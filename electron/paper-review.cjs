@@ -281,7 +281,7 @@ async function createRun(input = {}, { emit = () => {}, workspace = "" } = {}) {
       const result = await pipeline.runPipeline({
         document,
         venue,
-        model: reviewModel,
+        model: { ...reviewModel, sessionId: runId },
         concurrency: settings.concurrency,
         signal: controller.signal,
         emit: progress,

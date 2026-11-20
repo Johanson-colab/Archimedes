@@ -1,7 +1,10 @@
 const { buildModelRequestOptions, formatConnectionError, sanitizeHeaders, sanitizeSessionHeader } = require("./model-request-headers.cjs");
 const modelRegistry = require("./model-registry.cjs");
 
-const PROVIDERS = new Set(["openai", "anthropic", "gemini", "glm", "minimax", "deepseek", "qwen", "moonshot", "openrouter", "custom"]);
+const OPENCODE_GO_BASE_URL = "https://opencode.ai/inference/go/openai/v1";
+const OPENCODE_GO_SESSION_HEADER = { name: "x-opencode-session", strategy: "thread" };
+const OPENCODE_GO_USER_AGENT = `Archimedes/${require("../package.json").version}`;
+const PROVIDERS = new Set(["openai", "anthropic", "gemini", "glm", "minimax", "deepseek", "qwen", "moonshot", "openrouter", "opencode-go", "custom"]);
 const ROLES = new Set(["agent", "proactive"]);
 
 function normalizeRole(role) {
@@ -38,6 +41,12 @@ function normalizeBaseUrl(value) {
   return baseUrl;
 }
 
+function normalizeProvider(provider, baseUrl) {
+  // Earlier versions used Custom for this exact OpenCode Go endpoint.
+  if (provider === "custom" && baseUrl === OPENCODE_GO_BASE_URL) return "opencode-go";
+  return PROVIDERS.has(provider) ? provider : "custom";
+}
+
 function validateModelId(baseUrl, value) {
   const model = String(value || "").trim();
   if (!model || model.length > 160) throw new Error("Enter a model name of at most 160 characters.");
@@ -50,6 +59,9 @@ function validateModelId(baseUrl, value) {
 
 function modelListUrl(provider, baseUrl) {
   const endpoint = new URL(normalizeBaseUrl(baseUrl));
+  if (provider === "opencode-go" && baseUrl === OPENCODE_GO_BASE_URL) {
+    return "https://opencode.ai/inference/go/v1/models";
+  }
   if (provider === "qwen" && endpoint.hostname === "dashscope.aliyuncs.com" && endpoint.pathname.includes("compatible-mode")) {
     return "https://dashscope.aliyuncs.com/api/v1/models?providers=qwen&page_size=100";
   }
@@ -74,26 +86,44 @@ function getActiveModelConfig(role = "agent") {
   const saved = own || inherited;
   if (!saved) return { ...fallback, role: normalizedRole, inheritedFromAgent: false, modelId: "", modelLabel: "", contextWindowTokens: 0, maxOutputTokens: 0, capabilities: {} };
   return {
+    ...resolveStoredConnection({
+      ...saved,
+      baseUrl: saved.baseUrl || fallback.baseUrl,
+      model: saved.model || fallback.model,
+      apiKey: saved.apiKey || fallback.apiKey,
+    }),
     modelId: saved.id,
     modelLabel: saved.label || "",
     contextWindowTokens: saved.contextWindowTokens || 0,
     maxOutputTokens: saved.maxOutputTokens || 0,
     capabilities: saved.capabilities || {},
-    provider: PROVIDERS.has(saved.provider) ? saved.provider : "custom",
-    baseUrl: saved.baseUrl || fallback.baseUrl,
-    model: saved.model || fallback.model,
-    apiKey: saved.apiKey || fallback.apiKey,
-    headers: sanitizeHeaders(saved.headers),
-    sessionHeader: sanitizeSessionHeader(saved.sessionHeader),
-    userAgent: typeof saved.userAgent === "string" ? saved.userAgent.slice(0, 300) : "",
     role: normalizedRole,
     inheritedFromAgent: Boolean(inherited),
   };
 }
 
+function resolveStoredConnection(saved) {
+  const baseUrl = String(saved.baseUrl || "").trim().replace(/\/+$/, "");
+  const provider = normalizeProvider(saved.provider, baseUrl);
+  return {
+    ...saved,
+    provider,
+    baseUrl,
+    headers: sanitizeHeaders(saved.headers),
+    sessionHeader: sanitizeSessionHeader(saved.sessionHeader === undefined && provider === "opencode-go"
+      ? OPENCODE_GO_SESSION_HEADER : saved.sessionHeader),
+    userAgent: typeof saved.userAgent === "string" ? saved.userAgent.slice(0, 300)
+      : provider === "opencode-go" ? OPENCODE_GO_USER_AGENT : "",
+  };
+}
+
 function connectionSettings(input, current, provider, baseUrl) {
-  const saved = current?.provider === provider && normalizeBaseUrl(current.baseUrl) === baseUrl ? current : {};
-  const sessionHeader = input.sessionHeader === undefined ? saved.sessionHeader : input.sessionHeader;
+  const sameConnection = current?.provider === provider && normalizeBaseUrl(current.baseUrl) === baseUrl;
+  const saved = sameConnection ? current : {};
+  const defaults = provider === "opencode-go" && !sameConnection
+    ? { sessionHeader: OPENCODE_GO_SESSION_HEADER, userAgent: OPENCODE_GO_USER_AGENT }
+    : saved;
+  const sessionHeader = input.sessionHeader === undefined ? defaults.sessionHeader : input.sessionHeader;
   const fixedValue = saved.sessionHeader?.strategy === "fixed" &&
     saved.sessionHeader.name.toLowerCase() === String(sessionHeader?.name || "").trim().toLowerCase()
     ? saved.sessionHeader.value : "";
@@ -103,16 +133,16 @@ function connectionSettings(input, current, provider, baseUrl) {
     sessionHeader: sanitizeSessionHeader(sessionHeader?.strategy === "fixed" && sessionHeader.value === undefined
       ? { ...sessionHeader, value: fixedValue }
       : sessionHeader),
-    userAgent: typeof input.userAgent === "string" ? input.userAgent.trim().slice(0, 300) : (saved.userAgent || ""),
+    userAgent: typeof input.userAgent === "string" ? input.userAgent.trim().slice(0, 300) : defaults.userAgent || "",
   };
 }
 
 async function listProviderModels(input = {}, role = "agent") {
   const current = profileForInput(input, role);
-  const provider = PROVIDERS.has(input.provider) ? input.provider : (current?.provider || "custom");
   const baseUrl = normalizeBaseUrl(input.baseUrl || current?.baseUrl);
+  const provider = normalizeProvider(PROVIDERS.has(input.provider) ? input.provider : current?.provider, baseUrl);
   const config = connectionSettings(input, current, provider, baseUrl);
-  if (!config.apiKey && provider !== "openrouter") throw new Error("Enter or save this provider's API key before refreshing its live model catalog.");
+  if (!config.apiKey && provider !== "openrouter" && provider !== "opencode-go") throw new Error("Enter or save this provider's API key before refreshing its live model catalog.");
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 15_000);
@@ -161,20 +191,20 @@ function profileForInput(input, role) {
   if (typeof input?.id === "string") {
     const profile = modelRegistry.getModel(input.id);
     if (!profile) throw new Error("The selected model is not in the registry.");
-    return profile;
+    return resolveStoredConnection(profile);
   }
   return getActiveModelConfig(role);
 }
 
 function saveProfile(input, previous, role) {
-  const provider = PROVIDERS.has(input.provider) ? input.provider : "custom";
   const baseUrl = normalizeBaseUrl(input.baseUrl);
+  const provider = normalizeProvider(input.provider, baseUrl);
   const model = validateModelId(baseUrl, input.model);
   const connection = connectionSettings(input, previous, provider, baseUrl);
   if (!connection.apiKey || connection.apiKey.length > 2_000) throw new Error("Enter a valid API key.");
   const previousLabel = previous?.label || previous?.modelLabel;
   return modelRegistry.saveModel({
-    id: input.id === null ? undefined : (input.id || previous?.id || (previous?.inheritedFromAgent ? undefined : previous?.modelId)),
+    id: input.id === null ? undefined : (input.id || (previous?.inheritedFromAgent ? undefined : previous?.id || previous?.modelId)),
     label: input.label || (previousLabel === previous?.model ? model : previousLabel) || model,
     provider,
     baseUrl,
@@ -202,13 +232,18 @@ function saveModelConfig(input = {}, role = "agent") {
 }
 
 function saveModelProfile(input = {}) {
-  return saveProfile(input, modelRegistry.getModel(input.id));
+  const previous = modelRegistry.getModel(input.id);
+  return saveProfile(input, previous ? resolveStoredConnection(previous) : null);
+}
+
+function listModelProfiles() {
+  return modelRegistry.listModels().map((profile) => modelRegistry.publicProfile(resolveStoredConnection(profile)));
 }
 
 async function testModelConfig(input = null, role = "agent") {
   const current = profileForInput(input, role);
-  const provider = PROVIDERS.has(input?.provider) ? input.provider : (current?.provider || "custom");
   const baseUrl = normalizeBaseUrl(input?.baseUrl || current?.baseUrl);
+  const provider = normalizeProvider(PROVIDERS.has(input?.provider) ? input.provider : current?.provider, baseUrl);
   const candidate = {
     provider,
     baseUrl,
@@ -254,11 +289,10 @@ async function testModelConfig(input = null, role = "agent") {
 module.exports = {
   deleteModelProfile: modelRegistry.deleteModel,
   getActiveModelConfig,
-  getModelProfile: modelRegistry.getPublicModel,
   getPublicModelConfig,
   getRoleAssignments: modelRegistry.getRoleAssignments,
   initializeModelConfig,
-  listModelProfiles: modelRegistry.listModels,
+  listModelProfiles,
   listProviderModels,
   saveModelProfile,
   saveModelConfig,

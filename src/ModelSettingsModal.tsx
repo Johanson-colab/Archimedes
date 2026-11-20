@@ -21,7 +21,9 @@ import zaiLogo from "@lobehub/icons-static-svg/icons/zai.svg";
 import deepseekLogo from "@lobehub/icons-static-svg/icons/deepseek-color.svg";
 import moonshotLogo from "@lobehub/icons-static-svg/icons/kimi-color.svg";
 import openaiLogo from "@lobehub/icons-static-svg/icons/openai.svg";
+import opencodeLogo from "@lobehub/icons-static-svg/icons/opencode.svg";
 import qwenLogo from "@lobehub/icons-static-svg/icons/qwen-color.svg";
+import packageMetadata from "../package.json";
 import { useUISettings } from "./i18n";
 import { MenuSurface } from "./Menu";
 import AgentBackendSettings from "./AgentBackendSettings";
@@ -48,6 +50,8 @@ const providers: Array<{
   baseUrl: string;
   models: string[];
   icon?: React.ReactNode;
+  sessionHeader?: ModelSessionHeaderConfig;
+  userAgent?: string;
 }> = [
   { id: "openai", name: "OpenAI", caption: "GPT and reasoning models", baseUrl: "https://api.openai.com/v1", models: ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.1", "gpt-5", "gpt-5-mini", "gpt-5-nano", "gpt-5.1-codex", "gpt-5.1-codex-max", "gpt-5-codex", "gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano", "o3", "o4-mini", "o3-deep-research", "o4-mini-deep-research"], icon: brandIcon(openaiLogo, true) },
   { id: "anthropic", name: "Anthropic", caption: "Claude · native Messages API", baseUrl: "https://api.anthropic.com/v1", models: ["claude-fable-5-1", "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5", "claude-fable-5", "claude-opus-5", "claude-sonnet-5", "claude-opus-4-8", "claude-opus-4-7", "claude-opus-4-6", "claude-opus-4-5-20251101", "claude-sonnet-4-6", "claude-sonnet-4-5-20250929", "claude-haiku-4-5-20251001"], icon: brandIcon(anthropicLogo) },
@@ -58,8 +62,18 @@ const providers: Array<{
   { id: "qwen", name: "Qwen", caption: "DashScope compatible API", baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1", models: ["qwen3.8-max", "qwen3.7-max", "qwen3.7-plus", "qwen3.7-flash", "qwen3-max", "qwen-max", "qwen-plus", "qwen-flash", "qwen-turbo", "qwen3-coder-next", "qwen3-coder-plus", "qwen3-coder-flash", "qwen-coder-plus", "qwen-coder-turbo", "qwq-plus", "qwen-long", "qwen-math-plus", "qwen-math-turbo"], icon: brandIcon(qwenLogo) },
   { id: "moonshot", name: "Moonshot", caption: "Kimi OpenAI-compatible API", baseUrl: "https://api.moonshot.cn/v1", models: ["kimi-k3", "kimi-k2.7-code", "kimi-k2.7-code-turbo", "kimi-k2.6", "kimi-k2.5", "moonshot-v1-8k", "moonshot-v1-32k", "moonshot-v1-128k"], icon: brandIcon(moonshotLogo) },
   { id: "openrouter", name: "OpenRouter", caption: "Models from multiple providers", baseUrl: "https://openrouter.ai/api/v1", models: ["openrouter/auto", "openai/gpt-5.6-sol", "openai/gpt-5.6-terra", "openai/gpt-5.6-luna", "deepseek/deepseek-v4-pro", "deepseek/deepseek-v4-flash-0731", "qwen/qwen3.8-max", "moonshotai/kimi-k3"], icon: <Route size={17} /> },
+  { id: "opencode-go", name: "OpenCode Go", caption: "OpenAI-compatible Go API", baseUrl: "https://opencode.ai/inference/go/openai/v1", models: ["hy4-flash-free", "hy4", "qwen3.7-plus"], icon: brandIcon(opencodeLogo, true), sessionHeader: { name: "x-opencode-session", strategy: "thread" }, userAgent: `Archimedes/${packageMetadata.version}` },
   { id: "custom", name: "Custom", caption: "Any OpenAI-compatible endpoint", baseUrl: "", models: [] },
 ];
+
+export function formatModelConnectionError(error: unknown, t: ReturnType<typeof useUISettings>["t"]) {
+  const message = error instanceof Error ? error.message : String(error);
+  const detail = message.replace(/^Error invoking remote method '[^']+':\s*(?:Error:\s*)?|^Error:\s*/, "");
+  const missingSession = /^Connection failed \((\d+)\): MissingSessionID$/.exec(detail);
+  return missingSession
+    ? t("Connection failed ({status}). In Settings → Models, select OpenCode Go or set Session header to x-opencode-session and Strategy to Thread.", { status: missingSession[1] })
+    : detail;
+}
 
 const modelProfilesPreference = "archimedes-advanced-model-profiles";
 
@@ -215,21 +229,20 @@ export default function ModelSettingsModal({ bridge, open, onClose, onSaved, emb
   }
 
   function chooseProvider(next: typeof providers[number]) {
-    setProvider(next.id);
-    setApiKey("");
-    if (next.id === "custom") {
-      setBaseUrl(savedConnection?.provider === "custom" ? savedConnection.baseUrl : "");
-      setModel(savedConnection?.provider === "custom" ? savedConnection.model : "");
+    if (next.id === provider) return;
+    if (savedConnection?.provider === next.id) {
+      loadConnectionFields(savedConnection);
     } else {
+      setProvider(next.id);
+      setApiKey("");
       setBaseUrl(next.baseUrl);
       setModel(next.models[0] || "");
+      setHeadersText("");
+      setSessionHeaderName(next.sessionHeader?.name || "");
+      setSessionStrategy(next.sessionHeader?.strategy || "thread");
+      setSessionHeaderValue("");
+      setUserAgent(next.userAgent || "");
     }
-    const sameProvider = savedConnection?.provider === next.id;
-    setHeadersText("");
-    setSessionHeaderName(sameProvider ? savedConnection.sessionHeader?.name || "" : "");
-    setSessionStrategy(sameProvider ? savedConnection.sessionHeader?.strategy || "thread" : "thread");
-    setSessionHeaderValue("");
-    setUserAgent(sameProvider ? savedConnection.userAgent || "" : "");
     setCatalogModels([]);
     setCatalogError("");
     setModelMenuOpen(false);
@@ -266,27 +279,9 @@ export default function ModelSettingsModal({ bridge, open, onClose, onSaved, emb
     };
   }
 
-  function applyOpenCodeGoPreset() {
-    const presetUrl = "https://opencode.ai/inference/go/openai/v1";
-    if (provider !== "custom" || baseUrl.trim().replace(/\/+$/, "") !== presetUrl) setApiKey("");
-    setProvider("custom");
-    setBaseUrl(presetUrl);
-    setModel("hy4-flash-free");
-    setHeadersText("");
-    setSessionHeaderName("x-opencode-session");
-    setSessionStrategy("thread");
-    setSessionHeaderValue("");
-    setUserAgent("Archimedes/0.1.0");
-    setCatalogModels([]);
-    setCatalogError("");
-    setModelMenuOpen(false);
-    setModelSearch("");
-    setFeedback({ kind: "idle", text: t("OpenCode Go preset loaded. Add your OpenCode Go key to connect.") });
-  }
-
   async function refreshModelCatalog({ quiet = false } = {}) {
     if (catalogLoading || !baseUrl.trim()) return;
-    if (!apiKey.trim() && !hasApiKey && provider !== "openrouter") {
+    if (!apiKey.trim() && !hasApiKey && provider !== "openrouter" && provider !== "opencode-go") {
       if (!quiet) setCatalogError("Add this provider's API key, then refresh to load the live catalog.");
       return;
     }
@@ -355,7 +350,7 @@ export default function ModelSettingsModal({ bridge, open, onClose, onSaved, emb
       const result = await bridge.testModelConfig({ provider, baseUrl, model, apiKey, ...requestExtras() }, role);
       setFeedback({ kind: "success", text: `Connected in ${result.latencyMs} ms · ${result.resolvedModel}` });
     } catch (error) {
-      setFeedback({ kind: "error", text: String(error).replace(/^Error:\s*/, "") });
+      setFeedback({ kind: "error", text: formatModelConnectionError(error, t) });
     } finally {
       setTesting(false);
     }
@@ -421,7 +416,7 @@ export default function ModelSettingsModal({ bridge, open, onClose, onSaved, emb
         <nav className="provider-list" aria-label="Model providers">
           {providers.map((item) => <button key={item.id} className={`${item.id === provider ? "provider-option active" : "provider-option"}${item.icon ? "" : " no-icon"}`} onClick={() => chooseProvider(item)}>
             {item.icon && <span className="provider-icon">{item.icon}</span>}
-            <span><strong>{item.name}</strong><small>{item.id === provider && model ? model : item.caption}</small></span>
+            <span><strong>{item.name}</strong><small>{item.id === provider && model ? model : t(item.caption)}</small></span>
             {item.id === provider && <Check size={14} />}
           </button>)}
         </nav>
@@ -455,7 +450,6 @@ export default function ModelSettingsModal({ bridge, open, onClose, onSaved, emb
             {proactiveRole && savedConfig?.inheritedFromAgent && <div className="model-inherited-note"><Sparkle size={13} /><span>{t("Currently inheriting the main Agent model. Save below to give Proactive agent its own model.")}</span></div>}
             {advancedProfiles && <label><span>{t("Profile name")}</span><input value={profileName} onChange={(event) => setProfileName(event.target.value)} placeholder={model} maxLength={120} /></label>}
             <label><span><Server size={14} />{t("Base URL")}</span><input value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} placeholder="https://api.example.com/v1" spellCheck={false} /><small className="model-field-hint">{t("Enter the base URL. Archimedes appends {endpoint}.", { endpoint: provider === "anthropic" ? "/messages" : "/chat/completions" })}</small></label>
-            <button type="button" className="secondary-button model-preset-button" onClick={applyOpenCodeGoPreset}>{t("Use OpenCode Go preset")}</button>
             <label><span><Key size={14} />{t("API key")}</span><input type="password" value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder={hasApiKey ? t("Saved securely · enter a new key to replace") : t("Enter API key")} autoComplete="off" spellCheck={false} /></label>
             <label><span><Brain size={14} />{t("Model")}</span><div className="model-combobox" ref={modelAnchorRef}>
               <input
@@ -488,7 +482,7 @@ export default function ModelSettingsModal({ bridge, open, onClose, onSaved, emb
               <label><span>{t("Strategy")}</span><select className="settings-select" value={sessionStrategy} onChange={(event) => setSessionStrategy(event.target.value as ModelSessionHeaderConfig["strategy"])}><option value="thread">{t("Thread")}</option><option value="fixed">{t("Fixed")}</option><option value="disabled">{t("Disabled")}</option></select></label>
             </div>
             {sessionStrategy === "fixed" && <label><span>{t("Fixed session header value")}</span><input type="password" value={sessionHeaderValue} onChange={(event) => setSessionHeaderValue(event.target.value)} placeholder={hasFixedSessionValue ? t("Saved securely · enter a new value to replace") : ""} autoComplete="off" spellCheck={false} /></label>}
-            <label><span>{t("User-Agent")}</span><input value={userAgent} onChange={(event) => setUserAgent(event.target.value)} placeholder="Archimedes/0.1.0" spellCheck={false} /></label>
+            <label><span>{t("User-Agent")}</span><input value={userAgent} onChange={(event) => setUserAgent(event.target.value)} placeholder={`Archimedes/${packageMetadata.version}`} spellCheck={false} /></label>
             {advancedProfiles && <div className="model-profile-limits">
               <label><span>{t("Context window (tokens)")}</span><input type="number" min={0} value={contextWindowTokens} onChange={(event) => setContextWindowTokens(event.target.value)} placeholder="128000" /></label>
               <label><span>{t("Max output (tokens)")}</span><input type="number" min={0} value={maxOutputTokens} onChange={(event) => setMaxOutputTokens(event.target.value)} placeholder="8192" /></label>

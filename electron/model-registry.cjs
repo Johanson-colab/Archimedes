@@ -91,8 +91,8 @@ function migrateLegacyConfigs(registry) {
       model: config.model,
       apiKey: config.apiKey,
       headers: config.headers || {},
-      sessionHeader: config.sessionHeader || null,
-      userAgent: config.userAgent || "",
+      sessionHeader: config.sessionHeader,
+      userAgent: config.userAgent,
       contextWindowTokens: 0,
       maxOutputTokens: 0,
       capabilities: {},
@@ -132,7 +132,7 @@ function publicProfile(model) {
 }
 
 function listModels() {
-  return readRegistry().models.map(publicProfile);
+  return readRegistry().models;
 }
 
 function getModel(id) {
@@ -207,6 +207,7 @@ module.exports = {
   initializeModelRegistry,
   listModels,
   publicConnectionSettings,
+  publicProfile,
   saveModel,
   setRoleModel,
 };

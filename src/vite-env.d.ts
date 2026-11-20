@@ -1791,7 +1791,7 @@ interface ResearchThread {
   archived_at: string | null;
 }
 
-type ModelProviderId = "openai" | "anthropic" | "gemini" | "glm" | "minimax" | "deepseek" | "qwen" | "moonshot" | "openrouter" | "custom";
+type ModelProviderId = "openai" | "anthropic" | "gemini" | "glm" | "minimax" | "deepseek" | "qwen" | "moonshot" | "openrouter" | "opencode-go" | "custom";
 type WebSearchProviderId = "brave" | "tavily" | "exa" | "firecrawl";
 interface PublicWebSearchConfig { provider: WebSearchProviderId; hasApiKey: boolean; configuredProviders: WebSearchProviderId[] }
 
