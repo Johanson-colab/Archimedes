@@ -175,6 +175,7 @@ type Message = {
   turn_id?: string;
   role: "user" | "assistant";
   text: string;
+  recoveryNotice?: boolean;
   sources?: ResearchSource[];
   attachments?: MessageAttachment[];
   created_at?: string;
@@ -4849,13 +4850,14 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
 }
 
 const ConversationMessage = memo(function ConversationMessage({ message, streaming }: { message: Message; streaming: boolean }) {
+  const { t } = useUISettings();
   return <article className={`conversation-message ${message.role}`} data-session-message-id={message.id} data-turn-id={message.role === "user" ? message.id : undefined}>
     <div className="conversation-message-content">
     {message.role === "user" && Boolean(message.attachments?.length) && <div className="message-attachments">{message.attachments?.map((attachment) => <MessageAttachmentView key={attachment.position} attachment={attachment} turnId={message.turn_id} />)}</div>}
     <div className="conversation-message-copy">
       <div className="conversation-message-role">{message.role === "assistant" ? "Archimedes" : "You"}</div>
       {message.role === "assistant"
-        ? streaming ? <StreamingMarkdownMessage content={message.text} /> : <MarkdownMessage content={message.text} />
+        ? message.recoveryNotice ? <p>{t(message.text)}</p> : streaming ? <StreamingMarkdownMessage content={message.text} /> : <MarkdownMessage content={message.text} />
         : <p>{message.text}</p>}
       {Boolean(message.sources?.length) && <div className="conversation-sources" aria-label="Sources read by Archimedes">
         {message.sources?.map((source, index) => <a key={`${source.url}:${source.startPage}:${index}`} href={source.startPage ? `${source.url}#page=${source.startPage}` : source.url} target="_blank" rel="noreferrer" title={[source.title, source.url, source.query && `Query: ${source.query}`, source.excerpt, source.retrievedAt && `Read: ${source.retrievedAt}`].filter(Boolean).join("\n\n")}>
