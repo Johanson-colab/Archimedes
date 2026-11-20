@@ -151,18 +151,37 @@ export function parseBibliography(input: string): { entries: BibliographyEntry[]
   return { entries, warnings };
 }
 
-export function matchBibliographyPaper(incoming: AcademicSearchResult, papers: BibliographyPaper[], { strongOnly = false }: { strongOnly?: boolean } = {}) {
-  const fields = [
-    ['s2_id', (value: string) => value.trim().toLowerCase()], ['arxiv_id', arxiv], ['doi', doi],
-  ] as const;
-  const compatible = (paper: BibliographyPaper) => !fields.some(([field, normalize]) => incoming[field] && paper[field] && normalize(incoming[field]) !== normalize(paper[field]));
-  for (const [field, normalize] of fields) {
+const identifierFields = [
+  ['s2_id', (value: string) => value.trim().toLowerCase()], ['arxiv_id', arxiv], ['doi', doi],
+] as const;
+
+export function hasConflictingBibliographyIdentifiers(first: AcademicSearchResult, second: AcademicSearchResult) {
+  return identifierFields.some(([field, normalize]) => {
+    const a = normalize(first[field] || "");
+    const b = normalize(second[field] || "");
+    return a && b && a !== b;
+  });
+}
+
+export function matchBibliographyPaper<T extends AcademicSearchResult>(incoming: AcademicSearchResult, papers: T[], { strongOnly = false, titleAlreadyMatched = false }: { strongOnly?: boolean; titleAlreadyMatched?: boolean } = {}) {
+  const compatible = (paper: AcademicSearchResult) => !hasConflictingBibliographyIdentifiers(incoming, paper);
+  for (const [field, normalize] of identifierFields) {
     if (!incoming[field]) continue;
     const matched = papers.find(paper => paper[field] && normalize(incoming[field]) === normalize(paper[field]) && compatible(paper));
     if (matched) return matched;
   }
   if (strongOnly) return undefined;
-  return papers.find(paper => compatible(paper) && title(incoming.title) && title(incoming.title) === title(paper.title));
+  return papers.find(paper => compatible(paper) && (titleAlreadyMatched || title(incoming.title) && title(incoming.title) === title(paper.title)));
+}
+
+// A strong duplicate can complete the identity of an existing record without
+// replacing its saved metadata. Keep the whole learned identity together.
+export function paperWithLearnedIdentifiers(paper: BibliographyPaper, original: AcademicSearchResult, representative: AcademicSearchResult) {
+  if (!identifierFields.some(([field]) => !original[field] && representative[field])) return paper;
+  const identifiers = identifierFields
+    .filter(([field]) => !paper[field] && representative[field])
+    .map(([field]) => [field, representative[field]]);
+  return identifiers.length ? { ...paper, ...Object.fromEntries(identifiers) } : paper;
 }
 
 export function metadataDifferences(entry: AcademicSearchResult, current: AcademicSearchResult): MetadataPatch {
@@ -199,4 +218,58 @@ export function exportBibliography(papers: BibliographyPaper[]) {
     const escape = (value: string) => value.replace(/[\\{}%&#_$]/g, (character) => character === "\\" ? "\\textbackslash{} " : `\\${character}`);
     return `@${paper.entry_type || "article"}{${keys[index]},\n${Object.entries(values).filter(([, value]) => value).map(([field, value]) => `  ${field} = {${field === "author" ? paper.authors.map((author) => /\s+and\s+/i.test(author) ? `{${escape(author)}}` : escape(author)).join(" and ") : escape(value)}}`).join(",\n")}\n}`;
   }).join("\n\n") + "\n";
+}
+
+// Only retained rows can represent another import. A discarded title-only
+// match has no authority to hide a later entry with a different DOI.
+export function indexBibliographyBatch(entries: BibliographyEntry[]) {
+  const byIdentity = new Map<string, Set<AcademicSearchResult>>();
+  const repeatedRows = new Set<number>();
+  const representatives = new Map<number, AcademicSearchResult>();
+  const addIdentity = (key: string, representative: AcademicSearchResult) => {
+    const group = byIdentity.get(key);
+    if (group) group.add(representative);
+    else byIdentity.set(key, new Set([representative]));
+  };
+  entries.forEach(({ paper }, index) => {
+    const identities = identifierFields.flatMap(([field, normalize]) =>
+      paper[field] ? [field + ":" + normalize(paper[field])] : []);
+    const normalizedTitle = title(paper.title);
+    const titleKey = normalizedTitle ? "title:" + normalizedTitle : "";
+    let representative: AcademicSearchResult | undefined;
+    for (const identity of identities) {
+      representative = matchBibliographyPaper(paper, [...(byIdentity.get(identity) || [])], { strongOnly: true });
+      if (representative) break;
+    }
+    if (representative) {
+      repeatedRows.add(index);
+      if (titleKey) addIdentity(titleKey, representative);
+      for (const [field, normalize] of identifierFields) {
+        if (!paper[field] || representative[field]) continue;
+        representative[field] = paper[field];
+        addIdentity(field + ":" + normalize(paper[field]), representative);
+      }
+      return;
+    }
+    if (titleKey && matchBibliographyPaper(paper, [...(byIdentity.get(titleKey) || [])], { titleAlreadyMatched: true })) {
+      repeatedRows.add(index);
+      return;
+    }
+    representative = { ...paper };
+    representatives.set(index, representative);
+    for (const identity of identities) addIdentity(identity, representative);
+    if (titleKey) addIdentity(titleKey, representative);
+  });
+  // A strong alias can make two retained rows claim the same identifier.
+  // Detect contradictions after the batch has finished learning aliases.
+  const conflictingPapers = new Set<AcademicSearchResult>();
+  for (const [identity, group] of byIdentity) {
+    if (identity.startsWith("title:") || group.size < 2) continue;
+    const papers = [...group];
+    for (const paper of papers) {
+      if (papers.some(other => hasConflictingBibliographyIdentifiers(paper, other))) conflictingPapers.add(paper);
+    }
+  }
+  const conflictingRows = new Set([...representatives].filter(([, paper]) => conflictingPapers.has(paper)).map(([index]) => index));
+  return { repeatedRows, representatives, conflictingRows };
 }
