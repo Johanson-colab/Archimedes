@@ -22,6 +22,16 @@ The Proactive model comparisons use the upstream settings panel and connection h
 
 The replacement endpoint remained a draft. Testing the original endpoint in each stage used the saved dummy credential with an empty API key field.
 
+### Migrated Go model capabilities
+
+Both Charcoal screenshots use English and a 1180 × 900 viewport. A temporary legacy Custom connection points at the canonical Go endpoint with `gpt-5.6-luna`. The before build at `5e30fee` already shows the migrated Go provider with only Standard context. The after build at `dc90298` restores Thinking effort and the Extra Long context option.
+
+| Before | After |
+| --- | --- |
+| [Migrated provider with only Standard context](go-capabilities-before.png) | [Thinking effort and context length controls](go-capabilities-after.png) |
+
+The desktop capability response and the request-builder tests confirm that High effort keeps its API parameter and Extra Long uses a 1,000,000-character cap. The capture blocks external requests and reads only fixture settings.
+
 ## Initial connection and chat evidence
 
 Captured in Archimedes' macOS Electron app at a matching 1180 × 900 content viewport. The baseline is upstream `0637139`. Each run used a fresh profile, a disposable workspace and the same local OpenAI-compatible fixture with a dummy API key. The fixture responds with HTTP 400 and `MissingSessionID` when the session header is absent.
