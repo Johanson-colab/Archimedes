@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Plus, Save, Trash2 } from "lucide-react";
+import { Plus, Save, Trash } from "lucide-react";
 import { useUISettings } from "../i18n";
 import { SettingsGroup, SettingsSection } from "../SettingsPrimitives";
 
@@ -43,7 +43,7 @@ export default function EnvironmentVariablesPanel({ bridge }: { bridge: Research
           <input className="settings-text-input" type="password" aria-label={t("Value for {name}", { name })} placeholder={names.some(item => item.name === name) ? t("Enter a new value to replace") : t("Enter value")} value={values[name] || ""} autoComplete="off" spellCheck={false} onChange={event => setValues(current => ({ ...current, [name]: event.target.value }))} />
           <label className="environment-share"><input type="checkbox" disabled={!!busy || !(values[name] || "").trim()} checked={sharing[name] ?? names.find(item => item.name === name)?.shared ?? false} onChange={event => setSharing(current => ({ ...current, [name]: event.target.checked }))} />{t("Share with agents and runs")}</label>
           <button type="button" className="secondary-button" disabled={!!busy || !(values[name] || "").trim()} onClick={() => void save(name)} aria-label={t("Save {name}", { name })}><Save size={14}/>{t("Save")}</button>
-          {(names.some(item => item.name === name) || extra.includes(name)) && <button type="button" className="quiet-icon-button" disabled={!!busy} onClick={() => void remove(name)} aria-label={t("Remove {name}", { name })} title={t("Remove {name}", { name })}><Trash2 size={15}/></button>}
+          {(names.some(item => item.name === name) || extra.includes(name)) && <button type="button" className="quiet-icon-button" disabled={!!busy} onClick={() => void remove(name)} aria-label={t("Remove {name}", { name })} title={t("Remove {name}", { name })}><Trash size={15}/></button>}
         </div>)}
       </SettingsGroup>
       <p className="settings-group-note">{t("Re-enter a value to change sharing. Shared keys are available to native agents and code they run, and to managed experiment commands. Only names ending in _API_KEY or _TOKEN can be shared.")}</p>
