@@ -1968,6 +1968,32 @@ function repairLibraryPaperMetadata(paperId, patch = {}) {
   return hydratePaper(db.prepare("SELECT * FROM papers WHERE id = ?").get(paperId));
 }
 
+function addLibraryPaper(libraryId, paper) {
+  if (paper.source !== "bibtex" || typeof paper.citekey !== "string" || typeof paper.entry_type !== "string") {
+    return addPaper(libraryId, paper);
+  }
+
+  const db = requireDatabase();
+  db.exec("BEGIN");
+  try {
+    const saved = addPaper(libraryId, paper);
+    // BibTeX imports name a local paper ID only for an explicitly selected replacement.
+    if (paper.id && paper.id !== saved.id) throw new Error("Paper not found.");
+    const keepExistingKey = saved.citekey && !paper.id;
+    const key = keepExistingKey ? saved.citekey : paper.citekey;
+    bibliographyRecords.assertCitationKeyAvailable(db, saved.id, key, libraryId);
+    if (!keepExistingKey) {
+      bibliographyRecords.setBibliography(db, saved.id, { citekey: key, entryType: paper.entry_type }, canAccessProject);
+    }
+    const result = keepExistingKey ? saved : getPaper(saved.id);
+    db.exec("COMMIT");
+    return result;
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+}
+
 function linkLibraryToCloud(libraryId, cloudLibraryId) {
   const db = requireDatabase();
   const library = db.prepare("SELECT project_id FROM libraries WHERE id = ?").get(libraryId);
@@ -4552,7 +4578,7 @@ module.exports = {
   compactResearchThread,
   forkResearchThread,
   undoResearchTurn,
-  addPaper,
+  addPaper: addLibraryPaper,
   createComment,
   deleteComment,
   listComments,
