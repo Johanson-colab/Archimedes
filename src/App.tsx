@@ -1507,7 +1507,7 @@ function App() {
   const fileEditorScopesRef = useRef<FileEditorScopes>({});
   const noteValuesRef = useRef<Record<string, string>>({});
   const noteKeyRef = useRef("draft");
-  const pendingAssistantDeltasRef = useRef(new Map<string, { delta: string; threadId?: string }>());
+  const pendingAssistantDeltasRef = useRef(new Map<string, string>());
   const assistantDeltaFrameRef = useRef<number | null>(null);
   const mainWorkspaceRef = useRef<HTMLDivElement | null>(null);
   const conversationScrollPositionsRef = useRef(new Map<string, number>());
@@ -2128,15 +2128,18 @@ function App() {
     if (!pending.length) return;
     setMessages((current) => {
       let next = current;
-      for (const [streamId, update] of pending) {
+      for (const [turnId, delta] of pending) {
+        // IPC delivery can leave a delta behind the saved response for this turn.
+        if (next.some((message) => message.id === `${turnId}:assistant`)) continue;
+        const streamId = `${turnId}:stream`;
         const index = next.findIndex((message) => message.id === streamId);
         if (index < 0) {
           if (next === current) next = [...current];
-          next.push({ id: streamId, role: "assistant", text: update.delta });
+          next.push({ id: streamId, role: "assistant", text: delta });
           continue;
         }
         if (next === current) next = [...current];
-        next[index] = { ...next[index], text: `${next[index].text}${update.delta}` };
+        next[index] = { ...next[index], text: `${next[index].text}${delta}` };
       }
       return next;
     });
@@ -2144,12 +2147,8 @@ function App() {
 
   function queueAssistantDelta(event: AgentEvent) {
     if (!event.turnId || !event.delta) return;
-    const streamId = `${event.turnId}:stream`;
-    const existing = pendingAssistantDeltasRef.current.get(streamId);
-    pendingAssistantDeltasRef.current.set(streamId, {
-      delta: `${existing?.delta ?? ""}${event.delta}`,
-      threadId: event.threadId,
-    });
+    const existing = pendingAssistantDeltasRef.current.get(event.turnId) ?? "";
+    pendingAssistantDeltasRef.current.set(event.turnId, `${existing}${event.delta}`);
     if (assistantDeltaFrameRef.current === null) {
       assistantDeltaFrameRef.current = requestAnimationFrame(flushAssistantDeltas);
     }

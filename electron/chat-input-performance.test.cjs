@@ -121,3 +121,44 @@ test("parent activity updates preserve history callbacks while using their lates
     delete global.IS_REACT_ACT_ENVIRONMENT;
   }
 });
+
+test("late assistant deltas never recreate a saved turn's streaming message", async () => {
+  const source = fs.readFileSync(path.join(__dirname, "..", "src", "App.tsx"), "utf8");
+  const start = source.indexOf("  function flushAssistantDeltas()");
+  const end = source.indexOf("\n  useEffect", start);
+  assert.ok(start >= 0 && end > start);
+  const { transformWithOxc } = await import("vite");
+  const { code } = await transformWithOxc(source.slice(start, end), "assistant-deltas.ts");
+  let messages = [];
+  let scheduled;
+  const queue = new Function("pendingAssistantDeltasRef", "assistantDeltaFrameRef", "setMessages", "requestAnimationFrame",
+    `${code}\nreturn queueAssistantDelta;`)(
+    { current: new Map() }, { current: null }, update => { messages = update(messages); }, flush => { scheduled = flush; return 1; },
+  );
+  const delta = (turnId, text) => queue({ turnId, delta: text });
+  const answer = "Repeatable result.";
+  const saved = turnId => ({ id: turnId + ":assistant", turn_id: turnId, role: "assistant", text: answer });
+
+  delta("first", "Repeatable");
+  scheduled();
+  assert.deepEqual(messages, [{ id: "first:stream", role: "assistant", text: "Repeatable" }]);
+  delta("first", " result.");
+  scheduled();
+  assert.equal(messages[0].text, answer);
+
+  const first = saved("first");
+  const firstSnapshot = [first];
+  messages = firstSnapshot;
+  delta("first", " result.");
+  scheduled();
+  assert.equal(messages, firstSnapshot);
+
+  delta("second", answer);
+  scheduled();
+  assert.deepEqual(messages, [first, { id: "second:stream", role: "assistant", text: answer }]);
+  const secondSnapshot = [first, saved("second")];
+  messages = secondSnapshot;
+  delta("second", " result.");
+  scheduled();
+  assert.equal(messages, secondSnapshot);
+});
