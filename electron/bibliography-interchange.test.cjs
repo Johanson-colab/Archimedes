@@ -35,7 +35,7 @@ before(async () => {
     const result = new Function(...Object.keys(scope), `${code.replace(/^export \{\};?$/gm, "")}\nreturn {${names.join(",")}};`)(...Object.values(scope));
     Object.assign(scope, result);
   }
-  await load("bibliography.ts", ["parseBibliography", "exportBibliography", "matchBibliographyPaper", "metadataDifferences", "citationKeyIdentity"]);
+  await load("bibliography.ts", ["parseBibliography", "indexBibliographyBatch", "exportBibliography", "matchBibliographyPaper", "metadataDifferences", "citationKeyIdentity"]);
   await load("Tabs.tsx", ["Tabs", "Tab", "FilterGroup", "FilterButton"]);
   scope.conferenceCatalog = require("../shared/conferences.json");
   scope.ReactMarkdown = ({ children }) => React.createElement("span", null, children); scope.remarkMath = () => {}; scope.rehypeKatex = () => {};
@@ -130,6 +130,19 @@ test("BibTeX ignores commented-out entries with nested braces and tolerates whit
   assert.equal(parsed.entries[0].paper.title, "Kept");
 });
 
+
+test("a redundant title-only row cannot hide a later paper with a distinct DOI", () => {
+  const batch = scope.parseBibliography([
+    '@article{first,title={Evaluation},doi={10.5555/one}}',
+    '@article{alias,title={Evaluation}}',
+    '@article{second,title={Evaluation},doi={10.5555/two}}',
+    '@article{importAgain,title={Renamed second},doi={10.5555/two}}',
+    '@article{first,title={A different work},doi={10.5555/three}}',
+  ].join("\n"));
+  const flags = scope.indexBibliographyBatch(batch.entries);
+  assert.deepEqual(flags.map(row => row.duplicate), [false, true, false, true, false]);
+  assert.deepEqual(flags.map(row => row.keyConflict), [false, false, false, false, true]);
+});
 
 test("BibTeX preview rejects citation keys that collide only by case", async () => {
   const data = database("Key case"); let unmount;

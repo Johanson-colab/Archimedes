@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Dialog } from "./Dialog";
 import { InlineNotice } from "./InlineNotice";
 import { useUISettings } from "./i18n";
-import { citationKeyIdentity, exportBibliography, matchBibliographyPaper, metadataDifferences, parseBibliography, type BibliographyBridge, type BibliographyPaper, type MetadataPatch } from "./bibliography";
+import { indexBibliographyBatch, citationKeyIdentity, exportBibliography, matchBibliographyPaper, metadataDifferences, parseBibliography, type BibliographyBridge, type BibliographyPaper, type MetadataPatch } from "./bibliography";
 import "./bibliography.css";
 
 export default function BibliographyDialog({ bridge, library, onClose, onChanged }: { bridge: ResearchDeskBridge; library: ResearchLibrary; onClose: () => void; onChanged: () => Promise<void> }) {
@@ -21,6 +21,7 @@ export default function BibliographyDialog({ bridge, library, onClose, onChanged
   const alive = useRef(true);
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
   const parsed = useMemo(() => parseBibliography(input), [input]);
+  const batch = useMemo(() => indexBibliographyBatch(parsed.entries), [parsed.entries]);
   const preview = useMemo(() => parsed.entries.map((entry, index) => {
     const existing = matchBibliographyPaper(entry.paper, targetPapers, { strongOnly: true })
       || matchBibliographyPaper(entry.paper, projectPapers, { strongOnly: true })
@@ -28,11 +29,11 @@ export default function BibliographyDialog({ bridge, library, onClose, onChanged
       || matchBibliographyPaper(entry.paper, targetPapers)
       || matchBibliographyPaper(entry.paper, projectPapers)
       || matchBibliographyPaper(entry.paper, known);
-    const duplicate = parsed.entries.findIndex((candidate) => matchBibliographyPaper(entry.paper, [candidate.paper as BibliographyPaper])) < index;
+    const { duplicate } = batch[index];
     const keyIdentity = citationKeyIdentity(entry.citekey);
-    const keyConflict = targetPapers.some((paper) => paper.citekey && citationKeyIdentity(paper.citekey) === keyIdentity && paper.id !== existing?.id) || parsed.entries.some((candidate, candidateIndex) => candidateIndex < index && citationKeyIdentity(candidate.citekey) === keyIdentity && !matchBibliographyPaper(entry.paper, [candidate.paper as BibliographyPaper]));
+    const keyConflict = batch[index].keyConflict || targetPapers.some((paper) => paper.citekey && citationKeyIdentity(paper.citekey) === keyIdentity && paper.id !== existing?.id);
     return { entry, existing, duplicate, keyConflict, differences: existing ? metadataDifferences(entry.paper, existing) : {} };
-  }), [parsed.entries, known, targetPapers, projectPapers]);
+  }), [batch, parsed.entries, known, targetPapers, projectPapers]);
   useEffect(() => {
     let active = true;
     void (async () => {
