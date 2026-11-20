@@ -1909,6 +1909,10 @@ function setPaperChatThread(paperId, threadId, projectId = null) {
 }
 
 function addPaper(libraryId, paper) {
+  return addPaperWithOutcome(libraryId, paper).paper;
+}
+
+function addPaperWithOutcome(libraryId, paper) {
   const db = requireDatabase();
   const library = db.prepare("SELECT id, project_id FROM libraries WHERE id = ?").get(libraryId);
   if (!library) throw new Error("Choose a valid library before importing a paper.");
@@ -1955,7 +1959,7 @@ function addPaper(libraryId, paper) {
   }
   db.prepare("INSERT OR IGNORE INTO library_papers (library_id, paper_id, added_at) VALUES (?, ?, ?)").run(libraryId, paperId, now);
   db.prepare("UPDATE libraries SET updated_at = ? WHERE id = ?").run(now, libraryId);
-  return hydratePaper(db.prepare("SELECT * FROM papers WHERE id = ?").get(paperId));
+  return { paper: getPaper(paperId), created: !existing };
 }
 
 function getPaperBibliography(paperId) {
@@ -2011,14 +2015,18 @@ function syncPaperFromCloud(libraryId, cloudPaper) {
     : null;
   if (!existing) existing = db.prepare("SELECT * FROM papers WHERE canonical_key = ?").get(canonicalKey);
   if (!existing) {
-    const local = addPaper(libraryId, {
+    const { paper: local, created } = addPaperWithOutcome(libraryId, {
       ...cloudPaper,
       canonical_key: canonicalKey,
       authors: Array.isArray(cloudPaper.authors) ? cloudPaper.authors : [],
       conference: cloudPaper.conference || undefined,
     });
-    const linked = linkPaperToCloud(local.id, cloudPaperId || local.id);
-    return applyCloudPaperState(local.id, cloudPaper) || linked;
+    if (created) {
+      const linked = linkPaperToCloud(local.id, cloudPaperId || local.id);
+      return applyCloudPaperState(local.id, cloudPaper) || linked;
+    }
+    // A match by bibliographic identity still has local state for the sync service to reconcile.
+    return cloudPaperId && !local.cloud_paper_id ? linkPaperToCloud(local.id, cloudPaperId) : local;
   }
   if (cloudPaperId) db.prepare("UPDATE papers SET cloud_paper_id = COALESCE(cloud_paper_id, ?) WHERE id = ?").run(cloudPaperId, existing.id);
   db.prepare("INSERT OR IGNORE INTO library_papers (library_id, paper_id, added_at) VALUES (?, ?, ?)").run(libraryId, existing.id, timestamp());
