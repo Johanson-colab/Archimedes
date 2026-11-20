@@ -1,3 +1,15 @@
+const { canonicalTitleKey, identifier } = require("./bibliography-records.cjs");
+
+function alternateTitleKey(paper) {
+  if (!paper.canonical_key.startsWith("title:") || Object.entries(identifier).some(([key, normalize]) => normalize(paper[key]))) return null;
+  const legacy = canonicalTitleKey({ title: paper.title });
+  const fingerprint = canonicalTitleKey(paper);
+  if (fingerprint === legacy) return null;
+  if (paper.canonical_key === legacy) return { key: fingerprint, fingerprint };
+  if (paper.canonical_key === fingerprint) return { key: legacy, fingerprint };
+  return null;
+}
+
 function createLibrarySync({ store, api } = {}) {
   if (!store || !api) throw new Error("Store and collaboration API are required.");
 
@@ -9,6 +21,22 @@ function createLibrarySync({ store, api } = {}) {
     const remoteLibraries = await api.listLibraries(project.cloud_project_id);
     const remoteById = new Map(remoteLibraries.map((library) => [library.id, library]));
     let localLibraries = store.listLibraries(projectId);
+    let visiblePapers;
+
+    async function canonicalKeyForUpload(paper) {
+      const alternative = alternateTitleKey(paper);
+      if (!alternative) return paper.canonical_key;
+      // Read existing cloud references before uploading a title-only identity.
+      // The cloud attaches by exact key, so aliases need the same author/year evidence.
+      visiblePapers ??= Promise.all(remoteLibraries.map(library => api.listPapers(library.id)))
+        .then(lists => new Map(lists.flat().map(item => [item.canonical_key, item])));
+      const papers = await visiblePapers;
+      const existing = papers.get(alternative.key);
+      if (!papers.has(paper.canonical_key) && existing && alternateTitleKey(existing)?.fingerprint === alternative.fingerprint) {
+        return existing.canonical_key;
+      }
+      return paper.canonical_key;
+    }
 
     // Local -> cloud: create missing cloud libraries and attach papers.
     for (const library of localLibraries) {
@@ -37,7 +65,7 @@ function createLibrarySync({ store, api } = {}) {
         if (paper.cloud_paper_id) continue;
         try {
           const cloudPaper = await api.addPaper(cloudLibraryId, {
-            canonical_key: paper.canonical_key,
+            canonical_key: await canonicalKeyForUpload(paper),
             title: paper.title,
             authors: paper.authors,
             year: paper.year,

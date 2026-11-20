@@ -35,9 +35,11 @@ function fakeApi() {
       return library;
     },
     async addPaper(libraryId, paper) {
-      const id = `cloud-paper-${nextPaper++}`;
-      const row = { ...paper, id, added_at: new Date().toISOString() };
-      papers.get(libraryId).push(row);
+      // The collaboration RPC keeps the first paper for each canonical key.
+      const existing = [...papers.values()].flat().find(item => item.canonical_key === paper.canonical_key);
+      const row = existing || { ...paper, id: `cloud-paper-${nextPaper++}`, added_at: new Date().toISOString() };
+      const items = papers.get(libraryId);
+      if (!items.some(item => item.id === row.id)) items.push(row);
       return row;
     },
     async listPapers(libraryId) {
@@ -95,6 +97,37 @@ test("library sync pushes local libraries and pulls shared books and paper state
     assert.deepEqual(second.warnings, []);
     assert.equal(store.listLibraries(project.id).length, result.libraries.length);
     assert.equal(store.listPapers(importedLibrary.id).length, 1);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a new title-only reference joins its legacy cloud record without joining a different publication", async () => {
+  const root = workspace();
+  try {
+    const project = store.createResearchProject({ name: "Shared title references" });
+    store.linkResearchProjectToCloud(project.id, "cloud-project");
+    const library = store.listLibraries(project.id)[0];
+    const api = fakeApi();
+    const remote = api.seedRemoteLibrary(library.name, {
+      canonical_key: "title:editorial", title: "Editorial", authors: ["Alex Morgan"], year: 2019,
+    });
+    store.linkLibraryToCloud(library.id, remote.id);
+    const [legacy] = await api.listPapers(remote.id);
+    const matching = store.addPaper(library.id, { title: "Editorial", authors: ["Alex Morgan"], year: 2019 });
+    const distinct = store.addPaper(library.id, { title: "Editorial", authors: ["Jamie Lee"], year: 2023 });
+    assert.match(matching.canonical_key, /^title:editorial:[a-f0-9]{64}$/);
+    assert.notEqual(matching.canonical_key, distinct.canonical_key);
+
+    const result = await createLibrarySync({ store, api }).syncProjectLibraries(project.id);
+    assert.deepEqual(result.warnings, []);
+    const cloud = await api.listPapers(remote.id);
+    assert.equal(cloud.length, 2);
+    assert.equal(store.getPaper(matching.id).cloud_paper_id, legacy.id);
+    assert.equal(store.getPaper(matching.id).canonical_key, matching.canonical_key);
+    const second = store.getPaper(distinct.id);
+    assert.notEqual(second.cloud_paper_id, legacy.id);
+    assert.equal(cloud.find(item => item.id === second.cloud_paper_id).canonical_key, distinct.canonical_key);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
