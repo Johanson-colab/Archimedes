@@ -47,6 +47,7 @@ type ProactiveAgentOptions = {
   workspace: string;
   section: string;
   bridge?: ResearchDeskBridge;
+  modelConfigRevision: number;
   onRun: (suggestion: ProactiveSuggestion) => void | Promise<void>;
   onNotice?: (text: string) => void;
 };
@@ -98,6 +99,7 @@ export function useProactiveAgent({
   workspace,
   section,
   bridge,
+  modelConfigRevision,
   onRun,
   onNotice,
 }: ProactiveAgentOptions): ProactiveAgentController {
@@ -155,7 +157,7 @@ export function useProactiveAgent({
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, []);
+  }, [modelConfigRevision]);
 
   useEffect(() => {
     saveProactiveState(state);

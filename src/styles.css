@@ -569,6 +569,10 @@ html[data-theme="charcoal"] .provider-brand-mono { filter: invert(1); }
 .provider-config .model-registry-bar label { margin-top: 0; min-width: 0; }
 .model-registry-bar select { width: 100%; min-width: 0; }
 .model-registry-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.provider-config .model-registry-actions .secondary-button, .model-settings-modal .model-settings-footer .secondary-button, .provider-config .model-preset-button { color: var(--night-ink); }
+.provider-config .model-profiles-setting { padding: 0; margin-bottom: 8px; }
+.provider-config-title h3 { overflow-wrap: anywhere; }
+.model-profile-limits { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .model-settings-panel > .model-feedback { margin: 4px 0 8px; overflow-wrap: anywhere; }
 .model-feedback { display: flex; align-items: flex-start; gap: 7px; margin-top: 16px; padding: 9px 10px; border-radius: 5px; font-size: 10px; line-height: 1.45; }
 .model-feedback.success { color: #286249; background: #edf6f0; border: 1px solid #cde3d5; }

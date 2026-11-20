@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Check, LoaderCircle, Network, Save, X } from "lucide-react";
 import { useUISettings } from "./i18n";
 import { SettingsChoiceGroup, SettingsRow, SettingsSection, SettingsSwitch } from "./SettingsPrimitives";
-import { providers } from "./ModelSettingsModal";
+import { modelProfilesEnabled, providers } from "./ModelSettingsModal";
 import type { ProactiveSettings } from "./proactive-types";
 
 const MODES: Array<{ id: ProactiveSettings["mode"]; label: string; description: string }> = [
@@ -17,6 +17,7 @@ export default function ProactiveSettingsPanel({
   onChange,
   onObserveOnce,
   onResetHistory,
+  onModelSaved,
   bridge,
   historyCount,
   canObserve,
@@ -25,6 +26,7 @@ export default function ProactiveSettingsPanel({
   onChange: (patch: Partial<ProactiveSettings>) => void;
   onObserveOnce: () => void;
   onResetHistory: () => void;
+  onModelSaved: () => void;
   bridge: ResearchDeskBridge;
   historyCount: number;
   canObserve: boolean;
@@ -43,6 +45,7 @@ export default function ProactiveSettingsPanel({
   const [modelSaving, setModelSaving] = useState(false);
   const [modelTesting, setModelTesting] = useState(false);
   const [modelFeedback, setModelFeedback] = useState<{ kind: "idle" | "success" | "error"; text: string }>({ kind: "idle", text: "" });
+  const editingSharedProfile = modelProfilesEnabled() && modelConfig?.sharedAcrossRoles;
   const selectedProvider = providers.find((item) => item.id === provider) ?? providers.at(-1)!;
 
   useEffect(() => {
@@ -89,8 +92,12 @@ export default function ProactiveSettingsPanel({
     setModelSaving(true);
     setModelFeedback({ kind: "idle", text: "" });
     try {
-      const config = await bridge.saveModelConfig({ provider, baseUrl, model: modelName, apiKey }, "proactive");
+      const config = await bridge.saveModelConfig({
+        provider, baseUrl, model: modelName, apiKey,
+        id: editingSharedProfile ? modelConfig.modelId : undefined,
+      }, "proactive");
       applyModelConfig(config);
+      onModelSaved();
       setModelFeedback({ kind: "success", text: `Saved ${config.model}. Proactive replies and live observation will use this model.` });
     } catch (error) {
       setModelFeedback({ kind: "error", text: String(error).replace(/^Error:\s*/, "") });
@@ -118,6 +125,7 @@ export default function ProactiveSettingsPanel({
     try {
       const config = await bridge.saveModelConfig({ provider, baseUrl, model: modelName, apiKey, useAgent: true }, "proactive");
       applyModelConfig(config);
+      onModelSaved();
       setModelFeedback({ kind: "success", text: "Proactive agent will inherit the main Agent's model." });
     } catch (error) {
       setModelFeedback({ kind: "error", text: String(error).replace(/^Error:\s*/, "") });
@@ -154,7 +162,9 @@ export default function ProactiveSettingsPanel({
           controlClassName="proactive-model-form"
           title={t("Proactive model")}
           description={t("Replies and live observation use this model. It can inherit the main Agent model or use a cheaper one.")}
-          hint={modelConfig?.inheritedFromAgent ? t("Currently inheriting the main Agent model.") : t("A dedicated Proactive model.")}
+          hint={modelConfig?.inheritedFromAgent
+            ? t("Currently inheriting the main Agent model.")
+            : editingSharedProfile ? t("Saving changes updates the shared Agent and Proactive profile.") : t("A dedicated Proactive model.")}
         >
             {modelLoading ? <div className="proactive-model-loading"><LoaderCircle className="spin" size={15} />{t("Loading configuration")}</div> : <>
               <label className="proactive-model-field">

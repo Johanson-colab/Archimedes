@@ -27,3 +27,18 @@ test('removes the oldest complete group first', () => {
   assert.equal(result.removed, 1);
   assert.deepEqual(messages.filter(m => m.role === 'tool').map(m => m.tool_call_id), ['two', 'three']);
 });
+test('keeps the latest prompt and tool pair under a small profile budget', () => {
+  const messages = [
+    { role: 'system', content: 'instructions' },
+    { role: 'user', content: 'earlier question' },
+    { role: 'assistant', content: 'x'.repeat(24000) },
+    { role: 'user', content: 'current question' },
+    ...group('latest', 27000),
+  ];
+  const result = boundActiveContext(messages, 24000, { strict: true });
+  assert.deepEqual(result, { removed: 1, clipped: 1 });
+  assert.ok(messages.reduce((total, message) => total + JSON.stringify(message).length, 0) <= 24000);
+  assert.deepEqual(messages.map(message => message.role), ['system', 'user', 'assistant', 'tool']);
+  assert.equal(messages[1].content, 'current question');
+  assert.equal(messages[2].tool_calls[0].id, messages[3].tool_call_id);
+});

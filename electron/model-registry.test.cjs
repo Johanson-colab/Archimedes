@@ -109,3 +109,28 @@ test("deleting a migrated profile stays deleted after reopening the registry", (
   assert.deepEqual(modelConfig.listModelProfiles(), []);
   assert.equal(modelConfig.getPublicModelConfig().modelId, "");
 });
+
+test("basic role edits preserve a shared profile while explicit edits update it", (context) => {
+  const directory = tempUser();
+  context.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  modelConfig.initializeModelConfig(directory);
+  const endpoint = { provider: "custom", baseUrl: "https://example.test/v1" };
+  const original = modelConfig.saveModelConfig({
+    ...endpoint, model: "shared", apiKey: "fixture-key",
+    headers: { "x-tenant": "fixture" }, contextWindowTokens: 24_000, maxOutputTokens: 321,
+  });
+  modelConfig.setRoleModel("proactive", original.modelId);
+  assert.equal(modelConfig.getPublicModelConfig("agent").sharedAcrossRoles, true);
+
+  modelConfig.saveModelConfig({ ...endpoint, id: original.modelId, model: "shared-renamed" }, "proactive");
+  assert.equal(modelConfig.getActiveModelConfig("agent").model, "shared-renamed");
+
+  const dedicated = modelConfig.saveModelConfig({ ...endpoint, model: "dedicated" }, "proactive");
+  assert.notEqual(dedicated.modelId, original.modelId);
+  assert.equal(modelConfig.getActiveModelConfig("agent").model, "shared-renamed");
+  assert.equal(modelConfig.getActiveModelConfig("proactive").apiKey, "fixture-key");
+  assert.equal(modelConfig.getActiveModelConfig("proactive").headers["x-tenant"], "fixture");
+  assert.equal(dedicated.contextWindowTokens, 24_000);
+  assert.equal(dedicated.maxOutputTokens, 321);
+  assert.equal(dedicated.sharedAcrossRoles, false);
+});

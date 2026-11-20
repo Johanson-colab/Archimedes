@@ -146,6 +146,7 @@ function getPublicModelConfig(role = "agent") {
     ...modelRegistry.publicConnectionSettings(config),
     modelId: config.modelId,
     modelLabel: config.modelLabel,
+    sharedAcrossRoles: Boolean(own && Object.values(modelRegistry.getRoleAssignments()).every((id) => id === own.id)),
     contextWindowTokens: config.contextWindowTokens,
     maxOutputTokens: config.maxOutputTokens,
     capabilities: config.capabilities,
@@ -171,9 +172,10 @@ function saveProfile(input, previous, role) {
   const model = validateModelId(baseUrl, input.model);
   const connection = connectionSettings(input, previous, provider, baseUrl);
   if (!connection.apiKey || connection.apiKey.length > 2_000) throw new Error("Enter a valid API key.");
+  const previousLabel = previous?.label || previous?.modelLabel;
   return modelRegistry.saveModel({
-    id: input.id || previous?.id || (previous?.inheritedFromAgent ? undefined : previous?.modelId),
-    label: input.label || previous?.label || previous?.modelLabel || model,
+    id: input.id === null ? undefined : (input.id || previous?.id || (previous?.inheritedFromAgent ? undefined : previous?.modelId)),
+    label: input.label || (previousLabel === previous?.model ? model : previousLabel) || model,
     provider,
     baseUrl,
     model,
@@ -189,7 +191,12 @@ function saveModelConfig(input = {}, role = "agent") {
   if (normalizedRole === "proactive" && input.useAgent === true) {
     modelRegistry.setRoleModel("proactive", null);
   } else {
-    saveProfile(input, profileForInput(input, normalizedRole), normalizedRole);
+    const previous = profileForInput(input, normalizedRole);
+    const assignments = modelRegistry.getRoleAssignments();
+    const shared = assignments.agent && assignments.agent === assignments.proactive;
+    // The basic editor saves independently per role. Only an explicit profile
+    // edit from the advanced UI changes a profile assigned to both roles.
+    saveProfile(input.id === undefined && shared ? { ...input, id: null } : input, previous, normalizedRole);
   }
   return getPublicModelConfig(normalizedRole);
 }

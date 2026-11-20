@@ -85,7 +85,7 @@ function migrateLegacyConfigs(registry) {
     const id = `legacy-${role}`;
     registry.models.push({
       id,
-      label: `${config.model} (imported)`,
+      label: config.model,
       provider: config.provider || "custom",
       baseUrl: config.baseUrl,
       model: config.model,

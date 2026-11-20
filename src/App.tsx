@@ -79,7 +79,6 @@ import AgentLayer from "./AgentLayer";
 import ResearchPathPanel from "./ResearchPathPanel";
 import ResearchGraphPanel from "./research-graph/ResearchGraphPanel";
 import ProactiveAgentPanel from "./ProactiveAgentPanel";
-import ProactiveSettingsPanel from "./ProactiveSettingsPanel";
 import { researchStages, stageForMode, type ResearchStage, type ResearchStageId } from "./research-path";
 import { useProactiveAgent } from "./useProactiveAgent";
 import type { ProactiveSuggestion } from "./proactive-types";
@@ -1488,6 +1487,7 @@ function App() {
   const [changeSets, setChangeSets] = useState<WorkspaceChangeSet[]>([]);
   const [papers, setPapers] = useState(initialPapers);
   const [modal, setModal] = useState<Modal>(null);
+  const [modelConfigRevision, setModelConfigRevision] = useState(0);
   const [activeModelConfig, setActiveModelConfig] = useState<PublicModelConfig | null>(null);
   const [newProjectOpen, setNewProjectOpen] = useState(false);
   const [newProjectName, setNewProjectName] = useState("");
@@ -1607,6 +1607,7 @@ function App() {
     workspace: executionWorkspace,
     section: mainSection,
     bridge: desktopBridge,
+    modelConfigRevision,
     onRun: runProactiveSuggestion,
     onNotice: (text) => setProactiveNotice(t(text)),
   });
@@ -2294,8 +2295,17 @@ function App() {
 
   useEffect(() => {
     void desktopBridge.getInitialWorkspace().then((initialWorkspace) => loadWorkspace(initialWorkspace ?? DEFAULT_WORKSPACE));
-    void desktopBridge.getModelConfig().then(setActiveModelConfig).catch(() => setActiveModelConfig(null));
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    void desktopBridge.getModelConfig().then((config) => {
+      if (active) setActiveModelConfig(config);
+    }).catch(() => {
+      if (active) setActiveModelConfig(null);
+    });
+    return () => { active = false; };
+  }, [modelConfigRevision]);
 
   useEffect(() => {
     const unsubscribeNewChat = desktopBridge.onMenuNewChat(() => startNewTask());
@@ -3611,7 +3621,7 @@ function App() {
               events={events}
               trajectoryEvents={combinedTrajectoryEvents}
               nativeBackend={selectedNativeBackend}
-              modelLabel={activeModelConfig?.hasApiKey ? activeModelConfig.modelLabel || activeModelConfig.model : ""}
+              modelLabel={activeModelConfig?.hasApiKey ? activeModelConfig.model : ""}
               harnessBound={Boolean(boundHarness)}
               onHarnessChange={async (backend) => {
                 if (agentBusy) throw new Error(t("Stop the running turn before using this command."));
@@ -3882,7 +3892,7 @@ function App() {
         appearance={appearance}
         onAppearanceChange={setAppearance}
         bridge={desktopBridge}
-        onModelSaved={setActiveModelConfig}
+        onModelSaved={() => setModelConfigRevision((value) => value + 1)}
         executionPreferences={{ reasoningEffort, contextLength, capabilities: modelCapabilities, onReasoningEffort: setReasoningEffort, onContextLength: setContextLength }}
         workspace={workspace}
         modelWorkspace={executionWorkspace}

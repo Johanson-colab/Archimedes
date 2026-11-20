@@ -1860,6 +1860,7 @@ interface PublicModelConfig {
   userAgent?: string;
   modelId?: string;
   modelLabel?: string;
+  sharedAcrossRoles?: boolean;
   contextWindowTokens?: number;
   maxOutputTokens?: number;
   capabilities?: Record<string, unknown>;
