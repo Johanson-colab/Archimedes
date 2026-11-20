@@ -1,13 +1,9 @@
 const { canonicalTitleKey, identifier } = require("./bibliography-records.cjs");
 
-function alternateTitleKey(paper) {
+function titleFingerprint(paper) {
   if (!paper.canonical_key.startsWith("title:") || Object.entries(identifier).some(([key, normalize]) => normalize(paper[key]))) return null;
-  const legacy = canonicalTitleKey({ title: paper.title });
   const fingerprint = canonicalTitleKey(paper);
-  if (fingerprint === legacy) return null;
-  if (paper.canonical_key === legacy) return { key: fingerprint, fingerprint };
-  if (paper.canonical_key === fingerprint) return { key: legacy, fingerprint };
-  return null;
+  return fingerprint === canonicalTitleKey({ title: paper.title }) ? null : fingerprint;
 }
 
 function hasInitialPaperState(paper) {
@@ -29,18 +25,22 @@ function createLibrarySync({ store, api } = {}) {
     let visiblePapers;
 
     async function matchingCloudTitlePaper(paper) {
-      const alternative = alternateTitleKey(paper);
-      if (!alternative) return null;
+      const fingerprint = titleFingerprint(paper);
+      if (!fingerprint) return null;
       // Read existing cloud references before uploading a title-only identity.
-      // The cloud attaches by exact key, so aliases need the same author/year evidence.
+      // Enrichment can leave the saved key behind the current bibliographic metadata.
       visiblePapers ??= Promise.all(remoteLibraries.map(library => api.listPapers(library.id)))
-        .then(lists => new Map(lists.flat().map(item => [item.canonical_key, item])));
-      const papers = await visiblePapers;
-      const existing = papers.get(alternative.key);
-      if (!papers.has(paper.canonical_key) && existing && alternateTitleKey(existing)?.fingerprint === alternative.fingerprint) {
-        return existing;
-      }
-      return null;
+        .then(lists => {
+          const byKey = new Map(lists.flat().map(item => [item.canonical_key, item]));
+          const byFingerprint = new Map();
+          for (const item of byKey.values()) {
+            const identity = titleFingerprint(item);
+            if (identity) byFingerprint.set(identity, byFingerprint.has(identity) ? null : item);
+          }
+          return { byKey, byFingerprint };
+        });
+      const { byKey, byFingerprint } = await visiblePapers;
+      return byKey.has(paper.canonical_key) ? null : byFingerprint.get(fingerprint) ?? null;
     }
 
     // Local -> cloud: create missing cloud libraries and attach papers.
