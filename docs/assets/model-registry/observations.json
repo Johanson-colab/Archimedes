@@ -67,14 +67,14 @@
           "agent": "legacy-agent",
           "proactive": "legacy-agent"
         },
-        "limits": {
-          "standard": 24000,
-          "extra-long": 24000
-        },
         "savedNames": [
           "fixture-shared-update",
           "fixture-agent"
-        ]
+        ],
+        "characterLimitsAtCapture": {
+          "standard": 24000,
+          "extra-long": 24000
+        }
       },
       "namedProfileCreatedAndDeleted": true
     },
@@ -118,7 +118,7 @@
         }
       ]
     },
-    "loopbackModelRequests": [
+    "screenshotRunRequests": [
       {
         "stream": true,
         "model": "fixture-shared-update",
@@ -155,5 +155,25 @@
         "messageCharacters": 24000
       }
     ]
+  },
+  "loopbackAfterReview": {
+    "summaryScenario": [
+      {
+        "count": 24000,
+        "maxOutput": 321,
+        "latestRole": "user"
+      },
+      {
+        "count": 24000,
+        "maxOutput": 321,
+        "latestRole": "tool",
+        "toolOutput": "Local fixture data"
+      }
+    ],
+    "longPromptScenario": {
+      "count": 44760,
+      "maxOutput": 16384,
+      "latestRole": "user"
+    }
   }
 }

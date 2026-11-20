@@ -15,7 +15,7 @@ const { extractPdfText, extractPdfTextData, findPdfTextData, renderPdfPageData }
 const { fetchPublicPdf, findPublicPage, isPrivateAddress, openPublicPage } = require("./agent/remote-content.cjs");
 const { evidenceForTool } = require("./agent/evidence.cjs");
 const { openAiReasoningOptions, reasoningPolicy } = require("./agent/reasoning.cjs");
-const { contextCharacterLimit, normalizeContextLength, normalizeReasoningEffort: normalizeModelReasoningEffort } = require("./agent/model-capabilities.cjs");
+const { contextCharacterLimit, normalizeContextLength, normalizeReasoningEffort: normalizeModelReasoningEffort, outputTokenLimit } = require("./agent/model-capabilities.cjs");
 const { snapshotWorkspace, compareWorkspaceSnapshots, workspacePath: existingWorkspacePath } = require("./workspace-files.cjs");
 const { artifactKind } = require("./artifacts.cjs");
 const { runNative } = require("./agent/external-backend.cjs");
@@ -1310,9 +1310,8 @@ function applyDelta(accumulator, delta, onTextDelta) {
 }
 
 async function complete(config, messages, { signal, onTextDelta = () => {}, allowTools = true, availableTools = tools, reasoningEffort, maxOutputTokens, allowLargeOutput = false, requireComplete = false, responseFormat, sessionId = "archimedes-internal" } = {}) {
-  const requestedLimit = Number.isFinite(Number(maxOutputTokens)) ? Number(maxOutputTokens) : Number(config.maxOutputTokens) || 0;
-  const tokenLimit = requestedLimit > 0 ? Math.max(64, Math.min(allowLargeOutput && !allowTools ? 32768 : 8192, Math.round(requestedLimit))) : 0;
-  if (config.provider === "anthropic") return completeAnthropic(config, messages, { signal, onTextDelta, allowTools, availableTools, maxOutputTokens: tokenLimit, allowLargeOutput, requireComplete, sessionId });
+  if (config.provider === "anthropic") return completeAnthropic(config, messages, { signal, onTextDelta, allowTools, availableTools, maxOutputTokens, allowLargeOutput, requireComplete, sessionId });
+  const tokenLimit = outputTokenLimit(config, { maxOutputTokens, allowTools, allowLargeOutput });
   const nativeReasoning = openAiReasoningOptions(config, reasoningEffort);
   const request = { model: config.model, messages, stream: true, ...nativeReasoning };
   if (tokenLimit) request.max_tokens = tokenLimit;

@@ -52,8 +52,8 @@ test("per-model metadata overrides guessed capabilities", () => {
   assert.deepEqual(capabilities.thinkingEfforts, ["low", "high"]);
   assert.equal(capabilities.supportsVision, true);
   assert.equal(capabilities.supportsTools, false);
-  assert.equal(capabilities.contextCharacterLimits.standard, 200000);
-  assert.equal(capabilities.contextCharacterLimits["extra-long"], 200000);
+  assert.equal(capabilities.contextCharacterLimits.standard, 800000);
+  assert.equal(capabilities.contextCharacterLimits["extra-long"], 800000);
   assert.equal(capabilities.maxOutputTokens, 32000);
 });
 

@@ -1,3 +1,4 @@
+const { outputTokenLimit } = require("./model-capabilities.cjs");
 const { fetchModelWithRetry } = require("./model-retry.cjs");
 const { ModelIncompleteError, assertModelCompletion } = require("./model-completion.cjs");
 const { buildModelRequestOptions, formatModelRequestError } = require("../model-request-headers.cjs");
@@ -38,7 +39,7 @@ function toAnthropicRequest(config, messages, { allowTools = true, availableTool
     if (converted.at(-1)?.role === role) converted.at(-1).content.push(...content);
     else converted.push({ role, content });
   }
-  const request = { model: config.model, max_tokens: Number.isFinite(Number(maxOutputTokens)) && Number(maxOutputTokens) > 0 ? Math.max(64, Math.min(allowLargeOutput && !allowTools ? 32768 : 8192, Math.round(Number(maxOutputTokens)))) : 4096, stream: true, messages: converted };
+  const request = { model: config.model, max_tokens: outputTokenLimit(config, { maxOutputTokens, allowTools, allowLargeOutput }) || 4096, stream: true, messages: converted };
   if (system.length) request.system = system.join("\n\n");
   if (allowTools && availableTools.length) request.tools = availableTools.map((tool) => ({
     name: tool.function.name, description: tool.function.description || "", input_schema: tool.function.parameters,

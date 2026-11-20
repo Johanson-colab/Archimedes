@@ -2,6 +2,20 @@ const THINKING_EFFORTS = ["low", "medium", "high"];
 const CONTEXT_LENGTHS = ["standard", "extra-long"];
 const STANDARD_CONTEXT_CHARS = 500_000;
 const EXTRA_LONG_CONTEXT_CHARS = 1_000_000;
+const ESTIMATED_CHARACTERS_PER_TOKEN = 4;
+
+function tokenCount(value) {
+  const count = Math.round(Number(value));
+  return Number.isSafeInteger(count) && count > 0 ? count : 0;
+}
+
+function outputTokenLimit(config, { maxOutputTokens, allowLargeOutput = false, allowTools = true } = {}) {
+  const savedLimit = tokenCount(config.maxOutputTokens);
+  const requested = tokenCount(maxOutputTokens);
+  if (savedLimit) return requested ? Math.min(savedLimit, requested) : savedLimit;
+  if (!requested) return 0;
+  return Math.max(64, Math.min(allowLargeOutput && !allowTools ? 32_768 : 8_192, requested));
+}
 
 function normalizedConfig(config = {}) {
   const provider = String(config.provider || "custom").toLowerCase();
@@ -30,19 +44,21 @@ function getModelCapabilities(config = {}) {
   const explicit = config.capabilities && typeof config.capabilities === "object" ? config.capabilities : {};
   const nativeThinking = explicit.nativeThinking === undefined ? isNativeThinkingModel(config) : Boolean(explicit.nativeThinking);
   const extraLongContext = explicit.extraLongContext === undefined ? supportsExtraLongContext(config) : Boolean(explicit.extraLongContext);
-  const standard = Number(config.contextWindowTokens) > 0 ? Number(config.contextWindowTokens) : STANDARD_CONTEXT_CHARS;
-  const extraLong = Number(config.contextWindowTokens) > 0 ? Number(config.contextWindowTokens) : EXTRA_LONG_CONTEXT_CHARS;
+  const contextWindowTokens = tokenCount(config.contextWindowTokens);
+  // The conversation and composer share a character estimate. The provider
+  // applies its own tokenizer when it receives the actual request.
+  const windowCharacters = contextWindowTokens * ESTIMATED_CHARACTERS_PER_TOKEN;
   return {
     thinkingEfforts: Array.isArray(explicit.thinkingEfforts) ? explicit.thinkingEfforts : (nativeThinking ? THINKING_EFFORTS : []),
     contextLengths: Array.isArray(explicit.contextLengths) ? explicit.contextLengths : (extraLongContext ? CONTEXT_LENGTHS : ["standard"]),
     nativeThinking,
     supportsVision: Boolean(explicit.supportsVision),
     supportsTools: explicit.supportsTools === undefined ? true : Boolean(explicit.supportsTools),
-    maxOutputTokens: Number(config.maxOutputTokens) || 0,
-    contextWindowTokens: Number(config.contextWindowTokens) || 0,
+    maxOutputTokens: tokenCount(config.maxOutputTokens),
+    contextWindowTokens,
     contextCharacterLimits: {
-      standard,
-      "extra-long": extraLong,
+      standard: windowCharacters || STANDARD_CONTEXT_CHARS,
+      "extra-long": windowCharacters || EXTRA_LONG_CONTEXT_CHARS,
     },
   };
 }
@@ -73,4 +89,5 @@ module.exports = {
   isNativeThinkingModel,
   normalizeContextLength,
   normalizeReasoningEffort,
+  outputTokenLimit,
 };
