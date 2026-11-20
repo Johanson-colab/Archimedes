@@ -94,12 +94,26 @@ test("SVG generation requires inputs and does not silently accept empty output",
 test("bitmap generation routes GPT Image references through multipart edits", async () => {
   let request;
   const references = Array(2).fill("data:image/png;base64,YWJj");
+  const connection = {
+    ...config,
+    baseUrl: "https://images.fixture.example/v1",
+    headers: { "X-Tenant": "fixture", "content-type": "application/json" },
+    sessionHeader: { name: "x-session", strategy: "thread" },
+    userAgent: "Archimedes/fixture",
+  };
   const result = await generateBitmap({ references, plan: "a paper", method: "direct", model: "gpt-image-1" }, {
-    config: { ...config, provider: "openai", baseUrl: "https://api.openai.com/v1" },
+    config: resolveFigureConfig({ provider: "configured" }, connection),
     fetchImpl: async (url, options) => { request = { url, options }; return { ok: true, text: async () => JSON.stringify({ data: [{ b64_json: "YWJj" }] }) }; },
   });
   assert.match(request.url, /\/images\/edits$/);
   assert.equal(request.options.body.getAll("image[]").length, 2);
+  assert.equal(request.options.redirect, "error");
+  const { headers } = new Request(request.url, request.options);
+  assert.equal(headers.get("authorization"), `Bearer ${connection.apiKey}`);
+  assert.equal(headers.get("x-tenant"), "fixture");
+  assert.equal(headers.get("x-session"), "archimedes-figure-forge");
+  assert.equal(headers.get("user-agent"), "Archimedes/fixture");
+  assert.match(headers.get("content-type"), /^multipart\/form-data; boundary=/);
   assert.equal(result.image, "data:image/png;base64,YWJj");
 });
 
