@@ -114,8 +114,8 @@ export const SETTINGS_SECTIONS: SettingsSectionDefinition[] = [
   },
   {
     id: "web",
-    label: "Web search",
-    description: "Search provider and API keys",
+    label: "Environment",
+    description: "API keys, variables, and web search",
     group: "connections",
     icon: <Globe2 size={15} />,
   },

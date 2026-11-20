@@ -1,14 +1,15 @@
 import { useEffect, useId, useRef, useState } from "react";
-import { Check, ChevronDown, LoaderCircle, Network, Save } from "lucide-react";
+import { Check, ChevronDown, LoaderCircle, Network, RefreshCw, Save } from "lucide-react";
 import openaiLogo from "@lobehub/icons-static-svg/icons/openai.svg";
 import claudeLogo from "@lobehub/icons-static-svg/icons/claude-color.svg";
 import opencodeLogo from "@lobehub/icons-static-svg/icons/opencode.svg";
 import { SettingsGroup, SettingsRow, SettingsSection } from "./SettingsPrimitives";
 import { useUISettings } from "./i18n";
+import { MenuItem, MenuSurface } from "./Menu";
 
 const CLAUDE_EFFORTS = ["low", "medium", "high", "xhigh", "max"] as const;
 
-export default function AgentBackendSettings({ bridge, onBackendChange }: { bridge: ResearchDeskBridge; onBackendChange?: (backend: AgentBackendConfig["backend"]) => void }) {
+export default function AgentBackendSettings({ bridge, onBackendChange, workspace }: { bridge: ResearchDeskBridge; onBackendChange?: (backend: AgentBackendConfig["backend"]) => void; workspace?: string }) {
   const { t } = useUISettings();
   const id = useId();
   const [config, setConfig] = useState<AgentBackendConfig>({ backend: "api", binary: "codex", model: "", effort: "", permissionMode: "ask" });
@@ -22,6 +23,14 @@ export default function AgentBackendSettings({ bridge, onBackendChange }: { brid
   const [catalogError, setCatalogError] = useState("");
   const catalogInFlight = useRef(false);
   const codexDraft = useRef<AgentBackendConfig | null>(null);
+  const opencodeDraft = useRef<{ binary: string; workspace?: string } | null>(null);
+  const opencodeInFlight = useRef(false);
+  const opencodeAnchor = useRef<HTMLDivElement>(null);
+  const [opencodeLoading, setOpenCodeLoading] = useState(false);
+  const [opencodeError, setOpenCodeError] = useState("");
+  const [opencodeOpen, setOpenCodeOpen] = useState(false);
+  const [opencodeSearch, setOpenCodeSearch] = useState("");
+  const [opencodeIndex, setOpenCodeIndex] = useState(0);
   const mounted = useRef(false);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const [connections, setConnections] = useState<Partial<Record<"codex" | "claude" | "opencode", "unchecked" | "connected" | "error">>>({});
@@ -32,6 +41,9 @@ export default function AgentBackendSettings({ bridge, onBackendChange }: { brid
   const labels = { codex: "Codex", claude: "Claude Code", opencode: "OpenCode", api: "Archimedes" };
   const name = labels[selected];
   const models = catalogs[selected] || [];
+  const openCodeFiltered = models.filter((model) => `${model.id} ${model.label}`.toLowerCase().includes(opencodeSearch.toLowerCase()));
+  const openCodeMatches = openCodeFiltered.slice(0, 80);
+  if (selected === "opencode") opencodeDraft.current = { binary: config.binary, workspace };
   const nativeModel = models.find((model) => model.id === (config.model || effectiveModelId));
   const effortLabel = (effort: string) => ({ low: "Low", medium: "Medium", high: "High", xhigh: "XHigh", max: "Max", ultra: "Ultra", minimal: "Minimal", none: "None" }[effort] || effort);
   const setModels = (value: NativeAgentModel[]) => setCatalogs((current) => ({ ...current, [selected]: value }));
@@ -44,6 +56,8 @@ export default function AgentBackendSettings({ bridge, onBackendChange }: { brid
     const nextConfig: AgentBackendConfig = { backend: next, binary: next, model: "", effort: "", ...profiles[next], permissionMode: next === "codex" && ["read-only", "workspace-write"].includes(profiles[next]?.permissionMode || "") ? "ask" : profiles[next]?.permissionMode || "ask" };
     setConfig(nextConfig);
     if (next === "codex") codexDraft.current = nextConfig;
+    if (next === "opencode") opencodeDraft.current = { binary: nextConfig.binary, workspace };
+    setOpenCodeOpen(false);
     setFeedback(null);
     return nextConfig;
   }
@@ -62,6 +76,8 @@ export default function AgentBackendSettings({ bridge, onBackendChange }: { brid
     }).catch((error) => { if (active) setLoadError(String(error)); });
     return () => { active = false; };
   }, [bridge, loadAttempt, onBackendChange]);
+
+  useEffect(() => { setCatalogs((current) => ({ ...current, opencode: [] })); setOpenCodeError(""); }, [workspace]);
 
   function edit(field: "binary" | "model", value: string) {
     const next = { ...config, [field]: value, ...(field === "model" ? { effort: "" } : {}) };
@@ -91,6 +107,19 @@ export default function AgentBackendSettings({ bridge, onBackendChange }: { brid
     }
   }
 
+  async function loadOpenCodeCatalog(draft: AgentBackendConfig) {
+    if (opencodeInFlight.current || !draft.binary.trim()) return;
+    opencodeInFlight.current = true;
+    setOpenCodeLoading(true); setOpenCodeError("");
+    try {
+      const result = await bridge.listOpenCodeModelCatalog({ ...draft, backend: "opencode", workspace });
+      if (!mounted.current || opencodeDraft.current?.binary !== draft.binary || opencodeDraft.current?.workspace !== workspace) return;
+      setCatalogs((current) => ({ ...current, opencode: result.models }));
+    } catch (error) {
+      if (mounted.current && opencodeDraft.current?.binary === draft.binary && opencodeDraft.current?.workspace === workspace) setOpenCodeError(t(String(error).replace(/^Error invoking remote method '[^']+': Error:\s*|^Error:\s*/, "")));
+    } finally { opencodeInFlight.current = false; if (mounted.current) setOpenCodeLoading(false); }
+  }
+
   async function apply(action: "check" | AgentBackendConfig["backend"]) {
     if (!savedConfig || busy) return;
     setBusy(action === "check" ? "check" : "save");
@@ -98,7 +127,7 @@ export default function AgentBackendSettings({ bridge, onBackendChange }: { brid
     try {
       if (action === "check") {
         const result = await bridge.checkAgentBackend({ ...config, backend: selected });
-        setModels(result.models);
+        if (selected !== "opencode" || result.models.length) setModels(result.models);
         setEffectiveModelId(result.effectiveModelId);
         setCatalogError("");
         setConnection(result.ready ? "connected" : "error");
@@ -143,6 +172,7 @@ export default function AgentBackendSettings({ bridge, onBackendChange }: { brid
         const draft = selected === item ? config : choose(item);
         if (selected === item) setExpanded(opening); else setExpanded(true);
         if (item === "codex" && opening && (!catalogs.codex?.length || (!draft.model && !effectiveModelId))) void loadCodexCatalog(draft);
+        if (item === "opencode" && opening && !catalogs.opencode?.length) void loadOpenCodeCatalog(draft);
       }}>
         <span className="provider-icon large"><img className={`provider-brand-logo${item === "claude" ? "" : " provider-brand-mono"}`} src={item === "codex" ? openaiLogo : item === "claude" ? claudeLogo : opencodeLogo} alt="" /></span>
         <span className="agent-backend-card-copy"><strong>{labels[item]}</strong><small>{item === "codex" ? t("Local CLI · uses your existing Codex login") : t("Local CLI · uses its existing login and configuration")}</small></span>
@@ -158,9 +188,26 @@ export default function AgentBackendSettings({ bridge, onBackendChange }: { brid
           <SettingsRow stacked title={<label htmlFor={`${id}-binary`}>{t(`${name} executable`)}</label>} description={selected === "codex" ? t("Use codex from PATH or an absolute executable path. Run codex login in a terminal first.") : t("Use the CLI name or an absolute executable path. Sign in through its terminal command first.")}>
             <input id={`${id}-binary`} className="settings-text-input settings-text-input-wide" disabled={disabled} value={config.binary} spellCheck={false} onChange={(event) => edit("binary", event.target.value)} onBlur={() => { if (selected === "codex" && !models.length) void loadCodexCatalog(config); }} />
           </SettingsRow>
-          <SettingsRow stacked title={<label htmlFor={`${id}-model`}>{t(`${name} model`)}</label>} description={selected === "codex" ? t("Leave empty to use your Codex configuration. API model settings do not select the Codex model.") : selected === "claude" ? t("Leave empty to use your Claude Code configuration.") : t("Leave empty to use native configuration. OpenCode model IDs use provider/model.")}>
-            <input id={`${id}-model`} className="settings-text-input settings-text-input-wide" disabled={disabled} list={`${id}-models`} value={config.model} spellCheck={false} onChange={(event) => edit("model", event.target.value)} onBlur={() => { if (selected === "codex" && !config.model && !effectiveModelId) void loadCodexCatalog(config); }} />
-            <datalist id={`${id}-models`}>{models.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</datalist>
+          <SettingsRow stacked controlClassName="agent-opencode-model-control" title={<label htmlFor={`${id}-model`}>{t(`${name} model`)}</label>} description={selected === "codex" ? t("Leave empty to use your Codex configuration. API model settings do not select the Codex model.") : selected === "claude" ? t("Leave empty to use your Claude Code configuration.") : t("Leave empty to use native configuration. OpenCode model IDs use provider/model.")}>
+            <>
+              <div className="agent-opencode-model-anchor" ref={opencodeAnchor}>
+                <input id={`${id}-model`} className="settings-text-input settings-text-input-wide" disabled={disabled} value={config.model} spellCheck={false} role="combobox" aria-autocomplete="list" aria-expanded={opencodeOpen} aria-controls={`${id}-opencode-models`} onClick={() => { setOpenCodeOpen(true); setOpenCodeSearch(""); setOpenCodeIndex(0); }} onFocus={() => { setOpenCodeOpen(true); setOpenCodeSearch(""); setOpenCodeIndex(0); if (selected === "opencode" && !catalogs.opencode?.length) void loadOpenCodeCatalog(config); if (selected === "codex" && !catalogs.codex?.length) void loadCodexCatalog(config); }} onChange={(event) => { edit("model", event.target.value); setOpenCodeSearch(event.target.value); setOpenCodeOpen(true); setOpenCodeIndex(0); }} onKeyDown={(event) => {
+                  if (event.key === "ArrowDown" || event.key === "ArrowUp") { event.preventDefault(); setOpenCodeOpen(true); setOpenCodeIndex((current) => Math.max(0, Math.min(openCodeMatches.length - 1, current + (event.key === "ArrowDown" ? 1 : -1)))); }
+                  if (event.key === "Enter" && opencodeOpen && openCodeMatches[opencodeIndex]) { event.preventDefault(); edit("model", openCodeMatches[opencodeIndex].id); setOpenCodeOpen(false); }
+                  if (event.key === "Escape") setOpenCodeOpen(false);
+                }} />
+                {selected === "opencode" && <button type="button" className="agent-opencode-refresh" disabled={disabled || opencodeLoading} onClick={() => void loadOpenCodeCatalog(config)} aria-label={t("Refresh OpenCode models")} title={t("Refresh OpenCode models")}>{opencodeLoading ? <LoaderCircle size={14} className="spin" /> : <RefreshCw size={14} />}</button>}
+              </div>
+              <MenuSurface open={opencodeOpen} onClose={() => setOpenCodeOpen(false)} anchorRef={opencodeAnchor} placement="bottom-start" width={360} minWidth={0} maxWidth="calc(100vw - 16px)" maxHeight={280} id={`${id}-opencode-models`} className="agent-opencode-model-menu" ariaLabel={t(`${name} model`)} focus="none" role="listbox">
+                {!opencodeSearch && <MenuItem role="option" aria-selected={!config.model} onMouseDown={(event) => event.preventDefault()} onClick={() => { edit("model", ""); setOpenCodeOpen(false); }}>{t(selected === "codex" ? "Codex default" : selected === "claude" ? "Claude default" : "Use OpenCode default")}</MenuItem>}
+                {openCodeMatches.map((item, index) => <MenuItem key={item.id} role="option" aria-selected={item.id === config.model} className={index === opencodeIndex ? "active" : ""} onMouseDown={(event) => event.preventDefault()} onClick={() => { edit("model", item.id); setOpenCodeOpen(false); }}>{item.id}</MenuItem>)}
+                {!(selected === "opencode" ? opencodeLoading : selected === "codex" && catalogLoading) && !openCodeMatches.length && <span className="agent-opencode-model-hint">{t("No matching models. You can enter an ID manually.")}</span>}
+                {selected === "opencode" && opencodeLoading && <span className="agent-opencode-model-hint">{t("Loading OpenCode models…")}</span>}
+                {selected === "opencode" && openCodeFiltered.length > 80 && <span className="agent-opencode-model-hint">{t("Type to search all OpenCode models.")}</span>}
+              </MenuSurface>
+              {selected === "opencode" && opencodeError && <small className="agent-backend-note" role="status">{opencodeError}</small>}
+              {selected === "opencode" && <small className="agent-backend-note">{t("The model list does not verify account access or usage limits.")}</small>}
+            </>
           </SettingsRow>
           {selected === "claude" && <SettingsRow stacked title={<label htmlFor={`${id}-claude-effort`}>{t("Claude Code thinking effort")}</label>} description={t("Choose from Claude Code's native effort levels.")}>
             <select id={`${id}-claude-effort`} className="settings-select" disabled={disabled} value={config.effort || ""} onChange={(event) => setConfig((current) => ({ ...current, effort: event.target.value }))}>
