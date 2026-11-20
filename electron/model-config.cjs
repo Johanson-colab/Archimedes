@@ -1,6 +1,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { buildModelRequestOptions, formatConnectionError, sanitizeHeaders, sanitizeSessionHeader } = require("./model-request-headers.cjs");
+const { readModelResponseJson } = require("./model-response-json.cjs");
 
 const OPENCODE_GO_BASE_URL = "https://opencode.ai/inference/go/openai/v1";
 const OPENCODE_GO_SESSION_HEADER = { name: "x-opencode-session", strategy: "thread" };
@@ -181,7 +182,7 @@ async function listProviderModels(input = {}, role = "agent") {
     });
     const response = await fetch(modelListUrl(provider, baseUrl), { ...requestOptions, signal: controller.signal });
     if (!response.ok) throw new Error(`Model catalog request failed (${response.status}).`);
-    const models = extractModelIds(await response.json());
+    const models = extractModelIds(await readModelResponseJson(response));
     if (!models.length) throw new Error("The provider returned no compatible chat models.");
     return { models, source: "live" };
   } catch (error) {
@@ -266,7 +267,7 @@ async function testModelConfig(input = null, role = "agent") {
     if (!response.ok) {
       throw new Error(formatConnectionError(response.status, await response.text(), candidate));
     }
-    const body = await response.json();
+    const body = await readModelResponseJson(response);
     if (anthropic ? !Array.isArray(body?.content) : !body?.choices?.[0]?.message) throw new Error("The endpoint responded, but did not return a compatible message.");
     return {
       ok: true,

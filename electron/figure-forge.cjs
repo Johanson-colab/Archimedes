@@ -1,4 +1,5 @@
 const { buildModelRequestOptions } = require("./model-request-headers.cjs");
+const { parseModelResponseJson, readModelResponseJson } = require("./model-response-json.cjs");
 
 const MAX_PAPER_CHARS = 60_000;
 const FIGURE_TYPES = new Set(["framework", "architecture", "pipeline", "conceptual", "custom"]);
@@ -201,7 +202,7 @@ async function generateBitmap(input, { config, fetchImpl = fetch }) {
     if (!response.ok) throw new Error(`Image provider returned HTTP ${response.status}. Verify the model supports reference images and this endpoint.`);
     const text = await response.text();
     if (text.length > 30_000_000) throw new Error("Generated image response is too large.");
-    const json = JSON.parse(text);
+    const json = parseModelResponseJson(text);
     if (nativeGemini) {
       const item = geminiImageResult(json);
       if (!/^image\/(png|jpeg|webp)$/.test(item.mimeType) || !/^[A-Za-z0-9+/]+={0,2}$/.test(item.b64_json)) throw new Error("Gemini returned an unsupported image.");
@@ -265,7 +266,7 @@ async function prepareFigurePlan(input, { config, complete, fetchImpl = fetch })
       }
       const response = await fetchImpl(endpoint, { method: "POST", ...requestOptions, body: JSON.stringify(body), signal: controller.signal });
       if (response.ok) {
-        const result = await response.json();
+        const result = await readModelResponseJson(response);
         const content = officialOpenAI ? result.output_text || result.output?.flatMap((item) => item.content || []).map((item) => item.text || "").join("") : anthropic ? result.content?.filter((item) => item.type === "text").map((item) => item.text).join("") : result.choices?.[0]?.message?.content;
         if (typeof content !== "string" || !content.trim()) throw new Error("The model returned an empty PDF analysis.");
         return { plan: content.trim().slice(0, 16_000), model: config.model, provider: config.provider, source: "pdf" };

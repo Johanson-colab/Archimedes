@@ -24,6 +24,7 @@ const { readLines, searchWorkspace, prepareWrite, prepareEdit, readCommandLog, v
 const { ToolRegistry } = require("./agent/tool-registry.cjs");
 const { fetchModelWithRetry } = require("./agent/model-retry.cjs");
 const { buildModelRequestOptions, formatModelRequestError, modelProviderErrorDetail } = require("./model-request-headers.cjs");
+const { readModelResponseJson } = require("./model-response-json.cjs");
 const { boundActiveContext } = require("./agent/active-context.cjs");
 const { discoverSkills, readSkillResource } = require("./agent/api-skills.cjs");
 const { prepareResearchSkill } = require("./agent/research-skills.cjs");
@@ -1329,7 +1330,7 @@ async function complete(config, messages, { signal, onTextDelta = () => {}, allo
       const fallbackDetail = (await fallback.text()).slice(0, 500);
       throw new Error(`Model stream was incompatible and its non-streaming retry failed. ${formatModelRequestError(fallback.status, fallbackDetail, config)}`);
     }
-    const body = await fallback.json();
+    const body = await readModelResponseJson(fallback);
     const choice = body?.choices?.[0];
     const responseMessage = choice?.message || (typeof choice?.text === "string" ? { role: "assistant", content: choice.text } : null);
     if (!responseMessage) throw new Error("The model returned neither a compatible stream nor a complete response message.");
@@ -1373,7 +1374,7 @@ async function complete(config, messages, { signal, onTextDelta = () => {}, allo
 
   const contentType = response.headers.get("content-type") || "";
   if (!contentType.includes("text/event-stream") || !response.body) {
-    const body = await response.json();
+    const body = await readModelResponseJson(response);
     const message = body?.choices?.[0]?.message;
     if (!message) throw new Error("The model response did not contain a message.");
     const normalized = normalizeAssistantMessage(message);

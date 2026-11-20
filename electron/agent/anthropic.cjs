@@ -1,6 +1,7 @@
 const { fetchModelWithRetry } = require("./model-retry.cjs");
 const { ModelIncompleteError, assertModelCompletion } = require("./model-completion.cjs");
 const { buildModelRequestOptions, formatModelRequestError, modelProviderErrorDetail } = require("../model-request-headers.cjs");
+const { readModelResponseJson } = require("../model-response-json.cjs");
 
 function parseArguments(value) {
   try { return JSON.parse(value || "{}"); } catch { return {}; }
@@ -65,7 +66,7 @@ async function completeAnthropic(config, messages, { signal, onTextDelta = () =>
   });
   if (!response.ok) throw new Error(formatModelRequestError(response.status, await response.text(), config));
   if (!(response.headers.get("content-type") || "").includes("text/event-stream") || !response.body) {
-    const body = await response.json();
+    const body = await readModelResponseJson(response);
     if (!Array.isArray(body?.content)) throw new Error("Anthropic response did not contain content blocks.");
     const normalized = normalizeBlocks(body.content);
     assertModelCompletion({ provider: "anthropic", finishReason: body.stop_reason, partialResponse: normalized.content, toolCalls: normalized.tool_calls });

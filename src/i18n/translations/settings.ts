@@ -302,6 +302,7 @@ export const settings: Record<string, string> = {
   "The account Archimedes connects as. It must already be able to log in with a key.": "Archimedes 连接使用的账号，需要已经可以用密钥登录。",
   "The API key is stored in Electron user data and never returned to the page.": "API key 存储在 Electron 用户数据中，不会返回给页面。",
   "The connection could not be tested.": "连接测试失败。",
+  "The model provider returned invalid JSON. Check the model endpoint and try again.": "模型服务返回了无效的 JSON。请检查模型接口地址后重试。",
   "The research app could not be installed.": "无法安装科研应用。",
   "The research app could not be removed.": "无法移除科研应用。",
   "The research app could not be updated.": "无法更新科研应用。",
