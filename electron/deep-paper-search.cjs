@@ -1,5 +1,6 @@
 const { searchAcademicPaperSources } = require("./literature.cjs");
 const { buildModelRequestOptions, formatModelRequestError } = require("./model-request-headers.cjs");
+const { parseModelResponseJson, readModelResponseJson } = require("./model-response-json.cjs");
 
 const MAX_PROMPT_LENGTH = 2_000;
 const MAX_QUERIES = 5;
@@ -73,7 +74,7 @@ function parseJsonObject(content) {
   const start = unfenced.indexOf("{");
   const end = unfenced.lastIndexOf("}");
   if (start < 0 || end <= start) throw new Error("The model did not return a JSON object.");
-  return JSON.parse(unfenced.slice(start, end + 1));
+  return parseModelResponseJson(unfenced.slice(start, end + 1));
 }
 
 async function requestModelJson(config, messages, { timeoutMs = 45_000, fetchImpl = fetch } = {}) {
@@ -88,7 +89,7 @@ async function requestModelJson(config, messages, { timeoutMs = 45_000, fetchImp
       signal: controller.signal,
     });
     if (!response.ok) throw new Error(formatModelRequestError(response.status, await response.text(), config));
-    const body = await response.json();
+    const body = await readModelResponseJson(response);
     const content = body?.choices?.[0]?.message?.content;
     return parseJsonObject(Array.isArray(content) ? content.map((item) => item?.text || "").join("") : content);
   } catch (error) {

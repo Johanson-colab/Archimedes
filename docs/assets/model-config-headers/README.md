@@ -54,3 +54,14 @@ Both protocol fixtures returned HTTP 200 and a stream error containing the same 
 | Anthropic | `Anthropic stream error: Gateway rejected DUMMY_GATEWAY_TOKEN and DUMMY_FIXED_SESSION` | `The anthropic response is incomplete (stream_error).` |
 
 The saved-turn regression verifies that each adapter retains the partial answer and the chat retry guidance. It also checks that an unrecognized stop reason echoed by a provider stays out of the recorded diagnostic metadata.
+
+## Malformed HTTP 200 response
+
+The same mocked gateway echoed the dummy custom request header in an HTTP 200 text body. The connection test, live model catalog, OpenAI-compatible and Anthropic completion, Paper review, FigureForge PDF analysis and bitmap generation, and voice transcription all produced these messages.
+
+| Stage | Error output |
+| --- | --- |
+| Before at `36fc831` | `Unexpected token 'D', "DUMMY_GATEWAY_TOKEN" is not valid JSON` |
+| After | `The model provider returned invalid JSON. Check the model endpoint and try again.` |
+
+Deep Search displayed the same diagnostic as a query-expansion warning. Automated regressions also cover a fixed session header, saved chat failures for both providers, the OpenAI non-streaming retry, and the Paper review retry without a temperature field. The fixture sends no requests to a live provider.

@@ -72,7 +72,7 @@ export function formatModelConnectionError(error: unknown, t: ReturnType<typeof 
   const missingSession = /^Connection failed \((\d+)\): MissingSessionID$/.exec(detail);
   return missingSession
     ? t("Connection failed ({status}). In Settings → Models, select OpenCode Go or set Session header to x-opencode-session and Strategy to Thread.", { status: missingSession[1] })
-    : detail;
+    : t(detail);
 }
 
 const modelProfilesPreference = "archimedes-advanced-model-profiles";
@@ -291,7 +291,7 @@ export default function ModelSettingsModal({ bridge, open, onClose, onSaved, emb
       const result = await bridge.listProviderModels({ provider, baseUrl, apiKey, ...requestExtras() }, role);
       setCatalogModels(result.models);
     } catch (error) {
-      setCatalogError(String(error).replace(/^Error invoking remote method '[^']+': Error:\s*|^Error:\s*/, ""));
+      setCatalogError(formatModelConnectionError(error, t));
     } finally {
       setCatalogLoading(false);
     }

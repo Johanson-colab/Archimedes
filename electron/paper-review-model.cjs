@@ -1,6 +1,7 @@
 const modelConfig = require("./model-config.cjs");
 const { assertModelCompletion } = require("./agent/model-completion.cjs");
 const { buildModelRequestOptions, formatModelRequestError } = require("./model-request-headers.cjs");
+const { parseModelResponseJson, readModelResponseJson } = require("./model-response-json.cjs");
 
 /**
  * Minimal text-completion adapter for Paper review.
@@ -88,7 +89,7 @@ function extractJsonObject(text) {
   try {
     return JSON.parse(body);
   } catch {
-    return JSON.parse(sanitizeJsonText(body));
+    return parseModelResponseJson(sanitizeJsonText(body));
   }
 }
 
@@ -178,7 +179,7 @@ async function requestJson(model, { system, prompt, maxTokens = DEFAULT_MAX_TOKE
           signal: controller.signal,
         });
         if (retryResponse.ok) {
-          const payload = await retryResponse.json();
+          const payload = await readModelResponseJson(retryResponse);
           return completedPayload(payload, anthropic);
         }
         const retryDetail = (await retryResponse.text()).slice(0, 800);
@@ -186,7 +187,7 @@ async function requestJson(model, { system, prompt, maxTokens = DEFAULT_MAX_TOKE
       }
       throw new Error(formatModelRequestError(response.status, detail, model));
     }
-    const payload = await response.json();
+    const payload = await readModelResponseJson(response);
     return completedPayload(payload, anthropic);
   } catch (error) {
     if (controller.signal.aborted && signal?.aborted) throw new Error("Paper review was cancelled.");
