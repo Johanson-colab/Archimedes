@@ -229,7 +229,7 @@ export function exportBibliography(papers: BibliographyPaper[]) {
     });
     const formatValue = (field: string, value: string) => {
       if (field === "url" || field === "doi" || field === "eprint") {
-        return value.replace(/[{}\\]/g, character => encodeURIComponent(character));
+        return value.replace(/[{}\\]/g, character => character === "\\" ? "\\textbackslash{} " : "\\" + character);
       }
       if (field === "author") return paper.authors.map(author =>
         /\s+and\s+/i.test(author) ? `{${escape(author)}}` : escape(author)).join(" and ");

@@ -286,3 +286,13 @@ test("a repeat import finds a previously stored TeX-accented title and offers to
     data.close();
   }
 });
+
+test("DOIs with literal BibTeX delimiters keep their strong identity across export", () => {
+  for (const suffix of ["a{b}", String.raw`a\b`, "a%7bb%7d", "a~b"]) {
+    const doi = "10.5555/" + suffix;
+    const paper = { ...fixture.paper, doi, arxiv_id: "", s2_id: "", id: "doi-literal", citekey: "exact", entry_type: "article" };
+    const imported = scope.parseBibliography(scope.exportBibliography([paper])).entries[0].paper;
+    assert.equal(imported.doi, doi);
+    assert.equal(scope.matchBibliographyPaper(imported, [paper], { strongOnly: true }), paper);
+  }
+});
