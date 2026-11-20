@@ -3419,14 +3419,19 @@ function App() {
   const reorderSidebar = useCallback((group: SidebarOrderGroup, sourceId: string, targetId: string, after: boolean, parentId?: string) => {
     setSidebarOrder((current) => moveSidebarOrder(reconcileSidebarOrder(current, { ...availableSidebarOrder, workspaces: { ...availableSidebarWorkspaces } }), group, sourceId, targetId, after, parentId));
   }, [availableSidebarOrder, availableSidebarWorkspaces]);
-  const moduleCommands: PaletteCommand[] = flatModuleEntries.map((entry) => ({
-    id: entry.commandId,
-    group: t("Research Apps"),
-    label: t(entry.labelKey),
-    detail: legacyResearchAppLabel(entry.id) ? t(legacyResearchAppLabel(entry.id)!) : undefined,
-    icon: <entry.icon size={15} />,
-    run: () => activateSidebarEntry(entry),
-  }));
+  const moduleCommands: PaletteCommand[] = flatModuleEntries.map((entry) => {
+    const legacyLabel = legacyResearchAppLabel(entry.id);
+    const alias = legacyLabel ? t(legacyLabel) : undefined;
+    return {
+      id: entry.commandId,
+      group: t("Research Apps"),
+      label: t(entry.labelKey),
+      alias,
+      detail: alias,
+      icon: <entry.icon size={15} />,
+      run: () => activateSidebarEntry(entry),
+    };
+  });
   const moduleButton = (entry: SidebarEntry) => {
     const ids = flatModuleEntries.map((item) => item.id);
     const reorderByKeyboard = (event: React.KeyboardEvent<HTMLButtonElement>) => {

@@ -69,6 +69,56 @@ test("palette extensions and a paper's reproduction callback retain their select
   assert.equal(h.calls.at(-1), "reproduce");
 });
 
+test("the command palette opens chart references for the exact legacy name", async (t) => {
+  const { JSDOM } = require("jsdom");
+  const React = require("react");
+  const dom = new JSDOM('<div id="root"></div>', { pretendToBeVisual: true });
+  dom.window.HTMLElement.prototype.scrollIntoView = () => {};
+  global.window = dom.window;
+  global.document = dom.window.document;
+  global.IS_REACT_ACT_ENVIRONMENT = true;
+  const { createRoot } = require("react-dom/client");
+  const root = createRoot(document.getElementById("root"));
+  t.after(async () => {
+    await React.act(() => root.unmount());
+    dom.window.close();
+    delete global.window; delete global.document; delete global.IS_REACT_ACT_ENVIRONMENT;
+  });
+
+  const h = await harness({ hiddenCoreModules: new Set() });
+  const metadata = require("../shared/research-apps.json");
+  const entries = [
+    { id: "data-analysis", labelKey: "Data analysis" },
+    { id: "data-charts", labelKey: "Paper chart references" },
+  ];
+  Object.assign(h.scope, {
+    React,
+    activateSidebarEntry: h.activateSidebarEntry,
+    legacyResearchAppLabel: id => metadata.apps[id]?.legacyLabel,
+    flatModuleEntries: entries.map(entry => ({ ...entry, commandId: "open-" + entry.id, destination: { section: entry.id }, icon: () => null })),
+  });
+  const mapping = /const moduleCommands: PaletteCommand\[\] = ([\s\S]*?);\n  const moduleButton/.exec(source)[1];
+  const commands = await h.evaluate(mapping);
+  const { transformWithOxc } = await import("vite");
+  const paletteSource = fs.readFileSync(path.join(__dirname, "../src/CommandPalette.tsx"), "utf8")
+    .replace(/^import .*;$/gm, "").replace("export default ", "");
+  const { code } = await transformWithOxc(paletteSource, "CommandPalette.tsx", { jsx: { runtime: "classic" } });
+  const Palette = new Function("React", "Dialog", "Search", "StateView", `const { useEffect, useMemo, useRef, useState } = React; ${code.replace(/^export \{\};?$/gm, "")}\nreturn CommandPalette;`)(
+    React, ({ children }) => React.createElement("section", null, children), () => null, () => null,
+  );
+
+  for (const [query, destination] of [["Data charts", "data-charts"], ["Data analysis", "data-analysis"]]) {
+    await React.act(() => root.render(React.createElement(Palette, { key: query, open: true, commands, onClose() {} })));
+    const input = document.querySelector('[aria-label="Search commands"]');
+    await React.act(() => {
+      Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, "value").set.call(input, query);
+      input.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
+    });
+    await React.act(() => input.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Enter", bubbles: true })));
+    assert.equal(h.calls.at(-1), destination, query);
+  }
+});
+
 test("opening waits for persisted visibility, and a failed save keeps the current page reachable", async () => {
   let release;
   const pending = new Promise((resolve) => { release = resolve; });
