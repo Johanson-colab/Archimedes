@@ -944,6 +944,7 @@ const previewBridge = {
   listEnvironmentVariables: async () => [],
   saveEnvironmentVariable: async () => { throw new Error("Environment variables require the desktop app."); },
   removeEnvironmentVariable: async () => { throw new Error("Environment variables require the desktop app."); },
+  generateLiteratureReview: async () => { throw new Error("Literature review generation requires the desktop app."); },
   getWebSearchConfig: async () => ({ provider: "brave" as const, hasApiKey: false }),
   saveWebSearchConfig: async () => ({ provider: "brave" as const, hasApiKey: true }),
   readClipboardText: async () => "",
@@ -1226,6 +1227,7 @@ const FileCodeEditor = lazy(() => import("./FileCodeEditor"));
 const LibraryView = lazy(() => import("./LibraryView"));
 const DataChartsView = lazy(() => import("./DataChartsView"));
 const DataAnalysisView = lazy(() => import("./DataAnalysisView"));
+const LiteratureReviewView = lazy(() => import("./LiteratureReviewView"));
 const PaperToSlidesView = lazy(() => import("./PaperToSlidesView"));
 const ImageCreationView = lazy(() => import("./ImageCreationView"));
 const BenchmarkRadarView = lazy(() => import("./BenchmarkRadarView"));
@@ -1377,6 +1379,7 @@ function App() {
   const [imageCreationOpened, setImageCreationOpened] = useState(false);
   const [dataChartsOpened, setDataChartsOpened] = useState(false);
   const [dataAnalysisOpened, setDataAnalysisOpened] = useState(false);
+  const [literatureReviewOpened, setLiteratureReviewOpened] = useState(false);
   const [dailyStartMode, setDailyStartMode] = useState<DailyDiscoveryMode | "conference">("latest");
   const [libraryRefreshVersion, setLibraryRefreshVersion] = useState(0);
   const [messages, setMessages] = useState<Message[]>(initialMessages);
@@ -2049,6 +2052,7 @@ function App() {
     if (section === "image-creation") setImageCreationOpened(true);
     if (section === "data-charts") setDataChartsOpened(true);
     if (section === "data-analysis") setDataAnalysisOpened(true);
+    if (section === "literature-review") setLiteratureReviewOpened(true);
     setMainSection(section);
   }
 
@@ -3460,6 +3464,7 @@ function App() {
     reproduce: <ReproduceView bridge={desktopBridge} selectedId={reproduceId} onSelect={setReproduceId} />,
     "image-creation": <ImageCreationView active={mainSection === "image-creation"} onBrowseProceedings={() => { setDailyStartMode("conference"); setMainSection("daily"); }} />,
     "data-charts": <DataChartsView active={mainSection === "data-charts"} />,
+    "literature-review": <LiteratureReviewView key={`${workspace}:${activeProjectId || ""}`} bridge={desktopBridge} />,
     "data-analysis": <DataAnalysisView onAskAI={(text) => sendNoteToChat(text, "replace")} />,
     "paper-to-slides": <PaperToSlidesView bridge={desktopBridge} workspace={executionWorkspace} busy={agentBusy} onStart={async ({ pdfPath, backend, language, length, instructions, mineruToken }) => {
       const staged = await desktopBridge.stagePaperToSlidesPdf(executionWorkspace, pdfPath);
@@ -3473,7 +3478,7 @@ function App() {
   for (const entry of pluginEntries) {
     sidebarModuleContent[entry.id] = <PluginModuleView key={entry.id} entry={entry} />;
   }
-  const sidebarModuleOpen: Partial<Record<string, boolean>> = { "image-creation": imageCreationOpened, "data-charts": dataChartsOpened, "data-analysis": dataAnalysisOpened };
+  const sidebarModuleOpen: Partial<Record<string, boolean>> = { "image-creation": imageCreationOpened, "data-charts": dataChartsOpened, "data-analysis": dataAnalysisOpened, "literature-review": literatureReviewOpened };
 
   return (
     <main className={`codex-shell theme-${theme}${sidebarHidden ? " sidebar-hidden" : ""}`} style={{ "--sidebar-width": `${sidebarWidth}px` } as React.CSSProperties}>

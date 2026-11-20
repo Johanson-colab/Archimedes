@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { isBetaResearchApp, researchAppMetadata, type ResearchAppCategory } from "./research-apps";
 import type { LucideIcon } from "lucide-react";
-import { BookOpen, Calendar, ChartLine, ClipboardCheck, FilePen, FlaskConical, ImagePlus, Puzzle, Radar, Rss, Table, Presentation } from "lucide-react";
+import { BookOpen, BookOpenText, Calendar, ChartLine, ClipboardCheck, FilePen, FlaskConical, ImagePlus, Puzzle, Radar, Rss, Table, Presentation } from "lucide-react";
 
 // Legacy plugin sections remain compatible; research categories drive app management.
 export type SidebarSection = "knowledge" | "create" | "evaluate";
@@ -12,7 +12,7 @@ export type SidebarSection = "knowledge" | "create" | "evaluate";
  * already accepts `plugin:<id>` so runtime-registered modules can join this
  * same projection once they land.
  */
-export type SidebarModuleId = "library" | "daily" | "news" | "benchmark-radar" | "extensions" | "reproduce" | "writing" | "image-creation" | "data-charts" | "data-analysis" | "paper-review" | "paper-to-slides";
+export type SidebarModuleId = "library" | "literature-review" | "daily" | "news" | "benchmark-radar" | "extensions" | "reproduce" | "writing" | "image-creation" | "data-charts" | "data-analysis" | "paper-review" | "paper-to-slides";
 
 /** Main sections that are not modules: they stay hardcoded in App. */
 export type MainSection = "chat" | "files" | SidebarModuleId | `plugin:${string}`;
@@ -57,6 +57,7 @@ export type SidebarEntry = {
  */
 export const coreSidebarEntries: SidebarEntry[] = ([
   { id: "library", commandId: "open-library", section: "knowledge", labelKey: "Library", titleKey: "Library", icon: BookOpen, destination: { type: "section", section: "library" }, source: "core", keepMounted: true, cacheClass: "library-view-cache", requiresWorkspace: true },
+  { id: "literature-review", commandId: "open-literature-review", section: "knowledge", labelKey: "Literature Review", titleKey: "Literature Review", icon: BookOpenText, destination: { type: "section", section: "literature-review" }, source: "core", keepMounted: true, cacheClass: "literature-review-cache", requiresWorkspace: true },
   { id: "daily", commandId: "open-daily-papers", section: "knowledge", labelKey: "Daily papers", titleKey: "Daily papers", icon: Calendar, destination: { type: "section", section: "daily" }, source: "core", requiresWorkspace: true },
   { id: "news", commandId: "open-news", section: "knowledge", labelKey: "News", titleKey: "News", icon: Rss, destination: { type: "section", section: "news" }, source: "core" },
   { id: "benchmark-radar", commandId: "open-benchmark-radar", section: "knowledge", labelKey: "Benchmark Radar", titleKey: "Benchmark Radar", icon: Radar, destination: { type: "section", section: "benchmark-radar" }, source: "core" },

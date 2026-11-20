@@ -193,6 +193,7 @@ contextBridge.exposeInMainWorld("researchDesk", {
   setReproductionEnv: (id, name, value) => ipcRenderer.invoke("reproduction:env-set", { id, name, value }),
   removeReproductionEnv: (id, name) => ipcRenderer.invoke("reproduction:env-remove", { id, name }),
   testReproductionEnv: (id, name) => ipcRenderer.invoke("reproduction:env-test", { id, name }),
+  generateLiteratureReview: (input) => ipcRenderer.invoke("literature-review:generate", input),
   deepSearchPapers: (input) => ipcRenderer.invoke("library:deep-search", input),
   getBenchmarkRadarData: (options) => ipcRenderer.invoke("benchmark-radar:get-data", options),
   searchConferencePapers: (input) => ipcRenderer.invoke("library:search-conferences", input),

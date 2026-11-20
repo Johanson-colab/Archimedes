@@ -233,6 +233,7 @@ interface ResearchDeskBridge {
       steps?: ReproductionStep[];
       step?: ReproductionRunStep;
     }) => void) => () => void;
+    generateLiteratureReview: (input: { question: string; papers: AcademicSearchResult[] }) => Promise<LiteratureReviewDraft>;
     deepSearchPapers: (input: DeepPaperSearchInput) => Promise<DeepPaperSearchResponse>;
     getBenchmarkRadarData: (options?: { cachedOnly?: boolean; refresh?: boolean }) => Promise<BenchmarkRadarData>;
     searchConferencePapers: (input: ConferenceSearchOptions) => Promise<ConferenceSearchResponse>;
@@ -2145,3 +2146,5 @@ interface BenchmarkRadarData {
   library: BenchmarkRadarRecord[];
   directions: BenchmarkRadarDirection[];
 }
+
+interface LiteratureReviewDraft { sections: Array<{ title: string; paragraphs: Array<{ text: string; sources: number[] }> }>; limitations: string; }

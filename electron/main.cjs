@@ -67,6 +67,7 @@ const sshServers = require("./ssh-servers.cjs");
 const { discoverDailyPapers, normalizeDailyOptions, resolveArxivFigure, searchAcademicPapers } = require("./literature.cjs");
 const { createDailyFigureCache } = require("./daily-figure-cache.cjs");
 const { deepSearchPapers } = require("./deep-paper-search.cjs");
+const { generateLiteratureReview } = require("./literature-review.cjs");
 const { searchConferencePapers } = require("./conferences.cjs");
 const skillCatalog = require("./skill-catalog.cjs");
 const speech = require("./speech.cjs");
@@ -1736,6 +1737,7 @@ app.whenReady().then(async () => {
     }
   });
 
+  ipcMain.handle("literature-review:generate", (_event, input) => generateLiteratureReview(input, { modelConfig: modelConfig.getActiveModelConfig() }));
   ipcMain.handle("library:deep-search", async (_event, input = {}) => {
     if (!input || typeof input !== "object") throw new Error("Deep-search input is required.");
     return deepSearchPapers(input, { modelConfig: modelConfig.getActiveModelConfig() });
