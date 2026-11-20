@@ -53,7 +53,7 @@ export default function BibliographyDialog({ bridge, library, onClose, onChanged
     setSelected(new Set(parseBibliography(value).entries.map((_, index) => index)));
   }
   async function apply() {
-    setBusy(true); setError("");
+    setBusy(true); setError(""); setExportText("");
     try {
       for (const [index, row] of preview.entries()) {
         if (!alive.current) break;
