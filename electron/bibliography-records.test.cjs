@@ -59,3 +59,38 @@ test("bibliography keys and explicit repairs persist through the actual preload 
   try { await assert.rejects(bridge.setPaperBibliography(paper.id, { citekey: "Forbidden" }), /editor/); await assert.rejects(bridge.repairLibraryPaperMetadata(paper.id, { title: "Forbidden" }), /editor/); }
   finally { store.setLocalIdentity({ userId: "local-user", displayName: "Local user", deviceId: "local-device", deviceName: "This device" }); }
 });
+
+test("same-title references use stable canonical keys across workspaces and import order", t => {
+  const first = fixture(t), second = fixture(t);
+  const references = [
+    { title: "Editorial", authors: ["Alice Chen"], year: 2010 },
+    { title: "Editorial", authors: ["Bob Martin"], year: 2026 },
+  ];
+  function keysFor(workspace, papers) {
+    workspace.owner.openWorkspace(workspace.root);
+    return Object.fromEntries(papers.map(paper => [
+      paper.year, workspace.owner.addPaper(workspace.libraryA.id, paper).canonical_key,
+    ]));
+  }
+  const ordered = keysFor(first, references);
+  const reversed = keysFor(second, [...references].reverse());
+  assert.notEqual(ordered[2010], ordered[2026]);
+  assert.deepEqual(reversed, ordered);
+});
+
+test("reimporting the original title preserves both legacy and current canonical records after a repair", t => {
+  const f = fixture(t);
+  for (const legacy of [true, false]) {
+    const original = { title: legacy ? "Original legacy title" : "Original title", authors: ["Fei Chen"], year: 2022 };
+    const input = legacy ? { ...original, canonical_key: "title:original legacy title" } : original;
+    const paper = f.owner.addPaper(f.libraryA.id, input);
+    f.owner.updatePaper(paper.id, { notes: "Keep the reading note", reading_status: "read" });
+    f.owner.repairLibraryPaperMetadata(paper.id, { title: original.title + " (repaired)" });
+    const reimported = f.owner.addPaper(f.libraryA.id, original);
+    assert.equal(reimported.id, paper.id);
+    assert.equal(reimported.canonical_key, paper.canonical_key);
+    assert.equal(reimported.title, original.title + " (repaired)");
+    assert.equal(reimported.notes, "Keep the reading note");
+    assert.equal(reimported.reading_status, "read");
+  }
+});
