@@ -15,7 +15,7 @@ export default function BibliographyDialog({ bridge, library, onClose, onChanged
   const [busy, setBusy] = useState(false);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [repairs, setRepairs] = useState<Record<number, string[]>>({});
-  const [done, setDone] = useState<Set<number>>(new Set());
+  const [done, setDone] = useState<Map<number, string>>(new Map());
   const [error, setError] = useState("");
   const [exportText, setExportText] = useState("");
   const alive = useRef(true);
@@ -24,7 +24,9 @@ export default function BibliographyDialog({ bridge, library, onClose, onChanged
   const batch = useMemo(() => indexBibliographyBatch(parsed.entries), [parsed.entries]);
   const preview = useMemo(() => parsed.entries.map((entry, index) => {
     const candidate = batch.representatives.get(index) ?? entry.paper;
-    const existing = matchBibliographyPaper(candidate, targetPapers, { strongOnly: true })
+    const savedId = done.get(index);
+    const existing = (savedId && targetPapers.find(paper => paper.id === savedId))
+      || matchBibliographyPaper(candidate, targetPapers, { strongOnly: true })
       || matchBibliographyPaper(candidate, projectPapers, { strongOnly: true })
       || matchBibliographyPaper(candidate, known, { strongOnly: true })
       || matchBibliographyPaper(candidate, targetPapers)
@@ -37,7 +39,7 @@ export default function BibliographyDialog({ bridge, library, onClose, onChanged
     const differences = existing ? metadataDifferences(entry.paper, paperWithLearnedIdentifiers(existing, entry.paper, candidate)) : {};
     const blocked = duplicate || keyConflict || identifierConflict;
     return { entry, candidate, existing, duplicate, keyConflict, identifierConflict, blocked, differences };
-  }), [batch, parsed.entries, known, targetPapers, projectPapers]);
+  }), [batch, done, parsed.entries, known, targetPapers, projectPapers]);
   useEffect(() => {
     let active = true;
     void (async () => {
@@ -54,7 +56,7 @@ export default function BibliographyDialog({ bridge, library, onClose, onChanged
     return () => { active = false; };
   }, [bridge, library.id]);
   function changeInput(value: string) {
-    setInput(value); setDone(new Set()); setRepairs({}); setExportText("");
+    setInput(value); setDone(new Map()); setRepairs({}); setExportText("");
     setSelected(new Set(parseBibliography(value).entries.map((_, index) => index)));
   }
   async function apply() {
@@ -85,7 +87,7 @@ export default function BibliographyDialog({ bridge, library, onClose, onChanged
           paper = { ...paper, citekey: row.entry.citekey, entry_type: row.entry.entryType };
         }
         savedInBatch.set(paper.id, paper);
-        setDone((current) => new Set(current).add(index));
+        setDone((current) => new Map(current).set(index, paper.id));
       }
       if (!alive.current) return;
       await onChanged();

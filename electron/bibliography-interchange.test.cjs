@@ -342,7 +342,9 @@ test("a selected title repair preserves the paper ID resolved for a later row", 
     assert.deepEqual(papers.map(paper => [paper.id, paper.title, paper.notes, paper.citekey, paper.entry_type]), [
       [saved.id, "Corrected field experiment", "Keep the field notes", "field", "inproceedings"],
     ]);
-    assert.equal([...document.querySelectorAll("article small")].filter(row => row.textContent.includes("Imported")).length, 2);
+    const importedRows = [...document.querySelectorAll("article small")];
+    assert.equal(importedRows.filter(row => row.textContent.includes("Imported")).length, 2);
+    assert.match(importedRows[1].textContent, /Existing paper.*Imported/);
   } finally { if (unmount) await unmount(); data.close(); }
 });
 
