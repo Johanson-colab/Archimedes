@@ -211,3 +211,89 @@ test("JSON review/planner refuses truncated but parseable output before its sing
     assert.equal(requests, 1);
   }
 });
+
+test("real Agent requests reserve tool schemas, provider structure and output tokens within the profile window", async t => {
+  const http = require("node:http");
+  const store = require("./store.cjs");
+  const model = require("./model-config.cjs");
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-request-budget-")));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  store.openWorkspace(root);
+  model.initializeModelConfig(path.join(root, "settings"));
+  const fixture = JSON.stringify(Array(2000).fill("abcd"));
+  fs.writeFileSync(path.join(root, "fixture.json"), fixture);
+  let requests = [];
+  const server = http.createServer(async (request, response) => {
+    let raw = "";
+    for await (const chunk of request) raw += chunk;
+    const body = JSON.parse(raw);
+    requests.push({ raw, body });
+    const anthropic = request.url.endsWith("/messages");
+    const name = "read_workspace_file";
+    const args = { path: "fixture.json" };
+    const answer = "The local request stayed within its configured estimate.";
+    const first = requests.length === 1;
+    const result = anthropic
+      ? first
+        ? { stop_reason: "tool_use", content: [{ type: "tool_use", id: "fixture-result", name, input: args }] }
+        : { stop_reason: "end_turn", content: [{ type: "text", text: answer }] }
+      : { choices: [{ finish_reason: first ? "tool_calls" : "stop", message: first
+        ? { role: "assistant", content: "", tool_calls: [{ type: "function", id: "fixture-result", function: { name, arguments: JSON.stringify(args) } }] }
+        : { role: "assistant", content: answer } }] };
+    response.writeHead(200, { "Content-Type": "application/json" });
+    response.end(JSON.stringify(result));
+  });
+  await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
+  t.after(() => new Promise(resolve => server.close(resolve)));
+
+  const contextWindowTokens = 12_000;
+  const maxOutputTokens = 321;
+  for (const provider of ["custom", "anthropic"]) {
+    requests = [];
+    model.saveModelConfig({ ...config, provider, baseUrl: `http://127.0.0.1:${server.address().port}/v1`, contextWindowTokens, maxOutputTokens });
+    const thread = store.createResearchThread({ prompt: "Review the local fixture", mode: "standard", workspacePath: root });
+    for (let index = 0; index < 20; index++) {
+      const turn = store.startResearchTurn({ threadId: thread.id, prompt: `Prior research question ${index}`, mode: "standard" });
+      store.finishResearchTurn(turn.id, { response: "x".repeat(51_000) });
+    }
+
+    const result = await agent.runAgent({ threadId: thread.id, workspace: root, prompt: "Read fixture.json and summarize.", autoBuildGraph: false });
+    assert.equal(result.status, "completed", result.response);
+    assert.equal(requests.length, 2);
+    for (const { raw, body } of requests) {
+      assert.ok(body.tools.length >= 20, "keep the actual built-in tool schemas");
+      assert.equal(body.max_tokens, maxOutputTokens);
+      assert.ok(raw.length + 4 * body.max_tokens <= 4 * contextWindowTokens, `${provider} request consumed ${raw.length + 4 * body.max_tokens} estimated characters`);
+    }
+    const messages = requests[1].body.messages;
+    const toolResult = provider === "anthropic"
+      ? messages.flatMap(message => message.content).find(block => block.tool_use_id === "fixture-result")
+      : messages.find(message => message.tool_call_id === "fixture-result");
+    assert.ok(toolResult);
+    assert.match(toolResult.content, /abcd/);
+    t.diagnostic(`${provider} serialized request lengths: ${requests.map(request => request.raw.length).join(", ")}; output reserve: ${4 * maxOutputTokens}`);
+  }
+});
+
+test("a fixed prompt that cannot fit emits and persists a stable context-budget error before sending a request", async t => {
+  const store = require("./store.cjs");
+  const model = require("./model-config.cjs");
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-fixed-context-")));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  store.openWorkspace(root);
+  model.initializeModelConfig(path.join(root, "settings"));
+  model.saveModelConfig({ ...config, contextWindowTokens: 6_000, maxOutputTokens: 321 });
+  let requests = 0;
+  fakeFetch(t, async () => { requests++; throw new Error("No request should have been sent"); });
+  const events = [];
+  const result = await agent.runAgent({ workspace: root, prompt: "Review the local evidence. ".repeat(1000), emit: event => events.push(event) });
+  assert.equal(result.status, "failed");
+  assert.deepEqual(result.error, { code: "MODEL_CONTEXT_BUDGET_EXCEEDED" });
+  assert.equal(requests, 0);
+  assert.match(result.response, /^The active prompt exceeds this model profile's context budget/);
+  assert.deepEqual(events.find(event => event.type === "failed").error, result.error);
+  assert.equal(events.find(event => event.type === "failed").detail, result.response);
+  const saved = store.getResearchThread(result.threadId);
+  assert.deepEqual(saved.events.find(event => event.type === "context_budget_exceeded").payload, result.error);
+  assert.equal(saved.turns.at(-1).assistant_message, result.response);
+});

@@ -1964,10 +1964,12 @@ interface AgentRunResult {
   taskId: string;
   response: string;
   status: string;
-  error?: ModelIncompleteFailure;
+  error?: ModelIncompleteFailure | ModelContextBudgetFailure;
   actions: AgentAction[];
   thread: ResearchThreadDetail;
 }
+
+interface ModelContextBudgetFailure { code: "MODEL_CONTEXT_BUDGET_EXCEEDED" }
 
 interface ModelIncompleteFailure { code: "MODEL_RESPONSE_INCOMPLETE"; reason: string; provider: string; finishReason?: string | null }
 
@@ -1979,7 +1981,7 @@ interface AgentEvent {
   turnId?: string;
   delta?: string;
   clientRunId?: string;
-  error?: ModelIncompleteFailure;
+  error?: ModelIncompleteFailure | ModelContextBudgetFailure;
   action?: AgentAction;
   changeSet?: WorkspaceChangeSet;
   toolCall?: { id?: string; name?: string; source: string; status: "running" | "completed" | "failed" | "interrupted"; durationMs: number };

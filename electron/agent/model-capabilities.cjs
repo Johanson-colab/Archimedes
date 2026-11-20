@@ -4,6 +4,10 @@ const STANDARD_CONTEXT_CHARS = 500_000;
 const EXTRA_LONG_CONTEXT_CHARS = 1_000_000;
 const ESTIMATED_CHARACTERS_PER_TOKEN = 4;
 
+function estimateTokenCharacters(tokens) {
+  return tokens * ESTIMATED_CHARACTERS_PER_TOKEN;
+}
+
 function tokenCount(value) {
   const count = Math.round(Number(value));
   return Number.isSafeInteger(count) && count > 0 ? count : 0;
@@ -47,7 +51,7 @@ function getModelCapabilities(config = {}) {
   const contextWindowTokens = tokenCount(config.contextWindowTokens);
   // The conversation and composer share a character estimate. The provider
   // applies its own tokenizer when it receives the actual request.
-  const windowCharacters = contextWindowTokens * ESTIMATED_CHARACTERS_PER_TOKEN;
+  const windowCharacters = estimateTokenCharacters(contextWindowTokens);
   return {
     thinkingEfforts: Array.isArray(explicit.thinkingEfforts) ? explicit.thinkingEfforts : (nativeThinking ? THINKING_EFFORTS : []),
     contextLengths: Array.isArray(explicit.contextLengths) ? explicit.contextLengths : (extraLongContext ? CONTEXT_LENGTHS : ["standard"]),
@@ -85,6 +89,7 @@ module.exports = {
   STANDARD_CONTEXT_CHARS,
   THINKING_EFFORTS,
   contextCharacterLimit,
+  estimateTokenCharacters,
   getModelCapabilities,
   isNativeThinkingModel,
   normalizeContextLength,

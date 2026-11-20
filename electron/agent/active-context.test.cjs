@@ -75,3 +75,20 @@ test('a small profile can reclaim continuity summary space for the next tool rou
   assert.equal(messages.at(-1).content, toolResult);
   assert.equal(messages.at(-1).tool_call_id, messages.at(-2).tool_calls[0].id);
 });
+
+test('clips an escape-heavy tool result using the serialized preview size', () => {
+  const messages = [{ role: 'user', content: 'question' }, ...group('structured', 0)];
+  const original = JSON.stringify(Array(1500).fill('abcd'));
+  messages.at(-1).content = original;
+  const characters = () => messages.reduce((total, message) => total + JSON.stringify(message).length, 0);
+  const limit = characters() - 500;
+
+  assert.deepEqual(boundActiveContext(messages, limit, { strict: true }), { removed: 0, clipped: 1 });
+  assert.ok(characters() <= limit);
+  assert.ok(characters() > limit - 5);
+  const result = JSON.parse(messages.at(-1).content);
+  assert.equal(result.truncated, true);
+  assert.ok(result.preview.length > 0 && result.preview.length < original.length);
+  assert.equal(result.preview, original.slice(0, result.preview.length));
+  assert.equal(messages.at(-1).tool_call_id, messages.at(-2).tool_calls[0].id);
+});
