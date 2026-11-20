@@ -1,0 +1,518 @@
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
+const { before, after, test } = require("node:test");
+const { JSDOM } = require("jsdom");
+const store = require("./store.cjs");
+const fixture = require("./test-support/discovery-fixture.cjs");
+let dom, React, createRoot, scope;
+const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+let language = "en";
+const t = (key, values) => {
+  const template = language === "zh" ? scope.library[key] ?? scope.misc[key] ?? key : key;
+  return values ? template.replace(/\{(\w+)\}/g, (match, name) => values[name] ?? match) : template;
+};
+before(async () => {
+  dom = new JSDOM('<div id="root"></div>', { url: "http://localhost", pretendToBeVisual: true });
+  for (const key of ["window", "document", "HTMLElement", "Node"]) global[key] = dom.window[key];
+  global.IS_REACT_ACT_ENVIRONMENT = true;
+  React = require("react"); ({ createRoot } = require("react-dom/client"));
+  const element = React.createElement;
+  scope = {
+    React, ...React, useUISettings: () => ({ t }),
+    Dialog: ({ open, children }) => open ? element("section", { role: "dialog" }, children) : null,
+    InlineNotice: ({ children }) => element("p", { role: "alert" }, children),
+    StateView: ({ title, action }) => element("section", null, title, action),
+    readableError: (error, fallback) => (error instanceof Error ? error.message : String(error || fallback)).replace(/^Error invoking remote method '[^']+':\s*/i, "").replace(/^Error:\s*/i, "").trim() || fallback,
+    DailyThumbnail: () => null, DailyPaperPreview: ({ paper, onClose }) => element("section", null, paper.title, element("button", { onClick: onClose }, "Close preview")),
+    DAILY_RANGES: [{ id: "7d", label: "7 days" }], DAILY_TOPICS: [{ id: "all", label: "All" }, { id: "coding_agents", label: "Coding agents" }],
+    ConferenceDiscovery: () => null,
+  };
+  const icons = require("lucide-react");
+  for (const name of ["Clock3", "Flame", "GraduationCap", "LoaderCircle", "RefreshCw", "Search", "Sparkle", "ArrowUp", "Plus", "Check", "Calendar", "ExternalLink", "Code2", "FileText", "BookOpen", "ChevronLeft", "ChevronRight"]) scope[name] = icons[name];
+  const { transformWithOxc } = await import("vite");
+  async function load(file, names, part) {
+    let source = fs.readFileSync(path.join(__dirname, "../src", file), "utf8");
+    if (part) source = part(source);
+    source = source.replace(/^import[\s\S]*?from\s+"[^"]+";\r?\n/gm, "").replace(/^import "[^"]+";\r?\n/gm, "").replace(/export default function/g, "function").replace(/export (function|const)/g, "$1");
+    const { code } = await transformWithOxc(source, file, { jsx: { runtime: "classic" } });
+    const result = new Function(...Object.keys(scope), `${code.replace(/^export \{\};?$/gm, "")}\nreturn {${names.join(",")}};`)(...Object.values(scope));
+    Object.assign(scope, result);
+  }
+  await load("discovery-state.ts", ["discoveryPaperFields", "discoveryPaperKey", "discoveryStorageKey", "readDiscoverySnapshot", "writeDiscoverySnapshot"]);
+  await load("Tabs.tsx", ["Tabs", "Tab", "FilterGroup", "FilterButton"]);
+  await load("i18n/translations/library.ts", ["library"]);
+  await load("i18n/translations/misc.ts", ["misc"]);
+  scope.conferenceCatalog = require("../shared/conferences.json");
+  scope.ReactMarkdown = ({ children }) => React.createElement("span", null, children); scope.remarkMath = () => {}; scope.rehypeKatex = () => {};
+  await load("ConferenceDiscovery.tsx", ["ConferenceDiscovery"]);
+  await load("LibraryView.tsx", ["DailyDiscovery"], (text) => text.slice(text.indexOf("function DailyDiscovery("), text.indexOf("\nfunction DailyPaperPreview")) + text.slice(text.indexOf("\nfunction DeepSearchResults")));
+  await load("LibraryView.tsx", ["DailyLibraryView"], (text) => text.slice(text.indexOf("function DailyLibraryView("), text.indexOf("\nfunction PaperInspector")));
+});
+after(() => { dom.window.close(); for (const key of ["window", "document", "HTMLElement", "Node", "IS_REACT_ACT_ENVIRONMENT"]) delete global[key]; });
+
+async function mount(Component, props) {
+  const root = createRoot(document.getElementById("root"));
+  await React.act(async () => { root.render(React.createElement(Component, props)); await tick(); await tick(); });
+  return () => React.act(async () => { root.unmount(); });
+}
+async function click(label) {
+  const button = [...document.querySelectorAll("button")].find((node) => node.textContent.trim() === label || node.getAttribute("aria-label") === label);
+  assert.ok(button, `Missing ${label}`); assert.equal(button.disabled, false, `${label} is disabled`);
+  await React.act(async () => { button.click(); await tick(); await tick(); });
+}
+async function input(node, value) {
+  assert.ok(node);
+  const prototype = node.tagName === "TEXTAREA" ? dom.window.HTMLTextAreaElement.prototype : dom.window.HTMLInputElement.prototype;
+  await React.act(async () => {
+    Object.getOwnPropertyDescriptor(prototype, "value").set.call(node, value);
+    node.dispatchEvent(new dom.window.Event("input", { bubbles: true })); await tick();
+  });
+}
+async function choose(node, value) {
+  assert.ok(node);
+  await React.act(async () => {
+    node.value = value;
+    node.dispatchEvent(new dom.window.Event("change", { bubbles: true })); await tick();
+  });
+}
+function conferencePaper(title, year = 2026) {
+  return { ...fixture.paper, title, conference: { id: "icml", year, presentation: "oral", decision: "Accepted", track: "Main", source_url: "https://example.invalid/catalog", presentation_source_url: "", retrieved_at: "2026-11-16" } };
+}
+function conferenceResponse(options, papers = []) {
+  return { papers, total: papers.length, catalog_total: papers.length, presentation_counts: { oral: 0, poster: 0, spotlight: 0, unknown: 0 }, options, sources: ["https://example.invalid/catalog"], status: "available", warnings: [], fetched_at: new Date().toISOString(), cached: false, stale: false, has_more: false };
+}
+function database(name) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-discovery-")), idle = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-discovery-idle-"));
+  store.openWorkspace(root);
+  const db = store, project = db.createResearchProject({ name });
+  const bridge = { listLibraries: async id => db.listLibraries(id), listLibraryPapers: async id => db.listPapers(id), createLibrary: async input => db.createLibrary(input), addLibraryPaper: async (...args) => db.addPaper(...args) };
+  return { root, db, project, bridge, close() { store.openWorkspace(idle); fs.rmSync(root, { recursive: true, force: true }); fs.rmSync(idle, { recursive: true, force: true }); } };
+}
+test("discovery creates a library inline, saves a paper, and remounts without searching across data roots", async () => {
+  window.localStorage.clear();
+  const data = database("Discovery A");
+  let feeds = 0, unmount;
+  data.bridge.discoverDailyPapers = async (input) => { feeds++; return fixture.feed(input); };
+  function Host({ dataRoot }) {
+    const [libraries, setLibraries] = React.useState(data.db.listLibraries(data.project.id));
+    return React.createElement(scope.DailyDiscovery, { storageKey: scope.discoveryStorageKey(dataRoot, data.project.id), projectId: data.project.id, bridge: data.bridge, libraries, loadingLibraries: false, onImported: async () => setLibraries(data.db.listLibraries(data.project.id)) });
+  }
+  try {
+    unmount = await mount(Host, { dataRoot: data.root });
+    await input(document.querySelector('.daily-search-input-row input'), "handoff evidence"); await click("Search");
+    assert.equal(document.querySelector('[aria-label="New discovery library"]'), null);
+    await click("New library");
+    await input(document.querySelector('[aria-label="New discovery library"]'), "Selected evidence"); await click("Create library here");
+    assert.equal(document.querySelector('[aria-label="New discovery library"]'), null, "the creation control collapses after success");
+    await click("Save");
+    const library = data.db.listLibraries(data.project.id)[0];
+    assert.equal(data.db.listPapers(library.id).length, 1);
+    const before = feeds; await unmount();
+    unmount = await mount(Host, { dataRoot: data.root });
+    assert.equal(feeds, before, "restoring a snapshot must not trigger a new query");
+    assert.equal(document.querySelector('.daily-search-input-row input').value, "handoff evidence");
+    assert.ok(document.body.textContent.includes("Evidence handoff fixture"));
+    assert.equal(document.querySelector('.daily-save-target select').value, library.id);
+    assert.ok([...document.querySelectorAll("button")].some((button) => button.textContent.trim() === "Saved"));
+    await unmount(); unmount = await mount(Host, { dataRoot: `${data.root}-other-store` });
+    assert.equal(document.querySelector('.daily-search-input-row input').value, "");
+    assert.equal(feeds, before + 1, "a different dataRoot has its own discovery state");
+  } finally { if (unmount) await unmount(); data.close(); }
+});
+
+
+test("conference discovery restores the candidate page without re-querying", async () => {
+  const data = database("Conference"); let unmount, calls = 0;
+  const library = data.db.listLibraries(data.project.id)[0];
+  const paper = { ...fixture.paper, conference: { id: "icml", year: 2026, presentation: "oral", decision: "Accepted", track: "Main", source_url: "https://example.invalid/catalog", presentation_source_url: "", retrieved_at: "2026-11-16" } };
+  data.bridge.searchConferencePapers = async (options) => { calls++; return { ...conferenceResponse(options, [paper]), status: "partial", warnings: ["Fixture partial catalog"] }; };
+  const props = { storageKey: scope.discoveryStorageKey(data.root, data.project.id) + ":conference", bridge: data.bridge, projectId: data.project.id, targetLibraryId: library.id, topic: "all", onImported: async () => {} };
+  try {
+    unmount = await mount(scope.ConferenceDiscovery, props);
+    await input(document.querySelector('[aria-label="Search conference papers"]'), "conference evidence"); await click("Search");
+    await click("Save");
+    assert.equal(data.db.listPapers(library.id).length, 1);
+    const before = calls; await unmount(); unmount = await mount(scope.ConferenceDiscovery, props);
+    assert.equal(calls, before); assert.equal(document.querySelector('[aria-label="Search conference papers"]').value, "conference evidence");
+    assert.ok(document.body.textContent.includes("Evidence handoff fixture"));
+  } finally { if (unmount) await unmount(); data.close(); }
+});
+
+test("expired and stale conference snapshots revalidate with their saved controls", async () => {
+  const options = { conference: "icml", year: 2026, presentation: "oral", query: "saved query", offset: 0, topic: "all" };
+  for (const cache of [{ fetched_at: new Date(Date.now() - 7 * 60 * 60 * 1000).toISOString() }, { stale: true }]) {
+    const storageKey = "expired-conference";
+    let calls = 0;
+    const response = { ...conferenceResponse(options), status: "not_published", ...cache };
+    window.localStorage.setItem(storageKey, JSON.stringify({ ...options, submittedQuery: options.query, response }));
+    const bridge = { searchConferencePapers: async (input) => {
+      calls++;
+      assert.equal(input.forceRefresh, false);
+      assert.equal(input.presentation, "oral");
+      assert.equal(input.query, "saved query");
+      return conferenceResponse(input, [conferencePaper("Published oral paper")]);
+    } };
+    const unmount = await mount(scope.ConferenceDiscovery, { storageKey, bridge, targetLibraryId: "", topic: "all", onImported: async () => {} });
+    try {
+      assert.equal(calls, 1);
+      assert.match(document.body.textContent, /Published oral paper/);
+    } finally { await unmount(); }
+  }
+});
+
+test("conference filters use the refreshed catalog even when selected during the refresh", async () => {
+  const requests = [];
+  let finishRefresh;
+  let published = false;
+  const bridge = { searchConferencePapers(input) {
+    requests.push(input);
+    if (input.forceRefresh) return new Promise((resolve) => {
+      finishRefresh = () => {
+        published = true;
+        resolve(conferenceResponse(input, [conferencePaper("New oral paper")]));
+      };
+    });
+    return Promise.resolve(conferenceResponse(input, published ? [conferencePaper("New oral paper")] : []));
+  } };
+  const unmount = await mount(scope.ConferenceDiscovery, { bridge, targetLibraryId: "", topic: "all", onImported: async () => {} });
+  const view = async (name) => {
+    const tab = [...document.querySelectorAll(".conference-presentation-tabs button")].find((button) => button.textContent.startsWith(name));
+    assert.ok(tab);
+    await React.act(async () => { tab.click(); await tick(); });
+  };
+  try {
+    await view("Oral");
+    assert.match(document.body.textContent, /No papers match these filters/);
+    await view("All");
+    await click("Refresh");
+    await view("Oral");
+    assert.equal(requests.filter(({ presentation }) => presentation === "oral").length, 1);
+    assert.match(document.body.textContent, /Loading the official/);
+    await React.act(async () => { finishRefresh(); await tick(); });
+    assert.equal(requests.filter(({ presentation }) => presentation === "oral").length, 2);
+    assert.match(document.body.textContent, /New oral paper/);
+  } finally { await unmount(); }
+});
+
+test("invalid restored destinations wait for the loaded library and membership errors clear on replacement", async () => {
+  const storageKey = "deleted-collection";
+  window.localStorage.setItem(storageKey, JSON.stringify({ targetLibraryId: "deleted" }));
+  const requests = [];
+  const bridge = {
+    discoverDailyPapers: async (options) => fixture.feed(options),
+    listLibraryPapers: async (libraryId) => {
+      requests.push(libraryId);
+      if (libraryId === "unavailable") throw new Error("Library not found.");
+      return [fixture.paper];
+    },
+  };
+  let selectLibraries;
+  function Host() {
+    const [libraries, setLibraries] = React.useState([]);
+    selectLibraries = setLibraries;
+    return React.createElement(scope.DailyDiscovery, { storageKey, bridge, libraries, loadingLibraries: !libraries.length, onImported: async () => {} });
+  }
+  const unmount = await mount(Host, {});
+  try {
+    assert.deepEqual(requests, []);
+    await React.act(async () => { selectLibraries([{ id: "unavailable", name: "Removed collection" }]); await tick(); });
+    assert.match(document.body.textContent, /Library not found\./);
+    await React.act(async () => { selectLibraries([{ id: "replacement", name: "Replacement collection" }]); await tick(); });
+    assert.deepEqual(requests, ["unavailable", "replacement"]);
+    assert.doesNotMatch(document.body.textContent, /Library not found\./);
+    assert.match(document.querySelector(".daily-paper-list .imported").textContent, /Saved/);
+  } finally { await unmount(); }
+});
+
+
+test("a delayed save into library A does not mark an unsaved candidate in newly selected library B as saved", async () => {
+  window.localStorage.clear();
+  const data = database("Pending target"), first = data.db.listLibraries(data.project.id)[0], second = data.db.createLibrary({ projectId: data.project.id, name: "Other destination" });
+  let release, unmount;
+  data.bridge.discoverDailyPapers = async options => fixture.feed(options);
+  data.bridge.addLibraryPaper = (libraryId, paper) => new Promise(resolve => { release = () => resolve(data.db.addPaper(libraryId, paper)); });
+  try {
+    unmount = await mount(scope.DailyDiscovery, { storageKey: scope.discoveryStorageKey(data.root, data.project.id), projectId: data.project.id, bridge: data.bridge, libraries: [first, second], loadingLibraries: false, onImported: async () => {} });
+    await click("Save");
+    const target = document.querySelector('.daily-save-target select');
+    await React.act(async () => { target.value = second.id; target.dispatchEvent(new dom.window.Event("change", { bubbles: true })); await tick(); });
+    await React.act(async () => { release(); await tick(); await tick(); });
+    assert.equal(data.db.listPapers(first.id).length, 1); assert.equal(data.db.listPapers(second.id).length, 0);
+    assert.ok([...document.querySelectorAll("button")].some(button => button.textContent.trim() === "Save" && !button.disabled), "B's candidate stays available to save");
+    assert.ok(![...document.querySelectorAll("button")].some(button => button.textContent.trim() === "Saved"));
+  } finally { if (unmount) await unmount(); data.close(); }
+});
+
+test("switching back to a cached conference key clears loading and restores that response", async () => {
+  window.localStorage.clear();
+  const data = database("Conference cache"), library = data.db.listLibraries(data.project.id)[0];
+  let releaseIclr, unmount;
+  data.bridge.searchConferencePapers = (options) => {
+    if (options.conference === "iclr") return new Promise((resolve) => { releaseIclr = () => resolve(conferenceResponse(options, [conferencePaper("ICLR delayed fixture")])); });
+    return Promise.resolve(conferenceResponse(options, [conferencePaper("ICML cached fixture")]));
+  };
+  try {
+    unmount = await mount(scope.ConferenceDiscovery, { storageKey: scope.discoveryStorageKey(data.root, data.project.id) + ":conference", bridge: data.bridge, projectId: data.project.id, targetLibraryId: library.id, topic: "all", onImported: async () => {} });
+    assert.ok(document.body.textContent.includes("ICML cached fixture"));
+    await choose(document.querySelector('[aria-label="Conference"]'), "iclr");
+    assert.ok(document.body.textContent.includes("Loading the official ICLR 2026 catalog"), "the new key is loading");
+    await choose(document.querySelector('[aria-label="Conference"]'), "icml");
+    assert.ok(!document.body.textContent.includes("Loading the official"), "switching back clears loading");
+    assert.ok(document.body.textContent.includes("ICML cached fixture"), "the cached response is restored");
+    assert.ok(!document.body.textContent.includes("ICLR delayed fixture"));
+    await React.act(async () => { releaseIclr(); await tick(); await tick(); });
+    assert.ok(document.body.textContent.includes("ICML cached fixture"));
+    assert.ok(!document.body.textContent.includes("ICLR delayed fixture"), "the abandoned request cannot replace the current response");
+  } finally { if (unmount) await unmount(); data.close(); }
+});
+
+test("a failed conference query hides the previous response and retry loads the new filters", async () => {
+  window.localStorage.clear();
+  const data = database("Conference retry"), library = data.db.listLibraries(data.project.id)[0];
+  let fail2025 = true, unmount;
+  data.bridge.searchConferencePapers = async (options) => {
+    if (options.year === 2025 && fail2025) throw new Error("Fixture catalog offline");
+    return conferenceResponse(options, [conferencePaper(options.year === 2025 ? "ICML 2025 fixture" : "ICML 2026 fixture", options.year)]);
+  };
+  try {
+    unmount = await mount(scope.ConferenceDiscovery, { storageKey: scope.discoveryStorageKey(data.root, data.project.id) + ":conference", bridge: data.bridge, projectId: data.project.id, targetLibraryId: library.id, topic: "all", onImported: async () => {} });
+    assert.ok(document.body.textContent.includes("ICML 2026 fixture"));
+    await choose(document.querySelector('[aria-label="Conference year"]'), "2025");
+    assert.ok(!document.body.textContent.includes("ICML 2026 fixture"), "the old response is hidden under the new filters");
+    assert.ok(document.body.textContent.includes("Fixture catalog offline"));
+    fail2025 = false;
+    await click("Retry");
+    assert.ok(document.body.textContent.includes("ICML 2025 fixture"));
+    assert.ok(!document.body.textContent.includes("Fixture catalog offline"));
+  } finally { if (unmount) await unmount(); data.close(); }
+});
+
+test("a failed daily query does not show results from the previous topic", async () => {
+  window.localStorage.clear();
+  const data = database("Daily failure"), library = data.db.listLibraries(data.project.id)[0];
+  let failTopic = true, unmount;
+  data.bridge.discoverDailyPapers = async (options) => {
+    if (options.topic === "coding_agents" && failTopic) throw new Error("Fixture feed offline");
+    return { ...fixture.feed(options), papers: [{ ...fixture.paper, title: options.topic === "coding_agents" ? "Daily current fixture" : "Daily previous fixture" }] };
+  };
+  try {
+    unmount = await mount(scope.DailyDiscovery, { storageKey: scope.discoveryStorageKey(data.root, data.project.id), projectId: data.project.id, bridge: data.bridge, libraries: [library], loadingLibraries: false, onImported: async () => {} });
+    assert.ok(document.body.textContent.includes("Daily previous fixture"));
+    await click("Coding agents");
+    assert.ok(!document.body.textContent.includes("Daily previous fixture"), "old results are hidden under the new topic");
+    assert.ok(document.body.textContent.includes("Could not load the live feed"));
+    assert.ok(document.body.textContent.includes("Fixture feed offline"));
+    assert.ok(!document.body.textContent.includes("Showing the previous results."), "the fallback is not claimed when it no longer matches");
+    failTopic = false;
+    await click("Retry");
+    assert.ok(document.body.textContent.includes("Daily current fixture"));
+    assert.ok(!document.body.textContent.includes("Fixture feed offline"));
+    failTopic = true;
+    await click("Refresh");
+    assert.ok(document.body.textContent.includes("Daily current fixture"), "matching results remain visible on a failed refresh");
+    assert.ok(document.body.textContent.includes("Showing the previous results."), "the fallback is labeled when results still match the controls");
+  } finally { if (unmount) await unmount(); data.close(); }
+});
+
+test("discovery renders failed refresh, library creation and membership in the selected language", async () => {
+  const cases = {
+    en: ["The daily paper feed could not be refreshed. Showing the previous results.", "Saved papers could not be checked.", "The library could not be created."],
+    zh: ["无法刷新每日论文动态。正在显示上一次的结果。", "无法核查已保存的论文。", "无法创建文献库。"],
+  };
+  for (const [locale, [feed, membership, creation]] of Object.entries(cases)) {
+    let unmount;
+    language = locale;
+    const unavailable = async () => { throw new Error(); };
+    const bridge = {
+      discoverDailyPapers: async (options) => options.forceRefresh ? unavailable() : fixture.feed(options),
+      searchConferencePapers: async (options) => conferenceResponse(options),
+      listLibraryPapers: unavailable,
+      createLibrary: unavailable,
+    };
+    try {
+      unmount = await mount(scope.DailyDiscovery, {
+        storageKey: `localized-failure-${locale}`, bridge,
+        libraries: [{ id: "library", name: "Library" }], loadingLibraries: false, onImported: async () => {},
+      });
+      await click("Refresh");
+      assert.ok(document.querySelector(".daily-paper-list"));
+      assert.ok(document.body.textContent.includes(feed));
+      assert.ok(document.body.textContent.includes(membership));
+      await click(t("New library"));
+      await input(document.querySelector(".daily-create-library input"), "New collection");
+      await click(t("Create library here"));
+      assert.ok(document.body.textContent.includes(creation));
+      await click("Top conference search");
+      assert.ok(document.querySelector(".conference-discovery").textContent.includes(membership));
+    } finally {
+      if (unmount) await unmount();
+      language = "en";
+    }
+  }
+});
+
+test("an explicit conference open beats saved daily mode without breaking normal restore", async () => {
+  window.localStorage.clear();
+  const data = database("Explicit conference"), library = data.db.listLibraries(data.project.id)[0];
+  const storageKey = scope.discoveryStorageKey(data.root, data.project.id);
+  const saved = JSON.stringify({ mode: "trending", range: "7d", topic: "all", searchKind: "quick", query: "", submittedQuery: "", targetLibraryId: library.id, response: fixture.feed({ mode: "trending" }), deepResponse: null });
+  let feeds = 0, unmount;
+  data.bridge.discoverDailyPapers = async (options) => { feeds += 1; return fixture.feed(options); };
+  data.bridge.searchConferencePapers = async (options) => conferenceResponse(options);
+  try {
+    window.localStorage.setItem(storageKey, JSON.stringify({ ...JSON.parse(saved), searchKind: "deep", query: "saved search", submittedQuery: "saved search" }));
+    unmount = await mount(scope.DailyDiscovery, { storageKey, projectId: data.project.id, initialMode: "conference", bridge: data.bridge, libraries: [library], loadingLibraries: false, onImported: async () => {} });
+    assert.equal(document.querySelector('.conference-mode-button').getAttribute('aria-pressed'), "true", "an explicit conference open wins over the saved mode");
+    assert.ok(document.querySelector('[aria-label="Conference"]'), "the conference catalog is mounted");
+    await click("Latest");
+    assert.ok(document.querySelector('.daily-mode-tabs [aria-selected="true"]').textContent.includes("Latest"));
+    assert.equal(feeds, 1, "leaving conference opens a live feed without carrying over the old search lock");
+    await unmount(); unmount = null;
+    window.localStorage.setItem(storageKey, saved);
+    unmount = await mount(scope.DailyDiscovery, { storageKey, projectId: data.project.id, bridge: data.bridge, libraries: [library], loadingLibraries: false, onImported: async () => {} });
+    assert.equal(document.querySelector('.conference-mode-button').getAttribute('aria-pressed'), "false", "a normal restore keeps the saved daily mode");
+    assert.ok(document.querySelector('.daily-mode-tabs [aria-selected="true"]').textContent.includes("Trending"));
+    assert.ok(document.body.textContent.includes("Evidence handoff fixture"));
+    assert.equal(feeds, 1, "restoring the matching snapshot does not re-query");
+  } finally { if (unmount) await unmount(); data.close(); }
+});
+
+test("conference controls survive an uncached exit and pagination resets when the topic changes", async () => {
+  const storageKey = "conference-uncached";
+  const requests = [];
+  const bridge = {
+    searchConferencePapers: async (options) => {
+      requests.push(options);
+      return conferenceResponse(options, [conferencePaper("Restored selection", options.year)]);
+    },
+  };
+  function saveControls() {
+    window.localStorage.setItem(storageKey, JSON.stringify({
+      conference: "iclr", year: 2025, presentation: "oral", topic: "all",
+      query: "restored query", submittedQuery: "restored query", offset: 40, response: null,
+    }));
+  }
+  const props = { storageKey, bridge, targetLibraryId: "", topic: "all", onImported: async () => {} };
+  saveControls();
+  let unmount = await mount(scope.ConferenceDiscovery, props);
+  try {
+    assert.deepEqual(requests.map(({ conference, year, presentation, query, offset }) => ({ conference, year, presentation, query, offset })), [
+      { conference: "iclr", year: 2025, presentation: "oral", query: "restored query", offset: 40 },
+    ]);
+    await unmount();
+    saveControls();
+    unmount = await mount(scope.ConferenceDiscovery, { ...props, topic: "coding_agents" });
+    assert.equal(requests.at(-1).offset, 0);
+    assert.equal(requests.at(-1).topic, "coding_agents");
+    assert.equal(document.querySelector('[aria-label="Search conference papers"]').value, "restored query");
+  } finally { await unmount(); }
+});
+
+test("conference shows the create-library error and repeated Enter starts one request", async () => {
+  let rejectCreation, attempts = 0;
+  const bridge = {
+    searchConferencePapers: async (options) => conferenceResponse(options),
+    createLibrary: () => { attempts += 1; return new Promise((resolve, reject) => { rejectCreation = reject; }); },
+  };
+  const unmount = await mount(scope.DailyDiscovery, { storageKey: "conference-create-library", initialMode: "conference", bridge, libraries: [], loadingLibraries: false, onImported: async () => {} });
+  try {
+    await click("New library");
+    const name = document.querySelector('[aria-label="New discovery library"]');
+    await input(name, "New collection");
+    await React.act(async () => {
+      name.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+      name.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    });
+    assert.equal(attempts, 1);
+    await React.act(async () => { rejectCreation(new Error("Name is too long")); });
+    assert.equal(document.querySelector('[role="alert"]').textContent, "Name is too long");
+  } finally { await unmount(); }
+});
+
+test("the arXiv match remains saved when a different feed omits the DOI", () => {
+  const latest = { ...fixture.paper, doi: "10.5555/example", arxiv_id: "2611.12345v2" };
+  const trending = { ...latest, doi: "", arxiv_id: "2611.12345" };
+  assert.equal(scope.discoveryPaperKey(latest), scope.discoveryPaperKey(trending));
+});
+
+test("saving while library membership loads keeps both saved markers", async () => {
+  const existing = { ...fixture.paper, external_id: "doi:10.5555/existing", doi: "10.5555/existing", title: "Previously saved" };
+  let resolveMembership;
+  const bridge = {
+    discoverDailyPapers: async (options) => ({ ...fixture.feed(options), papers: [fixture.paper, existing] }),
+    listLibraryPapers: () => new Promise((resolve) => { resolveMembership = resolve; }),
+    addLibraryPaper: async () => {},
+  };
+  const unmount = await mount(scope.DailyDiscovery, { storageKey: "membership-delay", bridge, libraries: [{ id: "library", name: "Library" }], loadingLibraries: false, onImported: async () => {} });
+  try {
+    await click("Save");
+    await React.act(async () => { resolveMembership([existing]); await tick(); });
+    assert.equal(document.querySelectorAll(".daily-paper-list .imported").length, 2);
+  } finally { await unmount(); }
+});
+
+test("a save that completes after leaving discovery still refreshes its host", async () => {
+  for (const mode of ["latest", "conference"]) {
+    let resolveSave, imported = 0;
+    const bridge = {
+      discoverDailyPapers: async (options) => fixture.feed(options),
+      searchConferencePapers: async (options) => conferenceResponse(options, [conferencePaper("Conference candidate")]),
+      addLibraryPaper: () => new Promise((resolve) => { resolveSave = resolve; }),
+    };
+    const unmount = await mount(scope.DailyDiscovery, {
+      storageKey: `late-import-${mode}`, initialMode: mode, bridge, libraries: [{ id: "library", name: "Library" }],
+      loadingLibraries: false, onImported: async () => { imported += 1; },
+    });
+    await click("Save");
+    await unmount();
+    await React.act(async () => { resolveSave(); await tick(); });
+    assert.equal(imported, 1, mode);
+  }
+});
+
+test("an aged saved daily response remains visible until its normal revalidation finishes", async () => {
+  const storageKey = "aged-feed";
+  const response = { ...fixture.feed(), fetched_at: new Date(Date.now() - 40 * 60 * 1000).toISOString() };
+  window.localStorage.setItem(storageKey, JSON.stringify({ mode: "latest", range: "7d", topic: "all",
+    searchKind: "quick", query: "", submittedQuery: "", targetLibraryId: "library", response, deepResponse: null }));
+  let finishRequest;
+  const bridge = {
+    discoverDailyPapers: options => {
+      assert.equal(options.forceRefresh, false, "use the desktop's ordinary refresh policy");
+      return new Promise((resolve) => { finishRequest = () => resolve({ ...fixture.feed(options), papers: [{ ...fixture.paper, title: "Refreshed papers" }] }); });
+    },
+  };
+  const unmount = await mount(scope.DailyDiscovery, { storageKey, bridge, libraries: [{ id: "library", name: "Library" }], loadingLibraries: false, onImported: async () => {} });
+  try {
+    assert.equal(typeof finishRequest, "function");
+    assert.match(document.body.textContent, /Evidence handoff fixture/);
+    assert.match(document.querySelector(".daily-search-meta").textContent, /cached/);
+    await React.act(async () => { finishRequest(); await tick(); });
+    assert.match(document.body.textContent, /Refreshed papers/);
+    assert.doesNotMatch(document.body.textContent, /Evidence handoff fixture/);
+  } finally { await unmount(); }
+});
+
+test("a created library stays selected when reloading libraries fails", async () => {
+  let listCalls = 0, createCalls = 0;
+  const bridge = {
+    listLibraries: async () => {
+      if (listCalls++) throw new Error("Fixture list unavailable");
+      return [{ id: "existing", name: "Existing collection" }];
+    },
+    createLibrary: async () => { createCalls += 1; return { id: "new", name: "New collection" }; },
+    discoverDailyPapers: async options => fixture.feed(options),
+  };
+  const unmount = await mount(scope.DailyLibraryView, { bridge, dataRoot: "create-refresh-failure", projectId: "test-project", refreshVersion: 0 });
+  try {
+    await click("New library");
+    await input(document.querySelector('[aria-label="New discovery library"]'), "New collection");
+    await click("Create library here");
+    assert.equal(createCalls, 1);
+    assert.equal(document.querySelector('[aria-label="New discovery library"]'), null);
+    assert.equal(document.querySelector(".daily-save-target select").value, "new");
+    assert.match(document.body.textContent, /The library was created, but the list could not be refreshed/);
+  } finally { await unmount(); }
+});

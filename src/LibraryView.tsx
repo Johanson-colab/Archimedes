@@ -26,6 +26,7 @@ import typescript from "react-syntax-highlighter/dist/esm/languages/prism/typesc
 import yaml from "react-syntax-highlighter/dist/esm/languages/prism/yaml";
 import { forgetDailyFigure, peekDailyFigure, subscribeDailyFigure } from "./daily-figures";
 import ConferenceDiscovery from "./ConferenceDiscovery";
+import { discoveryPaperKey, discoveryStorageKey, readDiscoverySnapshot, writeDiscoverySnapshot } from "./discovery-state";
 import PaperReviewWorkbench from "./PaperReviewWorkbench";
 import PaperCanvas, { type PaperCanvasInsert, type PaperCanvasSource } from "./PaperCanvas";
 import { equationTokens, findEquationRects } from "./pdf-equations";
@@ -178,6 +179,7 @@ type LibraryViewProps = {
   mode: "library" | "daily";
   initialDailyMode?: DailyDiscoveryMode | "conference";
   workspace?: string;
+  dataRoot?: string;
   active?: boolean;
   projectId?: string | null;
   libraryRefreshVersion?: number;
@@ -188,7 +190,7 @@ type LibraryViewProps = {
 };
 
 export default function LibraryView(props: LibraryViewProps) {
-  const { bridge, mode, initialDailyMode, workspace = "", active = true, projectId, libraryRefreshVersion = 0, onLibraryImported, onInternalReviewThreadsDeleted, onReproduceOpened, onOpenProject } = props;
+  const { bridge, mode, initialDailyMode, workspace = "", dataRoot = workspace, active = true, projectId, libraryRefreshVersion = 0, onLibraryImported, onInternalReviewThreadsDeleted, onReproduceOpened, onOpenProject } = props;
   if (mode === "library") return <LibraryWorkspace
     key={`${workspace}:${projectId || "local"}`}
     bridge={bridge} projectId={projectId} active={active} refreshVersion={libraryRefreshVersion}
@@ -198,11 +200,11 @@ export default function LibraryView(props: LibraryViewProps) {
     renderEditor={(editorProps) => <LibraryEditor {...editorProps} active={active} />}
     renderImport={(importProps) => <PaperImportModal {...importProps} bridge={bridge} workspace={workspace} />}
   />;
-  return <DailyLibraryView key={projectId || "local"} bridge={bridge} projectId={projectId} initialMode={initialDailyMode} refreshVersion={libraryRefreshVersion} onLibraryImported={onLibraryImported} />;
+  return <DailyLibraryView key={discoveryStorageKey(dataRoot, projectId)} dataRoot={dataRoot} bridge={bridge} projectId={projectId} initialMode={initialDailyMode} refreshVersion={libraryRefreshVersion} onLibraryImported={onLibraryImported} />;
 }
 
-function DailyLibraryView({ bridge, projectId, initialMode, refreshVersion, onLibraryImported }: {
-  bridge: ResearchDeskBridge; projectId?: string | null; initialMode?: DailyDiscoveryMode | "conference"; refreshVersion: number; onLibraryImported?: () => void;
+function DailyLibraryView({ bridge, dataRoot, projectId, initialMode, refreshVersion, onLibraryImported }: {
+  dataRoot: string; bridge: ResearchDeskBridge; projectId?: string | null; initialMode?: DailyDiscoveryMode | "conference"; refreshVersion: number; onLibraryImported?: () => void;
 }) {
   const [libraries, setLibraries] = useState<ResearchLibrary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -218,7 +220,11 @@ function DailyLibraryView({ bridge, projectId, initialMode, refreshVersion, onLi
     void loadLibraries().catch(() => {});
     return () => { alive.current = false; };
   }, [loadLibraries, refreshVersion]);
-  return <DailyDiscovery initialMode={initialMode} bridge={bridge} libraries={libraries} loadingLibraries={loading} onImported={async () => { await loadLibraries(); onLibraryImported?.(); }} />;
+  return <DailyDiscovery storageKey={discoveryStorageKey(dataRoot, projectId)} projectId={projectId} initialMode={initialMode} bridge={bridge} libraries={libraries} loadingLibraries={loading} onImported={async (created) => {
+    if (created && alive.current) setLibraries((current) => current.some((item) => item.id === created.id) ? current : [...current, created]);
+    onLibraryImported?.();
+    if (alive.current) await loadLibraries();
+  }} />;
 }
 
 function PaperInspector({ paper, onUpdate, onRemove, onRead, noteDrafts }: { paper: LibraryPaper | null; onUpdate: (patch: Parameters<ResearchDeskBridge["updateLibraryPaper"]>[1]) => Promise<void>; onRemove: () => Promise<void>; onRead: () => void; noteDrafts: LibraryNoteDrafts }) {
@@ -2545,43 +2551,101 @@ function DailyThumbnail({ paper, bridge }: { paper: DailyPaper; bridge: Research
   </div>;
 }
 
-function DailyDiscovery({ initialMode = "latest", bridge, libraries, loadingLibraries, onImported }: { initialMode?: DailyDiscoveryMode | "conference"; bridge: ResearchDeskBridge; libraries: ResearchLibrary[]; loadingLibraries: boolean; onImported: () => Promise<void> }) {
+function DailyDiscovery({ storageKey, projectId, initialMode = "latest", bridge, libraries, loadingLibraries, onImported }: { storageKey: string; projectId?: string | null; initialMode?: DailyDiscoveryMode | "conference"; bridge: ResearchDeskBridge; libraries: ResearchLibrary[]; loadingLibraries: boolean; onImported: (created?: ResearchLibrary) => Promise<void> }) {
   const { t } = useUISettings();
-  const [mode, setMode] = useState<DailyDiscoveryMode | "conference">(initialMode);
-  const [range, setRange] = useState<DailyDiscoveryRange>("7d");
-  const [topic, setTopic] = useState<DailyDiscoveryTopic>("all");
-  const [searchKind, setSearchKind] = useState<"quick" | "deep">("quick");
-  const [query, setQuery] = useState("");
-  const [submittedQuery, setSubmittedQuery] = useState("");
-  const [deepResponse, setDeepResponse] = useState<DeepPaperSearchResponse | null>(null);
-  const [targetLibraryId, setTargetLibraryId] = useState("");
-  const [response, setResponse] = useState<DailyDiscoveryResponse | null>(null);
+  const [saved] = useState(() => readDiscoverySnapshot(window.localStorage, storageKey));
+  const [mode, setMode] = useState<DailyDiscoveryMode | "conference">(initialMode === "conference" ? "conference" : saved?.mode || initialMode);
+  useEffect(() => { if (initialMode === "conference") setMode("conference"); }, [initialMode]);
+  const [range, setRange] = useState<DailyDiscoveryRange>(saved?.range || "7d");
+  const [topic, setTopic] = useState<DailyDiscoveryTopic>(saved?.topic || "all");
+  const [searchKind, setSearchKind] = useState<"quick" | "deep">(saved?.searchKind || "quick");
+  const [query, setQuery] = useState(saved?.query || "");
+  const [submittedQuery, setSubmittedQuery] = useState(saved?.submittedQuery || "");
+  const [deepResponse, setDeepResponse] = useState<DeepPaperSearchResponse | null>(saved?.deepResponse || null);
+  const [targetLibraryId, setTargetLibraryId] = useState(saved?.targetLibraryId || "");
+  const targetLibraryIdRef = useRef(targetLibraryId);
+  targetLibraryIdRef.current = targetLibraryId;
+  const [response, setResponse] = useState<DailyDiscoveryResponse | null>(saved?.response || null);
+  const [responseKey, setResponseKey] = useState(() => saved?.response ? dailyFeedKey(saved) : "");
+  const [feedError, setFeedError] = useState<{ key: string; message: string; showingPrevious?: boolean } | null>(() => saved?.response?.warning ? { key: dailyFeedKey(saved), message: saved.response.warning } : null);
   const [loading, setLoading] = useState(false);
   const [added, setAdded] = useState<Set<string>>(new Set());
   const [adding, setAdding] = useState<string | null>(null);
   const [previewPaper, setPreviewPaper] = useState<DailyPaper | null>(null);
-  const [error, setError] = useState("");
+  const [error, setError] = useState(saved?.deepResponse?.warning || "");
+  const [membershipError, setMembershipError] = useState<string | null>(null);
+  const [newLibraryName, setNewLibraryName] = useState("");
+  const [newLibraryOpen, setNewLibraryOpen] = useState(false);
+  const [creatingLibrary, setCreatingLibrary] = useState(false);
+  const creatingLibraryRef = useRef(false);
+  const [libraryCreationError, setLibraryCreationError] = useState<string | null>(null);
+  const [libraryRefreshError, setLibraryRefreshError] = useState("");
+  const [persistenceError, setPersistenceError] = useState("");
+  const alive = useRef(true);
+  useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
   const feedRequestId = useRef(0);
   const deepRequestId = useRef(0);
-  const responseRef = useRef<DailyDiscoveryResponse | null>(null);
-  useEffect(() => { if (!targetLibraryId && libraries[0]) setTargetLibraryId(libraries[0].id); }, [libraries, targetLibraryId]);
+  const responseRef = useRef<DailyDiscoveryResponse | null>(saved?.response || null);
+  const responseKeyRef = useRef(responseKey);
+  const cachedFeedKey = useRef(saved?.response ? responseKey : "");
+  const currentFeedKey = dailyFeedKey({ mode, range, topic, searchKind, submittedQuery });
+  const displayedResponse = responseKey === currentFeedKey ? response : null;
+  const matchingFeedError = feedError?.key === currentFeedKey ? feedError : null;
+  const displayedFeedError = matchingFeedError ? matchingFeedError.message || t("The daily paper feed could not be refreshed.") : "";
+  const feedPending = !displayedFeedError && (loading || responseKey !== currentFeedKey);
+  useEffect(() => {
+    try {
+      writeDiscoverySnapshot(window.localStorage, storageKey, { mode, range, topic, searchKind, query, submittedQuery, targetLibraryId, response: displayedResponse, deepResponse });
+      setPersistenceError("");
+    } catch { setPersistenceError(t("Discovery could not be saved on this device. Keep this page open or free storage before leaving.")); }
+  }, [storageKey, mode, range, topic, searchKind, query, submittedQuery, targetLibraryId, displayedResponse, deepResponse, t]);
+  useEffect(() => () => { deepRequestId.current += 1; }, []);
+  useEffect(() => { if (!libraries.some((item) => item.id === targetLibraryId) && libraries[0]) setTargetLibraryId(libraries[0].id); }, [libraries, targetLibraryId]);
   const targetLibrary = useMemo(() => libraries.find((library) => library.id === targetLibraryId), [libraries, targetLibraryId]);
-  const searchActive = Boolean(submittedQuery);
+  const selectedLibraryId = targetLibrary?.id || "";
+  useEffect(() => {
+    let active = true;
+    setAdded(new Set());
+    setMembershipError(null);
+    if (selectedLibraryId && bridge.listLibraryPapers) void bridge.listLibraryPapers(selectedLibraryId).then((papers) => {
+      if (active) setAdded((current) => new Set([...current, ...papers.map(discoveryPaperKey)]));
+    }).catch((cause) => { if (active) setMembershipError(readableError(cause, "")); });
+    return () => { active = false; };
+  }, [bridge, selectedLibraryId]);
+  const searchActive = mode !== "conference" && Boolean(submittedQuery);
   const loadFeed = useCallback(async (forceRefresh = false) => {
     if (mode === "conference" || (searchKind === "deep" && submittedQuery)) return;
+    const cacheKey = dailyFeedKey({ mode, range, topic, searchKind, submittedQuery });
+    // Keep the visible saved result while the desktop feed revalidates after
+    // its normal twenty-minute cache lifetime.
+    const age = Date.now() - Date.parse(responseRef.current?.fetched_at ?? "");
+    if (!forceRefresh && cachedFeedKey.current === cacheKey && responseRef.current && age >= 0 && age < 20 * 60 * 1000) {
+      responseKeyRef.current = cacheKey;
+      setResponseKey(cacheKey);
+      setResponse(responseRef.current);
+      setLoading(false);
+      setFeedError(responseRef.current.warning ? { key: cacheKey, message: responseRef.current.warning } : null);
+      return;
+    }
     const requestId = ++feedRequestId.current;
     setLoading(true);
-    setError("");
+    setFeedError(null);
     try {
       const nextResponse = await bridge.discoverDailyPapers({ mode, range, topic, query: searchKind === "quick" ? submittedQuery : "", limit: 60, forceRefresh });
       if (requestId !== feedRequestId.current) return;
+      cachedFeedKey.current = cacheKey;
       responseRef.current = nextResponse;
+      responseKeyRef.current = cacheKey;
+      setResponseKey(cacheKey);
       setResponse(nextResponse);
-      if (nextResponse.warning) setError(nextResponse.warning);
+      setFeedError(nextResponse.warning ? { key: cacheKey, message: nextResponse.warning } : null);
     } catch (discoverError) {
       if (requestId !== feedRequestId.current) return;
-      const message = readableError(discoverError, "The daily paper feed could not be refreshed.");
-      setError(responseRef.current ? `${message} Showing the previous results.` : message);
+      setFeedError({
+        key: cacheKey,
+        message: readableError(discoverError, ""),
+        showingPrevious: responseKeyRef.current === cacheKey && Boolean(responseRef.current),
+      });
     } finally {
       if (requestId === feedRequestId.current) setLoading(false);
     }
@@ -2592,7 +2656,7 @@ function DailyDiscovery({ initialMode = "latest", bridge, libraries, loadingLibr
     return () => { feedRequestId.current += 1; };
   }, [loadFeed]);
 
-  const visiblePapers = response?.papers ?? [];
+  const visiblePapers = displayedResponse?.papers ?? [];
 
   async function submitSearch() {
     const nextQuery = query.trim();
@@ -2655,24 +2719,49 @@ function DailyDiscovery({ initialMode = "latest", bridge, libraries, loadingLibr
 
   async function add(paper: DailyPaper | AcademicSearchResult) {
     if (!targetLibraryId) return;
-    const key = paper.external_id || paper.title;
+    const key = discoveryPaperKey(paper);
     setAdding(key);
     setError("");
     try {
       await bridge.addLibraryPaper(targetLibraryId, paper);
-      setAdded((current) => new Set(current).add(key));
+      if (alive.current && targetLibraryIdRef.current === targetLibraryId) setAdded((current) => new Set(current).add(key));
       await onImported();
     } catch (addError) {
-      setError(readableError(addError, "The paper could not be saved."));
+      if (alive.current) setError(readableError(addError, t("The paper could not be saved.")));
     } finally {
-      setAdding(null);
+      if (alive.current) setAdding(null);
     }
+  }
+
+  async function createLibrary() {
+    const name = newLibraryName.trim();
+    if (!name || creatingLibraryRef.current) return;
+    creatingLibraryRef.current = true;
+    setCreatingLibrary(true);
+    setLibraryCreationError(null);
+    setLibraryRefreshError("");
+    try {
+      const created = await bridge.createLibrary({ projectId, name });
+      if (alive.current) {
+        setTargetLibraryId(created.id);
+        setNewLibraryName("");
+        setNewLibraryOpen(false);
+      }
+      try { await onImported(created); }
+      catch {
+        if (alive.current) setLibraryRefreshError(t("The library was created, but the list could not be refreshed."));
+      }
+    } catch (cause) { if (alive.current) setLibraryCreationError(readableError(cause, "")); }
+    finally { creatingLibraryRef.current = false; if (alive.current) setCreatingLibrary(false); }
   }
 
   return <section className="library-page daily-page">
     <div className="daily-feed-toolbar daily-conference-toolbar">
       <div className="daily-live-controls">
-      <Tabs value={searchActive ? "" : mode} onChange={(value) => setMode(value as typeof mode)} label="Paper feed mode" variant="segmented" className="daily-mode-tabs">
+      <Tabs value={searchActive ? "" : mode} onChange={(value) => {
+        if (mode === "conference" && submittedQuery) clearSearch();
+        setMode(value as typeof mode);
+      }} label="Paper feed mode" variant="segmented" className="daily-mode-tabs">
         <Tab value="latest" icon={<Clock3 size={12} />} disabled={searchActive} title={searchActive ? "Clear search to return to the daily feed" : "Newest arXiv submissions"}>Latest</Tab>
         <Tab value="trending" icon={<Flame size={12} />} disabled={searchActive} title={searchActive ? "Clear search to return to the daily feed" : "Trending community papers"}>Trending</Tab>
       </Tabs>
@@ -2681,9 +2770,14 @@ function DailyDiscovery({ initialMode = "latest", bridge, libraries, loadingLibr
       <button className={mode === "conference" ? "secondary-button conference-mode-button active" : "secondary-button conference-mode-button"} aria-pressed={mode === "conference"} disabled={searchActive} title={searchActive ? "Clear search before switching discovery modes" : "Search official conference catalogs"} onClick={() => setMode("conference")}><GraduationCap size={16} />Top conference search</button>
       {mode !== "conference" && !searchActive && <button className="secondary-button daily-refresh" disabled={loading} onClick={() => void loadFeed(true)}>{loading ? <LoaderCircle className="spin" size={14} /> : <RefreshCw size={14} />}Refresh</button>}
       <label className="daily-save-target">Save to<select value={targetLibraryId} disabled={loadingLibraries} onChange={(event) => setTargetLibraryId(event.target.value)}>{libraries.map((library) => <option key={library.id} value={library.id}>{library.name}</option>)}</select></label>
+      <button className="secondary-button" aria-expanded={newLibraryOpen} onClick={() => { setNewLibraryOpen((current) => !current); setLibraryCreationError(null); }}>{t("New library")}</button>
     </div>
+    {persistenceError && <InlineNotice tone="warning">{persistenceError}</InlineNotice>}
+    {libraryRefreshError && <InlineNotice tone="warning">{libraryRefreshError}</InlineNotice>}
+    {newLibraryOpen && <div className="daily-create-library"><label>{t("New discovery library")}<input autoFocus aria-label={t("New discovery library")} value={newLibraryName} onChange={(event) => setNewLibraryName(event.target.value)} placeholder={t("Library name")} onKeyDown={(event) => { if (event.key === "Enter" && !event.nativeEvent.isComposing) void createLibrary(); }} /></label><button className="secondary-button" disabled={creatingLibrary || !newLibraryName.trim()} onClick={() => void createLibrary()}>{t("Create library here")}</button></div>}
+    {newLibraryOpen && libraryCreationError !== null && <InlineNotice tone="danger" className="library-error">{libraryCreationError || t("The library could not be created.")}</InlineNotice>}
     <FilterGroup label="AI research topic" className="daily-topic-filter">{DAILY_TOPICS.map((item) => <FilterButton key={item.id} active={topic === item.id} disabled={searchActive && searchKind === "deep"} title={searchActive && searchKind === "deep" ? "Clear deep search to change its topic constraint" : item.description} onClick={() => setTopic(item.id)}>{item.label}</FilterButton>)}</FilterGroup>
-    {mode === "conference" ? <ConferenceDiscovery bridge={bridge} targetLibraryId={targetLibraryId} topic={topic} onImported={onImported} /> : <>
+    {mode === "conference" ? <ConferenceDiscovery storageKey={`${storageKey}:conference`} bridge={bridge} targetLibraryId={selectedLibraryId} topic={topic} onImported={onImported} /> : <>
     <div className={searchKind === "deep" ? "daily-search-panel deep" : "daily-search-panel"}>
       <Tabs value={searchKind} onChange={(value) => changeSearchKind(value as typeof searchKind)} label="Paper search type" variant="segmented" className="daily-search-kind">
         <Tab value="quick" icon={<Search size={12} />}>Quick search</Tab>
@@ -2692,11 +2786,13 @@ function DailyDiscovery({ initialMode = "latest", bridge, libraries, loadingLibr
       <div className="daily-search-input-row">{searchKind === "quick" ? <input value={query} onChange={(event) => changeQuery(event.target.value)} onKeyDown={(event) => event.key === "Enter" && void submitSearch()} placeholder="Search recent papers by keyword, title, author, or topic" /> : <textarea value={query} onChange={(event) => changeQuery(event.target.value)} onKeyDown={(event) => (event.metaKey || event.ctrlKey) && event.key === "Enter" && void submitSearch()} placeholder="Describe the field, problem, methods, evaluation setting, time range, and anything to exclude. The more specific you are, the better the match." />}
         <button className="daily-search-send" disabled={loading || !query.trim()} onClick={() => void submitSearch()} title={searchKind === "deep" ? "Deep search" : "Search"} aria-label={searchKind === "deep" ? "Deep search" : "Search"}>{loading ? <LoaderCircle className="spin" size={14} /> : <ArrowUp size={15} />}</button>
       </div>
-      {(searchKind !== "deep" || searchActive) && <div className="daily-search-meta"><span>{`${searchKind === "deep" ? deepResponse?.results.length ?? 0 : visiblePapers.length} papers`}{submittedQuery ? ` · “${submittedQuery}”` : ""}{searchKind === "quick" && response ? ` · ${response.cached ? "cached" : "live"} · updated ${formatFeedTime(response.fetched_at)}` : ""}{searchKind === "deep" && deepResponse ? ` · ${deepResponse.providers.join(" + ") || "metadata search"} · updated ${formatFeedTime(deepResponse.fetched_at)}` : ""}{searchKind === "quick" && searchActive && response?.options?.topic === "all" && topic !== "all" ? " · title search across all topics" : ""}</span></div>}
+      {(searchKind !== "deep" || searchActive) && <div className="daily-search-meta"><span>{`${searchKind === "deep" ? deepResponse?.results.length ?? 0 : visiblePapers.length} papers`}{submittedQuery ? ` · “${submittedQuery}”` : ""}{searchKind === "quick" && displayedResponse ? ` · ${displayedResponse.cached ? "cached" : "live"} · updated ${formatFeedTime(displayedResponse.fetched_at)}` : ""}{searchKind === "deep" && deepResponse ? ` · ${deepResponse.providers.join(" + ") || "metadata search"} · updated ${formatFeedTime(deepResponse.fetched_at)}` : ""}{searchKind === "quick" && searchActive && displayedResponse?.options?.topic === "all" && topic !== "all" ? " · title search across all topics" : ""}</span></div>}
     </div>
+    {displayedFeedError && <InlineNotice tone="danger" className="library-error">{matchingFeedError?.showingPrevious ? t("{message} Showing the previous results.", { message: displayedFeedError }) : displayedFeedError}</InlineNotice>}
+    {membershipError !== null && <InlineNotice tone="danger" className="library-error">{membershipError || t("Saved papers could not be checked.")}</InlineNotice>}
     {error && <InlineNotice tone={deepResponse ? "warning" : "danger"} className={deepResponse ? "daily-search-warning" : "library-error"}>{error}</InlineNotice>}
-    {searchKind === "deep" && searchActive ? <DeepSearchResults response={deepResponse} loading={loading} error={error} targetLibrary={targetLibrary} added={added} adding={adding} onSave={add} /> : loading && !response ? <LoadingState /> : error && !response ? <StateView tone="error" className="daily-empty daily-feed-failed" icon={<RefreshCw size={28} />} title="Could not load the live feed" description="arXiv may be responding slowly. Your library is unaffected." action={<button className="secondary-button" onClick={() => void loadFeed(true)}><RefreshCw size={14} />Retry</button>} /> : !visiblePapers.length ? <StateView className="daily-empty" icon={<Calendar size={28} />} title="No papers found" description="Try another topic, expand the date range, or use a broader keyword." /> : <div className="daily-paper-list">{visiblePapers.map((paper) => {
-      const key = paper.external_id || paper.title;
+    {searchKind === "deep" && searchActive ? <DeepSearchResults response={deepResponse} loading={loading} error={error} targetLibrary={targetLibrary} added={added} adding={adding} onSave={add} /> : feedPending && !displayedResponse ? <LoadingState /> : displayedFeedError && !displayedResponse ? <StateView tone="error" className="daily-empty daily-feed-failed" icon={<RefreshCw size={28} />} title={t("Could not load the live feed")} description={t("arXiv may be responding slowly. Your library is unaffected.")} action={<button className="secondary-button" onClick={() => void loadFeed(true)}><RefreshCw size={14} />{t("Retry")}</button>} /> : !visiblePapers.length ? <StateView className="daily-empty" icon={<Calendar size={28} />} title="No papers found" description="Try another topic, expand the date range, or use a broader keyword." /> : <div className="daily-paper-list">{visiblePapers.map((paper) => {
+      const key = discoveryPaperKey(paper);
       const isAdded = added.has(key);
       const isAdding = adding === key;
       return <article
@@ -2731,13 +2827,17 @@ function DailyDiscovery({ initialMode = "latest", bridge, libraries, loadingLibr
       paper={previewPaper}
       bridge={bridge}
       canSave={Boolean(targetLibrary)}
-      isAdded={added.has(previewPaper.external_id || previewPaper.title)}
-      isAdding={adding === (previewPaper.external_id || previewPaper.title)}
+      isAdded={added.has(discoveryPaperKey(previewPaper))}
+      isAdding={adding === (discoveryPaperKey(previewPaper))}
       onAdd={() => void add(previewPaper)}
       onClose={() => setPreviewPaper(null)}
     />}
     </>}
   </section>;
+}
+
+function dailyFeedKey(value: { mode: DailyDiscoveryMode | "conference"; range: DailyDiscoveryRange; topic: DailyDiscoveryTopic; searchKind: "quick" | "deep"; submittedQuery: string }) {
+  return JSON.stringify([value.mode, value.range, value.topic, value.searchKind, value.submittedQuery]);
 }
 
 function DailyPaperPreview({ paper, bridge, canSave, isAdded, isAdding, onAdd, onClose }: {
@@ -2823,7 +2923,7 @@ function DeepSearchResults({ response, loading, error, targetLibrary, added, add
     <section className="daily-search-plan"><div><span className="eyebrow">Search interpretation</span><strong>{response.plan.research_problem}</strong><p>Matches are based on titles and abstracts. Full-paper claims have not been verified.</p></div><div className="daily-search-plan-tags">{planTags.map((tag) => <span key={`${tag.kind}:${tag.value}`}><small>{tag.kind}</small>{tag.value}</span>)}{response.plan.year_range && <span><small>Years</small>{response.plan.year_range.start ?? "Any"}–{response.plan.year_range.end ?? "Any"}</span>}</div><details><summary>{response.plan.queries.length} expanded queries</summary><ul>{response.plan.queries.map((item) => <li key={item}>{item}</li>)}</ul></details></section>
     <div className="daily-paper-list deep-paper-list">{response.results.map((result) => {
       const paper = result.paper;
-      const key = paper.external_id || paper.title;
+      const key = discoveryPaperKey(paper);
       const isAdded = added.has(key);
       const isAdding = adding === key;
       return <article className="daily-paper-row" key={key}>
