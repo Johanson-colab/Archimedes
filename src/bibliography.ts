@@ -181,7 +181,10 @@ export function indexBibliographyBatch(entries: BibliographyEntry[]) {
       paper[field] ? [field + ":" + normalize(paper[field])] : []);
     const normalizedTitle = title(paper.title);
     if (normalizedTitle) identities.push("title:" + normalizedTitle);
-    const duplicate = identities.some(key => byIdentity.get(key)?.some(previous => compatibleIdentifiers(paper, previous)));
+    const duplicate = identities.some(key => {
+      const candidates = byIdentity.get(key);
+      return candidates && matchBibliographyPaper(paper, candidates);
+    });
     const key = citationKeyIdentity(citekey);
     const holder = byCitekey.get(key);
     const keyConflict = Boolean(holder && !matchBibliographyPaper(paper, [holder]));
