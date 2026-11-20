@@ -144,7 +144,8 @@ test("OpenCode Go is a provider list choice with connection defaults and localiz
     assert.equal(button("Use OpenCode Go preset"), undefined);
     await React.act(async () => goProvider.click());
     assert.ok(goProvider.classList.contains("active"));
-    assert.equal(document.querySelector(".provider-config-title h3").textContent, "OpenCode Go");
+    assert.equal(document.querySelector(".provider-config-title h3").textContent, "hy4-flash-free");
+    assert.equal(document.querySelector(".provider-config-title p").textContent, "Provider: OpenCode Go");
     assert.equal(document.querySelector(".provider-config input[type=password]").placeholder, "Enter API key");
     await click("Test connection");
     assert.equal(candidate.provider, "opencode-go");
