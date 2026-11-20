@@ -291,7 +291,9 @@ test("DOIs with literal BibTeX delimiters keep their strong identity across expo
   for (const suffix of ["a{b}", String.raw`a\b`, "a%7bb%7d", "a~b"]) {
     const doi = "10.5555/" + suffix;
     const paper = { ...fixture.paper, doi, arxiv_id: "", s2_id: "", id: "doi-literal", citekey: "exact", entry_type: "article" };
-    const imported = scope.parseBibliography(scope.exportBibliography([paper])).entries[0].paper;
+    const exported = scope.exportBibliography([paper]);
+    if (suffix.includes("%")) assert.ok(exported.includes(String.raw`doi = {10.5555/a\%7bb\%7d}`));
+    const imported = scope.parseBibliography(exported).entries[0].paper;
     assert.equal(imported.doi, doi);
     assert.equal(scope.matchBibliographyPaper(imported, [paper], { strongOnly: true }), paper);
   }
