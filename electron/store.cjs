@@ -1921,13 +1921,17 @@ function addPaper(libraryId, paper) {
   const paperId = existing?.id || randomUUID();
 
   if (!existing) {
+    // Preserve legacy title keys while giving distinct works with the same
+    // normalized title separate local records.
+    const storedKey = key.startsWith("title:") && db.prepare("SELECT 1 FROM papers WHERE canonical_key = ?").get(key)
+      ? `${key}:${paperId}` : key;
     db.prepare(`
       INSERT INTO papers (
         id, canonical_key, title, authors_json, year, venue, abstract, url, pdf_url, doi, arxiv_id, s2_id,
         source, citation_count, github_url, github_stars, reading_status, starred, notes, tags_json, created_at, updated_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'unread', 0, '', '[]', ?, ?)
     `).run(
-      paperId, key, paper.title.trim(), JSON.stringify(paper.authors || []), paper.year || null,
+      paperId, storedKey, paper.title.trim(), JSON.stringify(paper.authors || []), paper.year || null,
       paper.venue || "", paper.abstract || "", paper.url || "", paper.pdf_url || "", paper.doi || "",
       paper.arxiv_id || "", paper.s2_id || "", paper.source || "manual", paper.citation_count || 0,
       paper.github_url || "", Number(paper.github_stars) || 0, now, now,
