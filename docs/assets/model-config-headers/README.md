@@ -11,6 +11,17 @@ The comparison uses the macOS Electron app with an identical 1180 × 900 content
 
 The [saved OpenCode Go connection](connection-paper-go-after.png) passed **Test connection** after closing and reopening Models. The API key field showed the saved-key placeholder with an empty value. The loopback server received the test session ID, Archimedes User-Agent, and dummy authentication before save and after reopening. [Before observations](review-before.json) and [after observations](review-after.json) contain the viewport, visible feedback, and request metadata. The capture used a local fixture with external requests blocked.
 
+### Proactive model settings
+
+The Proactive model comparisons use the upstream settings panel and connection handler at `ae8c18d` for the before state and `1c0cf93` for the after state. Both stages used Chinese Paper at 1180 × 900, the same disposable configuration, and the same local fixture. The fixture returns HTTP 400 with `MissingSessionID`.
+
+| Scenario | Before | After |
+| --- | --- | --- |
+| Change the Base URL | [The old connection's saved-key hint](proactive-changed-endpoint-before.png) | [The new endpoint asks for a key](proactive-changed-endpoint-after.png) |
+| Test the saved connection | [Provider error](proactive-missing-session-before.png) | [Chinese recovery guidance](proactive-missing-session-after.png) |
+
+The replacement endpoint remained a draft. Testing the original endpoint in each stage used the saved dummy credential with an empty API key field.
+
 ## Initial connection and chat evidence
 
 Captured in Archimedes' macOS Electron app at a matching 1180 × 900 content viewport. The baseline is upstream `0637139`. Each run used a fresh profile, a disposable workspace and the same local OpenAI-compatible fixture with a dummy API key. The fixture responds with HTTP 400 and `MissingSessionID` when the session header is absent.
