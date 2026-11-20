@@ -223,6 +223,7 @@ export const library: Record<string, string> = {
   "Save draft": "保存草稿",
   "Save notes": "保存笔记",
   "Save outline": "保存大纲",
+  "Save to": "保存至",
   "Saved locally for this project": "保存在此项目的本地记录",
   "Saved text reading": "已保存的文字精读",
   "Search across scholarly indexes": "搜索学术索引",

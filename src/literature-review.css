@@ -80,3 +80,9 @@
 .lit-evidence summary { cursor:pointer; }
 .lit-evidence blockquote { margin:8px 0; padding:8px 12px; border-left:2px solid var(--accent); color:var(--text-secondary); }
 .lit-draft-editor { width:100%; min-height:110px; padding:12px; resize:vertical; color:var(--text-primary); background:var(--surface-panel); border:1px solid var(--border-soft); border-radius:6px; font:inherit; font-size:13px; line-height:1.6; }
+
+.lit-save-target { display:flex; align-items:center; gap:10px; padding:0 4px 16px; color:var(--text-muted); font-size:12px; font-weight:600; }
+.lit-save-target select { min-width:180px; max-width:100%; padding:7px 10px; color:var(--text-primary); background:var(--surface-panel); border:1px solid var(--border-soft); border-radius:6px; }
+.lit-paper-actions { flex:none; display:flex; flex-direction:column; align-items:flex-end; gap:12px; }
+.lit-save-button { display:inline-flex; align-items:center; gap:5px; white-space:nowrap; }
+@media(max-width:760px) { .lit-paper-actions { gap:4px; } .lit-save-target { flex-wrap:wrap; } }
