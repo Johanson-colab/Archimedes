@@ -64,6 +64,7 @@ function detectGitState(root) {
   // The project root must be the actual top-level work tree.
   const topLevel = gitOutput(resolved, ["rev-parse", "--show-toplevel"]);
   if (!topLevel) return "suspicious";
+  // Both paths resolve to the actual directory, including symlinked workspaces.
   try {
     if (fs.realpathSync(topLevel) !== resolved) return "suspicious";
   } catch {

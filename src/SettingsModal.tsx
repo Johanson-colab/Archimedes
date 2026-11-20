@@ -4,7 +4,7 @@ import AccountSettingsPanel from "./AccountSettingsPanel";
 import ModelSettingsModal, { type ModelExecutionPreferences } from "./ModelSettingsModal";
 import PluginsSettingsPanel from "./PluginsSettingsPanel";
 import SshServersPanel from "./SshServersPanel";
-import WebSearchSettingsModal from "./WebSearchSettingsModal";
+import EnvironmentVariablesPanel from "./settings/EnvironmentVariablesPanel";
 import { Dialog } from "./Dialog";
 import type { AppearanceSettings, AppTheme, ThemePreset } from "./appearance";
 import type { WorkbenchTabPreferences } from "./workbench-tabs";
@@ -42,6 +42,7 @@ type SettingsModalProps = {
   onModelSaved: (config: PublicModelConfig) => void;
   executionPreferences?: ModelExecutionPreferences;
   workspace: string;
+  modelWorkspace?: string;
   workspaceReady: boolean;
   agentBusy: boolean;
   onChooseWorkspace: () => void;
@@ -91,6 +92,7 @@ export default function SettingsModal({
   onModelSaved,
   executionPreferences,
   workspace,
+  modelWorkspace,
   workspaceReady,
   agentBusy,
   onChooseWorkspace,
@@ -201,7 +203,7 @@ export default function SettingsModal({
             sessionTools={sessionTools}
             onSessionToolsChange={onSessionToolsChange}
           />}
-          {location.section === "models" && <ModelSettingsModal bridge={bridge} open embedded onClose={() => undefined} onSaved={onModelSaved} executionPreferences={executionPreferences} />}
+          {location.section === "models" && <ModelSettingsModal bridge={bridge} open embedded onClose={() => undefined} onSaved={onModelSaved} executionPreferences={executionPreferences} workspace={modelWorkspace || workspace} />}
           {location.section === "plugins" && <PluginsSettingsPanel bridge={bridge} workspace={workspace} onPluginsChanged={onPluginsChanged} disabledCoreModules={disabledCoreModules} onCoreModuleEnabled={onCoreModuleEnabled} />}
           {location.section === "workspace" && <WorkspaceSettingsHub
             view={subview}
@@ -214,7 +216,7 @@ export default function SettingsModal({
             activeThreadId={activeThreadId}
             onProjectsChanged={onProjectsChanged}
           />}
-          {location.section === "web" && <WebSearchSettingsModal bridge={bridge} open embedded onClose={() => undefined} />}
+          {location.section === "web" && <EnvironmentVariablesPanel bridge={bridge} />}
           {location.section === "ssh" && <SshServersPanel bridge={bridge} />}
         </div>
       </div>

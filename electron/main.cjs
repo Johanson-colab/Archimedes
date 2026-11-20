@@ -61,6 +61,8 @@ const proactiveAgent = require("./proactive-agent.cjs");
 const figureForge = require("./figure-forge.cjs");
 const { getModelCapabilities, normalizeContextLength, normalizeReasoningEffort } = require("./agent/model-capabilities.cjs");
 const webSearch = require("./web-search.cjs");
+const { createEnvironmentVault, setEnvironmentVault } = require("./environment-vault.cjs");
+let environmentVault;
 const sshServers = require("./ssh-servers.cjs");
 const { discoverDailyPapers, normalizeDailyOptions, resolveArxivFigure, searchAcademicPapers } = require("./literature.cjs");
 const { createDailyFigureCache } = require("./daily-figure-cache.cjs");
@@ -69,6 +71,9 @@ const { searchConferencePapers } = require("./conferences.cjs");
 const skillCatalog = require("./skill-catalog.cjs");
 const speech = require("./speech.cjs");
 const store = require("./store.cjs");
+const researchGraph = require("./research-graph/service.cjs");
+const experimentRunner = require("./research-graph/experiment-runner.cjs");
+const experimentRuns = require("./research-graph/experiment-runs.cjs");
 const workspaceFiles = require("./workspace-files.cjs");
 const latexWorkspace = require("./latex-workspace.cjs");
 const { preparePaperReader } = require("./library-reader.cjs");
@@ -644,7 +649,9 @@ app.whenReady().then(async () => {
   dailyFigureCache = createDailyFigureCache({ directory: path.join(app.getPath("userData"), "Cache", "daily-figures"), resolveFigure: resolveArxivFigure });
   modelConfig.initializeModelConfig(app.getPath("userData"));
   agentBackendConfig.initialize(app.getPath("userData"));
-  webSearch.initializeWebSearch(app.getPath("userData"));
+  environmentVault = createEnvironmentVault({ directory: app.getPath("userData"), safeStorage });
+  setEnvironmentVault(environmentVault);
+  webSearch.initializeWebSearch(app.getPath("userData"), environmentVault);
   // Passwords and reproduction tokens share one OS keychain-backed codec; both
   // are useless if the machine cannot encrypt, so both refuse to save instead.
   const secretCodec = {
@@ -1044,6 +1051,42 @@ app.whenReady().then(async () => {
   });
 
   ipcMain.handle("research:snapshot", () => store.getSnapshot());
+  ipcMain.handle("research-graph:create-node", (_event, input = {}) => {
+    if (input.kind === "result") throw new Error("Results are created from completed runs.");
+    return researchGraph.createNode(input);
+  });
+  ipcMain.handle("research-graph:revise-node", (_event, input = {}) => researchGraph.reviseNode(input));
+  ipcMain.handle("research-graph:link", (_event, input = {}) => researchGraph.linkNodes(input));
+  ipcMain.handle("research-graph:list", (_event, input = {}) => researchGraph.listGraph(input));
+  ipcMain.handle("research-graph:history", (_event, input = {}) => researchGraph.getNodeHistory(input.nodeId));
+  ipcMain.handle("research-graph:archive", (_event, input = {}) => researchGraph.archiveNode(input));
+  ipcMain.handle("research-graph:restore", (_event, input = {}) => researchGraph.restoreNode(input));
+  ipcMain.handle("research-graph:set-status", (_event, input = {}) => researchGraph.setNodeStatus(input));
+  ipcMain.handle("research-graph:validate", (_event, input = {}) => researchGraph.validateGraph(input));
+  ipcMain.handle("research-graph:retry-extraction", async (event, input = {}) => {
+    if (typeof input.threadId !== "string" || typeof input.turnId !== "string") throw new Error("A research thread and turn are required.");
+    const dataWorkspace = workspaceForWindow(BrowserWindow.fromWebContents(event.sender));
+    if (!dataWorkspace) throw new Error("Open a workspace before retrying graph extraction.");
+    store.openWorkspace(dataWorkspace);
+    return agent.retryGraphExtraction({ threadId: input.threadId, turnId: input.turnId, dataWorkspace, backendConfig: agentBackendConfig.get() });
+  });
+  ipcMain.handle("experiment-activity:list", (_event, input = {}) => store.listExperimentActivities(input));
+  ipcMain.handle("experiment-run:list", (_event, input = {}) => store.listExperimentRuns(input));
+  ipcMain.handle("experiment-run:start", (event, input = {}) => {
+    if (typeof input.workspace !== "string" || !input.workspace.trim()) throw new Error("A workspace is required to start an experiment run.");
+    const workspace = resolveWorkspace(input.workspace);
+    const started = experimentRunner.startExperimentRun({
+      ...input,
+      workspace,
+      onUpdate: (run) => {
+        if (!event.sender.isDestroyed()) event.sender.send("experiment-run:update", run);
+      },
+    });
+    return started.run;
+  });
+  ipcMain.handle("experiment-run:cancel", (_event, runId) => experimentRunner.cancelExperimentRun(runId));
+  ipcMain.handle("experiment-run:log", (_event, input = {}) => experimentRuns.readExperimentRunLog(input));
+  ipcMain.handle("experiment-run:result", (_event, input = {}) => researchGraph.createResultFromRun(input));
   registerThreadCommands({ ipcMain, store, agent, modelConfig, dialog, BrowserWindow,
     dataWorkspace: (event, input) => workspaceForWindow(BrowserWindow.fromWebContents(event.sender)) || resolveWorkspace(input.workspace),
     nativeBackend: { getConfig: () => agentBackendConfig.get(), compact: (input) => nativeAgent.compactNative(input) },
@@ -1129,6 +1172,7 @@ app.whenReady().then(async () => {
   ipcMain.handle("agent-backend:save", (_event, input) => agentBackendConfig.save(input));
   ipcMain.handle("agent-backend:check", (_event, input) => agentBackendConfig.check(input));
   ipcMain.handle("agent-backend:codex-models", (_event, input) => agentBackendConfig.listCodexModelCatalog(input));
+  ipcMain.handle("agent-backend:opencode-models", (_event, input = {}) => agentBackendConfig.listOpenCodeModelCatalog(input, resolveWorkspace(input.workspace)));
 
   ipcMain.handle("model-config:list-models", (_event, input = {}, role) => modelConfig.listProviderModels(input, role));
 
@@ -1171,6 +1215,9 @@ app.whenReady().then(async () => {
     return sshServers.testConnection(target);
   });
 
+  ipcMain.handle("environment:list", () => environmentVault.list());
+  ipcMain.handle("environment:save", (_event, input) => environmentVault.save(input));
+  ipcMain.handle("environment:remove", (_event, name) => environmentVault.remove(name));
   ipcMain.handle("web-search:get-config", () => webSearch.getPublicWebSearchConfig());
 
   ipcMain.handle("web-search:save-config", (_event, input = {}) => webSearch.saveWebSearchConfig(input));
@@ -2596,6 +2643,7 @@ app.on("activate", () => {
 app.on("before-quit", () => {
   closeAllNativeClients();
   closeAllTerminals();
+  experimentRunner.shutdownExperimentRuns();
   collaborationServer?.close?.();
   void presence?.closeAll();
 });

@@ -266,3 +266,37 @@ test("outbound JSON byte counts match actual escaping, surrogate and nested repr
     assert.throws(() => assertJsonSize(value, bytes - 1), /size limit/);
   }
 });
+
+test("Codex exposes live experiment tools and dispatches requests during the turn", async () => {
+  let client;
+  class DynamicClient extends EventEmitter {
+    constructor() { super(); this.requests = []; this.replies = []; this.closed = false; client = this; }
+    async start() { return this; }
+    async request(method, params) {
+      this.requests.push({ method, params });
+      if (method === "account/read") return { account: { type: "chatgpt" } };
+      if (method === "thread/start") return { thread: { id: "native-thread" } };
+      if (method === "turn/start") {
+        setImmediate(() => this.emit("message", { id: 81, method: "item/tool/call", params: { threadId: "native-thread", turnId: "native-turn", callId: "call-1", namespace: null, tool: "create_experiment", arguments: { idea: "Idea", title: "Experiment" } } }));
+        return { turn: { id: "native-turn" } };
+      }
+      return {};
+    }
+    respond(id, result) {
+      this.replies.push({ id, result });
+      this.emit("message", { method: "item/agentMessage/delta", params: { threadId: "native-thread", turnId: "native-turn", itemId: "answer", delta: "done" } });
+      this.emit("message", { method: "turn/completed", params: { threadId: "native-thread", turn: { id: "native-turn", status: "completed" } } });
+    }
+    unsupported(id) { this.replies.push({ id, denied: true }); }
+    close() { this.closed = true; }
+  }
+  const args = input(DynamicClient);
+  args.turn.mode = "research";
+  args.experimentBridgeInstructions = "Use live experiment tools.";
+  args.experimentDynamicTools = [{ type: "function", name: "create_experiment", description: "Create experiment", inputSchema: { type: "object" } }];
+  args.invokeExperimentTool = async (name, payload) => { assert.equal(name, "create_experiment"); assert.equal(payload.idea, "Idea"); return { experiment_id: "e1" }; };
+  assert.equal(await runCodex(args), "done");
+  assert.equal(client.requests.find((entry) => entry.method === "thread/start").params.dynamicTools[0].name, "create_experiment");
+  assert.deepEqual(client.replies[0].result, { success: true, contentItems: [{ type: "inputText", text: '{"experiment_id":"e1"}' }] });
+  assert.match(client.requests.find((entry) => entry.method === "turn/start").params.input[0].text, /Use live experiment tools/);
+});

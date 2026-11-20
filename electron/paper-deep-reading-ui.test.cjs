@@ -37,7 +37,8 @@ test('saved illustrated reading is restored, exports, and survives a failed reru
   await f.render(); assert.match(document.querySelector('[data-reading]').textContent, /saved illustrated/);
   await click('Export reading'); assert.equal(exports, 1); assert.match(document.body.textContent, /exports\/report/);
   await click('Read again'); assert.match(document.body.textContent, /Provider unavailable/); assert.match(document.querySelector('[data-reading]').textContent, /saved illustrated/);
-  await click('Presentation'); assert.match(document.body.textContent, /Presentation/);
+  assert.equal([...document.querySelectorAll('button')].some(button => button.textContent === 'Presentation'), false);
+  assert.match(document.querySelector('.paper-deep-toolbar-title').textContent, /Reading/);
 });
 
 test('cancellation stops progress while preserving the existing reading', async t => {

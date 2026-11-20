@@ -5,6 +5,21 @@ const path = require('node:path');
 const test = require('node:test');
 const config = require('./agent-backend-config.cjs');
 
+test('OpenCode catalog parses model IDs without accepting command output or duplicates', () => {
+  const models = config.parseOpenCodeModels('warning: ignored\nopencode-go/qwen3.7-plus\nopencode-go/qwen3.7-plus\nopenai/gpt-5\ninvalid entry\n');
+  assert.deepEqual(models.map(item => item.id), ['opencode-go/qwen3.7-plus', 'openai/gpt-5']);
+});
+
+test('OpenCode catalog runs the selected executable in the workspace without starting a session', { skip: process.platform === 'win32' }, async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'opencode-catalog-'));
+  try {
+    const binary = path.join(root, 'opencode-fixture');
+    fs.writeFileSync(binary, `#!${process.execPath}\nif (process.argv[2] !== 'models' || process.cwd() !== ${JSON.stringify(fs.realpathSync(root))}) process.exit(2);\nconsole.log('opencode-go/qwen3.7-plus');\n`, { mode: 0o755 });
+    const result = await config.listOpenCodeModelCatalog({ backend: 'opencode', binary }, root);
+    assert.equal(result.models[0].id, 'opencode-go/qwen3.7-plus');
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
 test('switching native Harnesses retains independent executable, model and permission profiles', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'harness-config-'));
   config.initialize(root);

@@ -1,0 +1,17 @@
+Real native harness smoke test — 2026-11-18
+
+Environment: macOS; isolated temporary Git repositories; Archimedes agent.runAgent in Research mode; native permissions set to ask. The harness adapters were real installed CLI processes, not mocked peers. Approval automation allowed only the isolated experiment worktree and the exact harmless command `printf ARCHIMEDES_E2E_OK`. Test repositories were removed afterwards.
+
+Verified for each successful run: one Experiment linked to its Idea, one completed managed Run with exit code 0, an observed baseline activity, a Result linked to the Experiment, expected run log content, and a code archive whose SHA-256 matched its recorded hash.
+
+Codex CLI 0.161.0 / gpt-6.1-terra: PASS, including resuming an existing native thread that started before experiment tools were registered. Graph edges, log content and archive digest verified.
+Claude Code 2.1.119 / qwen/qwen3.6-plus: PASS with the model configured in this installation. Graph edges, log content and archive digest verified.
+OpenCode 2.2.7 / opencode-go/gpt-5.6-luna: PASS with an existing configured provider. Graph edges, log content and archive digest verified.
+
+Observed failures and fixes:
+- One initial Codex attempt created the Experiment but failed before Run with a generic native turn error; subsequent full runs succeeded. The original transient failure was not conclusively diagnosed.
+- The default OpenCode provider returned authentication required, and an OpenCode free model returned its usage limit. The existing OpenCode Go provider succeeded without modifying user configuration.
+- An initial OpenCode worktree attempt supplied an unsupported workspace argument. The bridge instructions now provide the exact supported fields; the real complete flow passed afterwards.
+- An initial resumed Codex thread failed to connect to the Unix socket under the native sandbox. Replacing the socket transport with a temporary workspace mailbox retained the sandbox and passed a real resumed-thread test. A disconnected requester cannot subsequently start an approved command.
+
+Scope: backend adapter, real provider/model calls, approval handling, SQLite graph, managed process, log, and archive were exercised. The packaged desktop application and the full graphical workflow were not exercised in this smoke test. The baseline activity was synthetic test data, not a scientific result.
