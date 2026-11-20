@@ -10,6 +10,11 @@ function alternateTitleKey(paper) {
   return null;
 }
 
+function hasInitialPaperState(paper) {
+  return paper.state_updated_at === paper.created_at && paper.reading_status === "unread"
+    && !paper.starred && !paper.notes && !paper.tags.length;
+}
+
 function createLibrarySync({ store, api } = {}) {
   if (!store || !api) throw new Error("Store and collaboration API are required.");
 
@@ -23,9 +28,9 @@ function createLibrarySync({ store, api } = {}) {
     let localLibraries = store.listLibraries(projectId);
     let visiblePapers;
 
-    async function canonicalKeyForUpload(paper) {
+    async function matchingCloudTitlePaper(paper) {
       const alternative = alternateTitleKey(paper);
-      if (!alternative) return paper.canonical_key;
+      if (!alternative) return null;
       // Read existing cloud references before uploading a title-only identity.
       // The cloud attaches by exact key, so aliases need the same author/year evidence.
       visiblePapers ??= Promise.all(remoteLibraries.map(library => api.listPapers(library.id)))
@@ -33,9 +38,9 @@ function createLibrarySync({ store, api } = {}) {
       const papers = await visiblePapers;
       const existing = papers.get(alternative.key);
       if (!papers.has(paper.canonical_key) && existing && alternateTitleKey(existing)?.fingerprint === alternative.fingerprint) {
-        return existing.canonical_key;
+        return existing;
       }
-      return paper.canonical_key;
+      return null;
     }
 
     // Local -> cloud: create missing cloud libraries and attach papers.
@@ -64,8 +69,9 @@ function createLibrarySync({ store, api } = {}) {
       for (const paper of store.listPapers(library.id)) {
         if (paper.cloud_paper_id) continue;
         try {
+          const match = await matchingCloudTitlePaper(paper);
           const cloudPaper = await api.addPaper(cloudLibraryId, {
-            canonical_key: await canonicalKeyForUpload(paper),
+            canonical_key: match?.canonical_key ?? paper.canonical_key,
             title: paper.title,
             authors: paper.authors,
             year: paper.year,
@@ -82,7 +88,11 @@ function createLibrarySync({ store, api } = {}) {
             github_stars: paper.github_stars,
             conference: paper.conference,
           });
-          store.linkPaperToCloud(paper.id, cloudPaper.id);
+          const linked = store.linkPaperToCloud(paper.id, cloudPaper.id);
+          if (match?.state_updated_at && match.id === cloudPaper.id && hasInitialPaperState(linked)) {
+            // A fresh import has a timestamp even though nobody edited its defaults.
+            store.applyCloudPaperState(linked.id, match);
+          }
         } catch (error) {
           warnings.push(`${paper.title}: ${error instanceof Error ? error.message : String(error)}`);
         }

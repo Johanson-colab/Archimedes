@@ -111,6 +111,8 @@ test("a new title-only reference joins its legacy cloud record without joining a
     const api = fakeApi();
     const remote = api.seedRemoteLibrary(library.name, {
       canonical_key: "title:editorial", title: "Editorial", authors: ["Alex Morgan"], year: 2019,
+      notes: "Existing cloud note", reading_status: "read", starred: true,
+      tags: ["checked"], state_updated_at: "2025-01-01T00:00:00.000Z",
     });
     store.linkLibraryToCloud(library.id, remote.id);
     const [legacy] = await api.listPapers(remote.id);
@@ -123,11 +125,43 @@ test("a new title-only reference joins its legacy cloud record without joining a
     assert.deepEqual(result.warnings, []);
     const cloud = await api.listPapers(remote.id);
     assert.equal(cloud.length, 2);
-    assert.equal(store.getPaper(matching.id).cloud_paper_id, legacy.id);
-    assert.equal(store.getPaper(matching.id).canonical_key, matching.canonical_key);
+    const linked = store.getPaper(matching.id);
+    assert.equal(linked.cloud_paper_id, legacy.id);
+    assert.equal(linked.canonical_key, matching.canonical_key);
+    assert.deepEqual(cloud.find(item => item.id === legacy.id), legacy);
+    assert.equal(linked.notes, legacy.notes);
+    assert.equal(linked.reading_status, "read");
+    assert.equal(linked.starred, true);
+    assert.deepEqual(linked.tags, ["checked"]);
     const second = store.getPaper(distinct.id);
     assert.notEqual(second.cloud_paper_id, legacy.id);
     assert.equal(cloud.find(item => item.id === second.cloud_paper_id).canonical_key, distinct.canonical_key);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("reusing a cloud title key preserves an explicit local note for reconciliation", async () => {
+  const root = workspace();
+  try {
+    const project = store.createResearchProject({ name: "Title reference with edited notes" });
+    store.linkResearchProjectToCloud(project.id, "cloud-project");
+    const library = store.listLibraries(project.id)[0];
+    const api = fakeApi();
+    const reference = { title: "Editorial", authors: ["Alex Morgan"], year: 2019 };
+    const remote = api.seedRemoteLibrary(library.name, {
+      canonical_key: "title:editorial", ...reference, notes: "Older cloud note", state_updated_at: "2025-01-01T00:00:00.000Z",
+    });
+    store.linkLibraryToCloud(library.id, remote.id);
+    const paper = store.addPaper(library.id, reference);
+    store.updatePaper(paper.id, { notes: "Edited locally before sync" });
+
+    const result = await createLibrarySync({ store, api }).syncProjectLibraries(project.id);
+    assert.deepEqual(result.warnings, []);
+    const cloud = await api.listPapers(remote.id);
+    assert.equal(cloud.length, 1);
+    assert.equal(cloud[0].notes, "Edited locally before sync");
+    assert.equal(store.getPaper(paper.id).notes, cloud[0].notes);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
