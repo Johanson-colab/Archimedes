@@ -192,8 +192,55 @@ test("citation keys are scoped to the target export, while paper identity still 
     await input(document.querySelector('[aria-label="BibTeX source"]'), '@article{Smith2020,title={Third unrelated paper},doi={10.5555/third}}');
     assert.ok(document.body.textContent.includes("Citation key conflict"), "an actual collision inside the target export stays blocked");
     await input(document.querySelector('[aria-label="BibTeX source"]'), '@article{OtherKey,title={First unrelated paper},doi={10.5555/first}}');
-    assert.ok(document.body.textContent.includes("Existing paper")); await click("Import selected references");
-    assert.equal(data.db.listPapers(libraryB.id).find((paper) => paper.doi === "10.5555/first").id, first.id);
+    assert.ok(document.body.textContent.includes("Citation key conflict"), "the import detects a collision with the retained key");
+    const replace = [...document.querySelectorAll("label")].find((label) => label.textContent.startsWith("Replace citation key explicitly"));
+    await React.act(async () => { replace.querySelector("input").click(); await tick(); });
+    assert.ok(!document.body.textContent.includes("Citation key conflict"), "an explicit nonconflicting replacement permits the import");
+    await click("Import selected references");
+    const papers = data.db.listPapers(libraryB.id);
+    assert.equal(papers.find((paper) => paper.doi === "10.5555/first").id, first.id);
+    assert.deepEqual(new Set(papers.map(paper => paper.citekey)), new Set(["OtherKey", "Smith2020"]));
+  } finally { if (unmount) await unmount(); data.close(); }
+});
+
+test("a shared paper cannot take a citation key already used in another collection", () => {
+  const data = database("Shared citation");
+  try {
+    const first = data.db.listLibraries(data.project.id)[0];
+    const second = data.db.createLibrary({ projectId: data.project.id, name: "Another collection" });
+    const shared = data.db.addPaper(first.id, { ...fixture.paper, title: "Shared citation", doi: "10.5555/shared" });
+    const other = data.db.addPaper(second.id, { ...fixture.paper, title: "Other citation", doi: "10.5555/other" });
+    data.db.addPaper(second.id, shared);
+    data.db.setPaperBibliography(shared.id, { citekey: "CurrentKey" });
+    data.db.setPaperBibliography(other.id, { citekey: "NewKey" });
+
+    assert.throws(() => data.db.setPaperBibliography(shared.id, { citekey: "newkey" }), /Citation key conflict/);
+    assert.equal(data.db.getPaper(shared.id).citekey, "CurrentKey");
+    assert.equal(data.db.getPaper(other.id).citekey, "NewKey");
+    assert.equal(data.db.setPaperBibliography(shared.id, { citekey: "UnusedKey" }).citekey, "UnusedKey");
+  } finally { data.close(); }
+});
+
+test("a conflicting replacement rolls back attaching the imported paper", async () => {
+  const data = database("Atomic citation"); let unmount;
+  try {
+    const source = data.db.listLibraries(data.project.id)[0];
+    const target = data.db.createLibrary({ projectId: data.project.id, name: "Target collection" });
+    const shared = data.db.addPaper(source.id, { ...fixture.paper, title: "Shared reference", doi: "10.5555/shared-rollback" });
+    const sourcePeer = data.db.addPaper(source.id, { ...fixture.paper, title: "Source key holder", doi: "10.5555/source-peer" });
+    const targetPeer = data.db.addPaper(target.id, { ...fixture.paper, title: "Target key holder", doi: "10.5555/target-peer" });
+    data.db.setPaperBibliography(shared.id, { citekey: "CurrentKey" });
+    data.db.setPaperBibliography(sourcePeer.id, { citekey: "NewKey" });
+    data.db.setPaperBibliography(targetPeer.id, { citekey: "CurrentKey" });
+
+    unmount = await mount(scope.BibliographyDialog, { bridge: data.bridge, library: target, onClose() {}, onChanged: async () => {} });
+    await input(document.querySelector('[aria-label="BibTeX source"]'), '@article{NewKey,title={Shared reference},doi={10.5555/shared-rollback}}');
+    const replace = [...document.querySelectorAll("label")].find((label) => label.textContent.startsWith("Replace citation key explicitly"));
+    await React.act(async () => { replace.querySelector("input").click(); await tick(); });
+    await click("Import selected references");
+    assert.match(document.querySelector('[role="alert"]').textContent, /Citation key conflict/);
+    assert.deepEqual(data.db.listPapers(target.id).map(paper => paper.id), [targetPeer.id]);
+    assert.equal(data.db.getPaper(shared.id).citekey, "CurrentKey");
   } finally { if (unmount) await unmount(); data.close(); }
 });
 
@@ -226,9 +273,8 @@ test("real Library BibTeX preview preserves existing edits and notes; only selec
 test("leaving a BibTeX import stops subsequent operations after an in-flight add returns", async () => {
   const data = database("Import scope"); let unmount;
   const library = data.db.listLibraries(data.project.id)[0];
-  let release, additions = 0, bibliographyWrites = 0;
+  let release, additions = 0;
   data.bridge.addLibraryPaper = async (...args) => { additions++; await new Promise((resolve) => { release = resolve; }); return data.db.addPaper(...args); };
-  data.bridge.setPaperBibliography = async () => { bibliographyWrites++; };
   try {
     unmount = await mount(scope.BibliographyDialog, { bridge: data.bridge, library, onClose() {}, onChanged: async () => {} });
     await input(document.querySelector('[aria-label="BibTeX source"]'), fixture.bibtex + '\n@article{second,title={Different candidate},year=2026}');
@@ -236,7 +282,9 @@ test("leaving a BibTeX import stops subsequent operations after an in-flight add
     await React.act(async () => { button.click(); await tick(); }); assert.equal(additions, 1);
     await unmount(); unmount = null;
     await React.act(async () => { release(); await tick(); });
-    assert.equal(additions, 1); assert.equal(bibliographyWrites, 0, "an unmounted owner must not start another IPC in the newly selected data root");
-    assert.equal(data.db.listPapers(library.id).length, 1, "the already-issued add still completes in its original store");
+    assert.equal(additions, 1, "an unmounted owner must not start another IPC in the newly selected data root");
+    const imported = data.db.listPapers(library.id);
+    assert.equal(imported.length, 1, "the already-issued add still completes in its original store");
+    assert.equal(imported[0].citekey, scope.parseBibliography(fixture.bibtex).entries[0].citekey, "the original request writes its reference and key together");
   } finally { if (unmount) await unmount(); data.close(); }
 });

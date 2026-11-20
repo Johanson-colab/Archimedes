@@ -4,6 +4,7 @@ const identifier = {
   doi: value => String(value || "").trim().toLowerCase().replace(/^https?:\/\/(?:dx\.)?doi\.org\//, "").replace(/^doi:\s*/, ""),
 };
 const titleIdentity = value => String(value || "").normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+const citationKeyIdentity = value => value.normalize("NFKC").trim().toLowerCase();
 
 function conflictingIdentifiers(first, second) {
   return Object.entries(identifier).some(([key, normalize]) => normalize(first[key]) && normalize(second[key]) && normalize(first[key]) !== normalize(second[key]));
@@ -54,6 +55,19 @@ function bibliography(db, paperId) {
   return { paper_id: paperId, citekey: row?.citekey || "", entryType: row?.entry_type || "article", updated_at: row?.updated_at || null };
 }
 
+function assertCitationKeyAvailable(db, paperId, citekey, libraryId = null) {
+  const identity = citationKeyIdentity(citekey);
+  if (!identity) return;
+  const peerKeys = db.prepare(`SELECT DISTINCT bibliography.citekey
+    FROM library_papers AS member
+    JOIN library_papers AS peer ON peer.library_id = member.library_id AND peer.paper_id <> member.paper_id
+    JOIN paper_bibliography AS bibliography ON bibliography.paper_id = peer.paper_id
+    WHERE member.paper_id = ? AND member.library_id = COALESCE(?, member.library_id) AND bibliography.citekey <> ''`).all(paperId, libraryId);
+  if (peerKeys.some(peer => citationKeyIdentity(peer.citekey) === identity)) {
+    throw new Error("Citation key conflict: edit the source before importing");
+  }
+}
+
 function setBibliography(db, paperId, patch, canAccessProject) {
   assertPaperAccess(db, paperId, canAccessProject, "editor");
   const current = bibliography(db, paperId);
@@ -61,6 +75,9 @@ function setBibliography(db, paperId, patch, canAccessProject) {
   const entryType = patch.entryType === undefined ? current.entryType : String(patch.entryType).trim().toLowerCase();
   if (citekey.length > 200 || /[\s,{}\\#%"]/.test(citekey)) throw new Error("Use a citation key without spaces or BibTeX delimiters.");
   if (!/^[a-z][a-z0-9_-]{0,79}$/.test(entryType)) throw new Error("Choose a valid bibliography entry type.");
+  if (citationKeyIdentity(citekey) !== citationKeyIdentity(current.citekey)) {
+    assertCitationKeyAvailable(db, paperId, citekey);
+  }
   db.prepare(`INSERT INTO paper_bibliography (paper_id, citekey, entry_type, updated_at) VALUES (?, ?, ?, ?)
     ON CONFLICT(paper_id) DO UPDATE SET citekey = excluded.citekey, entry_type = excluded.entry_type, updated_at = excluded.updated_at`)
     .run(paperId, citekey, entryType, new Date().toISOString());
@@ -86,4 +103,4 @@ function repairMetadata(db, paperId, patch, canAccessProject) {
   if (assignments.length) db.prepare(`UPDATE papers SET ${assignments.join(", ")}, updated_at = ? WHERE id = ?`).run(...values, new Date().toISOString(), paperId);
 }
 
-module.exports = { identifier, titleIdentity, findImportMatch, assertPaperAccess, bibliography, setBibliography, repairMetadata };
+module.exports = { identifier, titleIdentity, findImportMatch, assertPaperAccess, bibliography, assertCitationKeyAvailable, setBibliography, repairMetadata };
