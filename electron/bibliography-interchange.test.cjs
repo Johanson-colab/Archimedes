@@ -75,9 +75,7 @@ test("a redundant title-only row cannot hide a later paper with a distinct DOI",
     '@article{importAgain,title={Renamed second},doi={10.5555/two}}',
     '@article{first,title={A different work},doi={10.5555/three}}',
   ].join("\n"));
-  const flags = scope.indexBibliographyBatch(batch.entries);
-  assert.deepEqual(flags.map(row => row.duplicate), [false, true, false, true, false]);
-  assert.deepEqual(flags.map(row => row.keyConflict), [false, false, false, false, true]);
+  assert.deepEqual([...scope.indexBibliographyBatch(batch.entries)], [1, 3]);
 });
 
 test("a local title-only candidate cannot override a conflict-free global strong identifier", () => {

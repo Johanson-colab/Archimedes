@@ -21,7 +21,7 @@ export default function BibliographyDialog({ bridge, library, onClose, onChanged
   const alive = useRef(true);
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
   const parsed = useMemo(() => parseBibliography(input), [input]);
-  const batch = useMemo(() => indexBibliographyBatch(parsed.entries), [parsed.entries]);
+  const repeatedRows = useMemo(() => indexBibliographyBatch(parsed.entries), [parsed.entries]);
   const preview = useMemo(() => parsed.entries.map((entry, index) => {
     const existing = matchBibliographyPaper(entry.paper, targetPapers, { strongOnly: true })
       || matchBibliographyPaper(entry.paper, projectPapers, { strongOnly: true })
@@ -29,11 +29,11 @@ export default function BibliographyDialog({ bridge, library, onClose, onChanged
       || matchBibliographyPaper(entry.paper, targetPapers)
       || matchBibliographyPaper(entry.paper, projectPapers)
       || matchBibliographyPaper(entry.paper, known);
-    const { duplicate } = batch[index];
+    const duplicate = repeatedRows.has(index);
     const keyIdentity = citationKeyIdentity(entry.citekey);
-    const keyConflict = batch[index].keyConflict || targetPapers.some((paper) => paper.citekey && citationKeyIdentity(paper.citekey) === keyIdentity && paper.id !== existing?.id);
+    const keyConflict = targetPapers.some((paper) => paper.citekey && citationKeyIdentity(paper.citekey) === keyIdentity && paper.id !== existing?.id) || parsed.entries.some((candidate, candidateIndex) => candidateIndex < index && citationKeyIdentity(candidate.citekey) === keyIdentity && !matchBibliographyPaper(entry.paper, [candidate.paper as BibliographyPaper]));
     return { entry, existing, duplicate, keyConflict, differences: existing ? metadataDifferences(entry.paper, existing) : {} };
-  }), [batch, parsed.entries, known, targetPapers, projectPapers]);
+  }), [repeatedRows, parsed.entries, known, targetPapers, projectPapers]);
   useEffect(() => {
     let active = true;
     void (async () => {

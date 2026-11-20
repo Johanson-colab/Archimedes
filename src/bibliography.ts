@@ -206,8 +206,8 @@ export function exportBibliography(papers: BibliographyPaper[]) {
 // match has no authority to hide a later entry with a different DOI.
 export function indexBibliographyBatch(entries: BibliographyEntry[]) {
   const byIdentity = new Map<string, AcademicSearchResult[]>();
-  const byCitekey = new Map<string, AcademicSearchResult>();
-  return entries.map(({ paper, citekey }) => {
+  const repeatedRows = new Set<number>();
+  entries.forEach(({ paper }, index) => {
     const identities = identifierFields.flatMap(([field, normalize]) =>
       paper[field] ? [field + ":" + normalize(paper[field])] : []);
     const normalizedTitle = title(paper.title);
@@ -216,17 +216,15 @@ export function indexBibliographyBatch(entries: BibliographyEntry[]) {
       const candidates = byIdentity.get(key);
       return candidates && matchBibliographyPaper(paper, candidates);
     });
-    const key = citationKeyIdentity(citekey);
-    const holder = byCitekey.get(key);
-    const keyConflict = Boolean(holder && !matchBibliographyPaper(paper, [holder]));
-    if (!duplicate && !keyConflict) {
-      byCitekey.set(key, paper);
-      for (const identity of identities) {
-        const group = byIdentity.get(identity);
-        if (group) group.push(paper);
-        else byIdentity.set(identity, [paper]);
-      }
+    if (duplicate) {
+      repeatedRows.add(index);
+      return;
     }
-    return { duplicate, keyConflict };
+    for (const identity of identities) {
+      const group = byIdentity.get(identity);
+      if (group) group.push(paper);
+      else byIdentity.set(identity, [paper]);
+    }
   });
+  return repeatedRows;
 }
