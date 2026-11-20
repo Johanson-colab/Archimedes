@@ -155,49 +155,15 @@ const identifierFields = [
   ['s2_id', (value: string) => value.trim().toLowerCase()], ['arxiv_id', arxiv], ['doi', doi],
 ] as const;
 
-function compatibleIdentifiers(first: AcademicSearchResult, second: AcademicSearchResult) {
-  return identifierFields.every(([field, normalize]) =>
-    !first[field] || !second[field] || normalize(first[field]) === normalize(second[field]));
-}
-
 export function matchBibliographyPaper<T extends AcademicSearchResult>(incoming: AcademicSearchResult, papers: T[], { strongOnly = false }: { strongOnly?: boolean } = {}) {
+  const compatible = (paper: AcademicSearchResult) => !identifierFields.some(([field, normalize]) => incoming[field] && paper[field] && normalize(incoming[field]) !== normalize(paper[field]));
   for (const [field, normalize] of identifierFields) {
     if (!incoming[field]) continue;
-    const matched = papers.find(paper => paper[field] && normalize(incoming[field]) === normalize(paper[field]) && compatibleIdentifiers(incoming, paper));
+    const matched = papers.find(paper => paper[field] && normalize(incoming[field]) === normalize(paper[field]) && compatible(paper));
     if (matched) return matched;
   }
   if (strongOnly) return undefined;
-  const normalizedTitle = title(incoming.title);
-  return papers.find(paper => normalizedTitle && normalizedTitle === title(paper.title) && compatibleIdentifiers(incoming, paper));
-}
-
-// Only retained rows can represent another import. A discarded title-only
-// match has no authority to hide a later entry with a different DOI.
-export function indexBibliographyBatch(entries: BibliographyEntry[]) {
-  const byIdentity = new Map<string, AcademicSearchResult[]>();
-  const byCitekey = new Map<string, AcademicSearchResult>();
-  return entries.map(({ paper, citekey }) => {
-    const identities = identifierFields.flatMap(([field, normalize]) =>
-      paper[field] ? [field + ":" + normalize(paper[field])] : []);
-    const normalizedTitle = title(paper.title);
-    if (normalizedTitle) identities.push("title:" + normalizedTitle);
-    const duplicate = identities.some(key => {
-      const candidates = byIdentity.get(key);
-      return candidates && matchBibliographyPaper(paper, candidates);
-    });
-    const key = citationKeyIdentity(citekey);
-    const holder = byCitekey.get(key);
-    const keyConflict = Boolean(holder && !matchBibliographyPaper(paper, [holder]));
-    if (!duplicate && !keyConflict) {
-      byCitekey.set(key, paper);
-      for (const identity of identities) {
-        const group = byIdentity.get(identity);
-        if (group) group.push(paper);
-        else byIdentity.set(identity, [paper]);
-      }
-    }
-    return { duplicate, keyConflict };
-  });
+  return papers.find(paper => compatible(paper) && title(incoming.title) && title(incoming.title) === title(paper.title));
 }
 
 export function metadataDifferences(entry: AcademicSearchResult, current: AcademicSearchResult): MetadataPatch {
@@ -234,4 +200,33 @@ export function exportBibliography(papers: BibliographyPaper[]) {
     const escape = (value: string) => value.replace(/[\\{}%&#_$]/g, (character) => character === "\\" ? "\\textbackslash{} " : `\\${character}`);
     return `@${paper.entry_type || "article"}{${keys[index]},\n${Object.entries(values).filter(([, value]) => value).map(([field, value]) => `  ${field} = {${field === "author" ? paper.authors.map((author) => /\s+and\s+/i.test(author) ? `{${escape(author)}}` : escape(author)).join(" and ") : escape(value)}}`).join(",\n")}\n}`;
   }).join("\n\n") + "\n";
+}
+
+// Only retained rows can represent another import. A discarded title-only
+// match has no authority to hide a later entry with a different DOI.
+export function indexBibliographyBatch(entries: BibliographyEntry[]) {
+  const byIdentity = new Map<string, AcademicSearchResult[]>();
+  const byCitekey = new Map<string, AcademicSearchResult>();
+  return entries.map(({ paper, citekey }) => {
+    const identities = identifierFields.flatMap(([field, normalize]) =>
+      paper[field] ? [field + ":" + normalize(paper[field])] : []);
+    const normalizedTitle = title(paper.title);
+    if (normalizedTitle) identities.push("title:" + normalizedTitle);
+    const duplicate = identities.some(key => {
+      const candidates = byIdentity.get(key);
+      return candidates && matchBibliographyPaper(paper, candidates);
+    });
+    const key = citationKeyIdentity(citekey);
+    const holder = byCitekey.get(key);
+    const keyConflict = Boolean(holder && !matchBibliographyPaper(paper, [holder]));
+    if (!duplicate && !keyConflict) {
+      byCitekey.set(key, paper);
+      for (const identity of identities) {
+        const group = byIdentity.get(identity);
+        if (group) group.push(paper);
+        else byIdentity.set(identity, [paper]);
+      }
+    }
+    return { duplicate, keyConflict };
+  });
 }
