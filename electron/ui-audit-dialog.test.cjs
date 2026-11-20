@@ -47,5 +47,5 @@ test("paper project dialog is dismissible before a project exists", () => {
   assert.match(paper, /<Dialog open=\{dialogOpen\} onClose=\{\(\) => setChooserOpen\(false\)\}/);
   assert.match(paper, /overlayClassName="paper-create-backdrop app-dialog-overlay"/);
   assert.doesNotMatch(paper, /activeProject && <button[^>]*aria-label="Close project chooser"/);
-  assert.match(paper, /<button className="app-dialog-close" onClick=\{\(\) => setChooserOpen\(false\)\} aria-label="Close project chooser">/);
+  assert.match(paper, /<button className="app-dialog-close" onClick=\{\(\) => setChooserOpen\(false\)\} aria-label=\{t\("Close project chooser"\)\}>/);
 });

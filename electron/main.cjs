@@ -163,24 +163,18 @@ function stopWorkspaceWatcher(senderId) {
 
 function setWindowWorkspace(senderId, workspace) {
   windowWorkspaces.set(senderId, workspace);
-  let token = windowPreviewTokens.get(senderId);
-  if (!token) {
-    token = randomUUID();
-    windowPreviewTokens.set(senderId, token);
-  }
-  previewTokenWorkspaces.set(token, workspace);
-  return token;
+  return createPreviewToken(senderId, workspace);
 }
 
 function createPreviewToken(senderId, workspace) {
-  // Execution folders (project directories) can differ from the window's data
-  // workspace. Preview tokens must not move the window's primary workspace.
-  let token = windowPreviewTokens.get(senderId);
+  let tokens = windowPreviewTokens.get(senderId);
+  if (!tokens) { tokens = new Map(); windowPreviewTokens.set(senderId, tokens); }
+  let token = tokens.get(workspace);
   if (!token) {
     token = randomUUID();
-    windowPreviewTokens.set(senderId, token);
+    tokens.set(workspace, token);
+    previewTokenWorkspaces.set(token, workspace);
   }
-  previewTokenWorkspaces.set(token, workspace);
   return token;
 }
 
@@ -322,8 +316,7 @@ function createWindow(workspace) {
     closeWindowTerminals(senderId);
     stopWorkspaceWatcher(senderId);
     void presence?.leave(String(senderId));
-    const token = windowPreviewTokens.get(senderId);
-    if (token) previewTokenWorkspaces.delete(token);
+    for (const token of windowPreviewTokens.get(senderId)?.values() ?? []) previewTokenWorkspaces.delete(token);
     windowPreviewTokens.delete(senderId);
     windowWorkspaces.delete(senderId);
   });
@@ -1027,8 +1020,9 @@ app.whenReady().then(async () => {
 
   ipcMain.handle("paper:compile", async (event, input = {}) => {
     const workspace = resolveWorkspace(input.workspace);
+    const requestId = typeof input.requestId === "string" ? input.requestId.slice(0, 200) : undefined;
     const result = await managedPaperCompiler(workspace, input.path, (stage, log) => {
-      if (!event.sender.isDestroyed()) event.sender.send("paper:compile-progress", { path: input.path, stage, log });
+      if (!event.sender.isDestroyed()) event.sender.send("paper:compile-progress", { workspace, requestId, path: input.path, stage, log });
     });
     if (!result.ok || !result.pdf_path) return result;
     const token = createPreviewToken(event.sender.id, workspace);
