@@ -67,6 +67,19 @@ function database(name) {
   const bridge = { listLibraries: async id => db.listLibraries(id), listLibraryProjects: async () => db.listLibraryProjects(), listLibraryPapers: async id => db.listPapers(id), addLibraryPaper: async (...args) => db.addPaper(...args), setPaperBibliography: async (...args) => db.setPaperBibliography(...args), repairLibraryPaperMetadata: async (...args) => db.repairLibraryPaperMetadata(...args) };
   return { root, db, project, bridge, close() { store.openWorkspace(idle); fs.rmSync(root, { recursive: true, force: true }); fs.rmSync(idle, { recursive: true, force: true }); } };
 }
+test("a redundant title-only row cannot hide a later paper with a distinct DOI", () => {
+  const batch = scope.parseBibliography([
+    '@article{first,title={Evaluation},doi={10.5555/one}}',
+    '@article{alias,title={Evaluation}}',
+    '@article{second,title={Evaluation},doi={10.5555/two}}',
+    '@article{importAgain,title={Renamed second},doi={10.5555/two}}',
+    '@article{first,title={A different work},doi={10.5555/three}}',
+  ].join("\n"));
+  const flags = scope.indexBibliographyBatch(batch.entries);
+  assert.deepEqual(flags.map(row => row.duplicate), [false, true, false, true, false]);
+  assert.deepEqual(flags.map(row => row.keyConflict), [false, false, false, false, true]);
+});
+
 test("a local title-only candidate cannot override a conflict-free global strong identifier", () => {
   const data = database("Strong before title");
   try {
@@ -130,19 +143,6 @@ test("BibTeX ignores commented-out entries with nested braces and tolerates whit
   assert.equal(parsed.entries[0].paper.title, "Kept");
 });
 
-
-test("a redundant title-only row cannot hide a later paper with a distinct DOI", () => {
-  const batch = scope.parseBibliography([
-    '@article{first,title={Evaluation},doi={10.5555/one}}',
-    '@article{alias,title={Evaluation}}',
-    '@article{second,title={Evaluation},doi={10.5555/two}}',
-    '@article{importAgain,title={Renamed second},doi={10.5555/two}}',
-    '@article{first,title={A different work},doi={10.5555/three}}',
-  ].join("\n"));
-  const flags = scope.indexBibliographyBatch(batch.entries);
-  assert.deepEqual(flags.map(row => row.duplicate), [false, true, false, true, false]);
-  assert.deepEqual(flags.map(row => row.keyConflict), [false, false, false, false, true]);
-});
 
 test("BibTeX preview rejects citation keys that collide only by case", async () => {
   const data = database("Key case"); let unmount;
