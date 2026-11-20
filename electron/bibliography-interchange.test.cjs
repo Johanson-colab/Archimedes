@@ -96,6 +96,23 @@ test("BibTeX supports nested values, grouped authors, stable keys and explicit u
 });
 
 
+test("BibTeX decodes TeX accents and exports caret and tilde as literal characters", () => {
+  const source = String.raw`@article{latin2026, title={Garc{\'i}a: A^2 at ~/data}, author={Jos{\'e} Garc{\'{\i}}a and Bj{\o}rn M{\"u}ller}, journal={L{\oe}we \& S{\v{c}}uka}, year=2026}`;
+  const parsed = scope.parseBibliography(source);
+  assert.deepEqual(parsed.warnings, []);
+  const [{ paper, citekey, entryType }] = parsed.entries;
+  assert.equal(paper.title, "García: A^2 at ~/data");
+  assert.deepEqual(paper.authors, ["José García", "Bjørn Müller"]);
+  assert.equal(paper.venue, "Lœwe & Sčuka");
+
+  const exported = scope.exportBibliography([{ ...paper, id: "characters", citekey, entry_type: entryType }]);
+  assert.match(exported, /García: A\\textasciicircum\{\}2 at \\textasciitilde\{\}\/data/);
+  assert.match(exported, /author = \{José García and Bjørn Müller\}/);
+  assert.deepEqual(scope.parseBibliography(exported), parsed);
+  assert.equal(scope.parseBibliography(String.raw`@article{spaces,title={Note \textasciicircum{} and \textasciitilde{} marks}}`).entries[0].paper.title, "Note ^ and ~ marks");
+});
+
+
 test("BibTeX export retains explicit keys and disambiguates every generated key after normalization", () => {
   const exported = scope.exportBibliography([
     { ...fixture.paper, id: "paper-1", title: "Generated first", citekey: "", entry_type: "article" },
