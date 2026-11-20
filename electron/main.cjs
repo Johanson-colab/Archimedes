@@ -67,7 +67,11 @@ const sshServers = require("./ssh-servers.cjs");
 const { discoverDailyPapers, normalizeDailyOptions, resolveArxivFigure, searchAcademicPapers } = require("./literature.cjs");
 const { createDailyFigureCache } = require("./daily-figure-cache.cjs");
 const { deepSearchPapers } = require("./deep-paper-search.cjs");
-const { generateLiteratureReview } = require("./literature-review.cjs");
+const { generateLiteratureReview, generateLiteratureOutline } = require("./literature-review.cjs");
+const { searchLiterature } = require("./literature-search.cjs");
+const { createLiteratureHistory } = require("./literature-history.cjs");
+let literatureHistory;
+const activeLiteratureSearches = new Map();
 const { searchConferencePapers } = require("./conferences.cjs");
 const skillCatalog = require("./skill-catalog.cjs");
 const speech = require("./speech.cjs");
@@ -652,6 +656,7 @@ app.whenReady().then(async () => {
   agentBackendConfig.initialize(app.getPath("userData"));
   environmentVault = createEnvironmentVault({ directory: app.getPath("userData"), safeStorage });
   setEnvironmentVault(environmentVault);
+  literatureHistory = createLiteratureHistory(app.getPath("userData"));
   webSearch.initializeWebSearch(app.getPath("userData"), environmentVault);
   // Passwords and reproduction tokens share one OS keychain-backed codec; both
   // are useless if the machine cannot encrypt, so both refuse to save instead.
@@ -1737,6 +1742,36 @@ app.whenReady().then(async () => {
     }
   });
 
+  const literatureScope = (input) => ({ workspace: resolveWorkspace(input?.workspace), projectId: typeof input?.projectId === "string" ? input.projectId : "" });
+  ipcMain.handle("literature-search:run", async (event, input = {}) => {
+    const scope = literatureScope(input);
+    const requestId = String(input.requestId || "").slice(0, 80);
+    if (!/^[0-9a-f-]{36}$/i.test(requestId)) throw new Error("Invalid literature search request.");
+    const requestKey = `${event.sender.id}:${requestId}`;
+    if (activeLiteratureSearches.has(requestKey)) throw new Error("This search is already running.");
+    const controller = new AbortController(); activeLiteratureSearches.set(requestKey, controller);
+    const destroyed = () => controller.abort(); event.sender.once("destroyed", destroyed);
+    try {
+      const openAlexKey = input.source === "openalex" ? environmentVault.getForService("OPENALEX_API_KEY") || process.env.OPENALEX_API_KEY || "" : "";
+      const semanticKey = input.source === "semantic-scholar" ? environmentVault.getForService("SEMANTIC_SCHOLAR_API_KEY") || process.env.SEMANTIC_SCHOLAR_API_KEY || "" : "";
+      const sourceFetch = (url, init = {}) => {
+        const target = new URL(url);
+        if (target.protocol === "https:" && target.hostname === "api.openalex.org" && openAlexKey) target.searchParams.set("api_key", openAlexKey);
+        const signal = init.signal ? AbortSignal.any([init.signal, controller.signal]) : controller.signal;
+        const headers = new Headers(init.headers);
+        if (target.protocol === "https:" && target.hostname === "api.semanticscholar.org" && semanticKey) headers.set("x-api-key", semanticKey);
+        return fetch(target.toString(), { ...init, headers, signal });
+      };
+      const record = await searchLiterature(input, { modelConfig: modelConfig.getActiveModelConfig(), fetchImpl: sourceFetch, signal: controller.signal, onProgress: progress => { if (!event.sender.isDestroyed()) event.sender.send("literature-search:progress", { requestId, ...progress }); } });
+      if (controller.signal.aborted) throw new Error("Literature search cancelled.");
+      try { literatureHistory.save(scope, record); } catch { record.warnings.push("Search completed, but local history could not be saved."); }
+      return record;
+    } finally { activeLiteratureSearches.delete(requestKey); event.sender.removeListener("destroyed", destroyed); }
+  });
+  ipcMain.handle("literature-search:cancel", (event, requestId) => { const controller = activeLiteratureSearches.get(`${event.sender.id}:${String(requestId || "")}`); if (!controller) return { cancelled: false }; controller.abort(); return { cancelled: true }; });
+  ipcMain.handle("literature-search:history", (_event, input = {}) => literatureHistory.list(literatureScope(input)));
+  ipcMain.handle("literature-search:save", (_event, input = {}) => literatureHistory.save(literatureScope(input), input.record));
+  ipcMain.handle("literature-review:outline", (_event, input) => generateLiteratureOutline(input, { modelConfig: modelConfig.getActiveModelConfig() }));
   ipcMain.handle("literature-review:generate", (_event, input) => generateLiteratureReview(input, { modelConfig: modelConfig.getActiveModelConfig() }));
   ipcMain.handle("library:deep-search", async (_event, input = {}) => {
     if (!input || typeof input !== "object") throw new Error("Deep-search input is required.");

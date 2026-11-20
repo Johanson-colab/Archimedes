@@ -944,6 +944,12 @@ const previewBridge = {
   listEnvironmentVariables: async () => [],
   saveEnvironmentVariable: async () => { throw new Error("Environment variables require the desktop app."); },
   removeEnvironmentVariable: async () => { throw new Error("Environment variables require the desktop app."); },
+  cancelLiteratureSearch: async () => ({ cancelled: false }),
+  searchLiterature: async () => { throw new Error("Literature search requires the desktop app."); },
+  listLiteratureSearchHistory: async () => [],
+  saveLiteratureSearchHistory: async () => { throw new Error("Literature search history requires the desktop app."); },
+  onLiteratureSearchProgress: () => () => {},
+  generateLiteratureOutline: async () => { throw new Error("Literature outline requires the desktop app."); },
   generateLiteratureReview: async () => { throw new Error("Literature review generation requires the desktop app."); },
   getWebSearchConfig: async () => ({ provider: "brave" as const, hasApiKey: false }),
   saveWebSearchConfig: async () => ({ provider: "brave" as const, hasApiKey: true }),
@@ -3463,7 +3469,7 @@ function App() {
     reproduce: <ReproduceView bridge={desktopBridge} selectedId={reproduceId} onSelect={setReproduceId} />,
     "image-creation": <ImageCreationView active={mainSection === "image-creation"} onBrowseProceedings={() => { setDailyStartMode("conference"); setMainSection("daily"); }} />,
     "data-charts": <DataChartsView active={mainSection === "data-charts"} />,
-    "literature-review": <LiteratureReviewView key={`${workspace}:${activeProjectId || ""}`} bridge={desktopBridge} />,
+    "literature-review": <LiteratureReviewView key={`${workspace}:${activeProjectId || ""}`} bridge={desktopBridge} workspace={executionWorkspace} projectId={activeProjectId || ""} />,
     "data-analysis": <DataAnalysisView onAskAI={(text) => sendNoteToChat(text, "replace")} />,
     "paper-to-slides": <PaperToSlidesView bridge={desktopBridge} workspace={executionWorkspace} busy={agentBusy} onStart={async ({ pdfPath, backend, language, length, instructions, mineruToken }) => {
       const staged = await desktopBridge.stagePaperToSlidesPdf(executionWorkspace, pdfPath);

@@ -233,7 +233,13 @@ interface ResearchDeskBridge {
       steps?: ReproductionStep[];
       step?: ReproductionRunStep;
     }) => void) => () => void;
-    generateLiteratureReview: (input: { question: string; papers: AcademicSearchResult[] }) => Promise<LiteratureReviewDraft>;
+    cancelLiteratureSearch: (requestId: string) => Promise<{ cancelled: boolean }>;
+    searchLiterature: (input: { question: string; source: LiteratureSource; citations: boolean; requestId: string; workspace: string; projectId: string }) => Promise<LiteratureSearchRun>;
+    listLiteratureSearchHistory: (scope: { workspace: string; projectId: string }) => Promise<LiteratureSearchRun[]>;
+    saveLiteratureSearchHistory: (input: { workspace: string; projectId: string; record: LiteratureSearchRun }) => Promise<LiteratureSearchRun[]>;
+    onLiteratureSearchProgress: (callback: (data: { requestId: string; stage: string; detail: string }) => void) => () => void;
+    generateLiteratureOutline: (input: { question: string; papers: AcademicSearchResult[] }) => Promise<LiteratureOutlineSection[]>;
+    generateLiteratureReview: (input: { question: string; papers: AcademicSearchResult[]; outline?: LiteratureOutlineSection[] }) => Promise<LiteratureReviewDraft>;
     deepSearchPapers: (input: DeepPaperSearchInput) => Promise<DeepPaperSearchResponse>;
     getBenchmarkRadarData: (options?: { cachedOnly?: boolean; refresh?: boolean }) => Promise<BenchmarkRadarData>;
     searchConferencePapers: (input: ConferenceSearchOptions) => Promise<ConferenceSearchResponse>;
@@ -2147,4 +2153,8 @@ interface BenchmarkRadarData {
   directions: BenchmarkRadarDirection[];
 }
 
-interface LiteratureReviewDraft { sections: Array<{ title: string; paragraphs: Array<{ text: string; sources: number[] }> }>; limitations: string; }
+interface LiteratureReviewDraft { sections: Array<{ title: string; paragraphs: Array<{ text: string; sources: number[]; evidence: Array<{ source: number; quote: string }> }> }>; limitations: string; }
+
+type LiteratureSource = "openalex" | "arxiv" | "semantic-scholar" | "crossref" | "pubmed";
+interface LiteratureOutlineSection { title: string; description: string; sources: number[]; }
+interface LiteratureSearchRun { id: string; question: string; source: LiteratureSource; createdAt: string; history: Array<{ query: string; count: number; round: number; error?: boolean }>; totalCandidates: number; results: Array<{ paper: AcademicSearchResult; score: number | null; reason: string; lanes: string[] }>; edges: Array<{ from: string; to: string }>; warnings: string[]; selected?: number[]; outline?: LiteratureOutlineSection[]; draft?: LiteratureReviewDraft; draftPapers?: AcademicSearchResult[]; }

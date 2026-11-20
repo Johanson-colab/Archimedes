@@ -610,4 +610,4 @@ async function searchAcademicPaperSources(query, requestedLimit, fetchImpl = fet
   return { papers, providers: usedProviders, warnings };
 }
 
-module.exports = { buildArxivKeywordQuery, discoverDailyPapers, matchesDailyQuery, normalizeDailyOptions, searchAcademicPapers, searchAcademicPaperSources, fetchWithRetry, firstFigureSrc, matchesDailyTopic, resetProviderCooldowns, resolveArxivFigure, isArxivFigureUrl };
+module.exports = { searchOpenAlex, searchSemanticScholar, searchArxivKeywords, normalizeOpenAlexWork, buildArxivKeywordQuery, discoverDailyPapers, matchesDailyQuery, normalizeDailyOptions, searchAcademicPapers, searchAcademicPaperSources, fetchWithRetry, firstFigureSrc, matchesDailyTopic, resetProviderCooldowns, resolveArxivFigure, isArxivFigureUrl };
