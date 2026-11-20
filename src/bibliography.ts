@@ -155,7 +155,7 @@ const identifierFields = [
   ['s2_id', (value: string) => value.trim().toLowerCase()], ['arxiv_id', arxiv], ['doi', doi],
 ] as const;
 
-export function matchBibliographyPaper<T extends AcademicSearchResult>(incoming: AcademicSearchResult, papers: T[], { strongOnly = false }: { strongOnly?: boolean } = {}) {
+export function matchBibliographyPaper<T extends AcademicSearchResult>(incoming: AcademicSearchResult, papers: T[], { strongOnly = false, titleAlreadyMatched = false }: { strongOnly?: boolean; titleAlreadyMatched?: boolean } = {}) {
   const compatible = (paper: AcademicSearchResult) => !identifierFields.some(([field, normalize]) => incoming[field] && paper[field] && normalize(incoming[field]) !== normalize(paper[field]));
   for (const [field, normalize] of identifierFields) {
     if (!incoming[field]) continue;
@@ -163,7 +163,17 @@ export function matchBibliographyPaper<T extends AcademicSearchResult>(incoming:
     if (matched) return matched;
   }
   if (strongOnly) return undefined;
-  return papers.find(paper => compatible(paper) && title(incoming.title) && title(incoming.title) === title(paper.title));
+  return papers.find(paper => compatible(paper) && (titleAlreadyMatched || title(incoming.title) && title(incoming.title) === title(paper.title)));
+}
+
+// A strong duplicate can complete the identity of an existing record without
+// replacing its saved metadata. Keep the whole learned identity together.
+export function paperWithLearnedIdentifiers(paper: BibliographyPaper, original: AcademicSearchResult, representative: AcademicSearchResult) {
+  if (!identifierFields.some(([field]) => !original[field] && representative[field])) return paper;
+  const identifiers = Object.fromEntries(identifierFields
+    .filter(([field]) => !paper[field] && representative[field])
+    .map(([field]) => [field, representative[field]]));
+  return { ...paper, ...identifiers };
 }
 
 export function metadataDifferences(entry: AcademicSearchResult, current: AcademicSearchResult): MetadataPatch {
@@ -205,23 +215,27 @@ export function exportBibliography(papers: BibliographyPaper[]) {
 // Only retained rows can represent another import. A discarded title-only
 // match has no authority to hide a later entry with a different DOI.
 export function indexBibliographyBatch(entries: BibliographyEntry[]) {
-  const byIdentity = new Map<string, AcademicSearchResult[]>();
+  const byIdentity = new Map<string, Set<AcademicSearchResult>>();
   const repeatedRows = new Set<number>();
+  const representatives = new Map<number, AcademicSearchResult>();
   const addIdentity = (key: string, representative: AcademicSearchResult) => {
     const group = byIdentity.get(key);
-    if (group) group.push(representative);
-    else byIdentity.set(key, [representative]);
+    if (group) group.add(representative);
+    else byIdentity.set(key, new Set([representative]));
   };
   entries.forEach(({ paper }, index) => {
     const identities = identifierFields.flatMap(([field, normalize]) =>
       paper[field] ? [field + ":" + normalize(paper[field])] : []);
+    const normalizedTitle = title(paper.title);
+    const titleKey = normalizedTitle ? "title:" + normalizedTitle : "";
     let representative: AcademicSearchResult | undefined;
     for (const identity of identities) {
-      representative = matchBibliographyPaper(paper, byIdentity.get(identity) || [], { strongOnly: true });
+      representative = matchBibliographyPaper(paper, [...(byIdentity.get(identity) || [])], { strongOnly: true });
       if (representative) break;
     }
     if (representative) {
       repeatedRows.add(index);
+      if (titleKey) addIdentity(titleKey, representative);
       for (const [field, normalize] of identifierFields) {
         if (!paper[field] || representative[field]) continue;
         representative[field] = paper[field];
@@ -229,13 +243,14 @@ export function indexBibliographyBatch(entries: BibliographyEntry[]) {
       }
       return;
     }
-    const titleKey = "title:" + title(paper.title);
-    if (matchBibliographyPaper(paper, byIdentity.get(titleKey) || [])) {
+    if (titleKey && matchBibliographyPaper(paper, [...(byIdentity.get(titleKey) || [])], { titleAlreadyMatched: true })) {
       repeatedRows.add(index);
       return;
     }
     representative = { ...paper };
-    for (const identity of [...identities, titleKey]) addIdentity(identity, representative);
+    representatives.set(index, representative);
+    for (const identity of identities) addIdentity(identity, representative);
+    if (titleKey) addIdentity(titleKey, representative);
   });
-  return repeatedRows;
+  return { repeatedRows, representatives };
 }
