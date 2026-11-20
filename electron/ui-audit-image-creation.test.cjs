@@ -127,11 +127,11 @@ test("FigureForge reads as four numbered steps with one primary action each", ()
   assert.match(view, /className="forge-step-actions"/);
   assert.match(css, /\.forge-step-index \{/);
   assert.match(css, /\.forge-step-subtitle \{/);
-  // Configuration is behind a disclosure so the default path needs no setup.
+  // Configuration remains behind a disclosure, with a visible setup route when needed.
   assert.match(view, /<summary>\{t\("Model settings"\)\}/);
   assert.match(view, /Archimedes main model/);
   // Every disabled primary action explains itself.
-  assert.match(view, /const analyzeBlockedReason = hasPaperInput \? "" : t\("Add a PDF, or at least 100 characters of paper text\."\)/);
+  assert.match(view, /const analyzeBlockedReason = modelSetupBlockedReason \|\| \(hasPaperInput \? "" : t\("Add a PDF, or at least 100 characters of paper text\."\)\)/);
   assert.match(view, /const generateBlockedReason =/);
   assert.match(view, /className="forge-blocked">\{analyzeBlockedReason\}/);
   assert.match(view, /className="forge-blocked">\{generateBlockedReason\}/);

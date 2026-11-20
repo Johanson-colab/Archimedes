@@ -30,7 +30,7 @@ test("the welcome replication card opens the reproduce module", () => {
   const welcome = fs.readFileSync(path.resolve(__dirname, "..", "src", "ResearchWelcome.tsx"), "utf8");
   assert.match(welcome, /id: "replication"/);
   assert.match(welcome, /title: "Reproduce a paper"/);
-  assert.match(app, /action === "replication"\)\s*\{\s*setMainSection\("reproduce"\)/);
+  assert.match(app, /action === "replication"\)\s*\{\s*void openResearchApp\("reproduce"\)/);
 });
 
 test("all welcome images resolve inside the app for file and web deployments", async () => {

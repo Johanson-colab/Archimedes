@@ -60,7 +60,7 @@ async function mount() {
 test("standalone charts retains sorting, chart/table filters and the remote catalog", async () => {
   const { unmount } = await mount();
   try {
-    assert.equal(document.querySelector("h2").textContent, "Data charts");
+    assert.equal(document.querySelector("h2").textContent, "Paper chart references");
     assert.ok(!document.body.textContent.includes("FigureForge"));
     assert.ok(!document.body.textContent.includes("Paper diagrams"));
     assert.deepEqual(titles(), ["Learning study", "Older vision study", "Recent interaction study"]);

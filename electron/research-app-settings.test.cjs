@@ -61,7 +61,7 @@ test("all twelve built-ins appear once in the five issue categories with four en
   const unmount = await mount();
   try {
     assert.deepEqual(headings(), ["Discovery & tracking", "Resources & evidence", "Experiments & evaluation", "Analysis & visualization", "Writing & delivery"]);
-    const expected = { "Daily papers": 0, News: 0, "Benchmark Radar": 0, Library: 1, Extensions: 1, Reproduce: 2, "Image creation": 3, "Data charts": 3, "Data analysis": 3, "Paper writing": 4, "Paper review": 4, "Paper to Slides": 4 };
+    const expected = { "Daily papers": 0, News: 0, "Benchmark Radar": 0, Library: 1, Extensions: 1, Reproduce: 2, "Image creation": 3, "Paper chart references": 1, "Data analysis": 3, "Paper writing": 4, "Paper review": 4, "Paper to Slides": 4 };
     for (const [name, index] of Object.entries(expected)) {
       assert.equal(row(name)?.closest("section").querySelector("h3").textContent, headings()[index]);
     }
