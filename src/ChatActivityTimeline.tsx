@@ -6,8 +6,11 @@ import { eventFailedAnswer, eventIncomplete } from "./journeyEventState";
 type ActivityEvent = {
   title: string;
   detail: string;
+  snapshotCoverage?: WorkspaceSnapshotCoverage;
   state: "done" | "active" | "waiting";
 };
+
+type Translate = ReturnType<typeof useUISettings>["t"];
 
 type ActivityKind = "read" | "search" | "run" | "edit" | "other";
 
@@ -87,19 +90,36 @@ function resultSummary(content: unknown) {
   return content.replace(/\s+/g, " ").slice(0, 160);
 }
 
-function liveSteps(events: ActivityEvent[], busy: boolean): ChatStep[] {
+function snapshotCoverageDetail(coverage: WorkspaceSnapshotCoverage, t: Translate) {
+  const phases = [
+    { label: "Before scan", scan: coverage.before },
+    { label: "After scan", scan: coverage.after },
+  ];
+  return phases.filter(({ scan }) => scan?.entryLimitReached || scan?.byteBudgetReached).map(({ label, scan }) => {
+    const { entries, metadataOnly, ignoredDirectories, entryLimitReached, byteBudgetReached } = scan;
+    return [
+      t(label),
+      t("Files: {entries} · Tracked by size and time: {metadataOnly} · Ignored directories: {ignoredDirectories}",
+        { entries, metadataOnly, ignoredDirectories }),
+      entryLimitReached && t("File limit reached"),
+      byteBudgetReached && t("Text byte budget reached"),
+    ].filter(Boolean).join(" · ");
+  }).join(" / ");
+}
+
+function liveSteps(events: ActivityEvent[], busy: boolean, t: Translate): ChatStep[] {
   return events.map((event, index) => ({
     id: `live:${index}`,
     kind: kindForText(event.title),
-    label: titleCase(event.title),
-    detail: event.detail,
+    label: event.snapshotCoverage ? t("Workspace change scan is limited") : titleCase(event.title),
+    detail: event.snapshotCoverage ? snapshotCoverageDetail(event.snapshotCoverage, t) : event.detail,
     status: !busy && event.state === "active"
       ? "done"
       : event.state === "active" ? "running" : event.state === "waiting" ? "waiting" : "done",
   }));
 }
 
-function rawSteps(events: ResearchEvent[], busy: boolean): { steps: ChatStep[]; sources: number } {
+function rawSteps(events: ResearchEvent[], busy: boolean, t: Translate): { steps: ChatStep[]; sources: number } {
   const lastTurnId = events.at(-1)?.turn_id;
   const turnEvents = events.filter((event) => event.turn_id === lastTurnId);
   const calls = new Map<string, ChatStep>();
@@ -108,6 +128,14 @@ function rawSteps(events: ResearchEvent[], busy: boolean): { steps: ChatStep[]; 
   for (const event of turnEvents) {
     const payload = event.payload && typeof event.payload === "object" ? event.payload as Record<string, unknown> : {};
     if (event.type === "source_evidence") sources += 1;
+    if (event.type === "workspace_snapshot_coverage") {
+      const id = `${event.id}:coverage`;
+      calls.set(id, {
+        id, kind: "other", status: "done",
+        label: t("Workspace change scan is limited"),
+        detail: snapshotCoverageDetail(event.payload as WorkspaceSnapshotCoverage, t),
+      });
+    }
     if (event.type === "tool_call") {
       const name = typeof payload.name === "string" ? payload.name : "tool";
       const args = payload.arguments && typeof payload.arguments === "object" ? payload.arguments as Record<string, unknown> : {};
@@ -164,8 +192,8 @@ export default function ChatActivityTimeline({
   const [open, setOpen] = useState(true);
   const [lowOpen, setLowOpen] = useState(false);
   const [showAll, setShowAll] = useState(false);
-  const live = useMemo(() => liveSteps(events, busy), [busy, events]);
-  const raw = useMemo(() => rawSteps(rawEvents, busy), [busy, rawEvents]);
+  const live = useMemo(() => liveSteps(events, busy, t), [busy, events, t]);
+  const raw = useMemo(() => rawSteps(rawEvents, busy, t), [busy, rawEvents, t]);
   const steps = events.length ? live : raw.steps;
   const sources = events.length ? 0 : raw.sources;
   const summary = summaryFor(steps);

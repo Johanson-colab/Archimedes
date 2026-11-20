@@ -1922,6 +1922,19 @@ interface AgentRunResult {
   thread: ResearchThreadDetail;
 }
 
+interface WorkspaceSnapshotScanCoverage {
+  entries: number;
+  metadataOnly: number;
+  ignoredDirectories: number;
+  entryLimitReached: boolean;
+  byteBudgetReached: boolean;
+}
+
+interface WorkspaceSnapshotCoverage {
+  before: WorkspaceSnapshotScanCoverage;
+  after: WorkspaceSnapshotScanCoverage;
+}
+
 interface ModelIncompleteFailure { code: "MODEL_RESPONSE_INCOMPLETE"; reason: string; provider: string; finishReason?: string | null }
 
 interface AgentEvent {
@@ -1935,6 +1948,7 @@ interface AgentEvent {
   error?: ModelIncompleteFailure;
   action?: AgentAction;
   changeSet?: WorkspaceChangeSet;
+  snapshotCoverage?: WorkspaceSnapshotCoverage;
   toolCall?: { id?: string; name?: string; source: string; status: "running" | "completed" | "failed" | "interrupted"; durationMs: number };
   activity?: NativeAgentActivity;
   usage?: NativeAgentUsage | null;
