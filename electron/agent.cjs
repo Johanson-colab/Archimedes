@@ -23,7 +23,7 @@ const { runApprovedCommand } = require("./agent/command-runner.cjs");
 const { readLines, searchWorkspace, prepareWrite, prepareEdit, readCommandLog, visibleExisting } = require("./agent/workspace-tools.cjs");
 const { ToolRegistry } = require("./agent/tool-registry.cjs");
 const { fetchModelWithRetry } = require("./agent/model-retry.cjs");
-const { buildModelRequestOptions, formatModelRequestError } = require("./model-request-headers.cjs");
+const { buildModelRequestOptions, formatModelRequestError, modelProviderErrorDetail } = require("./model-request-headers.cjs");
 const { boundActiveContext } = require("./agent/active-context.cjs");
 const { discoverSkills, readSkillResource } = require("./agent/api-skills.cjs");
 const { prepareResearchSkill } = require("./agent/research-skills.cjs");
@@ -1401,7 +1401,9 @@ async function complete(config, messages, { signal, onTextDelta = () => {}, allo
         let body;
         try { body = JSON.parse(serialized); }
         catch { throw new ModelIncompleteError({ provider: "openai", reason: "malformed_frame" }); }
-        if (body.error) throw new Error(body.error.message || "Model stream error.");
+        if (body?.error || body?.type === "error") {
+          throw new Error(body.error?.message || body.message || "Model stream error.");
+        }
         if (body?.choices?.[0]?.finish_reason) finishReason = body.choices[0].finish_reason;
         applyDelta(message, body?.choices?.[0]?.delta || {}, (delta) => contentGuard.push(delta));
       }
@@ -1410,9 +1412,9 @@ async function complete(config, messages, { signal, onTextDelta = () => {}, allo
   } catch (error) {
     const partialResponse = message.content.trimStart().startsWith("<｜｜DSML｜｜") ? "" : message.content;
     try { await reader.cancel(); } catch { /* Preserve the actual stream error. */ }
-    if (signal?.aborted || error?.name === "AbortError") { error.partialResponse = partialResponse; throw error; }
+    if (signal?.aborted || error?.name === "AbortError") throw Object.assign(new Error("Model request interrupted."), { name: "AbortError", partialResponse });
     if (error.code === "MODEL_RESPONSE_INCOMPLETE") { error.partialResponse = partialResponse; throw error; }
-    throw new ModelIncompleteError({ provider: "openai", reason: "stream_error", partialResponse, detail: error.message });
+    throw new ModelIncompleteError({ provider: "openai", reason: "stream_error", partialResponse, detail: modelProviderErrorDetail(error?.message, config) });
   } finally { reader.releaseLock(); }
   if (!message.content && !message.tool_calls.length) {
     if (finishReason) assertModelCompletion({ provider: "openai", finishReason, partialResponse: "" });

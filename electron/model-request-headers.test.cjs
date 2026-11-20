@@ -9,6 +9,7 @@ const {
   buildModelHeaders,
   formatConnectionError,
   formatModelRequestError,
+  modelProviderErrorDetail,
   sanitizeHeaders,
   sanitizeSessionHeader,
 } = require("./model-request-headers.cjs");
@@ -55,6 +56,8 @@ test("provider session errors get actionable messages", () => {
   assert.match(formatModelRequestError(400, raw), /requires a stable session header/);
   assert.equal(formatConnectionError(400, raw), "Connection failed (400): MissingSessionID");
   assert.equal(formatModelRequestError(500, "boom"), "Model request failed (500): boom");
+  assert.match(modelProviderErrorDetail(raw, { headers: { "X-Tenant": "dummy" } }), /requires a stable session header/);
+  assert.equal(modelProviderErrorDetail("The key DUMMY_API_KEY was rejected", { apiKey: "DUMMY_API_KEY" }), "The key [redacted] was rejected");
 });
 
 test("saved custom header values stay in the main process and can be replaced or cleared", (t) => {

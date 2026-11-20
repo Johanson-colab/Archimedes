@@ -1,6 +1,6 @@
 const { fetchModelWithRetry } = require("./model-retry.cjs");
 const { ModelIncompleteError, assertModelCompletion } = require("./model-completion.cjs");
-const { buildModelRequestOptions, formatModelRequestError } = require("../model-request-headers.cjs");
+const { buildModelRequestOptions, formatModelRequestError, modelProviderErrorDetail } = require("../model-request-headers.cjs");
 
 function parseArguments(value) {
   try { return JSON.parse(value || "{}"); } catch { return {}; }
@@ -94,7 +94,7 @@ async function completeAnthropic(config, messages, { signal, onTextDelta = () =>
         catch { throw new ModelIncompleteError({ provider: "anthropic", reason: "malformed_frame" }); }
         if (event.type === "message_delta" && event.delta?.stop_reason) finishReason = event.delta.stop_reason;
         if (event.type === "message_stop") terminalSeen = true;
-        if (event.type === "error") throw new Error(`Anthropic stream error: ${event.error?.message || "Unknown error"}`);
+        if (event.type === "error" || event.error) throw new Error(`Anthropic stream error: ${event.error?.message || event.message || "Unknown error"}`);
         if (event.type === "content_block_start") {
           blocks[event.index] = { ...event.content_block, text: event.content_block?.text || "", partialInput: "" };
           openBlocks.add(event.index);
@@ -114,9 +114,9 @@ async function completeAnthropic(config, messages, { signal, onTextDelta = () =>
   } catch (error) {
     const partialResponse = normalizeBlocks(blocks.filter(Boolean)).content;
     try { await reader.cancel(); } catch { /* Preserve the actual stream error. */ }
-    if (signal?.aborted || error?.name === "AbortError") { error.partialResponse = partialResponse; throw error; }
+    if (signal?.aborted || error?.name === "AbortError") throw Object.assign(new Error("Model request interrupted."), { name: "AbortError", partialResponse });
     if (error.code === "MODEL_RESPONSE_INCOMPLETE") { error.partialResponse = partialResponse; throw error; }
-    throw new ModelIncompleteError({ provider: "anthropic", reason: "stream_error", partialResponse, detail: error.message });
+    throw new ModelIncompleteError({ provider: "anthropic", reason: "stream_error", partialResponse, detail: modelProviderErrorDetail(error?.message, config) });
   } finally { reader.releaseLock(); }
   const normalized = normalizeBlocks(blocks.filter(Boolean));
   assertModelCompletion({ provider: "anthropic", finishReason, terminalSeen, partialResponse: normalized.content, toolCalls: normalized.tool_calls });

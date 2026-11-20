@@ -76,12 +76,18 @@ function requiresSessionHeader(text) {
   return /MissingSessionID|x-opencode-session/i.test(text);
 }
 
-function formatProviderError(prefix, status, detail, config = {}) {
-  const text = String(detail || "").slice(0, 500);
-  if (requiresSessionHeader(text)) {
-    return `${prefix} (${status}): This provider requires a stable session header. In Settings → Models, select OpenCode Go or set Session header to x-opencode-session and Strategy to Thread.`;
+function modelProviderErrorDetail(detail, config = {}) {
+  const text = String(detail || "");
+  if (requiresSessionHeader(text.slice(0, 500))) {
+    return "This provider requires a stable session header. In Settings → Models, select OpenCode Go or set Session header to x-opencode-session and Strategy to Thread.";
   }
-  return `${prefix} (${status})${text && !hasPrivateHeaderValues(config) ? `: ${text}` : ""}`;
+  if (hasPrivateHeaderValues(config)) return "";
+  return (config.apiKey ? text.split(config.apiKey).join("[redacted]") : text).slice(0, 500);
+}
+
+function formatProviderError(prefix, status, detail, config) {
+  const text = modelProviderErrorDetail(detail, config);
+  return `${prefix} (${status})${text ? `: ${text}` : ""}`;
 }
 
 function formatModelRequestError(status, detail, config) {
@@ -100,6 +106,7 @@ module.exports = {
   formatConnectionError,
   formatModelRequestError,
   hasPrivateHeaderValues,
+  modelProviderErrorDetail,
   sanitizeHeaders,
   sanitizeSessionHeader,
 };
