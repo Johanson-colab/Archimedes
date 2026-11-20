@@ -1252,7 +1252,7 @@ function canonicalPaperKey(paper) {
     const value = bibliographyRecords.identifier[key](paper[key]);
     if (value) return `${key === "s2_id" ? "s2" : key === "arxiv_id" ? "arxiv" : "doi"}:${value}`;
   }
-  return `title:${bibliographyRecords.titleIdentity(paper.title)}`;
+  return bibliographyRecords.canonicalTitleKey(paper);
 }
 
 function seedLibraries(db) {
@@ -1924,7 +1924,7 @@ function addPaper(libraryId, paper) {
     // Preserve legacy title keys while giving distinct works with the same
     // normalized title separate local records.
     const storedKey = key.startsWith("title:") && db.prepare("SELECT 1 FROM papers WHERE canonical_key = ?").get(key)
-      ? `${key}:${paperId}` : key;
+      ? canonicalPaperKey(paper) : key;
     db.prepare(`
       INSERT INTO papers (
         id, canonical_key, title, authors_json, year, venue, abstract, url, pdf_url, doi, arxiv_id, s2_id,

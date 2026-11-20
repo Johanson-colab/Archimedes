@@ -1,3 +1,5 @@
+const { createHash } = require("node:crypto");
+
 const identifier = {
   s2_id: value => String(value || "").trim().toLowerCase(),
   arxiv_id: value => String(value || "").trim().toLowerCase().replace(/^https?:\/\/(?:www\.)?arxiv\.org\/(?:abs|pdf)\//, "").replace(/^arxiv:\s*/, "").replace(/\.pdf$/, "").replace(/v\d+$/, ""),
@@ -7,6 +9,15 @@ const titleIdentity = value => String(value || "").normalize("NFKC").toLowerCase
 
 function authorIdentity(authors = []) {
   return authors.map(author => titleIdentity(author).split(" ").sort().join(" ")).filter(Boolean).join("\n");
+}
+
+function canonicalTitleKey(paper) {
+  const key = `title:${titleIdentity(paper.title)}`;
+  const authors = authorIdentity(paper.authors);
+  const year = paper.year || null;
+  if (!authors && !year) return key;
+  const fingerprint = createHash("sha256").update(JSON.stringify([authors, year])).digest("hex");
+  return `${key}:${fingerprint}`;
 }
 
 function compatibleTitleMetadata(row, paper) {
@@ -41,9 +52,17 @@ function findImportMatch(db, paper, canonicalKey, { libraryId, projectId } = {})
   if (exact && !titleKey && conflictingIdentifiers(exact, paper)) throw new Error("The imported identifiers conflict with the existing paper. Review its metadata before importing.");
   if (exact && strong([exact])) return exact;
   const title = titleIdentity(paper.title);
-  const weak = rows => title ? rows.find(row => titleIdentity(row.title) === title
-    && !conflictingIdentifiers(row, paper) && compatibleTitleMetadata(row, paper)) || null : null;
-  const exactMatch = titleKey && exact ? weak([exact]) : exact;
+  const compatible = row => !conflictingIdentifiers(row, paper) && compatibleTitleMetadata(row, paper);
+  const weak = rows => title ? rows.find(row => titleIdentity(row.title) === title && compatible(row)) || null : null;
+  const legacyKey = `title:${title}`;
+  const fingerprintMatches = exact && titleKey && canonicalKey !== legacyKey && canonicalKey === canonicalTitleKey(paper);
+  // The saved title may have been corrected after its import key was assigned.
+  const compatibleExact = exact && (!titleKey || (
+    !conflictingIdentifiers(exact, paper) && (fingerprintMatches || compatibleTitleMetadata(exact, paper))
+  ));
+  const legacy = !compatibleExact && titleKey && canonicalKey !== legacyKey
+    ? db.prepare("SELECT * FROM papers WHERE canonical_key = ?").get(legacyKey) : null;
+  const exactMatch = compatibleExact ? exact : legacy && compatible(legacy) ? legacy : null;
   if (!Object.entries(identifier).some(([key, normalize]) => normalize(paper[key]))) {
     const scopedWeak = weak(ownLibrary) || weak(ownProject);
     if (scopedWeak || exactMatch) return scopedWeak || exactMatch;
@@ -99,4 +118,4 @@ function repairMetadata(db, paperId, patch, canAccessProject) {
   if (assignments.length) db.prepare(`UPDATE papers SET ${assignments.join(", ")}, updated_at = ? WHERE id = ?`).run(...values, new Date().toISOString(), paperId);
 }
 
-module.exports = { identifier, titleIdentity, findImportMatch, assertPaperAccess, bibliography, setBibliography, repairMetadata };
+module.exports = { identifier, canonicalTitleKey, findImportMatch, assertPaperAccess, bibliography, setBibliography, repairMetadata };
