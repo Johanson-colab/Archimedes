@@ -16,3 +16,10 @@ Both comparisons use the Library dialog in Electron at 1280 × 870 in the Paper 
 
 - [Before](identifiers-before.png) · [After](identifiers-after.png). The first reference has a DOI and gains arXiv `2401.01234` from a strong duplicate. Before the fix, the two selected rows wrote one record with arXiv `2401.05678`. After the fix, the DOI stays with `2401.01234` and the distinct `2401.05678` work is saved separately.
 - [Before](titles-before.png) · [After](titles-after.png). A strong DOI match establishes the alternate title. The title-only alias is suppressed while the row with a conflicting arXiv ID stays selectable and is saved.
+
+## Selected title repair and contradictory identifiers
+
+Both pairs show the actual Electron dialog after pressing Import in the same 1280 × 870 Paper viewport with the interface set to Chinese.
+
+- [Before](repair-before.png) · [After](repair-after.png). The first input row corrects the title of a saved paper by DOI. A later row resolves to the same paper by its old title. The old flow added a second record under the old title. The revised flow keeps the original paper ID and notes, and exports one record with the corrected title and its citation key.
+- [Before](conflict-before.png) · [After](conflict-after.png). A learned arXiv alias gives two retained rows the same arXiv ID and conflicting DOIs. The old flow saved the first reference and stopped on the second. The revised preview blocks both conflicting rows with instructions to edit the source and imports the unrelated reference. After correcting the arXiv ID, both works import. Repeating the corrected batch preserves all three paper IDs.
