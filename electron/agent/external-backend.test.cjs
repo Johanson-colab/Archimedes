@@ -178,3 +178,20 @@ test('Paper to Slides sends the official Claude skill and token through the nati
  assert.doesNotMatch(JSON.stringify(launch.args)+JSON.stringify(o.events)+JSON.stringify(records),/test-private-token/);
  assert.equal(fs.existsSync(path.join(o.workspace,'.claude/skills/archimedes-paper2slides/scripts/audit_deck.py')),false);
 });
+
+test('Claude and OpenCode receive the per-turn live experiment entry', async () => {
+ for (const backend of ['claude','opencode']) {
+  const o=options(backend);if(backend==='opencode')o.Client=ACPFixture;
+  o.turn.mode='research';o.experimentBridgeInstructions='LIVE_EXPERIMENT_BRIDGE_MARKER';
+  await runNative(o);
+  const sent=backend==='claude'?Fixture.last.sent.find(message=>message.type==='user'):Fixture.last.sent.find(message=>message.method==='session/prompt');
+  assert.match(JSON.stringify(sent),/LIVE_EXPERIMENT_BRIDGE_MARKER/);
+ }
+});
+
+test('only opted-in environment variables reach native turns, not extraction', async t => {
+ const { setEnvironmentVault } = require('../environment-vault.cjs');
+ setEnvironmentVault({ shared: () => ({ HF_TOKEN: 'synthetic-test-token' }) }); t.after(() => setEnvironmentVault(null));
+ const normal = options(); await runNative(normal); assert.equal(Fixture.last.options.env.HF_TOKEN, 'synthetic-test-token');
+ const extraction = options(); extraction.turn.task_id = 'research-graph-extraction'; await runNative(extraction); assert.equal(Fixture.last.options.env, undefined);
+});

@@ -1061,7 +1061,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
     </header>
     <div className="paper-reader-layout" style={chatOpen ? { "--paper-chat-width": `${chatWidth}px` } as React.CSSProperties : undefined}>
       {reviewVisited && <div className="paper-review-retained" hidden={readerView !== "review"} aria-hidden={readerView !== "review"} inert={readerView !== "review"}>
-        <PaperReviewWorkbench bridge={bridge} workspace={workspace} projectId={projectId} paper={paper} pageCount={lastPage} ready={ready} pdfUrl={reader?.asset?.preview_url || ""} onOpenSource={(page) => { setPageNumber(page); setReturnToReading(true); setReaderView("paper"); }} onInternalReviewThreadsDeleted={onInternalReviewThreadsDeleted} />
+        <PaperReviewWorkbench bridge={bridge} workspace={workspace} projectId={projectId} paper={paper} pageCount={lastPage} ready={ready} onOpenSource={(page) => { setPageNumber(page); setReturnToReading(true); setReaderView("paper"); }} onInternalReviewThreadsDeleted={onInternalReviewThreadsDeleted} />
       </div>}
       {readerView === "paper" && returnToReading && <button type="button" className="paper-return-reading" onClick={() => { setReturnToReading(false); setReaderView("review"); }}><ArrowLeft size={15} />{t("Back to reading")}</button>}
       {readerView !== "review" && readerView !== "codebase" && readerView !== "canvas" && <main className={readerView === "project" ? "project-browser-reader" : "original-paper-reader"}>

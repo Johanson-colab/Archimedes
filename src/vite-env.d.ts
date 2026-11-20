@@ -1,5 +1,18 @@
 /// <reference types="vite/client" />
 
+type ResearchGraphNode = import("./research-graph/types").ResearchNode;
+type ResearchGraphEdge = import("./research-graph/types").ResearchEdge;
+type ResearchGraph = import("./research-graph/types").ResearchGraph;
+type ResearchGraphIssue = import("./research-graph/types").ResearchGraphIssue;
+type ResearchGraphUpdate = import("./research-graph/types").ResearchGraphUpdate;
+type ResearchGraphNodeKind = import("./research-graph/types").ResearchNodeKind;
+type ResearchGraphEdgeKind = import("./research-graph/types").ResearchEdgeKind;
+type ResearchGraphStatus = import("./research-graph/types").ResearchNodeStatus;
+type ExperimentRun = import("./research-graph/types").ExperimentRun;
+type ExperimentActivity = import("./research-graph/types").ExperimentActivity;
+type ExperimentVerdict = import("./research-graph/types").ExperimentVerdict;
+type ResearchGraphParent = { nodeId: string; revisionId?: string; kind?: ResearchGraphEdgeKind; metadata?: Record<string, unknown> };
+
 type FigureForgeConnection = { provider: string; baseUrl?: string; apiKey?: string; model?: string };
 type WorkbenchLayoutSnapshot = {
   orientation: "row" | "column";
@@ -107,6 +120,23 @@ interface ResearchDeskBridge {
     compactResearchThread: (threadId: string, workspace?: string) => Promise<ResearchThreadDetail>;
     exportResearchThread: (threadId: string, workspace?: string) => Promise<{ canceled: boolean; path?: string }>;
     getResearchSnapshot: () => Promise<WorkspaceSnapshot>;
+    createResearchNode: (input: { projectId: string; threadId?: string | null; kind: ResearchGraphNodeKind; status?: ResearchGraphStatus; title: string; summary?: string; content?: Record<string, unknown>; parents?: ResearchGraphParent[]; author?: string }) => Promise<ResearchGraphNode>;
+    reviseResearchNode: (input: { nodeId: string; title?: string; summary?: string; content: Record<string, unknown>; sourceTurnId?: string | null; sourceEventId?: string | null; gitCommit?: string | null; author?: string }) => Promise<ResearchGraphNode>;
+    linkResearchNodes: (input: { fromNodeId: string; toNodeId: string; kind: ResearchGraphEdgeKind; fromRevisionId?: string | null; toRevisionId?: string | null; metadata?: Record<string, unknown>; author?: string }) => Promise<ResearchGraphEdge>;
+    listResearchGraph: (input: { projectId: string; threadId?: string | null; includeArchived?: boolean }) => Promise<ResearchGraph>;
+    retryResearchGraphExtraction: (input: { threadId: string; turnId: string }) => Promise<{ ok: boolean }>;
+    getResearchNodeHistory: (nodeId: string) => Promise<import("./research-graph/types").ResearchRevision[]>;
+    archiveResearchNode: (nodeId: string, reason?: string) => Promise<ResearchGraphNode>;
+    restoreResearchNode: (nodeId: string) => Promise<ResearchGraphNode>;
+    setResearchNodeStatus: (nodeId: string, status: ResearchGraphStatus, reason?: string) => Promise<ResearchGraphNode>;
+    validateResearchGraph: (projectId: string, threadId?: string | null) => Promise<{ projectId: string; ok: boolean; issues: ResearchGraphIssue[] }>;
+    listExperimentActivities?: (input: { projectId: string; threadId: string }) => Promise<ExperimentActivity[]>;
+    listExperimentRuns: (input: { projectId?: string; threadId?: string | null; nodeId?: string }) => Promise<ExperimentRun[]>;
+    startExperimentRun: (input: { projectId: string; threadId: string; nodeId: string; command: string; workspace: string; cwd?: string }) => Promise<ExperimentRun>;
+    cancelExperimentRun: (runId: string) => Promise<ExperimentRun>;
+    readExperimentRunLog: (runId: string, maxBytes?: number) => Promise<{ path: string; size: number; text: string }>;
+    createResultFromRun: (input: { runId: string; verdict?: ExperimentVerdict; reasoning?: string; title?: string }) => Promise<ResearchGraphNode>;
+    onExperimentRunUpdate?: (callback: (run: ExperimentRun) => void) => () => void;
     createResearchProject: (input: { name: string; description?: string; workspacePath?: string }) => Promise<ResearchProject>;
     renameResearchProject: (id: string, name: string) => Promise<ResearchProject>;
     setResearchProjectWorkspace: (id: string, workspacePath: string) => Promise<ResearchProject>;
@@ -145,6 +175,9 @@ interface ResearchDeskBridge {
     saveSshServer: (input: SshServerDraft) => Promise<SshServer>;
     deleteSshServer: (id: string) => Promise<boolean>;
     testSshServer: (input: Partial<SshServerDraft>) => Promise<SshServerTest>;
+    listEnvironmentVariables: () => Promise<Array<{ name: string; shared: boolean }>>;
+    saveEnvironmentVariable: (input: { name: string; value: string; shared: boolean }) => Promise<Array<{ name: string; shared: boolean }>>;
+    removeEnvironmentVariable: (name: string) => Promise<Array<{ name: string; shared: boolean }>>;
     getWebSearchConfig: () => Promise<PublicWebSearchConfig>;
     saveWebSearchConfig: (input: { provider: WebSearchProviderId; apiKey: string }) => Promise<PublicWebSearchConfig>;
     listLibraries: (projectId?: string | null) => Promise<ResearchLibrary[]>;
@@ -233,6 +266,7 @@ interface ResearchDeskBridge {
     getAgentBackendConfig: () => Promise<AgentBackendConfig>;
     saveAgentBackendConfig: (input: AgentBackendConfig) => Promise<AgentBackendConfig>;
     listCodexModelCatalog: (input: AgentBackendConfig) => Promise<{ models: NativeAgentModel[]; effectiveModelId?: string }>;
+    listOpenCodeModelCatalog: (input: AgentBackendConfig & { workspace?: string }) => Promise<{ models: NativeAgentModel[] }>;
     checkAgentBackend: (input: AgentBackendConfig) => Promise<{ ready: boolean; models: NativeAgentModel[]; effectiveModelId?: string; message: string }>;
     steerNativeAgent: (threadId: string, text: string, workspace?: string) => Promise<unknown>;
     answerNativeAgentQuestion: (threadId: string, questionId: string, answers: Record<string, string[]>, workspace?: string) => Promise<unknown>;
@@ -1892,7 +1926,7 @@ interface AgentRunResult {
 interface ModelIncompleteFailure { code: "MODEL_RESPONSE_INCOMPLETE"; reason: string; provider: string; finishReason?: string | null }
 
 interface AgentEvent {
-  type: "status" | "tool" | "artifact" | "approval" | "assistant_delta" | "complete" | "failed" | "incomplete" | "configuration" | "interrupted" | "workspace_change" | "native_activity" | "native_usage" | "native_plan" | "native_diff" | "native_question" | "native_question_resolved" | "native_approval_resolved" | "native_steer";
+  type: "status" | "tool" | "artifact" | "approval" | "assistant_delta" | "complete" | "failed" | "incomplete" | "configuration" | "interrupted" | "workspace_change" | "native_activity" | "native_usage" | "native_plan" | "native_diff" | "native_question" | "native_question_resolved" | "native_approval_resolved" | "native_steer" | "graph_update" | "graph_update_pending" | "experiment_run";
   title: string;
   detail: string;
   threadId?: string;
@@ -1909,6 +1943,8 @@ interface AgentEvent {
   diff?: string;
   question?: NativeAgentQuestion;
   questionId?: string;
+  graph?: ResearchGraphUpdate;
+  experimentRun?: ExperimentRun;
 }
 
 interface PaperReviewInput {

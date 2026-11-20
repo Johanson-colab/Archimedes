@@ -25,7 +25,7 @@ test("saved presentations render as a keyboard-navigable academic deck with PDF 
   assert.match(presentation, /requestFullscreen/);
   assert.match(presentation, /ArrowRight/);
   assert.match(presentation, /SECTION_LABELS/);
-  assert.match(review, /pdfUrl\s*=/);
+  assert.doesNotMatch(review, /PaperPresentationDeck/);
 });
 
 test("presentation slides keep source captions concise and structured grids contained", () => {

@@ -1,0 +1,60 @@
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
+const { createHash } = require("node:crypto");
+const test = require("node:test");
+const store = require("./store.cjs");
+const graph = require("./research-graph/service.cjs");
+const evidence = require("./research-graph/experiment-evidence.cjs");
+const directives = require("./agent/experiment-directives.cjs");
+const agent = require("./agent.cjs");
+
+test("finished runs retain append-only reported metrics and file fingerprints", async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-evidence-"));
+  const outside = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-outside-"));
+  try {
+    store.openWorkspace(root);
+    const project = store.createResearchProject({ name: "Evidence", workspacePath: root });
+    const thread = store.createResearchThread({ prompt: "Test", mode: "experiment-setup", projectId: project.id });
+    const question = graph.createNode({ projectId: project.id, threadId: thread.id, kind: "question", title: "Question", content: {} });
+    const idea = graph.createNode({ projectId: project.id, threadId: thread.id, kind: "idea", title: "Idea", content: {}, parents: [{ nodeId: question.id }] });
+    const experiment = graph.createNode({ projectId: project.id, threadId: thread.id, kind: "experiment", title: "Experiment", content: {}, parents: [{ nodeId: idea.id }] });
+    const run = store.createExperimentRun({ projectId: project.id, threadId: thread.id, nodeId: experiment.id, cwd: root, command: "test" });
+    const input = { runId: run.id, threadId: thread.id, workspace: root };
+    await assert.rejects(() => evidence.recordExperimentEvidence({ ...input, metrics: { accuracy: 0.91 } }), /finish/);
+    store.updateExperimentRun({ runId: run.id, status: "succeeded", exitCode: 0 });
+    fs.mkdirSync(path.join(root, "results"));
+    fs.writeFileSync(path.join(root, "results", "plot.csv"), "accuracy\n0.91\n");
+    fs.writeFileSync(path.join(outside, "secret"), "private");
+    fs.symlinkSync(path.join(outside, "secret"), path.join(root, "results", "outside"));
+    await assert.rejects(() => evidence.recordExperimentEvidence({ ...input, metrics: { accuracy: "91%" } }), /numeric value/);
+    await assert.rejects(() => evidence.recordExperimentEvidence({ ...input, artifacts: ["results/outside"] }), /outside/);
+    await assert.rejects(() => evidence.recordExperimentEvidence({ ...input, artifacts: ["../secret"] }), /parent traversal/);
+    await assert.rejects(() => evidence.recordExperimentEvidence({ ...input, artifacts: [".env"] }), /hidden/);
+    assert.equal(store.getExperimentRun(run.id).evidence.length, 0);
+    const updated = await evidence.recordExperimentEvidence({ ...input, metrics: { accuracy: 0.91 }, artifacts: ["results/plot.csv"] });
+    assert.deepEqual(updated.evidence[0].metrics, { accuracy: 0.91 });
+    assert.equal(updated.evidence[0].artifacts[0].sha256, createHash("sha256").update("accuracy\n0.91\n").digest("hex"));
+    fs.writeFileSync(path.join(root, "results", "plot.csv"), "changed");
+    const notes = await directives.executeExperimentDirectives({ directives: [{ action: "evidence", runId: run.id, metrics: { loss: 0.1 } }], threadId: thread.id, workspace: root, mode: "experiment-setup" });
+    assert.match(notes[0], /agent-reported/);
+    const task = store.startTask({ prompt: "Record evidence" });
+    const turn = store.startResearchTurn({ threadId: thread.id, taskId: task.id, prompt: "Record evidence", mode: "experiment-setup" });
+    const events = [];
+    const response = await agent.executeTool({ registry: agent.createToolRegistry(), call: { id: "report", function: { name: "record_experiment_evidence", arguments: JSON.stringify({ run_id: run.id, metrics: { f1: 0.8 } }) } }, root, threadId: thread.id, taskId: task.id, turnId: turn.id, capabilities: { write: "deny", command: "deny" }, emit: (event) => events.push(event), recordEvent: () => {}, signal: new AbortController().signal });
+    assert.equal(JSON.parse(response.content).report.metrics.f1, 0.8);
+    assert.equal(events.find((event) => event.experimentRun)?.experimentRun.id, run.id);
+    const reports = store.getExperimentRun(run.id).evidence;
+    assert.equal(reports.length, 3);
+    assert.equal(reports[0].artifacts[0].sha256, updated.evidence[0].artifacts[0].sha256);
+    const result = graph.createResultFromRun({ runId: run.id });
+    assert.equal(result.current_revision.content.evidence.reports.length, 3);
+  } finally {
+    const idle = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-evidence-idle-"));
+    store.openWorkspace(idle);
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(outside, { recursive: true, force: true });
+    fs.rmSync(idle, { recursive: true, force: true });
+  }
+});

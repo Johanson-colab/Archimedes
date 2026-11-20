@@ -127,14 +127,55 @@ test("menu proposals and late reader previews preserve the accepted owner; recov
   assert.throws(() => handlers.get("library:owner")(event), /ENOENT|exist/);
 });
 
+test("only a window that reopens a replaced database can write to the restored papers", t => {
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-replaced-store-")));
+  t.after(() => { store.closeAllWorkspaces(); fs.rmSync(root, { recursive: true, force: true }); });
+  const folder = path.join(root, "current");
+  const replacement = path.join(root, "restored");
+  fs.mkdirSync(folder);
+  fs.mkdirSync(replacement);
+  const restored = store.createWorkspaceStore(replacement);
+  restored.updatePaper("seed-react", { notes: "Restored notes" });
+  restored.close();
+
+  const handlers = new Map();
+  const ipc = createWorkspaceIpc({
+    ipcMain: { handle: (name, fn) => handlers.set(name, fn) }, store, workspaceForEvent: () => folder,
+  });
+  ipc.handle("workspace:open", () => store.getSnapshot());
+  const begin = source.indexOf('  ipcMain.handle("library:update-paper",');
+  const end = source.indexOf('  ipcMain.handle("library:remove-paper",', begin);
+  new Function("ipcMain", "store", source.slice(begin, end))(ipc, store);
+  const open = handlers.get("workspace:open");
+  const save = (event, notes) => handlers.get("library:update-paper")(event, {
+    paperId: "seed-react", dataRoot: folder, patch: { notes },
+  });
+  const first = { sender: { id: 1 } }, second = { sender: { id: 2 } };
+  open(first);
+  open(second);
+  fs.renameSync(folder, path.join(root, "old"));
+  fs.renameSync(replacement, folder);
+
+  assert.throws(() => save(first, "Old draft"), /Reopen the folder/);
+  assert.throws(() => save(first, "Retried draft"), /Reopen the folder/);
+  open(second);
+  assert.equal(store.createWorkspaceStore(folder).getPaper("seed-react").notes, "Restored notes");
+  save(second, "Reviewed after reload");
+  assert.throws(() => save(first, "Still stale"), /Reopen the folder/);
+  assert.equal(store.createWorkspaceStore(folder).getPaper("seed-react").notes, "Reviewed after reload");
+  open(first);
+  save(first, "New draft");
+  assert.equal(store.createWorkspaceStore(folder).getPaper("seed-react").notes, "New draft");
+});
+
 test("a window that vetoes Quit keeps its detached research database open", t => {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-quit-owner-")));
   const owner = store.createWorkspaceStore(root);
   t.after(() => { store.closeAllWorkspaces(); fs.rmSync(root, { recursive: true, force: true }); });
   const app = new (require("node:events").EventEmitter)();
   const registration = source.slice(source.lastIndexOf('app.on(', source.indexOf('  closeAllNativeClients();')));
-  new Function("app", "store", "closeAllNativeClients", "closeAllTerminals", "collaborationServer", "presence", registration)(
-    app, store, () => {}, () => {}, null, null,
+  new Function("app", "store", "experimentRunner", "closeAllNativeClients", "closeAllTerminals", "collaborationServer", "presence", registration)(
+    app, store, { shutdownExperimentRuns() {} }, () => {}, () => {}, null, null,
   );
   app.emit("before-quit");
   owner.updatePaper("seed-react", { notes: "finished after the canceled quit" });

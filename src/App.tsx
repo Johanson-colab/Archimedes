@@ -78,6 +78,7 @@ import { shortcutMatches } from "./file-text-size";
 import { previewLibraryBridge } from "./library-preview";
 import AgentLayer from "./AgentLayer";
 import ResearchPathPanel from "./ResearchPathPanel";
+import ResearchGraphPanel from "./research-graph/ResearchGraphPanel";
 import ProactiveAgentPanel from "./ProactiveAgentPanel";
 import ProactiveSettingsPanel from "./ProactiveSettingsPanel";
 import { researchStages, stageForMode, type ResearchStage, type ResearchStageId } from "./research-path";
@@ -932,6 +933,7 @@ const previewBridge = {
   saveAgentBackendConfig: async () => { throw new Error("External Agent backends require the desktop app."); },
   checkAgentBackend: async () => { throw new Error("Codex detection requires the desktop app."); },
   listCodexModelCatalog: async () => { throw new Error("Codex detection requires the desktop app."); },
+  listOpenCodeModelCatalog: async () => { throw new Error("OpenCode detection requires the desktop app."); },
   steerNativeAgent: async () => { throw new Error("Native steering requires the desktop app."); },
   answerNativeAgentQuestion: async () => { throw new Error("Native questions require the desktop app."); },
   getModelCapabilities: async () => previewModelCapabilities,
@@ -940,6 +942,9 @@ const previewBridge = {
   testModelConfig: async ({ model }: ModelConfigInput) => ({ ok: true, latencyMs: 184, resolvedModel: model }),
   transcribeSpeech: async () => ({ text: "Voice input transcription preview." }),
   requestMicrophoneAccess: async () => true,
+  listEnvironmentVariables: async () => [],
+  saveEnvironmentVariable: async () => { throw new Error("Environment variables require the desktop app."); },
+  removeEnvironmentVariable: async () => { throw new Error("Environment variables require the desktop app."); },
   getWebSearchConfig: async () => ({ provider: "brave" as const, hasApiKey: false }),
   saveWebSearchConfig: async () => ({ provider: "brave" as const, hasApiKey: true }),
   readClipboardText: async () => "",
@@ -1384,7 +1389,8 @@ function App() {
   const [workspace, setWorkspace] = useState(DEFAULT_WORKSPACE);
   const [workspaceReady, setWorkspaceReady] = useState(false);
   const [workspaceOpenError, setWorkspaceOpenError] = useState("");
-  const workspaceOpeningDialogRef = useRef<HTMLDialogElement>(null);
+  const [workspaceOpening, setWorkspaceOpening] = useState(false);
+  const workspaceOpeningRef = useRef(false);
   const [projects, setProjects] = useState<ResearchProject[]>([]);
   const [archivedProjects, setArchivedProjects] = useState<ResearchProject[]>([]);
   const [threads, setThreads] = useState<ResearchThread[]>([]);
@@ -1447,6 +1453,10 @@ function App() {
   const [selectedStage, setSelectedStage] = useState<ResearchStageId | null>(null);
   const [journeyNotice, setJourneyNotice] = useState("");
   const [researchPanelOpen, setResearchPanelOpen] = useState(readResearchPanelOpen);
+  const [researchGraphAvailable, setResearchGraphAvailable] = useState(false);
+  const [graphVersion, setGraphVersion] = useState(0);
+  const [graphPending, setGraphPending] = useState<Record<string, boolean>>({});
+  const [graphUpdate, setGraphUpdate] = useState<ResearchGraphUpdate | null>(null);
   const [pinnedPathThreadId, setPinnedPathThreadId] = useState<string | null>(readPinnedPathThreadId);
   const [proactiveNotice, setProactiveNotice] = useState("");
   const [reasoningEffort, setReasoningEffort] = useState<ReasoningEffort>(readReasoningEffort);
@@ -1591,6 +1601,8 @@ function App() {
   const pathProject = projects.find((project) => project.id === (pathThread?.project_id ?? activeProjectId)) ?? null;
   const pathIsPinned = Boolean(pinnedPathThreadId);
   const pathThreadInactive = Boolean(pinnedPathThreadId && !pathThreadIsActive);
+  const pathMode = pathThreadIsActive ? researchMode : (pathThread?.mode ?? researchMode);
+  const showResearchGraph = pathMode === "research" || pathMode === "idea-spark" || pathMode === "experiment-setup";
   const proactive = useProactiveAgent({
     messages,
     thread: activeThread ? { id: activeThread.id, title: activeThread.title, status: activeThread.status } : null,
@@ -2176,7 +2188,17 @@ function App() {
   useEffect(() => {
     const unsubscribe = desktopBridge.onAgentEvent((event) => {
       if (event.clientRunId?.startsWith("side-chat:") || event.clientRunId?.startsWith("paper-chat:")) return;
-      if (event.threadId) {
+      const isGraphEvent = event.type === "graph_update" || event.type === "graph_update_pending";
+      if (isGraphEvent && event.threadId && event.turnId) {
+        const key = `${event.threadId}:${event.turnId}`;
+        setGraphPending((current) => {
+          const next = { ...current };
+          if (event.type === "graph_update_pending") next[key] = true;
+          else delete next[key];
+          return next;
+        });
+      }
+      if (event.threadId && !isGraphEvent) {
         setRunningThreadId(event.threadId);
         if (!activeThreadIdRef.current) {
           activeThreadIdRef.current = event.threadId;
@@ -2201,6 +2223,17 @@ function App() {
         }
       }
       if (event.type === "artifact") setArtifactsVersion((current) => current + 1);
+      if (event.experimentRun) setGraphVersion((current) => current + 1);
+      if (event.type === "graph_update") {
+        setGraphVersion((current) => current + 1);
+        if (event.graph) setGraphUpdate(event.graph);
+        if (!event.graph || event.graph.nodeCount + event.graph.edgeCount + (event.graph.superseded?.length ?? 0) === 0) {
+          if (!event.threadId || activeThreadIdRef.current === event.threadId) {
+            setEvents((current) => current.filter((item) => item.title !== event.title));
+          }
+          return;
+        }
+      }
       if (event.type === "workspace_change" && event.changeSet) {
         if (!event.threadId || activeThreadIdRef.current === event.threadId) setChangeSets((current) => upsertChangeSet(current, event.changeSet!));
         return;
@@ -2226,7 +2259,8 @@ function App() {
         setPendingAction({ ...event.action, source: "agent" });
         if (event.threadId) setThreads((current) => current.map((thread) => thread.id === event.threadId ? { ...thread, pending_actions: (thread.pending_actions ?? 0) + 1 } : thread));
       }
-      const state = event.type === "complete" || event.type === "artifact" || event.toolCall?.status === "completed" ? "done" : event.type === "configuration" || event.type === "failed" || event.type === "incomplete" || event.type === "interrupted" || event.toolCall?.status === "failed" || event.toolCall?.status === "interrupted" ? "waiting" : "active";
+      if (isGraphEvent && event.threadId && activeThreadIdRef.current !== event.threadId) return;
+      const state = event.type === "complete" || event.type === "artifact" || event.type === "graph_update" || event.toolCall?.status === "completed" ? "done" : event.type === "configuration" || event.type === "failed" || event.type === "incomplete" || event.type === "interrupted" || event.toolCall?.status === "failed" || event.toolCall?.status === "interrupted" ? "waiting" : "active";
       setEvents((current) => [...current.filter((item) => item.title !== event.title), { title: event.title, detail: event.detail, state }]);
     });
     return unsubscribe;
@@ -2279,22 +2313,22 @@ function App() {
   }, [activeProjectId, agentBusy]);
 
   async function chooseWorkspace() {
-    if (agentBusy || sideBusy || commandLockRef.current || workspaceOpeningDialogRef.current?.open) return;
+    if (agentBusy || sideBusy || commandLockRef.current || workspaceOpeningRef.current) return;
     const selected = await desktopBridge.chooseWorkspace();
     if (selected) await loadWorkspace(selected);
   }
 
   async function loadWorkspace(workspacePath: string) {
-    const opening = workspaceOpeningDialogRef.current;
-    if (!opening || opening.open || agentBusy || sideBusy || commandLockRef.current) return;
+    if (workspaceOpeningRef.current || agentBusy || sideBusy || commandLockRef.current) return;
     if (hasDirtyFileEditorScopes(fileEditorScopesRef.current) && !(await confirm({ title: "Discard unsaved changes?", description: "Artifact changes that have not been saved will be lost.", confirmLabel: "Discard changes", destructive: true }))) return;
-    if (opening.open) return;
-    // The native modal blocks stale controls, including portaled dialogs, before IPC.
-    opening.showModal();
+    if (workspaceOpeningRef.current) return;
+    workspaceOpeningRef.current = true;
+    setWorkspaceOpening(true);
     try {
       await openDataWorkspace(workspacePath);
     } finally {
-      opening.close();
+      workspaceOpeningRef.current = false;
+      setWorkspaceOpening(false);
     }
   }
 
@@ -2372,7 +2406,7 @@ function App() {
       const nextWorkspace = (snapshot.workspaces ?? []).find((entry) => entry.project_id === nextProjectId && entry.is_default)
         ?? (snapshot.workspaces ?? []).find((entry) => entry.project_id === nextProjectId);
       setActiveWorkspaceId(thread?.workspace_id ?? nextWorkspace?.id ?? null);
-      if (thread) setResearchMode(chatModeFromThread(thread.mode, thread.events));
+      if (thread) setResearchMode(thread.mode === "experiment-setup" ? "experiment-setup" : chatModeFromThread(thread.mode, thread.events));
       setChangeSets(thread?.changeSets ?? []);
       const action = snapshot.actions.find((candidate) => candidate.status === "pending");
       setPendingAction(action ? { ...action, source: "agent" } : null);
@@ -2487,7 +2521,7 @@ function App() {
   }
 
   function startNewTask(projectId = activeProjectId, workspaceId = activeWorkspaceId) {
-    if (agentBusy || workspaceOpeningDialogRef.current?.open) return;
+    if (agentBusy || workspaceOpeningRef.current) return;
     writeComposerDraft(`new:${projectId ?? "none"}:${executionWorkspace}`, null);
     setMainSection("chat");
     clearPendingAssistantDeltas();
@@ -2568,7 +2602,7 @@ function App() {
   }
 
   async function openResearchThread(threadSummary: ResearchThread) {
-    if (workspaceOpeningDialogRef.current?.open) return;
+    if (workspaceOpeningRef.current) return;
     if (sideThread?.id === threadSummary.id) {
       if (sideBusy) return;
       setSideThread(null);
@@ -2594,7 +2628,7 @@ function App() {
       setMessages(thread.messages.length ? thread.messages : initialMessages);
       setTrajectoryEvents(thread.events ?? []);
       setEvents([]);
-      setResearchMode(chatModeFromThread(thread.mode, thread.events));
+      setResearchMode(thread.mode === "experiment-setup" ? "experiment-setup" : chatModeFromThread(thread.mode, thread.events));
       setChangeSets(thread.changeSets ?? []);
       const action = thread.turns.map((turn) => turn.task_id).filter(Boolean);
       setPendingAction((current) => current && action.includes(current.task_id) ? current : null);
@@ -2882,7 +2916,7 @@ function App() {
     const question = draft.trim();
     const submittedContext = submittedContextOverride ?? contextItems;
     const hasPastedImage = submittedContext.some((item) => item.type === "image");
-    if ((!question && !hasPastedImage) || agentBusy || commandLockRef.current || workspaceOpeningDialogRef.current?.open) return false;
+    if ((!question && !hasPastedImage) || agentBusy || commandLockRef.current || workspaceOpeningRef.current) return false;
     const requestPrompt = question || "Please analyze the attached image.";
     const submittedThreadId = forceNew ? null : activeThreadIdRef.current;
 
@@ -3563,17 +3597,15 @@ function App() {
               {presenceMembers.slice(0, 4).map((member) => <span className="presence-avatar" key={member.key} title={member.displayName}>{member.displayName.slice(0, 1).toUpperCase()}</span>)}
               {presenceMembers.length > 4 && <span className="presence-avatar more">+{presenceMembers.length - 4}</span>}
             </div>}
-            {activeThreadId && sessionTools.showSnapshots && <button className="quiet-icon-button" onClick={() => void openThreadShare()} title={t("Share session snapshot")} aria-label={t("Share session snapshot")}><Share2 size={15} /></button>}
-            {activeThreadId && sessionTools.showComments && <button className={commentsOpen ? "quiet-icon-button active" : "quiet-icon-button"} onClick={() => { setMainSection("chat"); setCommentsOpen((open) => !open); }} aria-pressed={commentsOpen} title={t("Session comments")} aria-label={t("Session comments")}><MessageCircleReply size={15} /></button>}
-            <button
+            {mainSection === "chat" && researchGraphAvailable && <button
               className={researchPanelOpen ? "quiet-icon-button dock-toggle open" : "quiet-icon-button dock-toggle"}
-              onClick={() => setResearchPanelOpen((open) => !open)}
+              onClick={() => { if (!activeThreadId && !pathIsPinned) setResearchMode("research"); setResearchPanelOpen((open) => !open); }}
               title={researchPanelOpen ? t("Hide Research path") : t("Show Research path")}
               aria-label={researchPanelOpen ? t("Hide Research path") : t("Show Research path")}
               aria-pressed={researchPanelOpen}
-            >
-              <Route size={16} />
-            </button>
+            ><Route size={16} /></button>}
+            {activeThreadId && sessionTools.showSnapshots && <button className="quiet-icon-button" onClick={() => void openThreadShare()} title={t("Share session snapshot")} aria-label={t("Share session snapshot")}><Share2 size={15} /></button>}
+            {activeThreadId && sessionTools.showComments && <button className={commentsOpen ? "quiet-icon-button active" : "quiet-icon-button"} onClick={() => { setMainSection("chat"); setCommentsOpen((open) => !open); }} aria-pressed={commentsOpen} title={t("Session comments")} aria-label={t("Session comments")}><MessageCircleReply size={15} /></button>}
             <button
               className={proactive.open ? "quiet-icon-button dock-toggle open" : "quiet-icon-button dock-toggle"}
               onClick={toggleProactiveDock}
@@ -3631,6 +3663,12 @@ function App() {
               canInterrupt={Boolean(runningThreadId) && !interrupting}
               researchMode={researchMode}
               onResearchMode={setResearchMode}
+              researchGraphOpen={researchPanelOpen}
+              onResearchGraphAvailability={setResearchGraphAvailable}
+              onToggleResearchGraph={(newSession) => {
+                if (newSession && !pathIsPinned) setResearchMode("research");
+                setResearchPanelOpen((open) => !open);
+              }}
               reasoningEffort={reasoningEffort}
               contextLength={contextLength}
               modelCapabilities={modelCapabilities}
@@ -3684,7 +3722,23 @@ function App() {
             onOpenSettings={() => { setSettingsSection("proactive"); setSettingsOpen(true); }}
             onCollapse={() => proactive.setOpen(false)}
           />}
-          research={<ResearchPathPanel
+          research={showResearchGraph ? <ResearchGraphPanel
+            projectId={pathProject?.id ?? activeProjectId ?? null}
+            threadId={pathThread?.id ?? null}
+            projectName={pathProject?.name ?? t("No project")}
+            threadTitle={pathThread?.title ?? t("No active session")}
+            hasThread={Boolean(pathThread)}
+            mode={pathMode}
+            workspace={workspace}
+            extractionPending={Boolean(pathThread && Object.keys(graphPending).some((key) => key.startsWith(`${pathThread.id}:`)))}
+            version={graphVersion}
+            update={graphUpdate}
+            pinned={pathIsPinned}
+            threadInactive={pathThreadInactive}
+            onTogglePin={togglePathPin}
+            onOpenThread={openPathThread}
+            onCollapse={() => setResearchPanelOpen(false)}
+          /> : <ResearchPathPanel
             stages={researchStages}
             activeStage={pathStage}
             acceptedStages={pathAcceptedStages}
@@ -3859,6 +3913,7 @@ function App() {
         onModelSaved={setActiveModelConfig}
         executionPreferences={{ reasoningEffort, contextLength, capabilities: modelCapabilities, onReasoningEffort: setReasoningEffort, onContextLength: setContextLength }}
         workspace={workspace}
+        modelWorkspace={executionWorkspace}
         workspaceReady={workspaceReady}
         agentBusy={agentBusy}
         onChooseWorkspace={() => void chooseWorkspace()}
@@ -3935,10 +3990,9 @@ function App() {
       />
       <CommandPalette open={paletteOpen} commands={paletteCommands} onClose={() => setPaletteOpen(false)} />
       <ProjectRemoveModal project={projectToRemove} onClose={() => setProjectToRemove(null)} onRemove={() => projectToRemove && void removeProject(projectToRemove)} />
-      <dialog ref={workspaceOpeningDialogRef} className="app-dialog app-dialog-compact workspace-opening-dialog" aria-label={t("Opening workspace")}
-        onCancel={(event) => event.preventDefault()} onKeyDown={(event) => event.stopPropagation()}>
+      <Dialog open={workspaceOpening} blocking size="compact" className="workspace-opening-dialog" ariaLabel={t("Opening workspace")}>
         <div role="status"><LoaderCircle className="spin" size={16} />{t("Opening workspace")}</div>
-      </dialog>
+      </Dialog>
     </main>
   );
 }
@@ -4137,7 +4191,7 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
   </div>;
 });
 
-function ConversationView({ messages, events, trajectoryEvents, nativeBackend, harnessBound, onHarnessChange, nativeQuestions, onNativeAnswer, onNativeSteer, workspace, projectId, agentBusy, interrupting, canInterrupt, pendingAction, changeSets, researchMode, reasoningEffort, contextLength, modelCapabilities, contextItems, onOpenWorkspaceSettings, onCommand, contextSummary, compactedThroughTurnId, onSubmit, onInterrupt, onResearchMode, onAddContext, onRemoveContext, onApprove, onReject, onOpenFile, showWelcome, onWelcomeAction, composerRequest, draftKey, currentFile, currentSelection, onComposerRequestApplied, initialScrollTop, onScrollTop, commentScope, addingComment, commentsShowResolved, onExitComments }: {
+function ConversationView({ messages, events, trajectoryEvents, nativeBackend, harnessBound, onHarnessChange, nativeQuestions, onNativeAnswer, onNativeSteer, workspace, projectId, agentBusy, interrupting, canInterrupt, pendingAction, changeSets, researchMode, researchGraphOpen, onToggleResearchGraph, onResearchGraphAvailability, reasoningEffort, contextLength, modelCapabilities, contextItems, onOpenWorkspaceSettings, onCommand, contextSummary, compactedThroughTurnId, onSubmit, onInterrupt, onResearchMode, onAddContext, onRemoveContext, onApprove, onReject, onOpenFile, showWelcome, onWelcomeAction, composerRequest, draftKey, currentFile, currentSelection, onComposerRequestApplied, initialScrollTop, onScrollTop, commentScope, addingComment, commentsShowResolved, onExitComments }: {
   commentScope: SessionCommentsScope | null;
   addingComment: boolean;
   commentsShowResolved: boolean;
@@ -4159,6 +4213,9 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
   pendingAction: PendingAction | null;
   changeSets: WorkspaceChangeSet[];
   researchMode: ResearchMode;
+  researchGraphOpen: boolean;
+  onToggleResearchGraph: (newSession: boolean) => void;
+  onResearchGraphAvailability: (available: boolean) => void;
   reasoningEffort: ReasoningEffort;
   contextLength: ContextLength;
   modelCapabilities: ModelCapabilities;
@@ -4282,6 +4339,9 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
   }, [prompt]);
 
   const predictedMode: NewChatMode = showWelcome ? newChatMode : chatModeFromThread(researchMode, trajectoryEvents);
+  useEffect(() => {
+    onResearchGraphAvailability(predictedMode === "research" || (!showWelcome && researchMode === "experiment-setup"));
+  }, [onResearchGraphAvailability, predictedMode, researchMode, showWelcome]);
   useEffect(() => {
     if (showWelcome) setPendingResearchSkill(null);
   }, [showWelcome]);
@@ -4595,7 +4655,11 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
     }
     const draft = prompt;
     const submittedContext = contextItems;
-    const submittedMode: ResearchMode = pendingResearchSkill ? "research" : predictedMode;
+    const submittedMode: ResearchMode = pendingResearchSkill
+      ? "research"
+      : researchMode === "experiment-setup"
+        ? "experiment-setup"
+        : predictedMode;
     rememberPrompt(draft);
     setPrompt("");
     setComposerError("");
@@ -4642,9 +4706,10 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
 
     <div className="conversation-composer-wrap" data-ui="research-composer">
       {showWelcome && <NewChatModePicker value={newChatMode} onChange={(mode) => {
-        setNewChatMode(mode);
-        setPrompt((current) => draftForNewChatMode(current, mode));
-      }} />}
+          if (mode !== "research" && researchGraphOpen) onToggleResearchGraph(false);
+          setNewChatMode(mode);
+          setPrompt((current) => draftForNewChatMode(current, mode));
+        }} />}
       {nativeQuestions.length > 0 && <div className="native-question-stack">{nativeQuestions.map((question) => <NativeQuestionCard key={question.id} question={question} onAnswer={onNativeAnswer} />)}</div>}
       <div
         ref={composerBoxRef}
