@@ -3,6 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { randomUUID } = require('node:crypto');
 const { CodexClient } = require('./codex-client.cjs');
+const { NativeSessionBusyError } = require('./native-session-busy.cjs');
 const { createNativeEvents } = require('./codex-events.cjs');
 const { validateNativeChoice } = require('./codex-models.cjs');
 const { assertJsonSize, VISIBLE_IMPORT_LIMIT } = require('./codex-limits.cjs');
@@ -147,7 +148,7 @@ async function nativeSession({ config, workspace, thread, turn, contextItems = [
   if (compaction && !resume) throw new Error('Native compaction requires an identical completed Codex binding. Continue this chat successfully before compacting.');
   if (runtimeId && activeNativeRuns.has(runtimeId)) throw new Error('This chat already has an active native Codex operation.');
   if (resume && Array.from(activeNativeRuns.values()).some(run => run.bindingId === binding.native_thread_id)) {
-    throw new Error('Another workspace is using this Codex conversation. Wait for its active turn to finish.');
+    throw new NativeSessionBusyError('codex');
   }
   const prompt = compaction ? null : userPrompt(thread, turn, resume, attachments, experimentBridgeInstructions);
   if (signal.aborted) throw new Error('Codex turn interrupted before skill setup.');

@@ -453,7 +453,7 @@ test('copied workspaces cannot start overlapping turns on one native Codex bindi
   const original = fixture(started, { ...options, runtimeId: 'first/same-local-thread' });
   const copy = fixture(complete, { ...options, runtimeId: 'copy/same-local-thread' });
   const first = backend.runCodex(original.args);
-  await assert.rejects(backend.runCodex(copy.args), /Another workspace is using this Codex conversation/);
+  await assert.rejects(backend.runCodex(copy.args), { message: /Another workspace is using this Codex conversation/, backend: 'codex' });
   assert.equal(copy.peer(), undefined);
   complete(await ready);
   await first;

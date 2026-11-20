@@ -6,6 +6,7 @@ const { randomUUID } = require('node:crypto');
 const codex = require('./codex-backend.cjs');
 const { closeAllCodexClients } = require('./codex-client.cjs');
 const { NativeProcess, closeAllExternalClients } = require('./native-process.cjs');
+const { NativeSessionBusyError } = require('./native-session-busy.cjs');
 const { claudeLaunch, initializeClaude, claudePrompt, handleClaude } = require('./claude-backend.cjs');
 const { opencodeLaunch, initializeOpenCode, openCodeModels, configureOpenCode, openCodePrompt, handleOpenCode } = require('./opencode-backend.cjs');
 const { prepareResearchSkill, skillReadActivity } = require('./research-skills.cjs');
@@ -39,7 +40,7 @@ async function runExternal(options) {
   const resume = canResumeExternal(binding, { backend, workspace: root, model: config.model, previousTurnId });
   if (runtimeId && active.has(runtimeId)) throw new Error('This chat already has an active native turn.');
   if (resume && Array.from(active.values()).some(run => run.backend === backend && run.bindingId === binding.native_thread_id)) {
-    throw new Error(`Another workspace is using this ${title} conversation. Wait for its active turn to finish.`);
+    throw new NativeSessionBusyError(backend);
   }
   if (signal.aborted) throw new Error(`${title} turn interrupted before skill setup.`);
   const skill = prepareResearchSkill({ workspace: root, backend, thread, requested: researchSkill, emit, recordEvent });

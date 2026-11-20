@@ -19,6 +19,7 @@ const { contextCharacterLimit, normalizeContextLength, normalizeReasoningEffort:
 const { snapshotWorkspace, compareWorkspaceSnapshots, workspacePath: existingWorkspacePath } = require("./workspace-files.cjs");
 const { artifactKind } = require("./artifacts.cjs");
 const { runNative } = require("./agent/external-backend.cjs");
+const { NativeSessionBusyError } = require("./agent/native-session-busy.cjs");
 const { runApprovedCommand } = require("./agent/command-runner.cjs");
 const { readLines, searchWorkspace, prepareWrite, prepareEdit, readCommandLog, visibleExisting } = require("./agent/workspace-tools.cjs");
 const { ToolRegistry } = require("./agent/tool-registry.cjs");
@@ -1728,6 +1729,9 @@ async function runAgentInStore({ prompt, workspace, threadId, projectId, workspa
       recordEvent({ type: "model_incomplete", payload: failure });
       emitTurn({ type: "incomplete", title: "Response incomplete", detail: "Partial text was kept. Continue in this chat to retry; no tool from the unfinished response was executed.", error: failure });
       return { ...finish(`${error.partialResponse ? `${error.partialResponse}\n\n` : ""}This model response is incomplete: ${error.message} Continue in this chat to retry.`, "incomplete"), error: failure };
+    }
+    if (error instanceof NativeSessionBusyError) {
+      recordEvent({ type: "native_session_busy", payload: { backend: error.backend } });
     }
     const response = `${error.partialResponse ? `${error.partialResponse}\n\n` : ""}Archimedes could not complete this task: ${error.message || String(error)}`;
     emitTurn({ type: "failed", title: "Research turn failed", detail: "The turn record was saved for inspection" });

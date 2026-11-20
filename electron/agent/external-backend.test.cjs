@@ -213,7 +213,7 @@ test('native adapters reserve a shared saved session before connecting a copied 
     const copy = { ...original, Client: adapter, runtimeId: 'copy/local' };
     const first = runNative(original);
     try {
-      await assert.rejects(runNative(copy), /Another workspace is using this/);
+      await assert.rejects(runNative(copy), { message: /Another workspace is using this/, backend });
     } finally {
       connect();
     }

@@ -54,8 +54,8 @@ import BrowserView from "./BrowserView";
 import { DEFAULT_WORKBENCH_PREFERENCES, activeWorkbenchPaneTabs, normalizeWorkbenchPreferences, selectWorkbenchTab, type WorkbenchTabId, type WorkbenchTabPreferences } from "./workbench-tabs";
 import ArtifactsPanel from "./ArtifactsPanel";
 import ChatActivityTimeline from "./ChatActivityTimeline";
-import NativeAgentPanel, { NativeContextUsage, NativeQuestionCard } from "./NativeAgentPanel";
-import { mergeNativeEvent, nativeTurnEvents, nativeUsage, updateNativeQuestions } from "./native-agent-state";
+import NativeAgentPanel, { NativeContextUsage, NativeQuestionCard, NativeSessionBusyNotice } from "./NativeAgentPanel";
+import { mergeNativeEvent, nativeTurnEvents, nativeUsage, updateNativeQuestions, type NativeSessionBackend } from "./native-agent-state";
 import HarnessPicker from "./HarnessPicker";
 import NewChatModePicker, { draftForNewChatMode, RESEARCH_EXAMPLE, type NewChatMode } from "./NewChatModePicker";
 import JourneyView from "./JourneyView";
@@ -4061,14 +4061,20 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
   });
   const hasCommentaryAtTail = lastNativeActivity?.kind === "commentary" && Boolean(lastNativeActivity.output || lastNativeActivity.detail);
   const thinking = agentBusy && !hasStreamingText && !hasRunningNativeTool && !hasCommentaryAtTail && !pendingAction;
-  const nativeEventsByTurn = useMemo(() => {
-    const grouped = new Map<string, ResearchEvent[]>();
+  const { nativeEventsByTurn, nativeBusyTurns } = useMemo(() => {
+    const activity = new Map<string, ResearchEvent[]>();
+    const busy = new Map<string, NativeSessionBackend>();
     for (const event of trajectoryEvents) {
+      if (event.type === "native_session_busy") {
+        const backend = (event.payload as { backend?: unknown } | null)?.backend;
+        if (backend === "codex" || backend === "claude" || backend === "opencode") busy.set(event.turn_id, backend);
+        continue;
+      }
       if (!event.type.startsWith("native_")) continue;
-      const turn = grouped.get(event.turn_id) ?? [];
-      turn.push(event); grouped.set(event.turn_id, turn);
+      const turn = activity.get(event.turn_id) ?? [];
+      turn.push(event); activity.set(event.turn_id, turn);
     }
-    return grouped;
+    return { nativeEventsByTurn: activity, nativeBusyTurns: busy };
   }, [trajectoryEvents]);
   const changeSetsByTurn = useMemo(() => {
     const grouped = new Map<string, WorkspaceChangeSet[]>();
@@ -4145,7 +4151,7 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
           Show {Math.min(HISTORY_MESSAGE_PAGE_SIZE, historyStart)} earlier {Math.min(HISTORY_MESSAGE_PAGE_SIZE, historyStart) === 1 ? "message" : "messages"}
         </button>}
         {visibleMessages.slice(0, lastUserIndex + 1).map((message, index) => <div key={message.id}>
-          <ConversationMessage message={message} streaming={agentBusy && message.id.endsWith(":stream")} />
+          <ConversationMessage message={message} streaming={agentBusy && message.id.endsWith(":stream")} busyBackend={message.turn_id ? nativeBusyTurns.get(message.turn_id) : undefined} />
           {message.role === "user" && index < lastUserIndex && message.turn_id && nativeEventsByTurn.has(message.turn_id) && <NativeAgentPanel events={nativeEventsByTurn.get(message.turn_id)!} busy={false} />}
           {message.turn_id && message.turn_id !== currentTurnId && lastTurnMessageIndex.get(message.turn_id) === index && (changeSetsByTurn.get(message.turn_id) ?? []).map((changeSet) => <WorkspaceChangesCard key={changeSet.id} changeSet={changeSet} onOpenFile={onOpenFile} />)}
         </div>)}
@@ -4153,7 +4159,7 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
         {visibleMessages.slice(lastUserIndex + 1).map((message, offset) => {
           const index = lastUserIndex + 1 + offset;
           return <div key={message.id}>
-            <ConversationMessage message={message} streaming={agentBusy && message.id.endsWith(":stream")} />
+            <ConversationMessage message={message} streaming={agentBusy && message.id.endsWith(":stream")} busyBackend={message.turn_id ? nativeBusyTurns.get(message.turn_id) : undefined} />
             {message.turn_id && message.turn_id !== currentTurnId && lastTurnMessageIndex.get(message.turn_id) === index && (changeSetsByTurn.get(message.turn_id) ?? []).map((changeSet) => <WorkspaceChangesCard key={changeSet.id} changeSet={changeSet} onOpenFile={onOpenFile} />)}
           </div>;
         })}
@@ -4880,14 +4886,16 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
   </div>;
 }
 
-const ConversationMessage = memo(function ConversationMessage({ message, streaming }: { message: Message; streaming: boolean }) {
+const ConversationMessage = memo(function ConversationMessage({ message, streaming, busyBackend }: { message: Message; streaming: boolean; busyBackend?: NativeSessionBackend }) {
   return <article className={`conversation-message ${message.role}`} data-session-message-id={message.id} data-turn-id={message.role === "user" ? message.id : undefined}>
     <div className="conversation-message-content">
     {message.role === "user" && Boolean(message.attachments?.length) && <div className="message-attachments">{message.attachments?.map((attachment) => <MessageAttachmentView key={attachment.position} attachment={attachment} turnId={message.turn_id} />)}</div>}
     <div className="conversation-message-copy">
       <div className="conversation-message-role">{message.role === "assistant" ? "Archimedes" : "You"}</div>
       {message.role === "assistant"
-        ? streaming ? <StreamingMarkdownMessage content={message.text} /> : <MarkdownMessage content={message.text} />
+        ? streaming ? <StreamingMarkdownMessage content={message.text} /> : busyBackend
+          ? <NativeSessionBusyNotice backend={busyBackend} />
+          : <MarkdownMessage content={message.text} />
         : <p>{message.text}</p>}
       {Boolean(message.sources?.length) && <div className="conversation-sources" aria-label="Sources read by Archimedes">
         {message.sources?.map((source, index) => <a key={`${source.url}:${source.startPage}:${index}`} href={source.startPage ? `${source.url}#page=${source.startPage}` : source.url} target="_blank" rel="noreferrer" title={[source.title, source.url, source.query && `Query: ${source.query}`, source.excerpt, source.retrievedAt && `Read: ${source.retrievedAt}`].filter(Boolean).join("\n\n")}>
