@@ -43,3 +43,14 @@ Captured in Archimedes' macOS Electron app at a matching 1180 × 900 content vie
 The updated form was saved and reopened before the Paper capture. The fixture received the connection-test ID and a separate ID for chat. Screenshots contain no credentials. The fixture does not test a subscription or production inference.
 
 Geometry and connection outcomes are in `before-geometry.json` and `after-geometry.json`.
+
+## Streamed provider failures
+
+Both protocol fixtures returned HTTP 200 and a stream error containing the same two dummy values. The comparison used mocked fetch calls.
+
+| Protocol | Before at `6582470` | After |
+| --- | --- | --- |
+| OpenAI-compatible | `Gateway rejected DUMMY_GATEWAY_TOKEN and DUMMY_FIXED_SESSION` | `The openai response is incomplete (stream_error).` |
+| Anthropic | `Anthropic stream error: Gateway rejected DUMMY_GATEWAY_TOKEN and DUMMY_FIXED_SESSION` | `The anthropic response is incomplete (stream_error).` |
+
+The saved-turn regression verifies that each adapter retains the partial answer and the chat retry guidance. It also checks that an unrecognized stop reason echoed by a provider stays out of the recorded diagnostic metadata.
