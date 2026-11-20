@@ -68,6 +68,7 @@ contextBridge.exposeInMainWorld("researchDesk", {
   createLatexDirectory: (workspace, path) => ipcRenderer.invoke("paper:create-directory", { workspace, path }),
   importLatexFolder: (workspace) => ipcRenderer.invoke("paper:import-folder", { workspace }),
   compileLatexDocument: (workspace, path) => ipcRenderer.invoke("paper:compile", { workspace, path }),
+  readManuscriptSnapshot: (workspace, manifestPath) => ipcRenderer.invoke("paper:build-snapshot", { workspace, manifestPath }),
   onLatexCompileProgress: (callback) => {
     const listener = (_event, payload) => callback(payload);
     ipcRenderer.on("paper:compile-progress", listener);
