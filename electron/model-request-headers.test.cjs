@@ -182,3 +182,36 @@ test("catalog, connection test, chat and inherited Paper review use the configur
   await assert.rejects(modelConfig.testModelConfig({ ...connection, headers: {}, sessionHeader: null }), /MissingSessionID/);
   assert.equal(requests.at(-1).headers["x-tenant"], undefined);
 });
+
+test("the reproduction executor includes its run ID on every model request", async () => {
+  const main = fs.readFileSync(path.join(__dirname, "main.cjs"), "utf8");
+  const start = main.indexOf("  const executeRun = async (session) => {");
+  const end = main.indexOf('  ipcMain.handle("reproduction:run"', start);
+  const requests = [];
+  const runtime = {
+    runPilot: async ({ complete }) => {
+      for (const prompt of ["First decision", "Second decision"]) await complete({ system: "Pilot", prompt });
+      return { status: "verified" };
+    },
+    reproductionModel: () => ({
+      provider: "opencode-go", baseUrl: "https://reproduction.fixture.example/v1", model: "test", apiKey: "fixture-key",
+      sessionHeader: { name: "x-opencode-session", strategy: "thread" },
+    }),
+    completeJson: (model, options) => paperReviewModel.completeJson(model, {
+      ...options,
+      fetchImpl: async (_url, { headers }) => {
+        requests.push(headers["x-opencode-session"]);
+        return Response.json({ choices: [{ finish_reason: "stop", message: { content: '{"action":"done"}' } }] });
+      },
+    }),
+    store: { updateReproduction() {}, updateReproductionRun() {} },
+    reproductionEnvItems: () => [],
+    stopSession: async () => {},
+    notifyRunFinished() {},
+  };
+  const executeRun = new Function(...Object.keys(runtime), `${main.slice(start, end)}\nreturn executeRun;`)(...Object.values(runtime));
+  for (const id of ["run-first", "run-second"]) {
+    await executeRun({ record: { id: "reproduction" }, run: { id }, contract: {}, backend: {}, send() {} });
+  }
+  assert.deepEqual(requests, ["run-first", "run-first", "run-second", "run-second"]);
+});

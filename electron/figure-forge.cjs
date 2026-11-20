@@ -179,11 +179,16 @@ async function generateBitmap(input, { config, fetchImpl = fetch }) {
     const useEdits = !nativeGemini && /^gpt-image-/i.test(model) && provider !== "infistar" && provider !== "nonelinear";
     let body;
     let endpoint = `${config.baseUrl.replace(/\/+$/, "")}/images/${useEdits ? "edits" : "generations"}`;
-    const headers = { Authorization: `Bearer ${config.apiKey}` };
+    const requestOptions = buildModelRequestOptions(config, "archimedes-figure-forge", {
+      baseHeaders: useEdits ? {} : { "Content-Type": "application/json" },
+    });
     if (nativeGemini) {
       const request = geminiImageRequest(config.baseUrl, model, prompt, references, { aspectRatio: aspect, imageSize: resolution });
-      endpoint = request.base + request.endpoint; headers["Content-Type"] = "application/json"; body = JSON.stringify(request.body);
+      endpoint = request.base + request.endpoint; body = JSON.stringify(request.body);
     } else if (useEdits) {
+      // Fetch generates the multipart Content-Type and boundary from the form.
+      const contentType = Object.keys(requestOptions.headers).find(name => name.toLowerCase() === "content-type");
+      if (contentType) delete requestOptions.headers[contentType];
       const form = new FormData(); form.set("model", model); form.set("prompt", prompt);
       form.set(dimensions.field, dimensions.value);
       references.forEach((image, index) => {
@@ -192,10 +197,9 @@ async function generateBitmap(input, { config, fetchImpl = fetch }) {
       });
       body = form;
     } else {
-      headers["Content-Type"] = "application/json";
       body = JSON.stringify({ model, prompt, image: references, response_format: "b64_json", [dimensions.field]: dimensions.value, ...(dimensions.aspectRatio ? { aspect_ratio: dimensions.aspectRatio } : {}) });
     }
-    const response = await fetchImpl(endpoint, { method: "POST", headers, body, signal: controller.signal });
+    const response = await fetchImpl(endpoint, { method: "POST", ...requestOptions, body, signal: controller.signal });
     if (!response.ok) throw new Error(`Image provider returned HTTP ${response.status}. Verify the model supports reference images and this endpoint.`);
     const text = await response.text();
     if (text.length > 30_000_000) throw new Error("Generated image response is too large.");

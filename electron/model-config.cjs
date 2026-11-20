@@ -16,11 +16,14 @@ function normalizeRole(role) {
 function environmentConfig() {
   const legacyPrefix = ["AX", "IOM_LLM_"].join("");
   const read = (name) => process.env[`ARCHIMEDES_LLM_${name}`] || process.env[`${legacyPrefix}${name}`] || "";
+  const baseUrl = trimBaseUrl(read("BASE_URL") || "https://api.openai.com/v1");
+  const provider = normalizeProvider("custom", baseUrl);
   return {
-    provider: "custom",
-    baseUrl: read("BASE_URL") || "https://api.openai.com/v1",
+    provider,
+    baseUrl,
     model: read("MODEL") || "gpt-4.1-mini",
     apiKey: read("API_KEY"),
+    ...(provider === "opencode-go" ? { sessionHeader: OPENCODE_GO_SESSION_HEADER, userAgent: OPENCODE_GO_USER_AGENT } : {}),
   };
 }
 
@@ -62,8 +65,12 @@ function writeSavedConfig(saved) {
   try { fs.chmodSync(configPath, 0o600); } catch { /* Windows and some filesystems ignore POSIX modes. */ }
 }
 
+function trimBaseUrl(value) {
+  return String(value || "").trim().replace(/\/+$/, "");
+}
+
 function normalizeBaseUrl(value) {
-  const baseUrl = String(value || "").trim().replace(/\/+$/, "");
+  const baseUrl = trimBaseUrl(value);
   let parsed;
   try {
     parsed = new URL(baseUrl);
@@ -121,7 +128,7 @@ function getActiveModelConfig(role = "agent") {
   const inherited = normalizedRole === "proactive" && !own ? readRoleConfig("agent") : null;
   const saved = own || inherited;
   if (!saved) return { ...fallback, role: normalizedRole, inheritedFromAgent: false };
-  const baseUrl = String(saved.baseUrl || fallback.baseUrl).trim().replace(/\/+$/, "");
+  const baseUrl = trimBaseUrl(saved.baseUrl || fallback.baseUrl);
   const provider = normalizeProvider(saved.provider, baseUrl);
   return {
     provider,
@@ -139,7 +146,7 @@ function getActiveModelConfig(role = "agent") {
 }
 
 function connectionSettings(input, current, provider, baseUrl) {
-  const sameConnection = current.provider === provider && normalizeBaseUrl(current.baseUrl) === baseUrl;
+  const sameConnection = current.provider === provider && current.baseUrl === baseUrl;
   const saved = sameConnection ? current : {};
   const defaults = provider === "opencode-go" && !sameConnection
     ? { sessionHeader: OPENCODE_GO_SESSION_HEADER, userAgent: OPENCODE_GO_USER_AGENT }
