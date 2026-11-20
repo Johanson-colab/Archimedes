@@ -14,8 +14,9 @@ async function harness(overrides = {}) {
   const calls = [], enabled = [];
   const scope = {
     hiddenCoreModules: new Set(["reproduce", "image-creation", "extensions", "data-charts", "daily"]),
+    mainNavigationRef: { current: 0 },
     setCoreModuleEnabled: async (id) => { enabled.push(id); },
-    setMainSection: (section) => calls.push(section),
+    updateMainSection: (section) => calls.push(section),
     setAppEntryError: (error) => { scope.error = error; },
     setDailyStartMode: (mode) => { scope.dailyMode = mode; },
     setImageCreationOpened: (open) => { scope.figureOpen = open; },
@@ -27,8 +28,8 @@ async function harness(overrides = {}) {
     ...overrides,
   };
   const { transformWithOxc } = await import("vite");
-  const { code } = await transformWithOxc(["openResearchApp", "activateSidebarEntry", "openWelcomeWorkflow", "runProactiveSuggestion"].map(extract).join("\n"), "app-entry.tsx");
-  const functions = new Function("scope", `with(scope) { ${code}; return { openResearchApp, activateSidebarEntry, openWelcomeWorkflow, runProactiveSuggestion }; }`)(scope);
+  const { code } = await transformWithOxc(["setMainSection", "openResearchApp", "activateSidebarEntry", "openWelcomeWorkflow", "runProactiveSuggestion"].map(extract).join("\n"), "app-entry.tsx");
+  const functions = new Function("scope", `with(scope) { ${code}; return { setMainSection, openResearchApp, activateSidebarEntry, openWelcomeWorkflow, runProactiveSuggestion }; }`)(scope);
   scope.openResearchApp = functions.openResearchApp;
   const evaluate = async (text) => {
     const { code } = await transformWithOxc(`const value = ${text};`, "app-entry-route.tsx", { jsx: { runtime: "classic" } });
@@ -131,4 +132,25 @@ test("opening waits for persisted visibility, and a failed save keeps the curren
   assert.equal(await h.openResearchApp("extensions"), false);
   assert.deepEqual(h.calls, ["reproduce"]);
   assert.match(h.scope.error, /Try again.*cannot save settings/);
+});
+
+test("a late visibility save does not override newer navigation", async () => {
+  let release;
+  const pending = new Promise(resolve => { release = resolve; });
+  const h = await harness({ setCoreModuleEnabled: () => pending });
+  const older = h.openResearchApp("image-creation");
+  assert.equal(await h.openResearchApp("library"), true);
+  release();
+  assert.equal(await older, false);
+  assert.deepEqual(h.calls, ["library"]);
+  assert.equal(h.scope.figureOpen, undefined);
+
+  let reject;
+  h.scope.setCoreModuleEnabled = () => new Promise((_resolve, fail) => { reject = fail; });
+  const failing = h.openResearchApp("reproduce");
+  h.setMainSection("chat");
+  reject(new Error("late save failure"));
+  assert.equal(await failing, false);
+  assert.deepEqual(h.calls, ["library", "chat"]);
+  assert.equal(h.scope.error, "");
 });

@@ -1385,7 +1385,8 @@ function App() {
   const [sidebarAppDropTarget, setSidebarAppDropTarget] = useState<string | null>(null);
   const [sidebarHidden, setSidebarHidden] = useState(readSidebarHidden);
   const sidebarDragRef = useRef<{ startX: number; startWidth: number } | null>(null);
-  const [mainSection, setMainSection] = useState<MainSection>("chat");
+  const [mainSection, updateMainSection] = useState<MainSection>("chat");
+  const mainNavigationRef = useRef(0);
   const [pluginEntries, setPluginEntries] = useState<SidebarEntry[]>([]);
   const [reproduceId, setReproduceId] = useState<string | null>(null);
   const [extensionsTab, setExtensionsTab] = useState<ExtensionsTab>("installed");
@@ -2059,9 +2060,16 @@ function App() {
     setWorkbenchOpen(true);
   }
 
+  function setMainSection(section: MainSection) {
+    mainNavigationRef.current += 1;
+    updateMainSection(section);
+  }
+
   async function openResearchApp(section: MainSection) {
+    const request = ++mainNavigationRef.current;
     try {
       if (hiddenCoreModules.has(section)) await setCoreModuleEnabled(section, true);
+      if (request !== mainNavigationRef.current) return false;
       if (section === "daily") setDailyStartMode("latest");
       if (section === "image-creation") setImageCreationOpened(true);
       if (section === "data-charts") setDataChartsOpened(true);
@@ -2070,7 +2078,7 @@ function App() {
       setMainSection(section);
       return true;
     } catch (error) {
-      setAppEntryError(`${t("Could not open this Research App. Try again.")} ${String(error)}`);
+      if (request === mainNavigationRef.current) setAppEntryError(`${t("Could not open this Research App. Try again.")} ${String(error)}`);
       return false;
     }
   }
