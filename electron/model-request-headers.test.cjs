@@ -13,6 +13,7 @@ const {
   sanitizeSessionHeader,
 } = require("./model-request-headers.cjs");
 const modelConfig = require("./model-config.cjs");
+const paperReviewModel = require("./paper-review-model.cjs");
 const { complete } = require("./agent.cjs");
 
 test("sanitizeHeaders drops unsafe or malformed headers", () => {
@@ -52,7 +53,7 @@ test("buildModelHeaders adds auth, custom headers, and thread session id", () =>
 test("provider session errors get actionable messages", () => {
   const raw = '{"type":"error","error":{"type":"MissingSessionID","message":"Request is missing x-opencode-session"}}';
   assert.match(formatModelRequestError(400, raw), /requires a stable session header/);
-  assert.match(formatConnectionError(400, raw), /requires a stable session header/);
+  assert.equal(formatConnectionError(400, raw), "Connection failed (400): MissingSessionID");
   assert.equal(formatModelRequestError(500, "boom"), "Model request failed (500): boom");
 });
 
@@ -84,7 +85,37 @@ test("saved custom header values stay in the main process and can be replaced or
   assert.equal(modelConfig.getActiveModelConfig().sessionHeader, null);
 });
 
-test("catalog, connection test and chat carry the intended headers on actual HTTP requests", async (t) => {
+test("the dedicated Go provider recognizes existing Custom connections and uses the Go catalog", async (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-opencode-go-"));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  modelConfig.initializeModelConfig(directory);
+  const baseUrl = "https://opencode.ai/inference/go/openai/v1";
+  fs.writeFileSync(path.join(directory, "model-config.json"), JSON.stringify({
+    provider: "custom",
+    baseUrl: `${baseUrl}/`,
+    model: "hy4",
+    apiKey: "legacy-key",
+  }));
+  const publicConfig = modelConfig.getPublicModelConfig();
+  assert.equal(publicConfig.provider, "opencode-go");
+  assert.equal(publicConfig.baseUrl, baseUrl);
+  assert.equal(publicConfig.hasApiKey, true);
+  assert.equal(Object.hasOwn(publicConfig, "apiKey"), false);
+  assert.deepEqual(publicConfig.sessionHeader, { name: "x-opencode-session", strategy: "thread", hasValue: false });
+
+  const request = t.mock.method(globalThis, "fetch", async () => Response.json({ data: [{ id: "hy4" }] }));
+  assert.deepEqual((await modelConfig.listProviderModels()).models, ["hy4"]);
+  assert.equal(request.mock.calls[0].arguments[0], "https://opencode.ai/inference/go/v1/models");
+  assert.equal(request.mock.calls[0].arguments[1].headers.Authorization, "Bearer legacy-key");
+  assert.match(request.mock.calls[0].arguments[1].headers["User-Agent"], /^Archimedes\//);
+  assert.equal(request.mock.calls[0].arguments[1].headers["x-opencode-session"], "archimedes-model-catalog");
+  await assert.rejects(modelConfig.testModelConfig({ provider: "openai", baseUrl }), /Add an API key/);
+  await assert.rejects(modelConfig.testModelConfig({ provider: "opencode-go", baseUrl: "https://other.example/v1" }), /Add an API key/);
+  modelConfig.saveModelConfig({ provider: "opencode-go", baseUrl, model: "qwen3.7-plus" });
+  assert.equal(modelConfig.getActiveModelConfig().apiKey, "legacy-key");
+});
+
+test("catalog, connection test, chat and inherited Paper review use the configured HTTP headers", async (t) => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-model-provider-"));
   modelConfig.initializeModelConfig(directory);
   const requests = [];
@@ -102,7 +133,7 @@ test("catalog, connection test and chat carry the intended headers on actual HTT
       res.setHeader("Content-Type", "text/event-stream");
       return res.end('data: {"choices":[{"delta":{"content":"OK"},"finish_reason":"stop"}]}\n\n');
     }
-    res.end(JSON.stringify({ model: "hy4-flash-free", choices: [{ message: { content: "OK" } }] }));
+    res.end(JSON.stringify({ model: "hy4-flash-free", choices: [{ finish_reason: "stop", message: { content: '{"ok":true}' } }] }));
   });
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   t.after(async () => {
@@ -122,7 +153,7 @@ test("catalog, connection test and chat carry the intended headers on actual HTT
     userAgent: "Archimedes/0.1.0",
   };
   modelConfig.saveModelConfig(connection);
-  await assert.rejects(modelConfig.testModelConfig(connection), /requires a stable session header/);
+  await assert.rejects(modelConfig.testModelConfig(connection), /MissingSessionID/);
   assert.deepEqual((await modelConfig.listProviderModels(proposed)).models, ["hy4-flash-free"]);
   assert.equal((await modelConfig.testModelConfig(proposed)).ok, true);
   modelConfig.saveModelConfig(proposed);
@@ -131,6 +162,9 @@ test("catalog, connection test and chat carry the intended headers on actual HTT
   for (const sessionId of ["thread-abc", "thread-abc", "thread-def"]) {
     assert.equal((await complete(config, messages, { allowTools: false, sessionId })).content, "OK");
   }
+  const inheritedReviewModel = paperReviewModel.resolveReviewModel({ model: { mode: "agent" } });
+  const review = await paperReviewModel.completeJson({ ...inheritedReviewModel, sessionId: "review-123" }, { system: "Review the paper", prompt: "Return JSON" });
+  assert.deepEqual(review.json, { ok: true });
   assert.deepEqual(requests.map(({ url, headers }) => [url, headers["x-opencode-session"]]), [
     ["/v1/chat/completions", undefined],
     ["/v1/models", "archimedes-model-catalog"],
@@ -138,11 +172,13 @@ test("catalog, connection test and chat carry the intended headers on actual HTT
     ["/v1/chat/completions", "thread-abc"],
     ["/v1/chat/completions", "thread-abc"],
     ["/v1/chat/completions", "thread-def"],
+    ["/v1/chat/completions", "review-123"],
   ]);
   for (const { headers } of requests.slice(1)) {
     assert.equal(headers["x-tenant"], "fixture-tenant");
     assert.equal(headers["user-agent"], "Archimedes/0.1.0");
+    assert.equal(headers.authorization, "Bearer test-key");
   }
-  await assert.rejects(modelConfig.testModelConfig({ ...connection, headers: {}, sessionHeader: null }), /requires a stable session header/);
+  await assert.rejects(modelConfig.testModelConfig({ ...connection, headers: {}, sessionHeader: null }), /MissingSessionID/);
   assert.equal(requests.at(-1).headers["x-tenant"], undefined);
 });

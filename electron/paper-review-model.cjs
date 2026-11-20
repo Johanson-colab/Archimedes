@@ -25,6 +25,9 @@ function resolveReviewModel(settings) {
       baseUrl: String(active.baseUrl || "").replace(/\/+$/, ""),
       model: active.model,
       apiKey: active.apiKey,
+      headers: active.headers,
+      sessionHeader: active.sessionHeader,
+      userAgent: active.userAgent,
       source: "agent",
     };
   }
@@ -96,7 +99,7 @@ function isAnthropic(model) {
 function anthropicRequest(model, { system, prompt, maxTokens }) {
   return {
     url: `${model.baseUrl.replace(/\/+$/, "")}/messages`,
-    options: buildModelRequestOptions(model, "archimedes-paper-review", { anthropic: true, baseHeaders: { "Content-Type": "application/json" } }),
+    options: buildModelRequestOptions(model, model.sessionId, { anthropic: true, baseHeaders: { "Content-Type": "application/json" } }),
     body: {
       model: model.model,
       system,
@@ -110,7 +113,7 @@ function anthropicRequest(model, { system, prompt, maxTokens }) {
 function openAiRequest(model, { system, prompt, maxTokens }) {
   return {
     url: `${model.baseUrl.replace(/\/+$/, "")}/chat/completions`,
-    options: buildModelRequestOptions(model, "archimedes-paper-review", { baseHeaders: { "Content-Type": "application/json" } }),
+    options: buildModelRequestOptions(model, model.sessionId, { baseHeaders: { "Content-Type": "application/json" } }),
     body: {
       model: model.model,
       messages: [

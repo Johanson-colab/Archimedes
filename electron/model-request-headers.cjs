@@ -70,10 +70,14 @@ function buildModelRequestOptions(config, sessionId, options) {
   return hasPrivateHeaderValues(config) ? { headers, redirect: "error" } : { headers };
 }
 
+function requiresSessionHeader(text) {
+  return /MissingSessionID|x-opencode-session/i.test(text);
+}
+
 function formatProviderError(prefix, status, detail, config = {}) {
   const text = String(detail || "").slice(0, 500);
-  if (/MissingSessionID|x-opencode-session/i.test(text)) {
-    return `${prefix} (${status}): This provider requires a stable session header. In Settings → Models, choose the OpenCode Go preset or set Session header to x-opencode-session with the Thread strategy.`;
+  if (requiresSessionHeader(text)) {
+    return `${prefix} (${status}): This provider requires a stable session header. In Settings → Models, select OpenCode Go or set Session header to x-opencode-session and Strategy to Thread.`;
   }
   return `${prefix} (${status})${text && !hasPrivateHeaderValues(config) ? `: ${text}` : ""}`;
 }
@@ -83,6 +87,8 @@ function formatModelRequestError(status, detail, config) {
 }
 
 function formatConnectionError(status, detail, config) {
+  // Electron's invoke bridge forwards the message, including this error code.
+  if (requiresSessionHeader(String(detail || "").slice(0, 500))) return `Connection failed (${status}): MissingSessionID`;
   return formatProviderError("Connection failed", status, detail, config);
 }
 
