@@ -40,6 +40,8 @@ before(async () => {
   scope.conferenceCatalog = require("../shared/conferences.json");
   scope.ReactMarkdown = ({ children }) => React.createElement("span", null, children); scope.remarkMath = () => {}; scope.rehypeKatex = () => {};
   await load("BibliographyDialog.tsx", ["BibliographyDialog"]);
+  scope.seedData = require("../shared/library-seeds.json");
+  await load("library-preview.ts", ["previewLibraryBridge"]);
 });
 after(() => { dom.window.close(); for (const key of ["window", "document", "HTMLElement", "Node", "IS_REACT_ACT_ENVIRONMENT"]) delete global[key]; });
 
@@ -287,4 +289,62 @@ test("leaving a BibTeX import stops subsequent operations after an in-flight add
     assert.equal(imported.length, 1, "the already-issued add still completes in its original store");
     assert.equal(imported[0].citekey, scope.parseBibliography(fixture.bibtex).entries[0].citekey, "the original request writes its reference and key together");
   } finally { if (unmount) await unmount(); data.close(); }
+});
+
+for (const backend of ["desktop", "browser"]) {
+  test(`BibTeX stores the first key and explicit replacement through the ${backend} bridge`, async () => {
+    const data = backend === "desktop" ? database("Key import") : null;
+    const bridge = data?.bridge || scope.previewLibraryBridge;
+    const library = data ? data.db.listLibraries(data.project.id)[0] : await bridge.createLibrary({ name: "Browser citation import" });
+    let unmount;
+    try {
+      const original = await bridge.addLibraryPaper(library.id, { ...fixture.paper, title: "Already saved reference", doi: "10.5555/first-and-replacement-key" });
+      unmount = await mount(scope.BibliographyDialog, { bridge, library, onClose() {}, onChanged: async () => {} });
+      const source = document.querySelector('[aria-label="BibTeX source"]');
+      const stored = async () => (await bridge.listLibraryPapers(library.id)).find(paper => paper.id === original.id);
+      await input(source, '@inproceedings{FirstKey,title={Already saved reference},doi={10.5555/first-and-replacement-key}}');
+      await click("Import selected references");
+      assert.equal((await stored()).citekey, "FirstKey");
+      assert.equal((await stored()).entry_type, "inproceedings");
+
+      const replacement = '@article{ReplacementKey,title={Already saved reference},doi={10.5555/first-and-replacement-key}}';
+      await input(source, replacement);
+      await click("Import selected references");
+      assert.equal((await stored()).citekey, "FirstKey");
+      assert.equal((await stored()).entry_type, "inproceedings");
+
+      await input(source, replacement + "\n");
+      const explicit = [...document.querySelectorAll("label")].find(label => label.textContent.startsWith("Replace citation key explicitly"));
+      assert.ok(explicit);
+      await React.act(async () => { explicit.querySelector("input").click(); await tick(); });
+      await click("Import selected references");
+      assert.equal((await stored()).citekey, "ReplacementKey");
+      assert.equal((await stored()).entry_type, "article");
+      await click("Preview BibTeX export");
+      assert.match(document.querySelector('[aria-label="BibTeX export preview"]').value, /@article\{ReplacementKey,/);
+    } finally {
+      if (unmount) await unmount();
+      if (data) data.close();
+      else await bridge.deleteLibrary(library.id);
+    }
+  });
+}
+
+test("browser BibTeX import leaves collection links and the old key intact on a rejected replacement", async () => {
+  const bridge = scope.previewLibraryBridge;
+  const source = await bridge.createLibrary({ name: "Linked browser source" });
+  const target = await bridge.createLibrary({ name: "Linked browser target" });
+  try {
+    const shared = await bridge.addLibraryPaper(source.id, { ...fixture.paper, title: "Browser shared paper", doi: "10.5555/browser-linked-paper" });
+    await bridge.setPaperBibliography(shared.id, { citekey: "CurrentKey", entryType: "article" });
+    const other = await bridge.addLibraryPaper(source.id, { ...fixture.paper, title: "Browser replacement key holder", doi: "10.5555/browser-linked-peer" });
+    await bridge.setPaperBibliography(other.id, { citekey: "NewKey", entryType: "article" });
+
+    await assert.rejects(bridge.addLibraryPaper(target.id, { ...shared, source: "bibtex", citekey: "newkey", entry_type: "inproceedings" }), /Citation key conflict/);
+    assert.deepEqual(await bridge.listLibraryPapers(target.id), []);
+    assert.equal((await bridge.getPaperBibliography(shared.id)).citekey, "CurrentKey");
+  } finally {
+    await bridge.deleteLibrary(source.id);
+    await bridge.deleteLibrary(target.id);
+  }
 });
