@@ -14,9 +14,9 @@ The import still adds the same paper to the cloud collection. The sync service r
 
 ## Electron comparison
 
-Both captures use the Library view at 1350 × 800 CSS pixels, Charcoal and English. In each fixture, the shared collection starts empty. Clicking **Sync cloud** calls the application's library sync service with a simulated remote response that contains the same DOI under a different canonical key and an older reading state.
+Both captures use the Library view at 1350 × 800 CSS pixels, Charcoal and English. In each fixture, the shared collection starts empty and the matching paper starts in a different local project without a cloud paper ID. Clicking **Sync cloud** calls the application's library sync service with a simulated remote response that contains the same DOI under a different canonical key and an older reading state.
 
-| Before (`ae8c18d`) | After (`8f7dd3d`) |
+| Before (`ae8c18d`) | After (`8e556fd`) |
 | --- | --- |
 | ![The imported paper is unread and unstarred, and the reading note is empty](before.png) | ![The imported paper still has its saved note, star, and Already read status](after.png) |
 
