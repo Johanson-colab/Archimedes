@@ -1,4 +1,9 @@
-export type BibliographyEntry = { citekey: string; entryType: string; paper: AcademicSearchResult };
+export type BibliographyEntry = {
+  citekey: string;
+  entryType: string;
+  paper: AcademicSearchResult;
+  exportLoss?: { locatorFields: string[]; literalAuthors: string[] };
+};
 export type BibliographyPaper = LibraryPaper & { citekey?: string; entry_type?: string };
 export type MetadataPatch = Partial<Pick<AcademicSearchResult, "title" | "authors" | "year" | "venue" | "doi" | "arxiv_id" | "url" | "pdf_url">>;
 export type BibliographyBridge = ResearchDeskBridge & {
@@ -28,17 +33,34 @@ const title = (value: string) => value.normalize("NFKC").toLowerCase().replace(/
 
 function splitAuthors(value: string) {
   const authors: string[] = [];
-  let depth = 0, start = 0;
+  const literalAuthors: string[] = [];
+  let depth = 0, start = 0, firstGroupEnd = -1;
+  const readAuthor = (end: number) => {
+    const source = value.slice(start, end).trimEnd();
+    const author = plain(source);
+    const wholeNameIsGrouped = source.trimStart().startsWith("{") && firstGroupEnd === start + source.length - 1;
+    // Export already groups a name containing "and" to keep it as one author.
+    if (author && wholeNameIsGrouped && !/\s+and\s+/i.test(author)) literalAuthors.push(author);
+    return author;
+  };
   for (let index = 0; index < value.length; index++) {
     if (value[index] === "\\") { index++; continue; }
     if (value[index] === "{") depth++;
-    else if (value[index] === "}") depth--;
+    else if (value[index] === "}") {
+      depth--;
+      if (depth === 0 && firstGroupEnd < 0) firstGroupEnd = index;
+    }
     const separator = depth === 0 ? /^\s+and\s+/i.exec(value.slice(index)) : null;
-    if (separator) { authors.push(plain(value.slice(start, index))); index += separator[0].length - 1; start = index + 1; }
+    if (separator) {
+      authors.push(readAuthor(index));
+      index += separator[0].length - 1;
+      start = index + 1;
+      firstGroupEnd = -1;
+    }
   }
-  const last = plain(value.slice(start));
+  const last = readAuthor(value.length);
   if (last) authors.push(last);
-  return authors;
+  return { authors, literalAuthors };
 }
 
 // Small BibTeX interchange parser: balanced braced/quoted values and literals.
@@ -135,9 +157,13 @@ export function parseBibliography(input: string): { entries: BibliographyEntry[]
       const eprintIsArxiv = (!record.archiveprefix || /^arxiv$/i.test(record.archiveprefix)) && arxivId(record.eprint || "");
       const normalizedArxiv = eprintIsArxiv ? arxiv(record.eprint) : arxivUrl(record.url || "") && arxivId(record.url) ? arxiv(record.url) : "";
       const externalId = normalizedDoi ? `doi:${normalizedDoi}` : normalizedArxiv ? `arxiv:${normalizedArxiv}` : `bibtex:${key[0]}`;
-      entries.push({ citekey: key[0], entryType: kind[0].toLowerCase(), paper: {
+      const entryType = kind[0].toLowerCase();
+      const { authors, literalAuthors } = splitAuthors(record.author || "");
+      const locatorFields = entryType === "article" ? ["volume", "number", "pages"].filter(field => record[field]) : [];
+      const exportLoss = locatorFields.length || literalAuthors.length ? { locatorFields, literalAuthors } : undefined;
+      entries.push({ citekey: key[0], entryType, ...(exportLoss ? { exportLoss } : {}), paper: {
         external_id: externalId, s2_id: "", arxiv_id: normalizedArxiv, doi: normalizedDoi,
-        title: record.title, authors: splitAuthors(record.author || ""),
+        title: record.title, authors,
         year: /^\d{4}$/.test(record.year || "") ? Number(record.year) : null, venue: record.journal || record.booktitle || record.publisher || "",
         abstract: record.abstract || "", url: record.url || (normalizedDoi ? `https://doi.org/${normalizedDoi}` : normalizedArxiv ? `https://arxiv.org/abs/${normalizedArxiv}` : ""),
         pdf_url: "", citation_count: 0, source: "bibtex",

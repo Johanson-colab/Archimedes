@@ -19,6 +19,8 @@ export const library: Record<string, string> = {
   "Attach a local PDF to open the original paper here.": "附加本地 PDF 以在此打开原始论文。",
   "Attach PDF": "附加 PDF",
   "Back to reading": "返回精读",
+  "BibTeX export drops the grouping around {authors}. Citation labels and sorting may change.": "导出 BibTeX 会省略作者名称 {authors} 外层的分组括号，可能改变引用标签和排序。",
+  "BibTeX export omits {fields} from this reference.": "导出 BibTeX 时，此条目的 {fields} 字段会被省略。",
   "BibTeX export preview": "BibTeX 导出预览",
   "BibTeX interchange": "BibTeX 导入与导出",
   "BibTeX source": "BibTeX 原文",
