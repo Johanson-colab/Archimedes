@@ -17,3 +17,11 @@ test("uses a conservative context-length capability and character cap", () => {
   assert.equal(normalizeContextLength(unsupported, "extra-long"), "standard");
   assert.equal(contextCharacterLimit(unsupported, "extra-long"), 500_000);
 });
+
+test("OpenCode Go keeps the capabilities of the same compatible model", () => {
+  const go = { provider: "opencode-go", model: "gpt-5.6-luna" };
+  assert.deepEqual(getModelCapabilities(go), getModelCapabilities({ ...go, provider: "custom" }));
+  assert.equal(normalizeReasoningEffort(go, "high"), "high");
+  assert.equal(contextCharacterLimit(go, "extra-long"), 1_000_000);
+  assert.deepEqual(getModelCapabilities({ ...go, model: "hy4" }).thinkingEfforts, []);
+});
