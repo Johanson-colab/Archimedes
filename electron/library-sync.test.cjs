@@ -6,6 +6,7 @@ const test = require("node:test");
 
 const store = require("./store.cjs");
 const { createLibrarySync } = require("./library-sync.cjs");
+const { createAnnotationSync } = require("./annotation-sync.cjs");
 
 function workspace() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-library-sync-"));
@@ -128,12 +129,13 @@ test("a DOI or arXiv match without personal state initializes from the cloud", a
   }
 });
 
-test("syncing a differently keyed cloud paper writes back to the incoming paper ID", async () => {
+test("syncing an older cloud duplicate twice cannot overwrite a newer note on the original cloud paper", async () => {
   const root = workspace();
   try {
     const doi = "10.5555/shared";
     const title = "A shared paper";
     const originalProject = store.createResearchProject({ name: "Original project" });
+    store.linkResearchProjectToCloud(originalProject.id, "cloud-original");
     const originalLibrary = store.listLibraries(originalProject.id)[0];
     const local = store.addPaper(originalLibrary.id, { canonical_key: "original:key", doi, title });
     store.applyCloudPaperState(local.id, {
@@ -153,18 +155,62 @@ test("syncing a differently keyed cloud paper writes back to the incoming paper 
     });
     const first = (await api.listPapers(original.id))[0];
     store.linkPaperToCloud(local.id, first.id);
+    store.linkLibraryToCloud(originalLibrary.id, original.id);
     const list = api.listLibraries;
-    api.listLibraries = async () => (await list()).filter(library => library.id !== original.id);
+    api.listLibraries = async cloudProjectId => (await list()).filter(library =>
+      library.id === (cloudProjectId === "cloud-original" ? original.id : duplicate.id));
 
-    const result = await createLibrarySync({ store, api }).syncProjectLibraries(project.id);
+    const sync = createLibrarySync({ store, api });
+    const result = await sync.syncProjectLibraries(project.id);
     assert.deepEqual(result.warnings, []);
+    assert.deepEqual((await sync.syncProjectLibraries(project.id)).warnings, []);
+    assert.deepEqual((await sync.syncProjectLibraries(originalProject.id)).warnings, []);
+    assert.deepEqual((await api.listPapers(original.id))[0], first);
+    assert.equal(store.getPaper(local.id).notes, first.notes);
     const target = result.libraries.find(item => item.cloud_library_id === duplicate.id);
     const synced = store.listPapers(target.id)[0];
-    assert.equal(synced.id, local.id);
-    assert.equal(synced.cloud_paper_id, first.id);
-    assert.equal(synced.notes, "Local saved note");
-    assert.deepEqual((await api.listPapers(original.id))[0], first);
-    assert.equal((await api.listPapers(duplicate.id))[0].notes, synced.notes);
+    const duplicateRemote = (await api.listPapers(duplicate.id))[0];
+    assert.notEqual(synced.id, local.id);
+    assert.equal(synced.cloud_paper_id, duplicateRemote.id);
+    assert.equal(synced.notes, "Older note in shared record");
+    assert.equal(duplicateRemote.state_updated_at, "2025-01-01T00:00:00.000Z");
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("annotation sync reads the cloud record attached to the destination collection", async () => {
+  const root = workspace();
+  try {
+    const source = store.createResearchProject({ name: "Original project" });
+    const sourceLibrary = store.listLibraries(source.id)[0];
+    const doi = "10.5555/annotations";
+    const local = store.addPaper(sourceLibrary.id, { canonical_key: "original:annotation-paper", doi, title: "Shared paper" });
+    store.linkPaperToCloud(local.id, "paper-a");
+    const target = store.createResearchProject({ name: "Shared annotations" });
+    store.linkResearchProjectToCloud(target.id, "cloud-shared");
+    const library = store.listLibraries(target.id)[0];
+    const imported = store.syncPaperFromCloud(library.id, {
+      id: "paper-b", canonical_key: "shared:annotation-paper", doi, title: "Shared paper",
+    });
+    const requests = [];
+    const api = {
+      async listHighlights(_projectId, paperId) {
+        requests.push(paperId);
+        return paperId === "paper-b" ? [{
+          id: "shared-highlight", paper_id: paperId, author_id: "remote-author", visibility: "project",
+          page_number: 1, quote: "A shared observation", note: "", color: "blue",
+          created_at: "2025-01-01T00:00:00.000Z", updated_at: "2025-01-01T00:00:00.000Z",
+        }] : [];
+      },
+      async getReview() { return null; },
+      async getPresentation() { return null; },
+    };
+    const result = await createAnnotationSync({ store, api }).syncProjectAnnotations(target.id);
+    assert.deepEqual(result.warnings, []);
+    assert.deepEqual(requests, ["paper-b"]);
+    assert.deepEqual(store.listPaperHighlights(target.id, imported.id).map(item => item.id), ["shared-highlight"]);
+    assert.equal(store.getPaper(local.id).cloud_paper_id, "paper-a");
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

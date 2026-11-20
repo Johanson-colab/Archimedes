@@ -1912,7 +1912,7 @@ function addPaper(libraryId, paper) {
   return addPaperWithOutcome(libraryId, paper).paper;
 }
 
-function addPaperWithOutcome(libraryId, paper, { initializeUserState = true } = {}) {
+function addPaperWithOutcome(libraryId, paper, { initializeUserState = true, cloudPaperId } = {}) {
   const db = requireDatabase();
   const library = db.prepare("SELECT id, project_id FROM libraries WHERE id = ?").get(libraryId);
   if (!library) throw new Error("Choose a valid library before importing a paper.");
@@ -1921,7 +1921,7 @@ function addPaperWithOutcome(libraryId, paper, { initializeUserState = true } = 
   if (conferenceJson && conferenceJson.length > 10000) throw new Error("Conference metadata is too large.");
   const now = timestamp();
   const key = String(paper.canonical_key || "").trim() || canonicalPaperKey(paper);
-  const existing = bibliographyRecords.findImportMatch(db, paper, key, { libraryId: library.id, projectId: library.project_id });
+  const existing = bibliographyRecords.findImportMatch(db, paper, key, { libraryId: library.id, projectId: library.project_id, cloudPaperId });
   const paperId = existing?.id || randomUUID();
 
   if (!existing) {
@@ -2028,7 +2028,7 @@ function syncPaperFromCloud(libraryId, cloudPaper) {
       canonical_key: canonicalKey,
       authors: Array.isArray(cloudPaper.authors) ? cloudPaper.authors : [],
       conference: cloudPaper.conference || undefined,
-    }, { initializeUserState: false });
+    }, { initializeUserState: false, cloudPaperId });
     local = created || (cloudPaperId && !paper.cloud_paper_id)
       ? linkPaperToCloud(paper.id, cloudPaperId || paper.id)
       : paper;
