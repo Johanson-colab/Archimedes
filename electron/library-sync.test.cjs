@@ -100,6 +100,76 @@ test("library sync pushes local libraries and pulls shared books and paper state
   }
 });
 
+test("a DOI or arXiv match without personal state initializes from the cloud", async () => {
+  const root = workspace();
+  try {
+    const seed = store.getPaper("seed-toolformer");
+    assert.equal(seed.state_updated_at, null);
+    const project = store.createResearchProject({ name: "Fresh workspace" });
+    store.linkResearchProjectToCloud(project.id, "cloud-fresh");
+    const api = fakeApi();
+    const remoteState = {
+      notes: "Saved on another device", reading_status: "read", starred: true,
+      tags: ["reviewed"], state_updated_at: "2025-01-01T00:00:00.000Z",
+    };
+    const remote = api.seedRemoteLibrary("Shared references", {
+      canonical_key: "cloud:toolformer", arxiv_id: seed.arxiv_id, title: seed.title, ...remoteState,
+    });
+
+    const result = await createLibrarySync({ store, api }).syncProjectLibraries(project.id);
+    assert.deepEqual(result.warnings, []);
+    const library = result.libraries.find(item => item.cloud_library_id === remote.id);
+    const imported = store.listPapers(library.id)[0];
+    assert.equal(imported.id, seed.id);
+    for (const [field, value] of Object.entries(remoteState)) assert.deepEqual(imported[field], value, field);
+    assert.equal((await api.listPapers(remote.id))[0].notes, remoteState.notes);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("syncing a differently keyed cloud paper writes back to the incoming paper ID", async () => {
+  const root = workspace();
+  try {
+    const doi = "10.5555/shared";
+    const title = "A shared paper";
+    const originalProject = store.createResearchProject({ name: "Original project" });
+    const originalLibrary = store.listLibraries(originalProject.id)[0];
+    const local = store.addPaper(originalLibrary.id, { canonical_key: "original:key", doi, title });
+    store.applyCloudPaperState(local.id, {
+      notes: "Local saved note", reading_status: "read", starred: true,
+      tags: ["local"], state_updated_at: "2026-06-01T00:00:00.000Z",
+    });
+    const project = store.createResearchProject({ name: "Current project" });
+    store.linkResearchProjectToCloud(project.id, "cloud-current");
+    const api = fakeApi();
+    const original = api.seedRemoteLibrary("Original references", {
+      canonical_key: "original:key", doi, title, notes: "Newer note in original cloud record",
+      reading_status: "reading", starred: true, tags: ["original"], state_updated_at: "2026-07-01T00:00:00.000Z",
+    });
+    const duplicate = api.seedRemoteLibrary("Shared references", {
+      canonical_key: "duplicate:key", doi, title, notes: "Older note in shared record",
+      reading_status: "unread", starred: false, tags: [], state_updated_at: "2025-01-01T00:00:00.000Z",
+    });
+    const first = (await api.listPapers(original.id))[0];
+    store.linkPaperToCloud(local.id, first.id);
+    const list = api.listLibraries;
+    api.listLibraries = async () => (await list()).filter(library => library.id !== original.id);
+
+    const result = await createLibrarySync({ store, api }).syncProjectLibraries(project.id);
+    assert.deepEqual(result.warnings, []);
+    const target = result.libraries.find(item => item.cloud_library_id === duplicate.id);
+    const synced = store.listPapers(target.id)[0];
+    assert.equal(synced.id, local.id);
+    assert.equal(synced.cloud_paper_id, first.id);
+    assert.equal(synced.notes, "Local saved note");
+    assert.deepEqual((await api.listPapers(original.id))[0], first);
+    assert.equal((await api.listPapers(duplicate.id))[0].notes, synced.notes);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("library sync requires a shared project", async () => {
   const root = workspace();
   try {
