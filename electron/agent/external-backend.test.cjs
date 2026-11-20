@@ -195,3 +195,29 @@ test('only opted-in environment variables reach native turns, not extraction', a
  const normal = options(); await runNative(normal); assert.equal(Fixture.last.options.env.HF_TOKEN, 'synthetic-test-token');
  const extraction = options(); extraction.turn.task_id = 'research-graph-extraction'; await runNative(extraction); assert.equal(Fixture.last.options.env, undefined);
 });
+
+test('native adapters reserve a shared saved session before connecting a copied chat', async () => {
+  for (const backend of ['claude', 'opencode']) {
+    const original = options(backend);
+    const adapter = backend === 'claude' ? Fixture : ACPFixture;
+    const binding = {
+      backend, workspace: fs.realpathSync(original.workspace), model: '',
+      native_thread_id: backend === 'claude' ? '1666f33f-d889-42b6-a431-94b0b948cebc' : 'native-acp', last_turn_id: 'prior',
+    };
+    original.thread.turns = [{ id: 'prior' }];
+    original.bindings.get = () => ({ ...binding });
+    original.runtimeId = 'first/local';
+    let connect;
+    const ready = new Promise(resolve => { connect = resolve; });
+    original.Client = class extends adapter { async start() { await ready; } };
+    const copy = { ...original, Client: adapter, runtimeId: 'copy/local' };
+    const first = runNative(original);
+    try {
+      await assert.rejects(runNative(copy), /Another workspace is using this/);
+    } finally {
+      connect();
+    }
+    await first;
+    assert.equal(await runNative(copy), backend === 'claude' ? 'Hello' : 'ACP answer');
+  }
+});

@@ -441,3 +441,22 @@ test('shared variables reach native Codex turns but not ephemeral extraction', a
   const extraction = fixture(p => complete(p), { ephemeral: true }); await backend.runCodex(extraction.args);
   assert.equal(extraction.peer().options.env, undefined);
 });
+
+test('copied workspaces cannot start overlapping turns on one native Codex binding', async () => {
+  const binding = { workspace: fs.realpathSync(os.tmpdir()), model: '', native_thread_id: 'native-thread', last_turn_id: 'prior' };
+  const options = {
+    thread: { id: 'same-local-thread', turns: [{ id: 'prior' }] },
+    bindings: { get: () => ({ ...binding }), save() {} },
+  };
+  let started;
+  const ready = new Promise(resolve => { started = resolve; });
+  const original = fixture(started, { ...options, runtimeId: 'first/same-local-thread' });
+  const copy = fixture(complete, { ...options, runtimeId: 'copy/same-local-thread' });
+  const first = backend.runCodex(original.args);
+  await assert.rejects(backend.runCodex(copy.args), /Another workspace is using this Codex conversation/);
+  assert.equal(copy.peer(), undefined);
+  complete(await ready);
+  await first;
+  assert.equal(await backend.runCodex(copy.args), 'Answer');
+  assert.equal(copy.peer().calls.filter(call => call.method === 'thread/resume').length, 1);
+});

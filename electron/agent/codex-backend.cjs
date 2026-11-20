@@ -146,6 +146,9 @@ async function nativeSession({ config, workspace, thread, turn, contextItems = [
   if (ephemeral && (resume || compaction)) throw new Error('Temporary Codex tasks cannot resume or compact a saved session.');
   if (compaction && !resume) throw new Error('Native compaction requires an identical completed Codex binding. Continue this chat successfully before compacting.');
   if (runtimeId && activeNativeRuns.has(runtimeId)) throw new Error('This chat already has an active native Codex operation.');
+  if (resume && Array.from(activeNativeRuns.values()).some(run => run.bindingId === binding.native_thread_id)) {
+    throw new Error('Another workspace is using this Codex conversation. Wait for its active turn to finish.');
+  }
   const prompt = compaction ? null : userPrompt(thread, turn, resume, attachments, experimentBridgeInstructions);
   if (signal.aborted) throw new Error('Codex turn interrupted before skill setup.');
   if (nativeSkill && (nativeSkill !== 'paper-deep-reading' || researchSkill)) throw new Error('Unsupported native skill.');
@@ -161,7 +164,7 @@ async function nativeSession({ config, workspace, thread, turn, contextItems = [
     finally { client.close(); }
   } });
   const items = new Map();
-  const active = { client, emit, recordEvent, questions: new Map(), approvals: new Map(), resolvedRequests: new Set(), settled: false, compaction, nativeThreadId: null, nativeTurnId: null };
+  const active = { client, emit, recordEvent, questions: new Map(), approvals: new Map(), resolvedRequests: new Set(), settled: false, compaction, bindingId: resume ? binding.native_thread_id : null, nativeThreadId: null, nativeTurnId: null };
   if (runtimeId) activeNativeRuns.set(runtimeId, active);
   let accepted = false, compacted = false, serverQueue = Promise.resolve(), resultStatus = 'failed';
   let resolveDone, rejectDone;
@@ -295,6 +298,7 @@ async function nativeSession({ config, workspace, thread, turn, contextItems = [
     active.nativeThreadId = result?.thread?.id;
     if (!active.nativeThreadId) throw new Error('Codex did not return a thread ID.');
     if (resume && active.nativeThreadId !== binding.native_thread_id) throw new Error('Codex returned a different native thread while resuming. No request was replayed.');
+    active.bindingId = active.nativeThreadId;
     if (active.settled || signal.aborted) throw new Error('Codex operation ended before it could start.');
     if (!resume) {
       const reset = { type: 'native_usage', title: 'Codex context', detail: 'Starting a new native context', usage: null };

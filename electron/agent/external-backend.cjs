@@ -38,6 +38,9 @@ async function runExternal(options) {
   const binding = bindings.get();
   const resume = canResumeExternal(binding, { backend, workspace: root, model: config.model, previousTurnId });
   if (runtimeId && active.has(runtimeId)) throw new Error('This chat already has an active native turn.');
+  if (resume && Array.from(active.values()).some(run => run.backend === backend && run.bindingId === binding.native_thread_id)) {
+    throw new Error(`Another workspace is using this ${title} conversation. Wait for its active turn to finish.`);
+  }
   if (signal.aborted) throw new Error(`${title} turn interrupted before skill setup.`);
   const skill = prepareResearchSkill({ workspace: root, backend, thread, requested: researchSkill, emit, recordEvent });
   // ACP has no developer-instructions field. Native skill discovery is paired
@@ -113,7 +116,7 @@ async function runExternal(options) {
     finally { approvals.delete(id); resolved.add(id); }
   }
   const session = {
-    backend, client, delivered: false, sessionId: launch.sessionId, append, activity, permission, finish,
+    backend, client, bindingId: resume ? binding.native_thread_id : null, delivered: false, sessionId: launch.sessionId, append, activity, permission, finish,
     hasStream: () => streamed,
     cancelApproval: id => {
       if (resolved.size >= 512 && !resolved.has(id)) throw new Error(`${title} exceeded the native request limit.`);
@@ -151,6 +154,7 @@ async function runExternal(options) {
       await configureOpenCode(client, config, created, session.sessionId);
     }
     if (!session.sessionId || settled || signal.aborted) throw new Error(`${title} ended before starting. No request was sent.`);
+    session.bindingId = session.sessionId;
     bindings.save({ backend, native_thread_id: session.sessionId, workspace: root, model: config.model || '', last_turn_id: null });
     emit({ type: 'status', title: `${title} backend`, detail: `${resume ? 'Resuming' : 'Starting'} native harness · native configured permissions and one-time approvals` });
     const reset = { type: 'native_usage', title: `${title} context`, detail: 'Context capacity unavailable', usage: null }; emit(reset); recordEvent({ type: 'native_usage', payload: { usage: null } });
