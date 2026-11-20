@@ -67,7 +67,7 @@ function ReviewerCard({ reviewer, tags, venue }: {
 }) {
   const { t } = useUISettings();
   if (reviewer.status !== "complete") return <article className="pra-reviewer failed">
-    <header><b>{t("Score")} {reviewer.targetScore}</b><span>{reviewer.error}</span></header>
+    <header><b>{t("Score")} {reviewer.targetScore}</b><span>{t(reviewer.error)}</span></header>
   </article>;
   return <details className="pra-reviewer">
     <summary>
@@ -394,7 +394,7 @@ export default function PaperReviewView({ bridge, workspace, projectId, active }
       </div> : null}
     </section>
 
-    {error ? <div className="pra-notice error">{error}</div> : null}
+    {error ? <div className="pra-notice error">{t(error)}</div> : null}
     {notice ? <div className="pra-notice">{notice}</div> : null}
 
     {!selectedRun ? <StateView
@@ -410,7 +410,7 @@ export default function PaperReviewView({ bridge, workspace, projectId, active }
       {!result ? <StateView
         tone={selectedRun.status === "error" ? "error" : selectedRun.status === "cancelled" ? "empty" : "loading"}
         title={selectedRun.status === "error" ? t("The review failed") : selectedRun.status === "cancelled" ? t("The review was cancelled.") : t("The review is running")}
-        description={selectedRun.error || (selectedRun.status === "cancelled" ? t("Start a new run when you are ready.") : t("Progress events will update this page."))}
+        description={selectedRun.error ? t(selectedRun.error) : (selectedRun.status === "cancelled" ? t("Start a new run when you are ready.") : t("Progress events will update this page."))}
       /> : null}
 
       {result?.gate?.status === "failed" ? <div className="pra-gate">

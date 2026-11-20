@@ -1,3 +1,6 @@
+const { buildModelRequestOptions, hasPrivateHeaderValues } = require("./model-request-headers.cjs");
+const { readModelResponseJson } = require("./model-response-json.cjs");
+
 const MAX_AUDIO_BYTES = 25 * 1024 * 1024;
 const DEFAULT_TRANSCRIPTION_MODEL = process.env.ARCHIMEDES_TRANSCRIPTION_MODEL || "whisper-1";
 
@@ -36,14 +39,17 @@ async function transcribeSpeech({ audio, mimeType, language } = {}, config = {},
 
   const response = await fetchImpl(transcriptionEndpoint(config.baseUrl), {
     method: "POST",
-    headers: { Authorization: `Bearer ${config.apiKey}`, Accept: "application/json" },
+    ...buildModelRequestOptions(config, "archimedes-transcription", {
+      baseHeaders: { Accept: "application/json" },
+      multipart: true,
+    }),
     body: form,
   });
   if (!response.ok) {
-    const detail = await response.text().catch(() => "");
+    const detail = hasPrivateHeaderValues(config) ? "" : await response.text().catch(() => "");
     throw new Error(`Voice transcription failed (${response.status}).${detail ? ` ${detail.slice(0, 300)}` : ""}`);
   }
-  const payload = await response.json();
+  const payload = await readModelResponseJson(response);
   const text = typeof payload?.text === "string" ? payload.text.trim() : "";
   if (!text) throw new Error("No speech was detected. Try again.");
   return { text };

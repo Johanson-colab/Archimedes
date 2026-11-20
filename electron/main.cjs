@@ -1491,7 +1491,7 @@ app.whenReady().then(async () => {
         env: reproductionEnvItems(record.id).map(({ name, required, reason, hasValue }) => ({ name, required, reason, hasValue })),
         backend: session.backend,
         target: session.backend.describe?.() || "",
-        complete: ({ system, prompt, signal }) => completeJson(reproductionModel(), {
+        complete: ({ system, prompt, signal }) => completeJson({ ...reproductionModel(), sessionId: run.id }, {
           system,
           prompt,
           signal,

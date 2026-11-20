@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Check, LoaderCircle, Network, Save, X } from "lucide-react";
 import { useUISettings } from "./i18n";
 import { SettingsChoiceGroup, SettingsRow, SettingsSection, SettingsSwitch } from "./SettingsPrimitives";
-import { providers } from "./ModelSettingsModal";
+import { formatModelConnectionError, providers } from "./ModelSettingsModal";
 import type { ProactiveSettings } from "./proactive-types";
 
 const MODES: Array<{ id: ProactiveSettings["mode"]; label: string; description: string }> = [
@@ -44,6 +44,7 @@ export default function ProactiveSettingsPanel({
   const [modelTesting, setModelTesting] = useState(false);
   const [modelFeedback, setModelFeedback] = useState<{ kind: "idle" | "success" | "error"; text: string }>({ kind: "idle", text: "" });
   const selectedProvider = providers.find((item) => item.id === provider) ?? providers.at(-1)!;
+  const hasApiKey = modelConfig?.provider === provider && modelConfig.baseUrl === baseUrl.trim().replace(/\/+$/, "") && modelConfig.hasApiKey;
 
   useEffect(() => {
     let cancelled = false;
@@ -72,6 +73,11 @@ export default function ProactiveSettingsPanel({
   }
 
   function chooseProvider(nextId: ModelProviderId) {
+    if (modelConfig?.provider === nextId) {
+      applyModelConfig(modelConfig);
+      setModelFeedback({ kind: "idle", text: "" });
+      return;
+    }
     setProvider(nextId);
     setApiKey("");
     setModelFeedback({ kind: "idle", text: "" });
@@ -106,7 +112,7 @@ export default function ProactiveSettingsPanel({
       const result = await bridge.testModelConfig({ provider, baseUrl, model: modelName, apiKey }, "proactive");
       setModelFeedback({ kind: "success", text: `Connected in ${result.latencyMs} ms · ${result.resolvedModel}` });
     } catch (error) {
-      setModelFeedback({ kind: "error", text: String(error).replace(/^Error:\s*/, "") });
+      setModelFeedback({ kind: "error", text: formatModelConnectionError(error, t) });
     } finally {
       setModelTesting(false);
     }
@@ -183,7 +189,7 @@ export default function ProactiveSettingsPanel({
               </label>
               <label className="proactive-model-field wide">
                 <span>{t("API key")}</span>
-                <input className="settings-text-input" type="password" value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder={modelConfig?.hasApiKey ? t("Saved securely · enter a new key to replace") : t("Enter API key")} autoComplete="off" spellCheck={false} />
+                <input className="settings-text-input" type="password" value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder={hasApiKey ? t("Saved securely · enter a new key to replace") : t("Enter API key")} autoComplete="off" spellCheck={false} />
               </label>
               <label className="proactive-model-vision">
                 <input

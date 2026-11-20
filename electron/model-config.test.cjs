@@ -55,6 +55,52 @@ test("reads the legacy flat model config as the Agent role", () => {
   }
 });
 
+test("a valid Custom connection can replace a malformed environment endpoint", async (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-model-repair-"));
+  const savedBaseUrl = process.env.ARCHIMEDES_LLM_BASE_URL;
+  t.after(() => {
+    if (savedBaseUrl === undefined) delete process.env.ARCHIMEDES_LLM_BASE_URL;
+    else process.env.ARCHIMEDES_LLM_BASE_URL = savedBaseUrl;
+    fs.rmSync(directory, { recursive: true, force: true });
+  });
+  const request = t.mock.method(globalThis, "fetch", async () => Response.json({ choices: [{ message: { content: "OK" } }] }));
+  const replacement = { provider: "custom", baseUrl: "https://fixture.example/v1", model: "test", apiKey: "fixture-key" };
+  for (const [index, oldEndpoint] of ["not a URL", "http://192.0.2.10/v1"].entries()) {
+    initializeModelConfig(path.join(directory, String(index)));
+    process.env.ARCHIMEDES_LLM_BASE_URL = oldEndpoint;
+    assert.equal((await testModelConfig(replacement)).ok, true);
+    assert.equal(saveModelConfig(replacement).baseUrl, replacement.baseUrl);
+  }
+  assert.deepEqual(request.mock.calls.map(({ arguments: [url, options] }) => [url, options.headers.Authorization]), [
+    ["https://fixture.example/v1/chat/completions", "Bearer fixture-key"],
+    ["https://fixture.example/v1/chat/completions", "Bearer fixture-key"],
+  ]);
+});
+
+test("environment URLs are normalized before using their configured credentials", async (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-model-env-url-"));
+  initializeModelConfig(directory);
+  const saved = { baseUrl: process.env.ARCHIMEDES_LLM_BASE_URL, apiKey: process.env.ARCHIMEDES_LLM_API_KEY };
+  t.after(() => {
+    if (saved.baseUrl === undefined) delete process.env.ARCHIMEDES_LLM_BASE_URL;
+    else process.env.ARCHIMEDES_LLM_BASE_URL = saved.baseUrl;
+    if (saved.apiKey === undefined) delete process.env.ARCHIMEDES_LLM_API_KEY;
+    else process.env.ARCHIMEDES_LLM_API_KEY = saved.apiKey;
+    fs.rmSync(directory, { recursive: true, force: true });
+  });
+  process.env.ARCHIMEDES_LLM_BASE_URL = "https://opencode.ai/inference/go/openai/v1/";
+  process.env.ARCHIMEDES_LLM_API_KEY = "fixture-key";
+  const config = getPublicModelConfig();
+  assert.equal(config.baseUrl, "https://opencode.ai/inference/go/openai/v1");
+  assert.equal(config.provider, "opencode-go");
+  assert.equal(config.hasApiKey, true);
+  const request = t.mock.method(globalThis, "fetch", async () => Response.json({ data: [{ id: "test" }] }));
+  assert.deepEqual((await listProviderModels({ provider: config.provider, baseUrl: config.baseUrl + "/" })).models, ["test"]);
+  const { headers } = request.mock.calls[0].arguments[1];
+  assert.equal(headers.Authorization, "Bearer fixture-key");
+  assert.equal(headers["x-opencode-session"], "archimedes-model-catalog");
+});
+
 test("keeps the Agent and Proactive models separate and supports inheritance", () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-model-roles-"));
   try {

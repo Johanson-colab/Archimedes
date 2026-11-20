@@ -21,7 +21,9 @@ import zaiLogo from "@lobehub/icons-static-svg/icons/zai.svg";
 import deepseekLogo from "@lobehub/icons-static-svg/icons/deepseek-color.svg";
 import moonshotLogo from "@lobehub/icons-static-svg/icons/kimi-color.svg";
 import openaiLogo from "@lobehub/icons-static-svg/icons/openai.svg";
+import opencodeLogo from "@lobehub/icons-static-svg/icons/opencode.svg";
 import qwenLogo from "@lobehub/icons-static-svg/icons/qwen-color.svg";
+import packageMetadata from "../package.json";
 import { useUISettings } from "./i18n";
 import { MenuSurface } from "./Menu";
 import AgentBackendSettings from "./AgentBackendSettings";
@@ -47,6 +49,8 @@ const providers: Array<{
   baseUrl: string;
   models: string[];
   icon?: React.ReactNode;
+  sessionHeader?: ModelSessionHeaderConfig;
+  userAgent?: string;
 }> = [
   { id: "openai", name: "OpenAI", caption: "GPT and reasoning models", baseUrl: "https://api.openai.com/v1", models: ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.1", "gpt-5", "gpt-5-mini", "gpt-5-nano", "gpt-5.1-codex", "gpt-5.1-codex-max", "gpt-5-codex", "gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano", "o3", "o4-mini", "o3-deep-research", "o4-mini-deep-research"], icon: brandIcon(openaiLogo, true) },
   { id: "anthropic", name: "Anthropic", caption: "Claude · native Messages API", baseUrl: "https://api.anthropic.com/v1", models: ["claude-fable-5-1", "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5", "claude-fable-5", "claude-opus-5", "claude-sonnet-5", "claude-opus-4-8", "claude-opus-4-7", "claude-opus-4-6", "claude-opus-4-5-20251101", "claude-sonnet-4-6", "claude-sonnet-4-5-20250929", "claude-haiku-4-5-20251001"], icon: brandIcon(anthropicLogo) },
@@ -57,8 +61,18 @@ const providers: Array<{
   { id: "qwen", name: "Qwen", caption: "DashScope compatible API", baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1", models: ["qwen3.8-max", "qwen3.7-max", "qwen3.7-plus", "qwen3.7-flash", "qwen3-max", "qwen-max", "qwen-plus", "qwen-flash", "qwen-turbo", "qwen3-coder-next", "qwen3-coder-plus", "qwen3-coder-flash", "qwen-coder-plus", "qwen-coder-turbo", "qwq-plus", "qwen-long", "qwen-math-plus", "qwen-math-turbo"], icon: brandIcon(qwenLogo) },
   { id: "moonshot", name: "Moonshot", caption: "Kimi OpenAI-compatible API", baseUrl: "https://api.moonshot.cn/v1", models: ["kimi-k3", "kimi-k2.7-code", "kimi-k2.7-code-turbo", "kimi-k2.6", "kimi-k2.5", "moonshot-v1-8k", "moonshot-v1-32k", "moonshot-v1-128k"], icon: brandIcon(moonshotLogo) },
   { id: "openrouter", name: "OpenRouter", caption: "Models from multiple providers", baseUrl: "https://openrouter.ai/api/v1", models: ["openrouter/auto", "openai/gpt-5.6-sol", "openai/gpt-5.6-terra", "openai/gpt-5.6-luna", "deepseek/deepseek-v4-pro", "deepseek/deepseek-v4-flash-0731", "qwen/qwen3.8-max", "moonshotai/kimi-k3"], icon: <Route size={17} /> },
+  { id: "opencode-go", name: "OpenCode Go", caption: "OpenAI-compatible Go API", baseUrl: "https://opencode.ai/inference/go/openai/v1", models: ["hy4-flash-free", "hy4", "qwen3.7-plus"], icon: brandIcon(opencodeLogo, true), sessionHeader: { name: "x-opencode-session", strategy: "thread" }, userAgent: `Archimedes/${packageMetadata.version}` },
   { id: "custom", name: "Custom", caption: "Any OpenAI-compatible endpoint", baseUrl: "", models: [] },
 ];
+
+export function formatModelConnectionError(error: unknown, t: ReturnType<typeof useUISettings>["t"]) {
+  const message = error instanceof Error ? error.message : String(error);
+  const detail = message.replace(/^Error invoking remote method '[^']+':\s*(?:Error:\s*)?|^Error:\s*/, "");
+  const missingSession = /^Connection failed \((\d+)\): MissingSessionID$/.exec(detail);
+  return missingSession
+    ? t("Connection failed ({status}). In Settings → Models, select OpenCode Go or set Session header to x-opencode-session and Strategy to Thread.", { status: missingSession[1] })
+    : t(detail);
+}
 
 export default function ModelSettingsModal({ bridge, open, onClose, onSaved, embedded = false, role = "agent", executionPreferences, workspace }: { bridge: ResearchDeskBridge; open: boolean; onClose: () => void; onSaved: (config: PublicModelConfig) => void; embedded?: boolean; role?: ModelRole; executionPreferences?: ModelExecutionPreferences; workspace?: string }) {
   const { t } = useUISettings();
@@ -70,8 +84,17 @@ export default function ModelSettingsModal({ bridge, open, onClose, onSaved, emb
   const [baseUrl, setBaseUrl] = useState("");
   const [model, setModel] = useState("");
   const [apiKey, setApiKey] = useState("");
+  const [headersText, setHeadersText] = useState("");
+  const [sessionHeaderName, setSessionHeaderName] = useState("");
+  const [sessionStrategy, setSessionStrategy] = useState<ModelSessionHeaderConfig["strategy"]>("thread");
+  const [sessionHeaderValue, setSessionHeaderValue] = useState("");
+  const [userAgent, setUserAgent] = useState("");
   const [savedConfig, setSavedConfig] = useState<PublicModelConfig | null>(null);
-  const hasApiKey = Boolean(savedConfig?.hasApiKey && savedConfig.provider === provider && savedConfig.baseUrl === baseUrl);
+  const sameConnection = savedConfig?.provider === provider && savedConfig.baseUrl === baseUrl.trim().replace(/\/+$/, "");
+  const hasApiKey = Boolean(sameConnection && savedConfig?.hasApiKey);
+  const hasCustomHeaders = Boolean(sameConnection && savedConfig?.hasCustomHeaders);
+  const hasFixedSessionValue = Boolean(sameConnection && savedConfig?.sessionHeader?.hasValue &&
+    savedConfig.sessionHeader.name.toLowerCase() === sessionHeaderName.trim().toLowerCase());
   const [loading, setLoading] = useState(false);
   const [testing, setTesting] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -94,11 +117,7 @@ export default function ModelSettingsModal({ bridge, open, onClose, onSaved, emb
     setLoading(true);
     setFeedback({ kind: "idle", text: "" });
     void bridge.getModelConfig(role).then((config) => {
-      setProvider(config.provider);
-      setBaseUrl(config.baseUrl);
-      setModel(config.model);
-      setSavedConfig(config);
-      setApiKey("");
+      loadConnectionFields(config);
       setCatalogModels([]);
       setCatalogError("");
       setModelMenuOpen(false);
@@ -106,15 +125,33 @@ export default function ModelSettingsModal({ bridge, open, onClose, onSaved, emb
     }).catch((error) => setFeedback({ kind: "error", text: String(error) })).finally(() => setLoading(false));
   }, [bridge, open, role]);
 
-  function chooseProvider(next: typeof providers[number]) {
-    setProvider(next.id);
+  function loadConnectionFields(config: PublicModelConfig) {
+    setProvider(config.provider);
+    setBaseUrl(config.baseUrl);
+    setModel(config.model);
+    setSavedConfig(config);
     setApiKey("");
-    if (next.id === "custom") {
-      setBaseUrl(savedConfig?.provider === "custom" ? savedConfig.baseUrl : "");
-      setModel(savedConfig?.provider === "custom" ? savedConfig.model : "");
+    setHeadersText("");
+    setSessionHeaderName(config.sessionHeader?.name || "");
+    setSessionStrategy(config.sessionHeader?.strategy || "thread");
+    setSessionHeaderValue("");
+    setUserAgent(config.userAgent || "");
+  }
+
+  function chooseProvider(next: typeof providers[number]) {
+    if (next.id === provider) return;
+    if (savedConfig?.provider === next.id) {
+      loadConnectionFields(savedConfig);
     } else {
+      setProvider(next.id);
+      setApiKey("");
       setBaseUrl(next.baseUrl);
       setModel(next.models[0] || "");
+      setHeadersText("");
+      setSessionHeaderName(next.sessionHeader?.name || "");
+      setSessionStrategy(next.sessionHeader?.strategy || "thread");
+      setSessionHeaderValue("");
+      setUserAgent(next.userAgent || "");
     }
     setCatalogModels([]);
     setCatalogError("");
@@ -123,19 +160,42 @@ export default function ModelSettingsModal({ bridge, open, onClose, onSaved, emb
     setFeedback({ kind: "idle", text: "" });
   }
 
+  function requestExtras() {
+    let headers: Record<string, string> | undefined;
+    const text = headersText.trim();
+    if (text) {
+      let parsed: unknown;
+      try { parsed = JSON.parse(text); } catch {
+        throw new Error(t("Custom headers must be a JSON object with text values."));
+      }
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed) || Object.values(parsed).some((value) => typeof value !== "string")) {
+        throw new Error(t("Custom headers must be a JSON object with text values."));
+      }
+      headers = parsed as Record<string, string>;
+    }
+    const name = sessionHeaderName.trim();
+    const value = sessionHeaderValue.trim();
+    if (name && sessionStrategy === "fixed" && !value && !hasFixedSessionValue) throw new Error(t("Enter a fixed session header value."));
+    return {
+      headers,
+      sessionHeader: name ? { name, strategy: sessionStrategy, ...(sessionStrategy === "fixed" && value ? { value } : {}) } : null,
+      userAgent: userAgent.trim(),
+    };
+  }
+
   async function refreshModelCatalog({ quiet = false } = {}) {
     if (catalogLoading || !baseUrl.trim()) return;
-    if (!apiKey.trim() && !hasApiKey && provider !== "openrouter") {
+    if (!apiKey.trim() && !hasApiKey && provider !== "openrouter" && provider !== "opencode-go") {
       if (!quiet) setCatalogError("Add this provider's API key, then refresh to load the live catalog.");
       return;
     }
     setCatalogLoading(true);
     setCatalogError("");
     try {
-      const result = await bridge.listProviderModels({ provider, baseUrl, apiKey }, role);
+      const result = await bridge.listProviderModels({ provider, baseUrl, apiKey, ...requestExtras() }, role);
       setCatalogModels(result.models);
     } catch (error) {
-      setCatalogError(String(error).replace(/^Error invoking remote method '[^']+': Error:\s*|^Error:\s*/, ""));
+      setCatalogError(formatModelConnectionError(error, t));
     } finally {
       setCatalogLoading(false);
     }
@@ -191,10 +251,10 @@ export default function ModelSettingsModal({ bridge, open, onClose, onSaved, emb
     setTesting(true);
     setFeedback({ kind: "idle", text: "" });
     try {
-      const result = await bridge.testModelConfig({ provider, baseUrl, model, apiKey }, role);
+      const result = await bridge.testModelConfig({ provider, baseUrl, model, apiKey, ...requestExtras() }, role);
       setFeedback({ kind: "success", text: `Connected in ${result.latencyMs} ms · ${result.resolvedModel}` });
     } catch (error) {
-      setFeedback({ kind: "error", text: String(error).replace(/^Error:\s*/, "") });
+      setFeedback({ kind: "error", text: formatModelConnectionError(error, t) });
     } finally {
       setTesting(false);
     }
@@ -204,12 +264,8 @@ export default function ModelSettingsModal({ bridge, open, onClose, onSaved, emb
     setSaving(true);
     setFeedback({ kind: "idle", text: "" });
     try {
-      const config = await bridge.saveModelConfig({ provider, baseUrl, model, apiKey }, role);
-      setProvider(config.provider);
-      setBaseUrl(config.baseUrl);
-      setModel(config.model);
-      setSavedConfig(config);
-      setApiKey("");
+      const config = await bridge.saveModelConfig({ provider, baseUrl, model, apiKey, ...requestExtras() }, role);
+      loadConnectionFields(config);
       onSaved(config);
       setFeedback({ kind: "success", text: proactiveRole ? `Saved ${config.model}. Proactive replies and live observation will use this model.` : t("Saved {model}. API-backed features will use this model.", { model: config.model }) });
     } catch (error) {
@@ -223,12 +279,8 @@ export default function ModelSettingsModal({ bridge, open, onClose, onSaved, emb
     setSaving(true);
     setFeedback({ kind: "idle", text: "" });
     try {
-      const config = await bridge.saveModelConfig({ provider, baseUrl, model, apiKey, useAgent: true }, role);
-      setProvider(config.provider);
-      setBaseUrl(config.baseUrl);
-      setModel(config.model);
-      setSavedConfig(config);
-      setApiKey("");
+      const config = await bridge.saveModelConfig({ provider, baseUrl, model, useAgent: true }, role);
+      loadConnectionFields(config);
       onSaved(config);
       setFeedback({ kind: "success", text: "Proactive agent will inherit the main Agent's model." });
     } catch (error) {
@@ -256,7 +308,7 @@ export default function ModelSettingsModal({ bridge, open, onClose, onSaved, emb
         <nav className="provider-list" aria-label="Model providers">
           {providers.map((item) => <button key={item.id} className={`${item.id === provider ? "provider-option active" : "provider-option"}${item.icon ? "" : " no-icon"}`} onClick={() => chooseProvider(item)}>
             {item.icon && <span className="provider-icon">{item.icon}</span>}
-            <span><strong>{item.name}</strong><small>{item.id === provider && model ? model : item.caption}</small></span>
+            <span><strong>{item.name}</strong><small>{item.id === provider && model ? model : t(item.caption)}</small></span>
             {item.id === provider && <Check size={14} />}
           </button>)}
         </nav>
@@ -265,7 +317,7 @@ export default function ModelSettingsModal({ bridge, open, onClose, onSaved, emb
           {loading ? <div className="model-settings-loading"><LoaderCircle className="spin" size={19} />{t("Loading configuration")}</div> : <>
             {proactiveRole && savedConfig?.inheritedFromAgent && <div className="model-inherited-note"><Sparkle size={13} /><span>{t("Currently inheriting the main Agent model. Save below to give Proactive agent its own model.")}</span></div>}
             <div className="provider-config-title">{selected.icon && <span className="provider-icon large">{selected.icon}</span>}<div><h3>{selected.name}</h3><p>{model || t(selected.caption)}</p></div></div>
-            <label><span><Server size={14} />{t("Base URL")}</span><input value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} placeholder="https://api.example.com/v1" spellCheck={false} /></label>
+            <label><span><Server size={14} />{t("Base URL")}</span><input value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} placeholder="https://api.example.com/v1" spellCheck={false} /><small className="model-field-hint">{t("Enter the base URL. Archimedes appends {endpoint}.", { endpoint: provider === "anthropic" ? "/messages" : "/chat/completions" })}</small></label>
             <label><span><Key size={14} />{t("API key")}</span><input type="password" value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder={hasApiKey ? t("Saved securely · enter a new key to replace") : t("Enter API key")} autoComplete="off" spellCheck={false} /></label>
             <label><span><Brain size={14} />{t("Model")}</span><div className="model-combobox" ref={modelAnchorRef}>
               <input
@@ -292,16 +344,23 @@ export default function ModelSettingsModal({ bridge, open, onClose, onSaved, emb
                 </div>
               </MenuSurface>
             </div></label>
+            <label><span>{t("Custom headers (JSON)")}</span><textarea className="model-headers-input" rows={3} value={headersText} onChange={(event) => setHeadersText(event.target.value)} placeholder={hasCustomHeaders ? t("Saved. Enter new headers to replace them or {} to clear them.") : "{}"} autoComplete="off" spellCheck={false} /></label>
+            <div className="model-session-header">
+              <label><span>{t("Session header")}</span><input value={sessionHeaderName} onChange={(event) => setSessionHeaderName(event.target.value)} placeholder="x-opencode-session" spellCheck={false} /></label>
+              <label><span>{t("Strategy")}</span><select className="settings-select" value={sessionStrategy} onChange={(event) => setSessionStrategy(event.target.value as ModelSessionHeaderConfig["strategy"])}><option value="thread">{t("Thread")}</option><option value="fixed">{t("Fixed")}</option><option value="disabled">{t("Disabled")}</option></select></label>
+            </div>
+            {sessionStrategy === "fixed" && <label><span>{t("Fixed session header value")}</span><input type="password" value={sessionHeaderValue} onChange={(event) => setSessionHeaderValue(event.target.value)} placeholder={hasFixedSessionValue ? t("Saved securely · enter a new value to replace") : ""} autoComplete="off" spellCheck={false} /></label>}
+            <label><span>{t("User-Agent")}</span><input value={userAgent} onChange={(event) => setUserAgent(event.target.value)} placeholder={`Archimedes/${packageMetadata.version}`} spellCheck={false} /></label>
             <div className="model-security-note"><Key size={13} /><span>{t("The API key is stored in Electron user data and never returned to the page.")}</span></div>
             {!proactiveRole && executionPreferences && <div className="model-execution-preferences">
               {executionPreferences.capabilities.thinkingEfforts.length > 0 && <label><span>{t("Thinking effort")}</span><select className="settings-select" aria-label={t("Thinking effort")} value={executionPreferences.reasoningEffort} onChange={(event) => executionPreferences.onReasoningEffort(event.target.value as ReasoningEffort)}>{executionPreferences.capabilities.thinkingEfforts.map((value) => <option key={value} value={value}>{t(value === "low" ? "Low" : value === "high" ? "High" : "Medium")}</option>)}</select></label>}
               {executionPreferences.capabilities.contextLengths.length > 0 && <label><span>{t("Context length")}</span><select className="settings-select" aria-label={t("Context length")} value={executionPreferences.contextLength} onChange={(event) => executionPreferences.onContextLength(event.target.value as ContextLength)}>{executionPreferences.capabilities.contextLengths.map((value) => <option key={value} value={value}>{t(value === "extra-long" ? "Extra Long" : "Standard")}</option>)}</select></label>}
             </div>}
-            {feedback.text && <div className={`model-feedback ${feedback.kind}`}>{feedback.kind === "success" ? <Check size={14} /> : <X size={14} />}<span>{feedback.text}</span></div>}
           </>}
         </div>
       </div>
 
+      {feedback.text && <div className={`model-feedback ${feedback.kind}`} role={feedback.kind === "error" ? "alert" : "status"}>{feedback.kind === "success" ? <Check size={14} /> : feedback.kind === "error" ? <X size={14} /> : null}<span>{feedback.text}</span></div>}
       <footer className="model-settings-footer">
         <div className="model-settings-footer-left">
           <button className="secondary-button" onClick={() => void testConnection()} disabled={loading || testing || saving || !baseUrl.trim() || !model.trim()}>{testing ? <LoaderCircle className="spin" size={14} /> : <Network size={14} />}{t("Test connection")}</button>

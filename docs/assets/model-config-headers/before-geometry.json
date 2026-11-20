@@ -1,0 +1,30 @@
+[
+  {
+    "theme": "charcoal",
+    "viewport": [
+      1180,
+      900
+    ],
+    "overflow": false,
+    "hint": false,
+    "preset": false,
+    "headers": false,
+    "savedHeaderValuesVisible": false,
+    "session": false,
+    "connectionTest": "missing session header"
+  },
+  {
+    "theme": "paper",
+    "viewport": [
+      1180,
+      900
+    ],
+    "overflow": false,
+    "hint": false,
+    "preset": false,
+    "headers": false,
+    "savedHeaderValuesVisible": false,
+    "session": false,
+    "connectionTest": "missing session header"
+  }
+]
