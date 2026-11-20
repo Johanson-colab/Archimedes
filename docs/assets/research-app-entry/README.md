@@ -38,3 +38,9 @@ The command palette comparison uses the application palette, app command definit
 | Before | After |
 | --- | --- |
 | ![Data analysis ranks first for the old chart app name](palette-alias-before.png) | ![Paper chart references ranks first for its exact alias](palette-alias-after.png) |
+
+The delayed-navigation pair uses the full App in Electron at 1200 × 860, Charcoal and English. The fixture pauses the real visibility-save IPC for **Generate figures**, selects **Library**, then lets the save finish. At `0956d24`, completion switches back to Image creation. At `ab90dd9`, Library remains active and Image creation becomes available in the sidebar. External gallery networking is disabled in the fixture.
+
+| Before | After |
+| --- | --- |
+| ![A delayed visibility save sent the user from Library to Image creation](late-navigation-before.png) | ![Library remains selected when the delayed visibility save completes](late-navigation-after.png) |
