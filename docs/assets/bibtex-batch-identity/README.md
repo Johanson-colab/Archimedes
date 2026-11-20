@@ -7,3 +7,5 @@ The first and third entries report different DOIs. The middle entry repeats the 
 | ![Original preview](before.png) | ![Revised preview](after.png) |
 
 Actual Library dialog rendered in Electron at 1280 × 870, Paper theme, English, using the same BibTeX and a disposable SQLite collection. No provider calls were made.
+
+The alias pair uses the same Paper dialog at 1280 × 870 and three records linked by a DOI and an arXiv ID. The third row changes from a new reference to a duplicate of the retained record. The existing pair above covers an ambiguous title-only bridge.

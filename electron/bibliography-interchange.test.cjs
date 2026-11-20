@@ -251,3 +251,14 @@ test("leaving a BibTeX import stops subsequent operations after an in-flight add
     assert.equal(data.db.listPapers(library.id).length, 1, "the already-issued add still completes in its original store");
   } finally { if (unmount) await unmount(); data.close(); }
 });
+
+test("a DOI-matched row can connect a subsequent arXiv alias without hiding a conflicting DOI", () => {
+  const batch = scope.parseBibliography([
+    "@article{a,title={First title},doi={10.1000/first}}",
+    "@article{b,title={Second title},doi={10.1000/first},eprint={2410.12345}}",
+    "@article{c,title={Second title},eprint={2410.12345}}",
+    "@article{d,title={Third title},doi={10.1000/other},eprint={2410.12345}}",
+  ].join("\n"));
+  assert.deepEqual([...scope.indexBibliographyBatch(batch.entries)], [1, 2]);
+  assert.equal(batch.entries[0].paper.arxiv_id, "");
+});

@@ -207,24 +207,35 @@ export function exportBibliography(papers: BibliographyPaper[]) {
 export function indexBibliographyBatch(entries: BibliographyEntry[]) {
   const byIdentity = new Map<string, AcademicSearchResult[]>();
   const repeatedRows = new Set<number>();
+  const addIdentity = (key: string, representative: AcademicSearchResult) => {
+    const group = byIdentity.get(key);
+    if (group) group.push(representative);
+    else byIdentity.set(key, [representative]);
+  };
   entries.forEach(({ paper }, index) => {
     const identities = identifierFields.flatMap(([field, normalize]) =>
       paper[field] ? [field + ":" + normalize(paper[field])] : []);
-    const normalizedTitle = title(paper.title);
-    if (normalizedTitle) identities.push("title:" + normalizedTitle);
-    const duplicate = identities.some(key => {
-      const candidates = byIdentity.get(key);
-      return candidates && matchBibliographyPaper(paper, candidates);
-    });
-    if (duplicate) {
+    let representative: AcademicSearchResult | undefined;
+    for (const identity of identities) {
+      representative = matchBibliographyPaper(paper, byIdentity.get(identity) || [], { strongOnly: true });
+      if (representative) break;
+    }
+    if (representative) {
+      repeatedRows.add(index);
+      for (const [field, normalize] of identifierFields) {
+        if (!paper[field] || representative[field]) continue;
+        representative[field] = paper[field];
+        addIdentity(field + ":" + normalize(paper[field]), representative);
+      }
+      return;
+    }
+    const titleKey = "title:" + title(paper.title);
+    if (matchBibliographyPaper(paper, byIdentity.get(titleKey) || [])) {
       repeatedRows.add(index);
       return;
     }
-    for (const identity of identities) {
-      const group = byIdentity.get(identity);
-      if (group) group.push(paper);
-      else byIdentity.set(identity, [paper]);
-    }
+    representative = { ...paper };
+    for (const identity of [...identities, titleKey]) addIdentity(identity, representative);
   });
   return repeatedRows;
 }
