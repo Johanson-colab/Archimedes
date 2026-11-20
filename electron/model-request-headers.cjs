@@ -57,6 +57,8 @@ function buildModelHeaders(config = {}, sessionId = "", options = {}) {
     const userAgent = String(config.userAgent).trim();
     if (userAgent && !INVALID_HEADER_VALUE.test(userAgent) && userAgent.length <= 300) setHeader("User-Agent", userAgent);
   }
+  // Fetch supplies the multipart media type and boundary together.
+  if (options.multipart) headers.delete("content-type");
   return Object.fromEntries(headers.values());
 }
 
@@ -97,6 +99,7 @@ module.exports = {
   buildModelRequestOptions,
   formatConnectionError,
   formatModelRequestError,
+  hasPrivateHeaderValues,
   sanitizeHeaders,
   sanitizeSessionHeader,
 };

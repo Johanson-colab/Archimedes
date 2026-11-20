@@ -4,8 +4,10 @@ const STANDARD_CONTEXT_CHARS = 500_000;
 const EXTRA_LONG_CONTEXT_CHARS = 1_000_000;
 
 function normalizedConfig(config = {}) {
+  const provider = String(config.provider || "custom").toLowerCase();
   return {
-    provider: String(config.provider || "custom").toLowerCase(),
+    // Go uses the same model-based capability checks as other compatible gateways.
+    provider: provider === "opencode-go" ? "custom" : provider,
     model: String(config.model || "").toLowerCase(),
   };
 }

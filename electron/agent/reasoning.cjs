@@ -46,9 +46,7 @@ function openAiReasoningOptions(config, value) {
   const effort = normalizeForModel(config, value);
   const provider = String(config?.provider || "").toLowerCase();
   if (provider === "openrouter") return { reasoning: { effort } };
-  if (provider === "openai" || provider === "gemini") return { reasoning_effort: effort };
-  if (provider === "custom") return { reasoning_effort: effort };
-  return {};
+  return { reasoning_effort: effort };
 }
 
 module.exports = { normalizeReasoningEffort, openAiReasoningOptions, reasoningPolicy };

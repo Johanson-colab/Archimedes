@@ -181,14 +181,12 @@ async function generateBitmap(input, { config, fetchImpl = fetch }) {
     let endpoint = `${config.baseUrl.replace(/\/+$/, "")}/images/${useEdits ? "edits" : "generations"}`;
     const requestOptions = buildModelRequestOptions(config, "archimedes-figure-forge", {
       baseHeaders: useEdits ? {} : { "Content-Type": "application/json" },
+      multipart: useEdits,
     });
     if (nativeGemini) {
       const request = geminiImageRequest(config.baseUrl, model, prompt, references, { aspectRatio: aspect, imageSize: resolution });
       endpoint = request.base + request.endpoint; body = JSON.stringify(request.body);
     } else if (useEdits) {
-      // Fetch generates the multipart Content-Type and boundary from the form.
-      const contentType = Object.keys(requestOptions.headers).find(name => name.toLowerCase() === "content-type");
-      if (contentType) delete requestOptions.headers[contentType];
       const form = new FormData(); form.set("model", model); form.set("prompt", prompt);
       form.set(dimensions.field, dimensions.value);
       references.forEach((image, index) => {
