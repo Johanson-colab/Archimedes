@@ -41,9 +41,13 @@ function splitAuthors(value: string) {
   return authors;
 }
 
+function formatWarning(template: string, values?: Record<string, string | number>) {
+  return values ? template.replace(/\{(\w+)\}/g, (placeholder, name) => String(values[name] ?? placeholder)) : template;
+}
+
 // Small BibTeX interchange parser: balanced braced/quoted values and literals.
 // Macro expressions are reported instead of silently importing a wrong title.
-export function parseBibliography(input: string): { entries: BibliographyEntry[]; warnings: string[] } {
+export function parseBibliography(input: string, t = formatWarning): { entries: BibliographyEntry[]; warnings: string[] } {
   input = input.replace(/^\s*%.*$/gm, "");
   const entries: BibliographyEntry[] = [], warnings: string[] = [];
   let cursor = 0;
@@ -87,7 +91,7 @@ export function parseBibliography(input: string): { entries: BibliographyEntry[]
       if (open === close && input[cursor] !== close) depth = 1;
       cursor++;
     }
-    throw new Error("Unclosed BibTeX value");
+    throw new Error(t("Unclosed BibTeX value"));
   };
   while (cursor < input.length) {
     const at = input.indexOf("@", cursor);
@@ -96,18 +100,18 @@ export function parseBibliography(input: string): { entries: BibliographyEntry[]
     const kind = /^[a-z]+/i.exec(input.slice(cursor));
     if (!kind) { cursor++; continue; }
     cursor += kind[0].length; skip();
-    if (!["{", "("].includes(input[cursor])) { warnings.push(`Invalid entry at ${at}`); continue; }
+    if (!["{", "("].includes(input[cursor])) { warnings.push(t("Invalid entry at {offset}", { offset: at })); continue; }
     const open = input[cursor], close = open === "{" ? "}" : ")";
     cursor++;
     if (["comment", "preamble", "string"].includes(kind[0].toLowerCase())) {
       try { skipDelimited(open, close); } catch { cursor = input.length; }
-      warnings.push(`Skipped @${kind[0]} directive`); continue;
+      warnings.push(t("Skipped @{directive} directive", { directive: kind[0] })); continue;
     }
     skipWhitespace();
     const key = /^[^,}\s)]+/.exec(input.slice(cursor));
-    if (!key) { warnings.push(`Missing citation key at ${at}`); continue; }
+    if (!key) { warnings.push(t("Missing citation key at {offset}", { offset: at })); continue; }
     cursor += key[0].length;
-    if (/[\s,{}\\#%"]/.test(key[0])) { warnings.push(`Invalid citation key: ${key[0]}`); const next = input.indexOf("@", cursor); cursor = next < 0 ? input.length : next; continue; }
+    if (/[\s,{}\\#%"]/.test(key[0])) { warnings.push(t("Invalid citation key: {citekey}", { citekey: key[0] })); const next = input.indexOf("@", cursor); cursor = next < 0 ? input.length : next; continue; }
     const record: Record<string, string> = {};
     let closed = false;
     try {
@@ -115,22 +119,22 @@ export function parseBibliography(input: string): { entries: BibliographyEntry[]
         skip();
         if (input[cursor] === close) { cursor++; closed = true; break; }
         const name = /^[a-z][\w-]*/i.exec(input.slice(cursor));
-        if (!name) throw new Error("Invalid field");
+        if (!name) throw new Error(t("Invalid field"));
         cursor += name[0].length; skip();
-        if (input[cursor++] !== "=") throw new Error("Missing field value");
+        if (input[cursor++] !== "=") throw new Error(t("Missing field value"));
         skip();
         let value = "";
         if (input[cursor] === "{") value = delimited("{", "}");
         else if (input[cursor] === '"') value = delimited('"', '"');
         else {
           const literal = /^[^,}\n)]+/.exec(input.slice(cursor));
-          if (!literal || !/^\d+$/.test(literal[0].trim())) throw new Error("Unsupported BibTeX macro; expand it before import");
+          if (!literal || !/^\d+$/.test(literal[0].trim())) throw new Error(t("Unsupported BibTeX macro; expand it before import"));
           value = literal[0]; cursor += value.length;
         }
         record[name[0].toLowerCase()] = name[0].toLowerCase() === "author" ? value : plain(value);
       }
-      if (!closed) throw new Error("Unclosed BibTeX entry");
-      if (!record.title) throw new Error("Missing title");
+      if (!closed) throw new Error(t("Unclosed BibTeX entry"));
+      if (!record.title) throw new Error(t("Missing title"));
       const normalizedDoi = doi(record.doi || "");
       const eprintIsArxiv = (!record.archiveprefix || /^arxiv$/i.test(record.archiveprefix)) && arxivId(record.eprint || "");
       const normalizedArxiv = eprintIsArxiv ? arxiv(record.eprint) : arxivUrl(record.url || "") && arxivId(record.url) ? arxiv(record.url) : "";
@@ -143,7 +147,7 @@ export function parseBibliography(input: string): { entries: BibliographyEntry[]
         pdf_url: "", citation_count: 0, source: "bibtex",
       } });
     } catch (cause) {
-      warnings.push(`${key[0]}: ${cause instanceof Error ? cause.message : String(cause)}`);
+      warnings.push(t("{citekey}: {message}", { citekey: key[0], message: cause instanceof Error ? cause.message : String(cause) }));
       const next = input.indexOf("@", cursor);
       cursor = next < 0 ? input.length : next;
     }

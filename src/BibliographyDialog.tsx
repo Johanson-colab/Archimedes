@@ -20,7 +20,7 @@ export default function BibliographyDialog({ bridge, library, onClose, onChanged
   const [exportText, setExportText] = useState("");
   const alive = useRef(true);
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
-  const parsed = useMemo(() => parseBibliography(input), [input]);
+  const parsed = useMemo(() => parseBibliography(input, t), [input, t]);
   const preview = useMemo(() => parsed.entries.map((entry, index) => {
     const existing = matchBibliographyPaper(entry.paper, targetPapers, { strongOnly: true })
       || matchBibliographyPaper(entry.paper, projectPapers, { strongOnly: true })

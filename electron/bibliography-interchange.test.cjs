@@ -8,7 +8,11 @@ const store = require("./store.cjs");
 const fixture = require("./test-support/bibliography-fixture.cjs");
 let dom, React, createRoot, scope;
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
-const t = (key) => key;
+let language = "en";
+const t = (key, values) => {
+  const template = language === "zh" ? scope.library[key] ?? key : key;
+  return values ? template.replace(/\{(\w+)\}/g, (placeholder, name) => values[name] ?? placeholder) : template;
+};
 before(async () => {
   dom = new JSDOM('<div id="root"></div>', { url: "http://localhost", pretendToBeVisual: true });
   for (const key of ["window", "document", "HTMLElement", "Node"]) global[key] = dom.window[key];
@@ -36,6 +40,7 @@ before(async () => {
     Object.assign(scope, result);
   }
   await load("bibliography.ts", ["parseBibliography", "exportBibliography", "matchBibliographyPaper", "metadataDifferences", "citationKeyIdentity"]);
+  await load("i18n/translations/library.ts", ["library"]);
   await load("Tabs.tsx", ["Tabs", "Tab", "FilterGroup", "FilterButton"]);
   scope.conferenceCatalog = require("../shared/conferences.json");
   scope.ReactMarkdown = ({ children }) => React.createElement("span", null, children); scope.remarkMath = () => {}; scope.rehypeKatex = () => {};
@@ -67,6 +72,30 @@ function database(name) {
   const bridge = { listLibraries: async id => db.listLibraries(id), listLibraryProjects: async () => db.listLibraryProjects(), listLibraryPapers: async id => db.listPapers(id), addLibraryPaper: async (...args) => db.addPaper(...args), setPaperBibliography: async (...args) => db.setPaperBibliography(...args), repairLibraryPaperMetadata: async (...args) => db.repairLibraryPaperMetadata(...args) };
   return { root, db, project, bridge, close() { store.openWorkspace(idle); fs.rmSync(root, { recursive: true, force: true }); fs.rmSync(idle, { recursive: true, force: true }); } };
 }
+
+test("the BibTeX preview localizes parser warnings without losing their context or valid entries", async () => {
+  const baseline = scope.parseBibliography(fixture.warningBibtex);
+  assert.deepEqual(baseline.warnings, ["Skipped @string directive", "needsTitle: Missing title"]);
+  const data = database("Localized BibTeX warnings");
+  let unmount;
+  try {
+    language = "zh";
+    const library = data.db.listLibraries(data.project.id)[0];
+    unmount = await mount(scope.BibliographyDialog, { bridge: data.bridge, library, onClose() {}, onChanged: async () => {} });
+    await input(document.querySelector('[aria-label="BibTeX 原文"]'), fixture.warningBibtex);
+    assert.deepEqual(
+      [...document.querySelectorAll('[role="alert"]')].map((notice) => notice.textContent),
+      ["已跳过 @string 指令", "needsTitle：缺少标题"],
+    );
+    await click("导入所选文献");
+    assert.deepEqual(data.db.listPapers(library.id).map((paper) => paper.citekey), ["handoff2026"]);
+  } finally {
+    if (unmount) await unmount();
+    language = "en";
+    data.close();
+  }
+});
+
 test("a local title-only candidate cannot override a conflict-free global strong identifier", () => {
   const data = database("Strong before title");
   try {
