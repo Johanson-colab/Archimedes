@@ -12,6 +12,17 @@ Captured from the compiled macOS Electron app at a 1560 × 980 viewport in Paper
 
 The fixture saved two role assignments to one model, edited it through Proactive, and showed the updated model ID in the composer. The saved assignments, profile mode, and limits survived reload. Creating and deleting another named profile left the active Agent model intact. The related capture data records the app’s character estimate at the time of capture.
 
-Separate loopback checks after review use four estimated characters per configured input token. A 6,000-token profile completed a follow-up after twenty replies of about 51,000 characters, including a tool round. Both requests reached the fixture at 24,000 serialized message characters with `max_tokens: 321`. A fresh 32,768-token profile accepted a 44,760-character request and sent its configured `max_tokens: 16384`.
+## Context budget and recovery
+
+Both providers received the same prompt, twenty prior 51,000-character replies, and an ordinary built-in file tool. The configured 12,000-token window is estimated at 48,000 characters. Each value below counts the serialized request and reserves another 1,284 characters for the configured 321 output tokens.
+
+| Provider | Before, initial | Before, tool result | After, initial | After, tool result |
+| --- | ---: | ---: | ---: | ---: |
+| OpenAI-compatible | 57,269 | 68,403 | 47,988 | 43,994 |
+| Anthropic | 56,270 | 67,399 | 47,981 | 43,017 |
+
+The follow-up request preserves the tool call and its matching result. A separate regression uses an escape-heavy JSON result and verifies the shortened preview fits after serialization. This check estimates text usage. The provider applies its own tokenizer and accounts for images.
+
+The [before](paper-before-budget-error.png) and [after](paper-after-budget-error.png) captures show the same saved conversation reopened in Chinese at 1280 × 870 in the Paper theme. Both runs stop locally before sending a model request. The recovery message now follows the interface language.
 
 [Captured observations](observations.json)
