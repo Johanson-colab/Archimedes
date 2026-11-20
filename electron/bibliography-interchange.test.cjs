@@ -272,6 +272,23 @@ test("real Library BibTeX preview preserves existing edits and notes; only selec
 });
 
 
+test("applying a BibTeX import invalidates the previous export preview", async () => {
+  const data = database("Export refresh"); let unmount;
+  try {
+    const library = data.db.listLibraries(data.project.id)[0];
+    data.db.addPaper(library.id, { ...fixture.paper, title: "Existing citation", doi: "10.5555/previous" });
+    unmount = await mount(scope.BibliographyDialog, { bridge: data.bridge, library, onClose() {}, onChanged: async () => {} });
+    await input(document.querySelector('[aria-label="BibTeX source"]'), '@article{NewReference,title={New citation},doi={10.5555/new}}');
+    await click("Preview BibTeX export");
+    assert.doesNotMatch(document.querySelector('[aria-label="BibTeX export preview"]').value, /NewReference/);
+
+    await click("Import selected references");
+    assert.equal(document.querySelector('[aria-label="BibTeX export preview"]'), null);
+    await click("Preview BibTeX export");
+    assert.match(document.querySelector('[aria-label="BibTeX export preview"]').value, /@article\{NewReference,/);
+  } finally { if (unmount) await unmount(); data.close(); }
+});
+
 test("leaving a BibTeX import stops subsequent operations after an in-flight add returns", async () => {
   const data = database("Import scope"); let unmount;
   const library = data.db.listLibraries(data.project.id)[0];
