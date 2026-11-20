@@ -99,6 +99,24 @@ function restoreToolHistory(events, turnId, budget) {
   return { messages: selected, size: used };
 }
 
+// Only automatic continuity text is reclaimable. Keep its source warning
+// attached whenever any summary text is sent.
+function fitContinuitySummary(message, limit) {
+  if (JSON.stringify(message).length <= limit) return true;
+  const text = message.content.slice(0, -summaryNote.length);
+  let remaining = limit - JSON.stringify({ role: "system", content: summaryNote }).length;
+  let end = 0;
+  for (const character of text) {
+    const size = JSON.stringify(character).length - 2;
+    if (size > remaining) break;
+    end += character.length;
+    remaining -= size;
+  }
+  if (!end) return false;
+  message.content = text.slice(0, end) + summaryNote;
+  return true;
+}
+
 function prepareConversation({ thread, currentTurnId, attachmentManifest = "", mode, reasoningInstruction = "", projectInstructions = "", contextCharacterLimit = MAX_CONTEXT_CHARS, strictContextLimit = false }) {
   const currentIndex = thread.turns.findIndex((turn) => turn.id === currentTurnId);
   if (currentIndex < 0) throw new Error("The active research turn is missing from its thread.");
@@ -128,25 +146,13 @@ function prepareConversation({ thread, currentTurnId, attachmentManifest = "", m
   }
 
   const summary = omitted.length ? compactTurns(omitted, thread.context_summary) : thread.context_summary;
+  let continuitySummary = null;
   if (summary) {
-    const text = clip(summary, MAX_SUMMARY_CHARS);
-    const summaryMessage = { role: "system", content: `${text}${summaryNote}` };
-    if (strictContextLimit) {
-      const room = Math.max(0, contextCharacterLimit - used);
-      const overhead = JSON.stringify({ role: "system", content: summaryNote }).length;
-      if (room > overhead) {
-        // A JSON-encoded character can take more than one character when escaped.
-        const encoded = JSON.stringify(text).slice(1, -1);
-        const end = encoded.length > room - overhead ? Math.floor(text.length * (room - overhead) / encoded.length) : text.length;
-        summaryMessage.content = `${text.slice(0, end)}${summaryNote}`;
-        const summarySize = JSON.stringify(summaryMessage).length;
-        if (summarySize <= room) {
-          messages.push(summaryMessage);
-          used += summarySize;
-        }
-      }
-    } else {
-      messages.push(summaryMessage);
+    const message = { role: "system", content: clip(summary, MAX_SUMMARY_CHARS) + summaryNote };
+    if (!strictContextLimit || fitContinuitySummary(message, contextCharacterLimit - used)) {
+      messages.push(message);
+      continuitySummary = message;
+      if (strictContextLimit) used += JSON.stringify(message).length;
     }
   }
   let toolHistoryBudget = Math.min(32_000, Math.max(0, contextCharacterLimit - used));
@@ -163,7 +169,7 @@ function prepareConversation({ thread, currentTurnId, attachmentManifest = "", m
   }
   messages.push(currentMessage);
 
-  return { messages, summary, compacted: omitted.length > 0, omittedTurnCount: omitted.length };
+  return { messages, summary, continuitySummary, compacted: omitted.length > 0, omittedTurnCount: omitted.length };
 }
 
-module.exports = { prepareConversation };
+module.exports = { fitContinuitySummary, prepareConversation };

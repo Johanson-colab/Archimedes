@@ -1,5 +1,7 @@
+const { fitContinuitySummary } = require('./context.cjs');
+
 // Keep model protocol call/result groups intact when bounding a long active turn.
-function boundActiveContext(messages, characterLimit, { strict = false } = {}) {
+function boundActiveContext(messages, characterLimit, { strict = false, continuitySummary } = {}) {
   const limit = strict ? characterLimit : Math.max(32_000, Number(characterLimit) || 500_000);
   const messageSize = (message) => {
     if (!strict || !Array.isArray(message.content)) return JSON.stringify(message).length;
@@ -28,6 +30,21 @@ function boundActiveContext(messages, characterLimit, { strict = false } = {}) {
     used -= discarded.reduce((total, message) => total + messageSize(message), 0);
     removed++;
   }
+  if (strict && used > limit && continuitySummary) {
+    const summaryIndex = messages.indexOf(continuitySummary);
+    if (summaryIndex !== -1) {
+      const previous = messageSize(continuitySummary);
+      if (fitContinuitySummary(continuitySummary, previous - (used - limit))) {
+        used -= previous - messageSize(continuitySummary);
+        clipped++;
+      } else {
+        messages.splice(summaryIndex, 1);
+        used -= previous;
+        removed++;
+      }
+    }
+  }
+
   // An exceptionally large latest result may itself exceed the budget. Keep a
   // protocol-compatible result with an explicit omission marker, never a false result.
   if (used > limit) {

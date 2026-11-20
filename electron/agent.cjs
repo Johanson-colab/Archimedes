@@ -1625,6 +1625,7 @@ async function runAgent({ prompt, workspace, threadId, projectId, workspaceId, v
       recordEvent({ type: "context_compacted", payload: { omitted_turn_count: context.omittedTurnCount } });
     }
     const messages = context.messages;
+    const contextBudgetOptions = { strict: strictContextLimit, continuitySummary: context.continuitySummary };
     if (researchRun) messages.splice(1, 0, { role: "system", content: researchRun.instructions });
     const images = contextItems.filter((item) => item.type === "image" && item.image?.dataUrl).slice(0, 4);
     const currentMessage = messages.at(-1);
@@ -1643,7 +1644,7 @@ async function runAgent({ prompt, workspace, threadId, projectId, workspaceId, v
     emitTurn({ type: "status", title: "Research turn started", detail: `Model: ${config.model} · thinking: ${resolvedReasoningEffort} · context: ${resolvedContextLength}` });
 
     for (let round = 0; round < maxToolRounds; round += 1) {
-      const bounded = boundActiveContext(messages, characterLimit, { strict: strictContextLimit });
+      const bounded = boundActiveContext(messages, characterLimit, contextBudgetOptions);
       if (bounded.removed || bounded.clipped) {
         recordEvent({ type: "active_context_bounded", payload: bounded });
         emitTurn({ type: "status", title: "Context adjusted", detail: "Context was reduced to fit the active budget. Saved turns and events remain available." });
@@ -1701,7 +1702,7 @@ async function runAgent({ prompt, workspace, threadId, projectId, workspaceId, v
       content: "The tool budget for this turn is exhausted. Do not request more tools. Synthesize the best useful final answer from the evidence already collected, explicitly state important gaps, and suggest a focused next step.",
     });
     emitTurn({ type: "status", title: "Synthesizing findings", detail: "Tool budget reached; preparing an evidence-aware answer" });
-    boundActiveContext(messages, characterLimit, { strict: strictContextLimit });
+    boundActiveContext(messages, characterLimit, contextBudgetOptions);
     const finalMessage = await complete(config, messages, {
       signal: controller.signal,
       allowTools: false,
