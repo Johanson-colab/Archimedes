@@ -1909,6 +1909,10 @@ function setPaperChatThread(paperId, threadId, projectId = null) {
 }
 
 function addPaper(libraryId, paper) {
+  return addPaperWithOutcome(libraryId, paper).paper;
+}
+
+function addPaperWithOutcome(libraryId, paper, { initializeUserState = true, cloudPaperId } = {}) {
   const db = requireDatabase();
   const library = db.prepare("SELECT id, project_id FROM libraries WHERE id = ?").get(libraryId);
   if (!library) throw new Error("Choose a valid library before importing a paper.");
@@ -1917,7 +1921,7 @@ function addPaper(libraryId, paper) {
   if (conferenceJson && conferenceJson.length > 10000) throw new Error("Conference metadata is too large.");
   const now = timestamp();
   const key = String(paper.canonical_key || "").trim() || canonicalPaperKey(paper);
-  const existing = bibliographyRecords.findImportMatch(db, paper, key, { libraryId: library.id, projectId: library.project_id });
+  const existing = bibliographyRecords.findImportMatch(db, paper, key, { libraryId: library.id, projectId: library.project_id, cloudPaperId });
   const paperId = existing?.id || randomUUID();
 
   if (!existing) {
@@ -1940,10 +1944,12 @@ function addPaper(libraryId, paper) {
       year = COALESCE(year, ?), updated_at = ? WHERE id = ?`)
       .run(...fields.map(field => paper[field] || ""), JSON.stringify(paper.authors || []), paper.year || null, now, paperId);
   }
-  db.prepare(`
-    INSERT OR IGNORE INTO paper_user_state (paper_id, user_id, reading_status, starred, notes, tags_json, created_at, updated_at)
-    VALUES (?, ?, 'unread', 0, '', '[]', ?, ?)
-  `).run(paperId, localIdentity.userId, now, now);
+  if (initializeUserState) {
+    db.prepare(`
+      INSERT OR IGNORE INTO paper_user_state (paper_id, user_id, reading_status, starred, notes, tags_json, created_at, updated_at)
+      VALUES (?, ?, 'unread', 0, '', '[]', ?, ?)
+    `).run(paperId, localIdentity.userId, now, now);
+  }
   if (paper.github_url) {
     db.prepare("UPDATE papers SET github_url = CASE WHEN github_url = '' THEN ? ELSE github_url END, github_stars = MAX(github_stars, ?), updated_at = ? WHERE id = ?")
       .run(paper.github_url, Number(paper.github_stars) || 0, now, paperId);
@@ -1955,7 +1961,7 @@ function addPaper(libraryId, paper) {
   }
   db.prepare("INSERT OR IGNORE INTO library_papers (library_id, paper_id, added_at) VALUES (?, ?, ?)").run(libraryId, paperId, now);
   db.prepare("UPDATE libraries SET updated_at = ? WHERE id = ?").run(now, libraryId);
-  return hydratePaper(db.prepare("SELECT * FROM papers WHERE id = ?").get(paperId));
+  return { paper: getPaper(paperId), created: !existing };
 }
 
 function getPaperBibliography(paperId) {
@@ -2036,20 +2042,24 @@ function syncPaperFromCloud(libraryId, cloudPaper) {
     ? db.prepare("SELECT * FROM papers WHERE cloud_paper_id = ?").get(cloudPaperId)
     : null;
   if (!existing) existing = db.prepare("SELECT * FROM papers WHERE canonical_key = ?").get(canonicalKey);
-  if (!existing) {
-    const local = addPaper(libraryId, {
+  let local;
+  if (existing) {
+    if (cloudPaperId) db.prepare("UPDATE papers SET cloud_paper_id = COALESCE(cloud_paper_id, ?) WHERE id = ?").run(cloudPaperId, existing.id);
+    db.prepare("INSERT OR IGNORE INTO library_papers (library_id, paper_id, added_at) VALUES (?, ?, ?)").run(libraryId, existing.id, timestamp());
+    db.prepare("UPDATE libraries SET updated_at = ? WHERE id = ?").run(timestamp(), libraryId);
+    local = getPaper(existing.id);
+  } else {
+    const { paper, created } = addPaperWithOutcome(libraryId, {
       ...cloudPaper,
       canonical_key: canonicalKey,
       authors: Array.isArray(cloudPaper.authors) ? cloudPaper.authors : [],
       conference: cloudPaper.conference || undefined,
-    });
-    const linked = linkPaperToCloud(local.id, cloudPaperId || local.id);
-    return applyCloudPaperState(local.id, cloudPaper) || linked;
+    }, { initializeUserState: false, cloudPaperId });
+    local = created || (cloudPaperId && !paper.cloud_paper_id)
+      ? linkPaperToCloud(paper.id, cloudPaperId || paper.id)
+      : paper;
   }
-  if (cloudPaperId) db.prepare("UPDATE papers SET cloud_paper_id = COALESCE(cloud_paper_id, ?) WHERE id = ?").run(cloudPaperId, existing.id);
-  db.prepare("INSERT OR IGNORE INTO library_papers (library_id, paper_id, added_at) VALUES (?, ?, ?)").run(libraryId, existing.id, timestamp());
-  db.prepare("UPDATE libraries SET updated_at = ? WHERE id = ?").run(timestamp(), libraryId);
-  return getPaper(existing.id);
+  return local.state_updated_at === null ? applyCloudPaperState(local.id, cloudPaper) : local;
 }
 
 function applyCloudPaperState(paperId, state) {
