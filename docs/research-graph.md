@@ -1,9 +1,12 @@
 # Research graph foundation
 
-This change adds the storage and service layer for a versioned research object
-graph, automatic extraction, a lineage view, and recorded local experiment runs.
-Git worktrees, node-scoped context packs, remote experiment backends, and graph
-collaboration sync are not implemented yet. See [the current implementation review](./research-graph-review.md) for the gap analysis and development sequence.
+Research Graph includes versioned research objects, automatic extraction, a
+lineage view, managed local experiment runs, isolated Git worktrees, code
+archives, and reported metrics and artifacts. The experiment loop is the current
+priority; node-scoped chat and context packs remain deferred. Remote run
+backends, complete replay, and graph collaboration sync are not implemented.
+The [early implementation review](./research-graph-review.md) is historical;
+its capability inventory predates the worktree and live bridge additions.
 
 ## Object model
 
@@ -111,16 +114,16 @@ Research mode now renders `ResearchGraphPanel` instead of the linear
   pinned state. Click the pin again to follow the active session. An unsent new
   chat has no saved graph yet. Late responses from a previous session cannot
   replace the current graph.
-- Ideas shows questions and hypotheses; Experiments adds experiments and results;
-  All activity also includes existing writing nodes and citation edges. Stored
-  merge and feedback relationships are visible. The extractor does not yet create
-  writing or merge relationships automatically.
+- The graph shows questions, hypotheses, experiments, results and existing
+  writing nodes together; there is no Ideas / Experiments overview toggle.
+  Stored merge and feedback relationships are visible. The extractor does not
+  yet create writing or merge relationships automatically.
 - History reveals retracted and archived records without deleting them. Selecting
   a relationship opens the related node; the relationship lists its pinned revision.
 - Empty sessions explain that a Research conversation builds the graph; there is
   no manual question or node-authoring form.
-- The header opens the graph in the shared Dialog, with optional node details.
-  Escape or minimize returns to the dock. Standard mode keeps its existing UI.
+- The Research-mode chat header opens the graph in the shared Dialog, with
+  optional node details. Standard mode does not require a graph.
 
 Same fixture, window, Paper theme, experiment scope and selected question:
 
@@ -179,7 +182,9 @@ released first. Extraction is stage-aware:
 - **Native harnesses:** Codex, Claude Code, and OpenCode run one transient
   extraction turn with no conversation history. The call uses read-only (Codex)
   or plan (Claude Code) permissions and a no-op approval handler; the main chat
-  thread and its native binding are untouched.
+  thread and its native binding are untouched. Codex explicitly uses
+  `ephemeral: true` to avoid persisting extraction sessions; this is not a
+  guarantee about Claude Code or OpenCode's own session persistence.
 - The extractor receives the user prompt, the assistant answer, and a bounded
   summary of the existing project graph. It returns a patch of at most six new
   nodes and eight new edges.
@@ -217,12 +222,22 @@ The experiment node is the plan. Each `experiment_runs` row is one attempt:
 | `commit_sha` | `git rev-parse HEAD` at launch, when the folder is a Git worktree. |
 | `log_path` | `.archimedes/experiment-runs/<runId>/run.log`. |
 | `exit_code` | The process exit code, when the run ended. |
-| `metrics` | Reserved for structured metrics; empty in the local-first v1. |
+| `metrics`, `evidence` | Append-only agent reports of numeric metrics and artifact paths, sizes and SHA-256 hashes. Hashes verify files at recording time; metrics are not independently measured by Archimedes. |
+| `provenance` | Pinned experiment/idea revisions, optional worktree/base-run information, and optional committed-code archive metadata. |
 
 The local runner starts the command in a child process, tees stdout and stderr
 into the run log, and writes the final exit line. The renderer receives
 `experiment-run:update` events on status changes and can read the log tail
 without loading the whole file.
+
+On POSIX, each command starts in its own process group. Stop sends SIGTERM to
+the group and escalates to SIGKILL after two seconds, including workers that
+close their log pipes before exiting. App shutdown sends SIGKILL immediately,
+because its event loop may exit before a timer can fire. On Windows the runner uses
+`taskkill /T /F`, falling back to terminating the shell if tree cleanup fails.
+This is local process cleanup, not a detached supervisor or a guarantee for
+workers that deliberately leave the process group. The new cancellation
+regressions exercise POSIX; Windows tree cleanup still needs platform validation.
 
 Runs belong to the workspace that was active when they started. Switching
 workspaces while a run is in progress is not supported in v1: the process keeps
@@ -247,7 +262,7 @@ result also gets a `produces` edge from its experiment. A run can produce at
 most one run-backed result; the unique index on
 `research_nodes(source_run_id)` enforces this.
 
-The Experiments view shows experiment lineage (`extends`/`replicates`), the
+The graph shows experiment lineage (`extends`/`replicates`), the
 latest run status on each node, and a read-only inspector for the plan, runs,
 and log. When a conversation moves to a new round, the model creates a child
 experiment with both an `extends` edge to the previous experiment and the
@@ -262,53 +277,43 @@ result gate.
 
 ### API harness
 
-Five built-in tools are available in the Experiment setup stage:
+The main conversation can use these experiment tools:
 
 | Tool | Effect |
 | --- | --- |
 | `create_experiment` | Create an experiment node under an idea with a structured plan. |
+| `prepare_experiment_workspace` | Request approval to prepare an isolated Git worktree; a child experiment chooses a recorded parent Run. |
 | `run_experiment` | Request command approval, then start a recorded local run. |
 | `wait_experiment` | Wait up to 30 seconds for a run to finish; return status, exit code, and a log tail. |
 | `read_experiment_log` | Read the log tail. Status alone is not evidence. |
+| `record_experiment_activity` | Record preparation, baseline, repair or other observed work as agent-reported activity, without adding graph nodes. |
+| `record_experiment_evidence` | Append agent-reported metrics and hash existing artifact files after a Run finishes. |
 | `create_experiment_result` | Create a run-backed result from a succeeded run. |
 
-`create_experiment` and `run_experiment` are hidden outside Experiment setup;
-log and result tools remain available for analyzing a recorded run. Every run
-still uses the same fixed-command and frozen-plan rules.
+Research conversations can create and run experiments when the user requests
+validation. Every run still uses the same approval, fixed-command and
+frozen-plan rules. A successful command does not establish a scientific verdict.
 
 ### Native harnesses
 
-Codex, Claude Code, and OpenCode receive a small fenced directive instruction
-during Experiment setup. The app strips the block from the visible answer and
-executes it:
+Codex, Claude Code, and OpenCode can use the live per-turn experiment bridge
+(`electron/agent/experiment-bridge.cjs`). Codex can receive dynamic tools;
+native backends can also invoke a bundled local CLI through a temporary
+workspace mailbox. Both routes dispatch the tools above with the current
+session scope and approval checks. The connection is revoked at turn end;
+read-only turns cannot use it to write. The mailbox bridge currently rejects
+Windows; this is separate from the local runner's Windows support.
 
-````text
-```experiment
-{"action":"create","idea":"...","title":"...","hypothesis":"...","baseline":"...","method":"...","metrics":["..."],"stopCriteria":"..."}
-```
+Legacy fenced directives remain a compatibility fallback. An agent that used
+the live bridge must not emit duplicate directives. Ordinary native shell
+commands do not automatically become managed Runs. Activities and metric
+reports stay distinguishable from the managed command, exit status and log.
 
-```experiment
-{"action":"run","experiment":"...","command":"..."}
-```
-
-```experiment
-{"action":"log","runId":"..."}
-```
-
-```experiment
-{"action":"result","runId":"...","verdict":"supports|contradicts|inconclusive","reasoning":"..."}
-```
-````
-
-Native `run` directives go through the same approval card as native commands.
-The app appends a short note with the created node or run id to the answer, and
-the next native turn receives a `Recent experiment runs` summary so the model
-can read the log and record a result.
-
-This is a directive bridge rather than a separate MCP process. The native
-harness already owns the turn and the one-time approval surface, so the app only
-needs a bounded JSON channel; the store, runner, and result gate are identical
-to the API path.
+Worktree Runs require clean committed code and save a Git archive before
+execution. The archive excludes uncommitted and ignored files, submodule
+contents, and export-ignore files; LFS content may remain pointers. Runtime
+data and environment are not captured. A commit and archive do not constitute
+a complete reproduction package.
 
 ## Service API
 
@@ -362,19 +367,23 @@ Status changes are pushed to the renderer as `experiment-run:update`.
 ## Intentionally out of scope
 
 - Node Chat and context packs.
-- Git worktrees and per-experiment branches.
-- Remote run backends, detached supervisors that survive app exit, and
-  structured metric ingestion.
+- Complete environment/data manifests and one-click restoration or replay.
+- Remote run backends and detached supervisors that survive app exit.
 - Merge proposals, tags, and research commits.
 - Collaboration sync and RLS.
 
 ## Validation
+
+See the [2026-11-21 experiment lifecycle audit](./research-graph-experiment-audit.md)
+for a numerical failure/repair/rerun fixture and cancellation regressions. It
+does not replace the earlier real-native smoke test or validate a packaged UI.
 
 ```sh
 node --test electron/research-graph.test.cjs
 node --test electron/research-graph-layout.test.cjs
 node --test electron/research-graph-auto-build.test.cjs
 node --test electron/experiment-runs.test.cjs
+node --test electron/experiment-run-cancellation.test.cjs electron/agent/experiment-retry-audit.test.cjs
 node --test electron/experiment-directives.test.cjs
 node --test electron/ui-audit-research-graph-auto.test.cjs
 node --test electron/store-schema-order.test.cjs
