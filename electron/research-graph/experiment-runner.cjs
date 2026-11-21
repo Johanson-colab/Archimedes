@@ -7,6 +7,7 @@ const store = require("../store.cjs");
 const { inspectCodeState, createCodeSnapshot } = require("./code-snapshot.cjs");
 
 const activeRuns = new Map();
+const pendingCleanup = new Set();
 const TERMINAL = new Set(["succeeded", "failed", "cancelled"]);
 
 function shellFor(command) {
@@ -145,6 +146,8 @@ function startExperimentRun({
       cwd: runCwd,
       env: { ...process.env, ...getSharedEnvironment() },
       stdio: ["ignore", "pipe", "pipe"],
+      detached: process.platform !== "win32",
+      windowsHide: true,
     });
   } catch (error) {
     stream.write(`\n[process error] ${error.message}\n`);
@@ -174,9 +177,37 @@ function startExperimentRun({
 
   activeRuns.set(runId, {
     child,
-    cancel: () => {
+    cancel: (force = false) => {
+      if ((cancelled || settled) && !force) return;
       cancelled = true;
-      child.kill("SIGTERM");
+      if (!child.pid) return;
+      if (process.platform === "win32") {
+        const fallback = () => { try { child.kill("SIGKILL"); } catch { /* already exited */ } };
+        try {
+          const killer = spawn("taskkill.exe", ["/PID", String(child.pid), "/T", "/F"], { windowsHide: true, stdio: "ignore" });
+          const timer = setTimeout(() => { try { killer.kill(); } catch { /* already exited */ } fallback(); }, 2_000);
+          timer.unref();
+          killer.once("error", () => { clearTimeout(timer); fallback(); });
+          killer.once("close", (code) => { clearTimeout(timer); if (code !== 0) fallback(); });
+        } catch { fallback(); }
+      } else {
+        const killGroup = (signal) => {
+          try { process.kill(-child.pid, signal); }
+          catch { try { child.kill(signal); } catch { /* already exited */ } }
+        };
+        killGroup(force ? "SIGKILL" : "SIGTERM");
+        if (force) return;
+        // Workers may ignore SIGTERM or close their log pipes before exiting.
+        // Keep escalation even after the shell's close event settles the run.
+        const killRemaining = () => {
+          clearTimeout(timer);
+          killGroup("SIGKILL");
+          pendingCleanup.delete(killRemaining);
+        };
+        const timer = setTimeout(killRemaining, 2_000);
+        pendingCleanup.add(killRemaining);
+        timer.unref();
+      }
     },
   });
   return { run, completion };
@@ -197,12 +228,15 @@ function cancelExperimentRun(runId) {
 function shutdownExperimentRuns() {
   for (const active of activeRuns.values()) {
     try {
-      active.cancel();
+      // The app may exit immediately; a delayed escalation would never fire.
+      active.cancel(true);
     } catch {
       // The process may already be gone during app shutdown.
     }
   }
   activeRuns.clear();
+  // A cancelled shell may already have closed while a worker awaits escalation.
+  for (const cleanup of pendingCleanup) cleanup();
 }
 
 module.exports = {
