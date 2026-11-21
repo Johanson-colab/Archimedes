@@ -41,7 +41,7 @@ export function LibraryPaperNotes({ paper, drafts, onSave, compact = false }: {
   }
   return <section className={`library-note-editor${compact ? " compact" : ""}`} aria-label={t("Reading notes")}>
     <header><div><h2>{t("Reading notes")}</h2><p>{paper.title}</p></div>{paper.url && <a className="icon-button" href={paper.url} target="_blank" rel="noreferrer" aria-label={t("Open source")}><ExternalLink size={15} /></a>}</header>
-    {error && <InlineNotice tone="danger">{error}</InlineNotice>}
+    {error && <InlineNotice tone="danger">{t(error.replace(/^Error invoking remote method '[^']+':\s*(?:Error:\s*)?/, ""))}</InlineNotice>}
     <textarea aria-label={t("Reading notes")} placeholder={t("Record questions, evidence, and next steps…")} value={text} onChange={(event) => { setText(event.target.value); drafts.set(paper.id, event.target.value); }} />
     <footer><span role="status">{text === paper.notes ? t("Saved") : t("Unsaved changes")}</span><button className="primary-button" disabled={saving || text === paper.notes} onClick={() => void save()}><Save size={14} />{saving ? t("Saving…") : t("Save notes")}</button></footer>
   </section>;
