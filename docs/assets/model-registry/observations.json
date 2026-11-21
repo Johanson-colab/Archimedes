@@ -1,0 +1,179 @@
+{
+  "before": {
+    "paper": {
+      "viewport": {
+        "theme": "paper",
+        "size": [
+          1560,
+          980
+        ]
+      },
+      "defaultProfilesHidden": true
+    },
+    "charcoal": {
+      "viewport": {
+        "theme": "charcoal",
+        "size": [
+          1560,
+          980
+        ]
+      },
+      "defaultProfilesHidden": true
+    }
+  },
+  "after": {
+    "paper": {
+      "viewport": {
+        "theme": "paper",
+        "size": [
+          1560,
+          980
+        ]
+      },
+      "defaultProfilesHidden": true,
+      "enabledButtonColors": [
+        {
+          "text": "Use for Agent",
+          "disabled": false,
+          "color": "rgb(44, 40, 38)",
+          "background": "rgb(240, 237, 232)",
+          "contrastRatio": 12.5
+        },
+        {
+          "text": "Use for Proactive",
+          "disabled": false,
+          "color": "rgb(44, 40, 38)",
+          "background": "rgb(240, 237, 232)",
+          "contrastRatio": 12.5
+        },
+        {
+          "text": "Delete",
+          "disabled": false,
+          "color": "rgb(44, 40, 38)",
+          "background": "rgb(240, 237, 232)",
+          "contrastRatio": 12.5
+        },
+        {
+          "text": "Test connection",
+          "disabled": false,
+          "color": "rgb(44, 40, 38)",
+          "background": "rgb(233, 229, 223)",
+          "contrastRatio": 11.63
+        }
+      ],
+      "proactiveEditUpdatedComposer": true,
+      "savedAfterReload": {
+        "roles": {
+          "agent": "legacy-agent",
+          "proactive": "legacy-agent"
+        },
+        "savedNames": [
+          "fixture-shared-update",
+          "fixture-agent"
+        ],
+        "characterLimitsAtCapture": {
+          "standard": 24000,
+          "extra-long": 24000
+        }
+      },
+      "namedProfileCreatedAndDeleted": true
+    },
+    "charcoal": {
+      "viewport": {
+        "theme": "charcoal",
+        "size": [
+          1560,
+          980
+        ]
+      },
+      "defaultProfilesHidden": true,
+      "enabledButtonColors": [
+        {
+          "text": "Use for Agent",
+          "disabled": false,
+          "color": "rgb(234, 232, 230)",
+          "background": "rgb(38, 38, 38)",
+          "contrastRatio": 12.38
+        },
+        {
+          "text": "Use for Proactive",
+          "disabled": false,
+          "color": "rgb(234, 232, 230)",
+          "background": "rgb(38, 38, 38)",
+          "contrastRatio": 12.38
+        },
+        {
+          "text": "Delete",
+          "disabled": false,
+          "color": "rgb(234, 232, 230)",
+          "background": "rgb(38, 38, 38)",
+          "contrastRatio": 12.38
+        },
+        {
+          "text": "Test connection",
+          "disabled": false,
+          "color": "rgb(234, 232, 230)",
+          "background": "rgb(38, 38, 38)",
+          "contrastRatio": 12.38
+        }
+      ]
+    },
+    "screenshotRunRequests": [
+      {
+        "stream": true,
+        "model": "fixture-shared-update",
+        "maxOutput": 321,
+        "prompt": "Fixture history 1",
+        "messageCharacters": 4578
+      },
+      {
+        "stream": true,
+        "model": "fixture-shared-update",
+        "maxOutput": 321,
+        "prompt": "Fixture history 2",
+        "messageCharacters": 6880
+      },
+      {
+        "stream": true,
+        "model": "fixture-shared-update",
+        "maxOutput": 321,
+        "prompt": "Fixture history 3",
+        "messageCharacters": 11123
+      },
+      {
+        "stream": true,
+        "model": "fixture-shared-update",
+        "maxOutput": 321,
+        "prompt": "Fixture history 4",
+        "messageCharacters": 17461
+      },
+      {
+        "stream": true,
+        "model": "fixture-shared-update",
+        "maxOutput": 321,
+        "prompt": "Check the saved context limit.",
+        "messageCharacters": 24000
+      }
+    ]
+  },
+  "loopbackAfterReview": {
+    "summaryScenario": [
+      {
+        "count": 24000,
+        "maxOutput": 321,
+        "latestRole": "user"
+      },
+      {
+        "count": 24000,
+        "maxOutput": 321,
+        "latestRole": "tool",
+        "toolOutput": "Local fixture data"
+      }
+    ],
+    "longPromptScenario": {
+      "count": 44760,
+      "maxOutput": 16384,
+      "latestRole": "user"
+    }
+  }
+}

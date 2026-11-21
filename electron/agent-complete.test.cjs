@@ -110,3 +110,21 @@ test('model requests retry rate limits without rerunning any tool', async () => 
     assert.equal(requests, 2);
   } finally { global.fetch = originalFetch; }
 });
+
+test("OpenAI-compatible tool turns honor the saved output limit and narrower caller requests", async () => {
+  const originalFetch = global.fetch;
+  const sent = [];
+  global.fetch = async (_url, options) => {
+    sent.push(JSON.parse(options.body).max_tokens);
+    return successfulResponse();
+  };
+  try {
+    const config = { provider: "custom", baseUrl: "https://example.test/v1", model: "fixture", apiKey: "test-key", maxOutputTokens: 16_384 };
+    const messages = [{ role: "user", content: "Reply with OK." }];
+    await complete(config, messages);
+    await complete(config, messages, { allowTools: false });
+    await complete(config, messages, { maxOutputTokens: 128 });
+    await complete(config, messages, { maxOutputTokens: 32_768 });
+    assert.deepEqual(sent, [16_384, 16_384, 128, 16_384]);
+  } finally { global.fetch = originalFetch; }
+});

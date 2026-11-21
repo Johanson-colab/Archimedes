@@ -54,3 +54,10 @@ test("streams Anthropic text and tool input as normalized agent calls", async ()
     assert.equal(request.headers.Authorization, undefined);
   } finally { global.fetch = originalFetch; }
 });
+
+test("Anthropic requests honor a saved limit above the legacy cap", () => {
+  const config = { model: "fixture", maxOutputTokens: 32_768 };
+  assert.equal(toAnthropicRequest(config, [], {}).max_tokens, 32_768);
+  assert.equal(toAnthropicRequest(config, [], { maxOutputTokens: 128 }).max_tokens, 128);
+  assert.equal(toAnthropicRequest(config, [], { maxOutputTokens: 64_000 }).max_tokens, 32_768);
+});

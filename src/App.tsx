@@ -79,7 +79,6 @@ import AgentLayer from "./AgentLayer";
 import ResearchPathPanel from "./ResearchPathPanel";
 import ResearchGraphPanel from "./research-graph/ResearchGraphPanel";
 import ProactiveAgentPanel from "./ProactiveAgentPanel";
-import ProactiveSettingsPanel from "./ProactiveSettingsPanel";
 import { researchStages, stageForMode, type ResearchStage, type ResearchStageId } from "./research-path";
 import { useProactiveAgent } from "./useProactiveAgent";
 import type { ProactiveSuggestion } from "./proactive-types";
@@ -1497,6 +1496,7 @@ function App() {
   const [changeSets, setChangeSets] = useState<WorkspaceChangeSet[]>([]);
   const [papers, setPapers] = useState(initialPapers);
   const [modal, setModal] = useState<Modal>(null);
+  const [modelConfigRevision, setModelConfigRevision] = useState(0);
   const [activeModelConfig, setActiveModelConfig] = useState<PublicModelConfig | null>(null);
   const [newProjectOpen, setNewProjectOpen] = useState(false);
   const [newProjectName, setNewProjectName] = useState("");
@@ -1616,6 +1616,7 @@ function App() {
     workspace: executionWorkspace,
     section: mainSection,
     bridge: desktopBridge,
+    modelConfigRevision,
     onRun: runProactiveSuggestion,
     onNotice: (text) => setProactiveNotice(t(text)),
   });
@@ -1706,7 +1707,7 @@ function App() {
       if (active) setModelCapabilities(previewModelCapabilities);
     });
     return () => { active = false; };
-  }, [activeModelConfig?.provider, activeModelConfig?.model]);
+  }, [activeModelConfig]);
 
   useEffect(() => {
     if (modelCapabilities.thinkingEfforts.length && !modelCapabilities.thinkingEfforts.includes(reasoningEffort)) {
@@ -2266,10 +2267,13 @@ function App() {
       }
       if (isGraphEvent && event.threadId && activeThreadIdRef.current !== event.threadId) return;
       const state = event.type === "complete" || event.type === "artifact" || event.type === "graph_update" || event.toolCall?.status === "completed" ? "done" : event.type === "configuration" || event.type === "failed" || event.type === "incomplete" || event.type === "interrupted" || event.toolCall?.status === "failed" || event.toolCall?.status === "interrupted" ? "waiting" : "active";
-      setEvents((current) => [...current.filter((item) => item.title !== event.title), { title: event.title, detail: event.detail, state }]);
+      const contextFailure = event.error?.code === "MODEL_CONTEXT_BUDGET_EXCEEDED";
+      const title = contextFailure ? t(event.title) : event.title;
+      const detail = contextFailure ? t(event.detail) : event.detail;
+      setEvents((current) => [...current.filter((item) => item.title !== title), { title, detail, state }]);
     });
     return unsubscribe;
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     const unsubscribeFiles = desktopBridge.onWorkspaceFilesChanged(() => {
@@ -2303,8 +2307,17 @@ function App() {
 
   useEffect(() => {
     void desktopBridge.getInitialWorkspace().then((initialWorkspace) => loadWorkspace(initialWorkspace ?? DEFAULT_WORKSPACE));
-    void desktopBridge.getModelConfig().then(setActiveModelConfig).catch(() => setActiveModelConfig(null));
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    void desktopBridge.getModelConfig().then((config) => {
+      if (active) setActiveModelConfig(config);
+    }).catch(() => {
+      if (active) setActiveModelConfig(null);
+    });
+    return () => { active = false; };
+  }, [modelConfigRevision]);
 
   useEffect(() => {
     const unsubscribeNewChat = desktopBridge.onMenuNewChat(() => startNewTask());
@@ -3621,6 +3634,7 @@ function App() {
               events={events}
               trajectoryEvents={combinedTrajectoryEvents}
               nativeBackend={selectedNativeBackend}
+              modelLabel={activeModelConfig?.hasApiKey ? activeModelConfig.model : ""}
               harnessBound={Boolean(boundHarness)}
               onHarnessChange={async (backend) => {
                 if (agentBusy) throw new Error(t("Stop the running turn before using this command."));
@@ -3891,7 +3905,7 @@ function App() {
         appearance={appearance}
         onAppearanceChange={setAppearance}
         bridge={desktopBridge}
-        onModelSaved={setActiveModelConfig}
+        onModelSaved={() => setModelConfigRevision((value) => value + 1)}
         executionPreferences={{ reasoningEffort, contextLength, capabilities: modelCapabilities, onReasoningEffort: setReasoningEffort, onContextLength: setContextLength }}
         workspace={workspace}
         modelWorkspace={executionWorkspace}
@@ -4029,6 +4043,9 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
   }, []);
   const lastUserIndex = useMemo(() => visibleMessages.reduce((last, message, index) => message.role === "user" ? index : last, -1), [visibleMessages]);
   const nativeEvents = useMemo(() => nativeTurnEvents(trajectoryEvents), [trajectoryEvents]);
+  const contextBudgetFailures = useMemo(() => new Set(trajectoryEvents
+    .filter((event) => event.type === "context_budget_exceeded")
+    .map((event) => event.turn_id)), [trajectoryEvents]);
   const hasStreamingText = messages.some((message) => message.role === "assistant" && message.id.endsWith(":stream") && Boolean(message.text.trim()));
   const lastNativeActivity = [...nativeEvents].reverse()
     .map((event) => (event.payload as { activity?: NativeAgentActivity } | null)?.activity)
@@ -4115,6 +4132,10 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
     setHistoryStart((current) => historyExpandedRef.current ? Math.min(current, tailStart) : tailStart);
   }, [messages.length]);
 
+  const renderMessage = (message: Message) => {
+    const text = message.role === "assistant" && message.turn_id && contextBudgetFailures.has(message.turn_id) ? t(message.text) : message.text;
+    return <ConversationMessage message={message} text={text} streaming={agentBusy && message.id.endsWith(":stream")} />;
+  };
   const historyContent = welcomeVisible ? <ResearchWelcome onSelect={onWelcomeAction} /> : <div className="conversation-thread">
         {historyStart > 0 && <button className="conversation-load-history" onClick={() => {
           historyExpandedRef.current = true;
@@ -4123,7 +4144,7 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
           Show {Math.min(HISTORY_MESSAGE_PAGE_SIZE, historyStart)} earlier {Math.min(HISTORY_MESSAGE_PAGE_SIZE, historyStart) === 1 ? "message" : "messages"}
         </button>}
         {visibleMessages.slice(0, lastUserIndex + 1).map((message, index) => <div key={message.id}>
-          <ConversationMessage message={message} streaming={agentBusy && message.id.endsWith(":stream")} />
+          {renderMessage(message)}
           {message.role === "user" && index < lastUserIndex && message.turn_id && nativeEventsByTurn.has(message.turn_id) && <NativeAgentPanel events={nativeEventsByTurn.get(message.turn_id)!} busy={false} />}
           {message.turn_id && message.turn_id !== currentTurnId && lastTurnMessageIndex.get(message.turn_id) === index && (changeSetsByTurn.get(message.turn_id) ?? []).map((changeSet) => <WorkspaceChangesCard key={changeSet.id} changeSet={changeSet} onOpenFile={onOpenFile} />)}
         </div>)}
@@ -4131,7 +4152,7 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
         {visibleMessages.slice(lastUserIndex + 1).map((message, offset) => {
           const index = lastUserIndex + 1 + offset;
           return <div key={message.id}>
-            <ConversationMessage message={message} streaming={agentBusy && message.id.endsWith(":stream")} />
+            {renderMessage(message)}
             {message.turn_id && message.turn_id !== currentTurnId && lastTurnMessageIndex.get(message.turn_id) === index && (changeSetsByTurn.get(message.turn_id) ?? []).map((changeSet) => <WorkspaceChangesCard key={changeSet.id} changeSet={changeSet} onOpenFile={onOpenFile} />)}
           </div>;
         })}
@@ -4169,7 +4190,7 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
   </div>;
 });
 
-function ConversationView({ messages, events, trajectoryEvents, nativeBackend, harnessBound, onHarnessChange, nativeQuestions, onNativeAnswer, onNativeSteer, workspace, projectId, agentBusy, interrupting, canInterrupt, pendingAction, changeSets, researchMode, researchGraphOpen, onToggleResearchGraph, onResearchGraphAvailability, reasoningEffort, contextLength, modelCapabilities, contextItems, onOpenWorkspaceSettings, onCommand, contextSummary, compactedThroughTurnId, onSubmit, onInterrupt, onResearchMode, onAddContext, onRemoveContext, onApprove, onReject, onOpenFile, showWelcome, onWelcomeAction, composerRequest, draftKey, currentFile, currentSelection, onComposerRequestApplied, initialScrollTop, onScrollTop, commentScope, addingComment, commentsShowResolved, onExitComments }: {
+function ConversationView({ messages, events, trajectoryEvents, nativeBackend, modelLabel, harnessBound, onHarnessChange, nativeQuestions, onNativeAnswer, onNativeSteer, workspace, projectId, agentBusy, interrupting, canInterrupt, pendingAction, changeSets, researchMode, researchGraphOpen, onToggleResearchGraph, onResearchGraphAvailability, reasoningEffort, contextLength, modelCapabilities, contextItems, onOpenWorkspaceSettings, onCommand, contextSummary, compactedThroughTurnId, onSubmit, onInterrupt, onResearchMode, onAddContext, onRemoveContext, onApprove, onReject, onOpenFile, showWelcome, onWelcomeAction, composerRequest, draftKey, currentFile, currentSelection, onComposerRequestApplied, initialScrollTop, onScrollTop, commentScope, addingComment, commentsShowResolved, onExitComments }: {
   commentScope: SessionCommentsScope | null;
   addingComment: boolean;
   commentsShowResolved: boolean;
@@ -4178,6 +4199,7 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
   events: TimelineEvent[];
   trajectoryEvents: ResearchEvent[];
   nativeBackend: AgentBackendConfig | null;
+  modelLabel?: string;
   harnessBound: boolean;
   onHarnessChange: (backend: AgentBackendConfig["backend"]) => Promise<void>;
   nativeQuestions: NativeAgentQuestion[];
@@ -4787,7 +4809,7 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
         {commandNotice && <div className="composer-command-notice" role="status">{commandNotice}</div>}
         <div className="conversation-composer-footer">
           <ContextPicker bridge={desktopBridge} workspace={workspace} projectId={projectId} items={contextItems} openRequest={contextPickerRequest} currentFile={currentFile} currentSelection={currentSelection} onAdd={addContextItems} />
-          <HarnessPicker backend={nativeBackend?.backend || "api"} bound={harnessBound} busy={agentBusy} onChange={onHarnessChange} onSettings={() => { void onCommand("model"); }} />
+          <HarnessPicker backend={nativeBackend?.backend || "api"} modelLabel={modelLabel} bound={harnessBound} busy={agentBusy} onChange={onHarnessChange} onSettings={() => { void onCommand("model"); }} />
           <button
             type="button"
             className="composer-context"
@@ -4858,15 +4880,15 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
   </div>;
 }
 
-const ConversationMessage = memo(function ConversationMessage({ message, streaming }: { message: Message; streaming: boolean }) {
+const ConversationMessage = memo(function ConversationMessage({ message, text, streaming }: { message: Message; text: string; streaming: boolean }) {
   return <article className={`conversation-message ${message.role}`} data-session-message-id={message.id} data-turn-id={message.role === "user" ? message.id : undefined}>
     <div className="conversation-message-content">
     {message.role === "user" && Boolean(message.attachments?.length) && <div className="message-attachments">{message.attachments?.map((attachment) => <MessageAttachmentView key={attachment.position} attachment={attachment} turnId={message.turn_id} />)}</div>}
     <div className="conversation-message-copy">
       <div className="conversation-message-role">{message.role === "assistant" ? "Archimedes" : "You"}</div>
       {message.role === "assistant"
-        ? streaming ? <StreamingMarkdownMessage content={message.text} /> : <MarkdownMessage content={message.text} />
-        : <p>{message.text}</p>}
+        ? streaming ? <StreamingMarkdownMessage content={text} /> : <MarkdownMessage content={text} />
+        : <p>{text}</p>}
       {Boolean(message.sources?.length) && <div className="conversation-sources" aria-label="Sources read by Archimedes">
         {message.sources?.map((source, index) => <a key={`${source.url}:${source.startPage}:${index}`} href={source.startPage ? `${source.url}#page=${source.startPage}` : source.url} target="_blank" rel="noreferrer" title={[source.title, source.url, source.query && `Query: ${source.query}`, source.excerpt, source.retrievedAt && `Read: ${source.retrievedAt}`].filter(Boolean).join("\n\n")}>
           <FileText size={12} /><span>{source.startPage ? `${new URL(source.url).hostname} · pp. ${source.startPage}${source.endPage !== source.startPage ? `-${source.endPage}` : ""}` : source.title}</span>

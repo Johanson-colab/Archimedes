@@ -2,10 +2,30 @@ const THINKING_EFFORTS = ["low", "medium", "high"];
 const CONTEXT_LENGTHS = ["standard", "extra-long"];
 const STANDARD_CONTEXT_CHARS = 500_000;
 const EXTRA_LONG_CONTEXT_CHARS = 1_000_000;
+const ESTIMATED_CHARACTERS_PER_TOKEN = 4;
+
+function estimateTokenCharacters(tokens) {
+  return tokens * ESTIMATED_CHARACTERS_PER_TOKEN;
+}
+
+function tokenCount(value) {
+  const count = Math.round(Number(value));
+  return Number.isSafeInteger(count) && count > 0 ? count : 0;
+}
+
+function outputTokenLimit(config, { maxOutputTokens, allowLargeOutput = false, allowTools = true } = {}) {
+  const savedLimit = tokenCount(config.maxOutputTokens);
+  const requested = tokenCount(maxOutputTokens);
+  if (savedLimit) return requested ? Math.min(savedLimit, requested) : savedLimit;
+  if (!requested) return 0;
+  return Math.max(64, Math.min(allowLargeOutput && !allowTools ? 32_768 : 8_192, requested));
+}
 
 function normalizedConfig(config = {}) {
+  const provider = String(config.provider || "custom").toLowerCase();
   return {
-    provider: String(config.provider || "custom").toLowerCase(),
+    // Go uses the same model-based capability checks as other compatible gateways.
+    provider: provider === "opencode-go" ? "custom" : provider,
     model: String(config.model || "").toLowerCase(),
   };
 }
@@ -25,15 +45,24 @@ function supportsExtraLongContext(config = {}) {
 }
 
 function getModelCapabilities(config = {}) {
-  const nativeThinking = isNativeThinkingModel(config);
-  const extraLongContext = supportsExtraLongContext(config);
+  const explicit = config.capabilities && typeof config.capabilities === "object" ? config.capabilities : {};
+  const nativeThinking = explicit.nativeThinking === undefined ? isNativeThinkingModel(config) : Boolean(explicit.nativeThinking);
+  const extraLongContext = explicit.extraLongContext === undefined ? supportsExtraLongContext(config) : Boolean(explicit.extraLongContext);
+  const contextWindowTokens = tokenCount(config.contextWindowTokens);
+  // The conversation and composer share a character estimate. The provider
+  // applies its own tokenizer when it receives the actual request.
+  const windowCharacters = estimateTokenCharacters(contextWindowTokens);
   return {
-    thinkingEfforts: nativeThinking ? THINKING_EFFORTS : [],
-    contextLengths: extraLongContext ? CONTEXT_LENGTHS : ["standard"],
+    thinkingEfforts: Array.isArray(explicit.thinkingEfforts) ? explicit.thinkingEfforts : (nativeThinking ? THINKING_EFFORTS : []),
+    contextLengths: Array.isArray(explicit.contextLengths) ? explicit.contextLengths : (extraLongContext ? CONTEXT_LENGTHS : ["standard"]),
     nativeThinking,
+    supportsVision: Boolean(explicit.supportsVision),
+    supportsTools: explicit.supportsTools === undefined ? true : Boolean(explicit.supportsTools),
+    maxOutputTokens: tokenCount(config.maxOutputTokens),
+    contextWindowTokens,
     contextCharacterLimits: {
-      standard: STANDARD_CONTEXT_CHARS,
-      "extra-long": EXTRA_LONG_CONTEXT_CHARS,
+      standard: windowCharacters || STANDARD_CONTEXT_CHARS,
+      "extra-long": windowCharacters || EXTRA_LONG_CONTEXT_CHARS,
     },
   };
 }
@@ -60,8 +89,10 @@ module.exports = {
   STANDARD_CONTEXT_CHARS,
   THINKING_EFFORTS,
   contextCharacterLimit,
+  estimateTokenCharacters,
   getModelCapabilities,
   isNativeThinkingModel,
   normalizeContextLength,
   normalizeReasoningEffort,
+  outputTokenLimit,
 };

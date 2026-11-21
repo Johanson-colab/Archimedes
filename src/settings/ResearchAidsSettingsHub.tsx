@@ -9,6 +9,7 @@ type ResearchAidsSettingsHubProps = {
   onChangeProactiveSettings: (patch: Partial<ProactiveSettings>) => void;
   onObserveProactive: () => void;
   onResetProactiveHistory: () => void;
+  onModelSaved: () => void;
   proactiveHistoryCount: number;
   bridge: ResearchDeskBridge;
   sessionTools: SessionToolPreferences;
@@ -21,6 +22,7 @@ export default function ResearchAidsSettingsHub({
   onChangeProactiveSettings,
   onObserveProactive,
   onResetProactiveHistory,
+  onModelSaved,
   proactiveHistoryCount,
   bridge,
   sessionTools,
@@ -33,6 +35,7 @@ export default function ResearchAidsSettingsHub({
         onChange={onChangeProactiveSettings}
         onObserveOnce={onObserveProactive}
         onResetHistory={onResetProactiveHistory}
+        onModelSaved={onModelSaved}
         bridge={bridge}
         historyCount={proactiveHistoryCount}
         canObserve={proactiveSettings.mode !== "off"}

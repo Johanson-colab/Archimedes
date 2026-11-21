@@ -6,7 +6,7 @@ const { JSDOM } = require("jsdom");
 
 let dom, React, createRoot, ModelSettingsModal;
 const calls = {};
-const translate = (key) => key;
+const translate = (key, values) => key.replace(/\{(\w+)\}/g, (placeholder, name) => values?.[name] ?? placeholder);
 
 before(async () => {
   dom = new JSDOM('<!doctype html><div id="root"></div>', { url: "http://localhost" });
@@ -27,6 +27,7 @@ before(async () => {
     ...Object.fromEntries(["Brain", "Workflow", "Check", "ChevronDown", "Key", "LoaderCircle", "Network", "RefreshCw", "Route", "Save", "Server", "Sparkle", "X"].map((name) => [name, icons[name]])),
     useUISettings: () => ({ t: translate }),
     createPortal: require("react-dom").createPortal,
+    packageMetadata: require("../package.json"),
     ...Object.fromEntries(["anthropicLogo", "claudeLogo", "opencodeLogo", "geminiLogo", "minimaxLogo", "zaiLogo", "deepseekLogo", "moonshotLogo", "openaiLogo", "qwenLogo"].map((name) => [name, name])),
   };
   async function load(name, exports) {
@@ -126,6 +127,33 @@ test("API and Agent tabs keep separate actions, keyboard navigation and unsaved 
     await click("Save model");
     assert.equal(calls.savedModels.length, 1);
     assert.deepEqual(calls.savedBackends, []);
+  } finally { await cleanup(); }
+});
+
+test("OpenCode Go is a provider list choice with connection defaults and localized recovery", async () => {
+  let candidate;
+  const cleanup = await mount(bridge({
+    testModelConfig: async (input) => {
+      candidate = input;
+      throw new Error("Error invoking remote method 'model-config:test': Error: Connection failed (400): MissingSessionID");
+    },
+  }));
+  try {
+    const goProvider = [...document.querySelectorAll(".provider-list .provider-option")].find((node) => node.querySelector("strong")?.textContent === "OpenCode Go");
+    assert.ok(goProvider);
+    assert.equal(button("Use OpenCode Go preset"), undefined);
+    await React.act(async () => goProvider.click());
+    assert.ok(goProvider.classList.contains("active"));
+    assert.equal(document.querySelector(".provider-config-title h3").textContent, "hy4-flash-free");
+    assert.equal(document.querySelector(".provider-config-title p").textContent, "Provider: OpenCode Go");
+    assert.equal(document.querySelector(".provider-config input[type=password]").placeholder, "Enter API key");
+    await click("Test connection");
+    assert.equal(candidate.provider, "opencode-go");
+    assert.equal(candidate.baseUrl, "https://opencode.ai/inference/go/openai/v1");
+    assert.equal(candidate.model, "hy4-flash-free");
+    assert.deepEqual(candidate.sessionHeader, { name: "x-opencode-session", strategy: "thread" });
+    assert.match(candidate.userAgent, /^Archimedes\//);
+    assert.match(document.querySelector(".model-feedback").textContent, /Connection failed \(400\).*select OpenCode Go/);
   } finally { await cleanup(); }
 });
 
