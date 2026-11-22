@@ -7928,12 +7928,12 @@ html[data-menu-style="glass"] .menu-surface {
 }
 
 /* Composer controls: status, model options and context estimate. */
-.remote-workspace-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 7px 10px; border-top: 1px solid var(--border-default); color: var(--text-muted); font-size: 11px; }
-.remote-workspace-bar label { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
-.remote-workspace-bar select { max-width: min(260px, 55vw); color: var(--text-primary); background: var(--surface-panel); border: 1px solid var(--border-default); border-radius: 4px; font: inherit; padding: 3px 5px; }
-.remote-workspace-bar button { color: var(--text-muted); background: transparent; border: 0; font: inherit; cursor: pointer; text-decoration: underline; }
-.remote-workspace-detail { flex-basis: 100%; overflow-wrap: anywhere; line-height: 1.4; }
-.remote-workspace-detail code { color: var(--text-primary); }
+.ssh-workspace-trigger { position: relative; }
+.ssh-workspace-trigger.selected { color: var(--text-primary); }
+.ssh-workspace-indicator { position: absolute; right: 2px; bottom: 2px; width: 6px; height: 6px; border: 1px solid var(--surface-panel); border-radius: 50%; background: var(--text-muted); }
+.ssh-workspace-menu-item .menu-item-body { min-width: 0; }
+.ssh-workspace-menu-item .menu-item-body > span, .ssh-workspace-menu-item .menu-item-body > small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ssh-workspace-menu-item .menu-item-body > small { margin-top: 2px; color: var(--text-muted); font-size: 11px; }
 .composer-model-controls { display: inline-flex; min-width: 0; align-items: center; gap: 2px; }
 .composer-model-controls .reasoning-effort-picker { display: inline-flex; }
 .composer-tool.context-length-trigger { gap: 6px; padding: 0 4px; }

@@ -151,6 +151,7 @@ import {
   Save,
   Scissors,
   Search,
+  Server,
   Settings,
   Share2,
   Shield,
@@ -4280,6 +4281,7 @@ function ConversationView({ messages, events, trajectoryEvents, remoteServers, r
   const activeMode = researchModes.find((mode) => mode.id === researchMode) ?? researchModes[0];
   const shortcutModifier = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform) ? "⌘" : "Ctrl+";
   const [contextUsageOpen, setContextUsageOpen] = useState(false);
+  const [sshWorkspaceOpen, setSshWorkspaceOpen] = useState(false);
   const [draggingFiles, setDraggingFiles] = useState(false);
   const [composerMenu, setComposerMenu] = useState<{ x: number; y: number } | null>(null);
   const [composerError, setComposerError] = useState("");
@@ -4299,6 +4301,7 @@ function ConversationView({ messages, events, trajectoryEvents, remoteServers, r
   const [contextPickerRequest, setContextPickerRequest] = useState(0);
   const previousBusyRef = useRef(agentBusy);
   const contextUsageTriggerRef = useRef<HTMLButtonElement>(null);
+  const sshWorkspaceTriggerRef = useRef<HTMLButtonElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const composerBoxRef = useRef<HTMLDivElement>(null);
   const appliedComposerRequestRef = useRef<string | null>(null);
@@ -4845,17 +4848,6 @@ function ConversationView({ messages, events, trajectoryEvents, remoteServers, r
         </MenuSurface>
         {composerError && <div id="composer-error" className="composer-attachment-error" role="alert">{composerError}</div>}
         {commandNotice && <div className="composer-command-notice" role="status">{commandNotice}</div>}
-        {nativeBackend?.backend === "codex" && (predictedMode === "research" || (!showWelcome && researchMode === "experiment-setup")) && <div className="remote-workspace-bar">
-          <label><span>{t("SSH workspace")}</span>
-            <select aria-label={t("SSH workspace")} value={remoteServerId} disabled={agentBusy} onFocus={onRefreshRemoteServers} onChange={event => onRemoteServerChange(event.target.value)}>
-              <option value="">{t("Local")}</option>
-              {remoteServers.map(server => <option key={server.id} value={server.id}>{server.name} · {server.user}@{server.host}:{server.port}</option>)}
-            </select>
-          </label>
-          <button type="button" onClick={onOpenSshSettings}>{t("Manage servers")}</button>
-          {remoteServerId && <div className="remote-workspace-detail" role="status">{t("Remote directory")}: <code>{remoteServers.find(server => server.id === remoteServerId)?.workspace || "—"}</code> · {t("Codex native tools remain local; remote tools require approval.")}</div>}
-          {remoteServerId && (nativeBackend.permissionMode === "read-only" || nativeBackend.permissionMode === "plan") && <div className="remote-workspace-detail" role="status">{t("Choose an approval-enabled Codex permission mode in Models before using SSH.")}</div>}
-        </div>}
         <div className="conversation-composer-footer">
           <ContextPicker bridge={desktopBridge} workspace={workspace} projectId={projectId} items={contextItems} openRequest={contextPickerRequest} currentFile={currentFile} currentSelection={currentSelection} onAdd={addContextItems} />
           <HarnessPicker backend={nativeBackend?.backend || "api"} bound={harnessBound} busy={agentBusy} onChange={onHarnessChange} onSettings={() => { void onCommand("model"); }} />
@@ -4868,6 +4860,20 @@ function ConversationView({ messages, events, trajectoryEvents, remoteServers, r
           >
             <Folder size={13} aria-hidden="true" /><span>{workspacePathName(workspace, t("No workspace"))}</span>
           </button>
+          {nativeBackend?.backend === "codex" && (predictedMode === "research" || (!showWelcome && researchMode === "experiment-setup")) && <>
+            <button ref={sshWorkspaceTriggerRef} type="button" className={`composer-tool ssh-workspace-trigger${remoteServerId ? " selected" : ""}`} disabled={agentBusy} aria-label={remoteServerId ? `${t("SSH workspace")}: ${remoteServers.find(server => server.id === remoteServerId)?.name || remoteServerId}` : t("SSH workspace")} aria-haspopup="menu" aria-expanded={sshWorkspaceOpen} title={remoteServerId ? `${t("SSH workspace")}: ${remoteServers.find(server => server.id === remoteServerId)?.name || remoteServerId}` : t("SSH workspace")} onClick={() => { onRefreshRemoteServers(); setSshWorkspaceOpen(open => !open); }}>
+              <Server size={15} aria-hidden="true" />
+              {remoteServerId && <span className="ssh-workspace-indicator" aria-hidden="true" />}
+            </button>
+            <MenuSurface open={sshWorkspaceOpen} onClose={() => setSshWorkspaceOpen(false)} anchorRef={sshWorkspaceTriggerRef} placement="top-start" width={300} ariaLabel={t("SSH workspace")}>
+              <MenuLabel>{t("SSH workspace")}</MenuLabel>
+              <MenuItem icon={<Laptop size={15} />} checked={!remoteServerId} onClick={() => { onRemoteServerChange(""); setSshWorkspaceOpen(false); }}>{t("Local")}</MenuItem>
+              {remoteServers.map(server => <MenuItem key={server.id} icon={<Server size={15} />} checked={server.id === remoteServerId} className="ssh-workspace-menu-item" onClick={() => { onRemoteServerChange(server.id); setSshWorkspaceOpen(false); }}><span>{server.name}</span><small>{server.user}@{server.host}:{server.port} · {server.workspace}</small></MenuItem>)}
+              {remoteServerId && (nativeBackend.permissionMode === "read-only" || nativeBackend.permissionMode === "plan") && <MenuLabel>{t("Choose an approval-enabled Codex permission mode in Models before using SSH.")}</MenuLabel>}
+              <MenuDivider />
+              <MenuItem icon={<Settings size={15} />} onClick={() => { setSshWorkspaceOpen(false); onOpenSshSettings(); }}>{t("Manage servers")}</MenuItem>
+            </MenuSurface>
+          </>}
           {nativeBackend ? (reportedNativeUsage?.modelContextWindow ? <NativeContextUsage usage={reportedNativeUsage} /> : null) : <div className="context-usage-control">
             <button
               ref={contextUsageTriggerRef}
