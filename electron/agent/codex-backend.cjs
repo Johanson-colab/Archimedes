@@ -145,7 +145,16 @@ async function nativeSession({ config, workspace, thread, turn, contextItems = [
   const binding = bindings.get();
   const resume = canResume(binding, { workspace: root, model: config.model, previousTurnId });
   if (ephemeral && (resume || compaction)) throw new Error('Temporary Codex tasks cannot resume or compact a saved session.');
-  if (compaction && !resume) throw new Error('Native compaction requires an identical completed Codex binding. Continue this chat successfully before compacting.');
+  if (compaction && !resume) {
+    let reason;
+    if (!binding?.native_thread_id) reason = 'This chat has no native Codex session yet. Forked or side chats acquire their own session after a successful turn.';
+    else if (binding.backend && binding.backend !== 'codex') reason = 'This chat is bound to a different native backend.';
+    else if (!binding.last_turn_id) reason = 'The previous native operation did not confirm completion. Resolve its uncertain state before compacting.';
+    else if (binding.workspace !== root) reason = 'The working directory differs from the one used by this Codex session.';
+    else if (binding.model !== (config.model || '')) reason = `The selected model (${config.model || 'native default'}) differs from this session's saved model (${binding.model || 'native default'}). Restore the saved model before compacting.`;
+    else reason = 'The local conversation has changed since the last completed native turn. Continue this chat successfully before compacting.';
+    throw new Error(`Codex could not compact this chat: ${reason}`);
+  }
   if (runtimeId && activeNativeRuns.has(runtimeId)) throw new Error('This chat already has an active native Codex operation.');
   if (resume && Array.from(activeNativeRuns.values()).some(run => run.bindingId === binding.native_thread_id)) {
     throw new NativeSessionBusyError('codex');
