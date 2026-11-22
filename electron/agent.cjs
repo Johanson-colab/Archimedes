@@ -1559,10 +1559,24 @@ async function runAgentInStore({ prompt, workspace, threadId, projectId, workspa
       const liveExperimentAllowed = liveNativeAllowed && !remoteServer;
       const experimentToolNames = new Set(["create_experiment", "prepare_experiment_workspace", "run_experiment", "wait_experiment", "read_experiment_log", "record_experiment_activity", "record_experiment_evidence", "create_experiment_result"]);
       const invokeExperimentTool = async (name, args, requestSignal, isRequestActive = () => true) => {
-        if (name === "ssh_remote_exec") {
+        const sshWorkspace = require("./agent/ssh-workspace.cjs");
+        if (name === "ssh_remote_exec" || sshWorkspace.FILE_TOOL_NAMES.has(name)) {
           if (!remoteServer || externalBackend.backend !== "codex" || !liveNativeAllowed) throw new Error("No remote SSH workspace is selected for this Research turn.");
           if (!isRequestActive() || requestSignal?.aborted) throw new Error("This remote operation has ended.");
-          return require("./agent/ssh-workspace.cjs").runSshWorkspace({ server: remoteServer, command: args.command, cwd: args.cwd, signal: requestSignal, approve: approveNative });
+          const location = `${remoteServer.user}@${remoteServer.host}:${remoteServer.port}`;
+          const label = name === "ssh_remote_read" ? "Remote file read" : name === "ssh_remote_edit" ? "Remote file edit" : "Remote command";
+          emitTurn({ type: "status", title: label, detail: `${location} · awaiting approval` });
+          try {
+            const result = name === "ssh_remote_exec"
+              ? await sshWorkspace.runSshWorkspace({ server: remoteServer, command: args.command, cwd: args.cwd, signal: requestSignal, approve: approveNative })
+              : await sshWorkspace.runRemoteFileOperation({ name, args, server: remoteServer, signal: requestSignal, approve: approveNative });
+            recordEvent({ type: "remote_workspace_operation", payload: { operation: name, location, cwd: result.cwd, exitCode: result.exitCode, truncated: result.truncated } });
+            emitTurn({ type: "status", title: label, detail: `${location} · exit ${result.exitCode ?? "unknown"}` });
+            return result;
+          } catch (error) {
+            emitTurn({ type: "status", title: label, detail: `${location} · not completed` });
+            throw error;
+          }
         }
         if (!liveExperimentAllowed || !experimentToolNames.has(name)) throw new Error("This experiment tool is unavailable in this session.");
         experimentToolsUsed = true;
@@ -1580,13 +1594,15 @@ async function runAgentInStore({ prompt, workspace, threadId, projectId, workspa
           emitTurn({ type: "status", title: "Experiment bridge unavailable", detail: "Live CLI access is unavailable; direct Codex tools or the existing directive fallback may still be available." });
         }
       }
-      const experimentDynamicTools = liveExperimentAllowed && externalBackend.backend === "codex"
+      // Codex retains the tool set from thread/start, so register both sets
+      // at creation and enforce the selected location again on every call.
+      const experimentDynamicTools = liveNativeAllowed && externalBackend.backend === "codex"
         ? toolRegistry.definitions().filter((item) => experimentToolNames.has(item.function.name)).map((item) => ({
           type: "function", name: item.function.name, description: item.function.description, inputSchema: item.function.parameters,
         })) : [];
-      if (liveNativeAllowed && externalBackend.backend === "codex") experimentDynamicTools.push({ type: "function", name: "ssh_remote_exec", description: "Execute one explicitly approved shell command on the selected SSH server. This is remote shell execution, not a managed Research Graph experiment run. Output is bounded; a timeout or cancellation does not confirm remote process termination.", inputSchema: { type: "object", properties: { command: { type: "string", description: "Exact remote shell command." }, cwd: { type: "string", description: "Optional absolute remote working directory or ~/ path." } }, required: ["command"], additionalProperties: false } });
+      if (liveNativeAllowed && externalBackend.backend === "codex") experimentDynamicTools.push({ type: "function", name: "ssh_remote_exec", description: "Execute one explicitly approved shell command on the selected SSH server. This is remote shell execution, not a managed Research Graph experiment run. Output is bounded; a timeout or cancellation does not confirm remote process termination.", inputSchema: { type: "object", properties: { command: { type: "string", description: "Exact remote shell command." }, cwd: { type: "string", description: "Optional absolute remote working directory or ~/ path." } }, required: ["command"], additionalProperties: false } }, ...require("./agent/ssh-workspace.cjs").fileToolDefinitions);
       let experimentBridgeInstructions = experimentBridge?.instructions || (remoteServer ? "Managed experiment tools are local-only and unavailable while an SSH workspace is selected. Do not emit experiment directives or claim a remote command is a managed Run." : liveExperimentAllowed ? "" : "Experiment tools are unavailable in the current read-only or plan permission mode. Do not emit experiment directives or start runs.");
-      if (remoteServer) experimentBridgeInstructions += `\n\nRemote SSH workspace selected: ${remoteServer.user}@${remoteServer.host}:${remoteServer.port}, default directory ${remoteServer.workspace}. Use ssh_remote_exec for remote operations; ordinary native Codex shell and file tools remain LOCAL. Never assume a remote command is a managed experiment run. Each remote command requires user approval. Do not run local commands to represent remote actions. On timeout, cancellation, or disconnect the remote process status is unknown; inspect before retrying.`;
+      if (remoteServer) experimentBridgeInstructions += `\n\nRemote SSH workspace selected: ${remoteServer.user}@${remoteServer.host}:${remoteServer.port}, default directory ${remoteServer.workspace}. For remote work use ssh_remote_read to read files, ssh_remote_edit for exact changes, and ssh_remote_exec for commands; all require approval. Their paths are on the remote machine. Ordinary native Codex shell and file tools remain LOCAL, so never use them as if they accessed the remote workspace. Remote shell operations are not managed experiment runs. On timeout, cancellation, or disconnect the remote process status is unknown; inspect before retrying.`;
       if (liveExperimentAllowed && experimentDynamicTools.length && !experimentBridgeInstructions) {
         experimentBridgeInstructions = "If direct experiment tools are available, use them only for an explicitly requested experiment. Never repeat a completed run. If unavailable, use the following legacy fallback:\n" + experimentDirectives.experimentPrompt();
       }
@@ -1604,7 +1620,7 @@ async function runAgentInStore({ prompt, workspace, threadId, projectId, workspa
         signal: controller.signal, emit: emitTurn, recordEvent, bindings: store.nativeAgentBindings(thread.id),
         approve: approveNative,
       });
-      if (externalBackend.backend === "codex" && liveNativeAllowed && !thread.turns.length) recordEvent({ type: "remote_tools_available", payload: { version: 1 } });
+      if (externalBackend.backend === "codex" && liveNativeAllowed && !thread.turns.length) recordEvent({ type: "remote_tools_available", payload: { version: require("./agent/ssh-workspace.cjs").FILE_TOOLS_VERSION } });
       let response = nativeResponse;
       if (["research", "experiment-setup"].includes(mode)) {
         const extracted = experimentDirectives.extractExperimentDirectives(nativeResponse);
@@ -1622,7 +1638,7 @@ async function runAgentInStore({ prompt, workspace, threadId, projectId, workspa
           });
           if (notes.length) response = [response, ...notes].filter(Boolean).join("\n\n");
         } else if (extracted.directives.length) {
-          response = [response, liveExperimentAllowed ? "Additional experiment directives were not executed because live experiment tools were already used; check the recorded activity before retrying." : "Experiment directives were not executed in the current read-only or plan permission mode."].filter(Boolean).join("\n\n");
+          response = [response, liveExperimentAllowed ? "Additional experiment directives were not executed because live experiment tools were already used; check the recorded activity before retrying." : remoteServer ? "Local experiment directives were not executed while an SSH workspace was selected." : "Experiment directives were not executed in the current read-only or plan permission mode."].filter(Boolean).join("\n\n");
         }
       }
       recordEvent({ type: "assistant_step", payload: { content: response, backend: externalBackend.backend } });

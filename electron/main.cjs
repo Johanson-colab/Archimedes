@@ -1996,12 +1996,13 @@ app.whenReady().then(async () => {
     let remoteServer = null;
     if (input.remoteServerId) {
       if (input.origin !== "research" || selectedBackend !== "codex" || !["research", "experiment-setup"].includes(mode)) throw new Error("SSH workspace is available only in Codex Research mode.");
+      if (input.researchSkill) throw new Error("Research skills are not available while an SSH workspace is selected.");
       if (["read-only", "plan"].includes(backend.permissionMode)) throw new Error("SSH workspace needs an approval-enabled Codex permission mode.");
       remoteServer = sshServers.listServers().find(server => server.id === input.remoteServerId);
       if (!remoteServer) throw new Error("The selected SSH server no longer exists.");
       if (input.threadId) {
         const existing = store.getResearchThread(input.threadId);
-        if (existing.turns.length && !(existing.events || []).some(event => event.type === "remote_tools_available")) throw new Error("Start a new Research conversation to enable SSH tools; existing native sessions cannot register them retroactively.");
+        if (existing.turns.length && !(existing.events || []).some(event => event.type === "remote_tools_available" && event.payload?.version >= require("./agent/ssh-workspace.cjs").FILE_TOOLS_VERSION)) throw new Error("Start a new Research conversation to enable the current SSH tools; existing native sessions cannot register them retroactively.");
       }
     }
     if (input.researchSkill != null && !["idea-spark", "paper-to-slides"].includes(input.researchSkill)) throw new Error("Unknown Research skill.");

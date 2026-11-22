@@ -3656,6 +3656,7 @@ function App() {
               remoteServerId={remoteServerId}
               onRemoteServerChange={setRemoteServerId}
               onRefreshRemoteServers={refreshRemoteServers}
+              onOpenSshSettings={() => { setSettingsSection("ssh"); setSettingsOpen(true); }}
               harnessBound={Boolean(boundHarness)}
               onHarnessChange={async (backend) => {
                 if (agentBusy) throw new Error(t("Stop the running turn before using this command."));
@@ -4219,7 +4220,7 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
   </div>;
 });
 
-function ConversationView({ messages, events, trajectoryEvents, remoteServers, remoteServerId, onRemoteServerChange, onRefreshRemoteServers, nativeBackend, harnessBound, onHarnessChange, nativeQuestions, onNativeAnswer, onNativeSteer, workspace, projectId, agentBusy, interrupting, canInterrupt, pendingAction, changeSets, researchMode, researchGraphOpen, onToggleResearchGraph, onResearchGraphAvailability, reasoningEffort, contextLength, modelCapabilities, contextItems, onOpenWorkspaceSettings, onCommand, contextSummary, compactedThroughTurnId, onSubmit, onInterrupt, onResearchMode, onAddContext, onRemoveContext, onApprove, onReject, onOpenFile, showWelcome, onWelcomeAction, composerRequest, draftKey, currentFile, currentSelection, onComposerRequestApplied, initialScrollTop, onScrollTop, commentScope, addingComment, commentsShowResolved, onExitComments }: {
+function ConversationView({ messages, events, trajectoryEvents, remoteServers, remoteServerId, onRemoteServerChange, onRefreshRemoteServers, onOpenSshSettings, nativeBackend, harnessBound, onHarnessChange, nativeQuestions, onNativeAnswer, onNativeSteer, workspace, projectId, agentBusy, interrupting, canInterrupt, pendingAction, changeSets, researchMode, researchGraphOpen, onToggleResearchGraph, onResearchGraphAvailability, reasoningEffort, contextLength, modelCapabilities, contextItems, onOpenWorkspaceSettings, onCommand, contextSummary, compactedThroughTurnId, onSubmit, onInterrupt, onResearchMode, onAddContext, onRemoveContext, onApprove, onReject, onOpenFile, showWelcome, onWelcomeAction, composerRequest, draftKey, currentFile, currentSelection, onComposerRequestApplied, initialScrollTop, onScrollTop, commentScope, addingComment, commentsShowResolved, onExitComments }: {
   commentScope: SessionCommentsScope | null;
   addingComment: boolean;
   commentsShowResolved: boolean;
@@ -4232,6 +4233,7 @@ function ConversationView({ messages, events, trajectoryEvents, remoteServers, r
   remoteServerId: string;
   onRemoteServerChange: (id: string) => void;
   onRefreshRemoteServers: () => void;
+  onOpenSshSettings: () => void;
   harnessBound: boolean;
   onHarnessChange: (backend: AgentBackendConfig["backend"]) => Promise<void>;
   nativeQuestions: NativeAgentQuestion[];
@@ -4672,6 +4674,7 @@ function ConversationView({ messages, events, trajectoryEvents, remoteServers, r
       : undefined;
     if (command) { await runSlashCommand(command); return; }
     if (pendingResearchSkill && !prompt.trim()) { setComposerError(t("Add a research direction for Idea Spark.")); return; }
+    if (pendingResearchSkill && remoteServerId) { setComposerError(t("Switch to Local before using Idea Spark.")); return; }
     if (!prompt.trim() && !contextItems.some((item) => item.type === "image")) return;
     if (agentBusy) {
       if (nativeBackend) {
@@ -4842,16 +4845,20 @@ function ConversationView({ messages, events, trajectoryEvents, remoteServers, r
         </MenuSurface>
         {composerError && <div id="composer-error" className="composer-attachment-error" role="alert">{composerError}</div>}
         {commandNotice && <div className="composer-command-notice" role="status">{commandNotice}</div>}
+        {nativeBackend?.backend === "codex" && (predictedMode === "research" || (!showWelcome && researchMode === "experiment-setup")) && <div className="remote-workspace-bar">
+          <label><span>{t("SSH workspace")}</span>
+            <select aria-label={t("SSH workspace")} value={remoteServerId} disabled={agentBusy} onFocus={onRefreshRemoteServers} onChange={event => onRemoteServerChange(event.target.value)}>
+              <option value="">{t("Local")}</option>
+              {remoteServers.map(server => <option key={server.id} value={server.id}>{server.name} · {server.user}@{server.host}:{server.port}</option>)}
+            </select>
+          </label>
+          <button type="button" onClick={onOpenSshSettings}>{t("Manage servers")}</button>
+          {remoteServerId && <div className="remote-workspace-detail" role="status">{t("Remote directory")}: <code>{remoteServers.find(server => server.id === remoteServerId)?.workspace || "—"}</code> · {t("Codex native tools remain local; remote tools require approval.")}</div>}
+          {remoteServerId && (nativeBackend.permissionMode === "read-only" || nativeBackend.permissionMode === "plan") && <div className="remote-workspace-detail" role="status">{t("Choose an approval-enabled Codex permission mode in Models before using SSH.")}</div>}
+        </div>}
         <div className="conversation-composer-footer">
           <ContextPicker bridge={desktopBridge} workspace={workspace} projectId={projectId} items={contextItems} openRequest={contextPickerRequest} currentFile={currentFile} currentSelection={currentSelection} onAdd={addContextItems} />
           <HarnessPicker backend={nativeBackend?.backend || "api"} bound={harnessBound} busy={agentBusy} onChange={onHarnessChange} onSettings={() => { void onCommand("model"); }} />
-          {nativeBackend?.backend === "codex" && (predictedMode === "research" || (!showWelcome && researchMode === "experiment-setup")) && <label className="composer-context" title={t("Native Codex tools remain local; selected SSH commands require approval.")}>
-            <span>{t("SSH workspace")}</span>
-            <select aria-label={t("SSH workspace")} value={remoteServerId} disabled={agentBusy} onFocus={onRefreshRemoteServers} onChange={event => onRemoteServerChange(event.target.value)}>
-              <option value="">{t("Local")}</option>
-              {remoteServers.map(server => <option key={server.id} value={server.id}>{server.name} · {server.user}@{server.host}</option>)}
-            </select>
-          </label>}
           <button
             type="button"
             className="composer-context"
