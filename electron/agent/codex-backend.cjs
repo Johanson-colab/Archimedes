@@ -294,7 +294,9 @@ async function nativeSession({ config, workspace, thread, turn, contextItems = [
     const account = await client.request('account/read', { refreshToken: false });
     if (!account?.account) throw new Error('Codex is not signed in. Run codex login, then retry.');
     await validateNativeChoice(client, config, root);
-    const result = await client.request(resume ? 'thread/resume' : 'thread/start', { ...policy.setup, ...(ephemeral ? { ephemeral: true } : {}), ...(developerInstructions ? { developerInstructions } : {}), ...(resume ? { threadId: binding.native_thread_id } : experimentDynamicTools.length ? { dynamicTools: experimentDynamicTools } : {}) });
+    // Native history stays in Codex. Hydrating every historical tool output
+    // here can overflow the protocol frame before compaction even starts.
+    const result = await client.request(resume ? 'thread/resume' : 'thread/start', { ...policy.setup, ...(ephemeral ? { ephemeral: true } : {}), ...(developerInstructions ? { developerInstructions } : {}), ...(resume ? { threadId: binding.native_thread_id, excludeTurns: true } : experimentDynamicTools.length ? { dynamicTools: experimentDynamicTools } : {}) });
     if (ephemeral && result?.thread?.ephemeral !== true) throw new Error('This Codex version did not confirm a temporary session. Update Codex and retry; no graph extraction prompt was sent.');
     active.nativeThreadId = result?.thread?.id;
     if (!active.nativeThreadId) throw new Error('Codex did not return a thread ID.');

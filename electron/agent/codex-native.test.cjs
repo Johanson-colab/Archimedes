@@ -218,6 +218,7 @@ test('native compaction resumes identical binding, records native context comple
   const result = await backend.compactNative(f.args);
   assert.equal(result.compacted, true);
   assert.equal(f.peer().calls.filter(c => c.method === 'thread/resume').length, 1);
+  assert.equal(f.peer().calls.find(c => c.method === 'thread/resume').params.excludeTurns, true);
   assert.equal(f.peer().calls.filter(c => c.method === 'thread/compact/start').length, 1);
   assert.equal(f.peer().calls.some(c => c.method === 'turn/start'), false);
   assert.equal(f.peer().closed, true);

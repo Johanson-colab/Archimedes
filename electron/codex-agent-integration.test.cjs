@@ -21,9 +21,13 @@ readline.createInterface({input:process.stdin}).on('line',line=>{
  let result={};
  if(m.method==='account/read')result={account:{type:'chatgpt'}};
  if(m.method.startsWith('thread/'))result={thread:{id:'native-fixture'}};
- if(m.method==='turn/start'){
+ // Mimic a large stored thread: metadata-only resume must be requested.
+ if(m.method==='thread/resume' && !m.params.excludeTurns)result.thread.turns=[{output:'x'.repeat(8_000_001)}];
+ if(m.method==='turn/start' || m.method==='thread/compact/start'){
    send({id:m.id,result:{turn:{id:'native-turn'}}});
-   send({method:'item/agentMessage/delta',params:{threadId:'native-fixture',turnId:'native-turn',itemId:'answer',delta:'Native fixture answer'}});
+   if(m.method==='thread/compact/start')send({method:'turn/started',params:{threadId:'native-fixture',turnId:'native-turn',turn:{id:'native-turn'}}});
+   if(m.method==='thread/compact/start')send({method:'item/completed',params:{threadId:'native-fixture',turnId:'native-turn',item:{id:'compact',type:'contextCompaction'}}});
+   else send({method:'item/agentMessage/delta',params:{threadId:'native-fixture',turnId:'native-turn',itemId:'answer',delta:'Native fixture answer'}});
    send({method:'turn/completed',params:{threadId:'native-fixture',turn:{id:'native-turn',status:'completed'}}});
  }else send({id:m.id,result});
 });
@@ -76,6 +80,10 @@ readline.createInterface({input:process.stdin}).on('line',line=>{
       assert.equal(next.status, 'completed');
       assert.equal(next.thread.turns.length, 2);
       assert.equal(next.thread.events.filter(event => event.type === 'remote_tools_available').length, 1);
+      const compacted = await require('./agent/codex-backend.cjs').compactNative({ config: options.externalBackend, workspace: directory, thread: next.thread, turn: next.thread.turns.at(-1), bindings: store.nativeAgentBindings(next.threadId) });
+      assert.equal(compacted.compacted, true);
+      assert.equal(store.nativeAgentBindings(next.threadId).get().last_turn_id, next.turnId);
+      assert.equal(store.getResearchThread(next.threadId).turns.length, 2);
     }
     await assert.rejects(agent.runAgent({ prompt: "switch", workspace: directory, threadId: result.threadId, origin: "research", mode: "free-chat" }), /different harness/);
     assert.equal(store.getResearchThread(result.threadId).turns.length, 1);
