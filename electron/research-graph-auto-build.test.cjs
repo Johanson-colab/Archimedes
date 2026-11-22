@@ -451,7 +451,7 @@ test("retry extracts only a failed completed turn and records success without du
   });
 });
 
-test("a new idea round retires previous direct ideas and can restore them", () => {
+test("additional ideas preserve existing alternatives, including a reused idea", () => {
   withWorkspace(({ project }) => {
     const question = graph.createNode({
       projectId: project.id,
@@ -472,6 +472,7 @@ test("a new idea round retires previous direct ideas and can restore them", () =
       projectId: project.id,
       patch: {
         nodes: [
+          { id: "reused", kind: "idea", title: "Old A", content: { prediction: "Refined prediction" } },
           { id: "n1", kind: "idea", title: "New A", content: { hypothesis: "New A" } },
           { id: "n2", kind: "idea", title: "New B", content: { hypothesis: "New B" } },
         ],
@@ -482,10 +483,9 @@ test("a new idea round retires previous direct ideas and can restore them", () =
       },
     });
     assert.equal(applied.createdNodes.length, 2);
-    assert.equal(applied.supersededNodes.length, 3);
-    for (const node of oldIdeas) assert.equal(store.getResearchNode(node.id).status, "retracted");
-    graph.setNodeStatus({ nodeId: oldIdeas[0].id, status: "active", reason: "restore test" });
-    assert.equal(store.getResearchNode(oldIdeas[0].id).status, "active");
+    assert.equal(applied.supersededNodes.length, 0);
+    for (const node of oldIdeas) assert.equal(store.getResearchNode(node.id).status, "active");
+    assert.equal(store.getResearchNode(oldIdeas[0].id).current_revision.content.prediction, "Refined prediction");
   });
 });
 
@@ -567,8 +567,8 @@ test("maybeAutoBuild reports superseded ideas in its graph update", async () => 
       backend: "api",
       config: { apiKey: "test", model: "fixture" },
       workspace: root,
-      userPrompt: "Give me a new set of ideas.",
-      assistantResponse: "Two new alternatives are proposed here.",
+      userPrompt: "Reject the old idea and give me a new set of ideas.",
+      assistantResponse: "The old idea is rejected. Two new alternatives are proposed here.",
       emit: (event) => events.push(event),
       recordEvent: () => {},
       complete: async () => ({
@@ -581,6 +581,7 @@ test("maybeAutoBuild reports superseded ideas in its graph update", async () => 
             { from: question.id, to: "n1", kind: "generates" },
             { from: question.id, to: "n2", kind: "generates" },
           ],
+          supersede: [{ nodeId: oldIdea.id, reason: "Explicitly rejected" }],
         }),
       }),
     });
