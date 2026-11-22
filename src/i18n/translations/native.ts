@@ -1,6 +1,7 @@
 // Native agent controls, execution and context.
 export const native: Record<string, string> = {
   "Accept edits": "自动接受编辑",
+  "Another workspace is using this {harness} conversation. Wait for its active turn to finish.": "另一个工作区正在使用此 {harness} 会话。请等当前轮次结束后再试。",
   "API providers and harnesses": "API 提供商与执行框架",
   "Approve for me": "帮我批准",
   "Ask before commands that need elevated access.": "需要额外权限的命令执行前请求批准。",

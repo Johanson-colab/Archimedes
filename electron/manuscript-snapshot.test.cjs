@@ -1,0 +1,389 @@
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
+const { createHash } = require("node:crypto");
+const { EventEmitter } = require("node:events");
+const test = require("node:test");
+const { captureManuscriptSources, readManuscriptSnapshot, pruneManuscriptPreviews } = require("./manuscript-snapshot.cjs");
+const { compileLatexDocument } = require("./latex-workspace.cjs");
+const { createManagedCompiler } = require("./managed-latex-engine.cjs");
+const hash = data => createHash("sha256").update(data).digest("hex");
+
+function fixture(t) {
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-manuscript-")));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  fs.mkdirSync(path.join(root, "paper/figures"), { recursive: true });
+  fs.writeFileSync(path.join(root, "paper/main.tex"), "\\input{section}\n");
+  fs.writeFileSync(path.join(root, "paper/section.tex"), "Section one");
+  fs.writeFileSync(path.join(root, "paper/refs.bib"), "Bibliography one");
+  fs.writeFileSync(path.join(root, "paper/figures/plot.png"), Buffer.from([1, 2, 3]));
+  return root;
+}
+
+function compilerFixture(onStart = () => {}, delay = 0) {
+  return (_command, args, options) => {
+    const child = new EventEmitter(); child.stdout = new EventEmitter(); child.stderr = new EventEmitter(); child.kill = () => {};
+    const text = fs.readFileSync(path.join(options.cwd, "section.tex"), "utf8");
+    const out = args[args.indexOf("--outdir") + 1];
+    onStart(options.cwd, text);
+    setTimeout(() => {
+      fs.writeFileSync(path.join(out, "main.pdf"), `%PDF-controlled-fixture ${text}`);
+      child.stdout.emit("data", `Controlled compiler: ${text}\n`);
+      child.emit("close", 0, null);
+    }, delay);
+    return child;
+  };
+}
+
+function transientCompilerFixture(relativePath, { inBuildDirectory = false, onCreated } = {}) {
+  return (_command, args, options) => {
+    const child = new EventEmitter(); child.stdout = new EventEmitter(); child.stderr = new EventEmitter(); child.kill = () => {};
+    const text = fs.readFileSync(path.join(options.cwd, "section.tex"), "utf8");
+    const out = args[args.indexOf("--outdir") + 1];
+    fs.writeFileSync(path.join(out, "main.pdf"), `%PDF-controlled-fixture ${text}`);
+    setImmediate(() => {
+      const transient = path.join(inBuildDirectory ? out : options.cwd, relativePath);
+      fs.writeFileSync(transient, "Generated while the compiler ran");
+      onCreated?.(relativePath);
+      fs.unlinkSync(transient);
+      child.stdout.emit("data", `Controlled compiler: ${text}\n`);
+      child.emit("close", 0, null);
+    });
+    return child;
+  };
+}
+
+test("manuscript version covers sections, bibliography and images while excluding generated/environment caches", t => {
+  const root = fixture(t), first = captureManuscriptSources(root, "paper/main.tex");
+  assert.equal(first.files.length, 4);
+  for (const name of [".archimedes", ".git", ".venv", "node_modules"]) { fs.mkdirSync(path.join(root, "paper", name)); fs.writeFileSync(path.join(root, "paper", name, "cache"), "generated"); }
+  assert.equal(captureManuscriptSources(root, "paper/main.tex").source_version, first.source_version);
+  let previous = first.source_version;
+  for (const name of ["section.tex", "refs.bib", "figures/plot.png"]) {
+    fs.appendFileSync(path.join(root, "paper", name), "changed");
+    const next = captureManuscriptSources(root, "paper/main.tex").source_version;
+    assert.notEqual(next, previous, name); previous = next;
+  }
+});
+
+test("successive builds retain immutable PDF/log bytes and a fresh source/PDF handoff check", async t => {
+  const root = fixture(t), spawnImpl = compilerFixture();
+  const first = await compileLatexDocument(root, "paper/main.tex", { executable: "tectonic", spawnImpl });
+  const firstBytes = fs.readFileSync(path.join(root, first.pdf_path));
+  const firstLog = fs.readFileSync(path.join(root, first.source_snapshot.log.path));
+  assert.equal(first.ok, true); assert.equal(readManuscriptSnapshot(root, first.source_snapshot.manifest_path).current, true);
+  assert.equal(first.source_snapshot.pdf.sha256, hash(firstBytes));
+  assert.equal(first.source_snapshot.log.sha256, hash(firstLog));
+  fs.writeFileSync(path.join(root, "paper/section.tex"), "Section two");
+  const second = await compileLatexDocument(root, "paper/main.tex", { executable: "tectonic", spawnImpl });
+  assert.notEqual(first.pdf_path, second.pdf_path);
+  assert.deepEqual(fs.readFileSync(path.join(root, first.pdf_path)), firstBytes);
+  assert.deepEqual(fs.readFileSync(path.join(root, first.source_snapshot.log.path)), firstLog);
+  const old = readManuscriptSnapshot(root, first.source_snapshot.manifest_path);
+  assert.equal(old.current, false); assert.equal(old.source_matches, false); assert.equal(old.pdf_matches, true);
+  assert.equal(readManuscriptSnapshot(root, second.source_snapshot.manifest_path).current, true);
+  fs.appendFileSync(path.join(root, second.pdf_path), "external PDF change");
+  assert.equal(readManuscriptSnapshot(root, second.source_snapshot.manifest_path).pdf_matches, false);
+});
+
+test("changes during compilation produce a stale receipt instead of a current PDF", async t => {
+  const root = fixture(t);
+  const result = await compileLatexDocument(root, "paper/main.tex", { executable: "tectonic", spawnImpl: compilerFixture(() => { fs.writeFileSync(path.join(root, "paper/refs.bib"), "Changed while running"); }) });
+  assert.equal(result.ok, false); assert.equal(result.pdf_path, "");
+  assert.equal(result.source_snapshot.status, "stale");
+  assert.match(result.diagnostics[0].message, /sources changed during/);
+  assert.ok(result.source_snapshot.pdf.sha256);
+});
+
+test("removing a source while compiling retains an inspectable stale build", async t => {
+  const root = fixture(t);
+  const result = await compileLatexDocument(root, "paper/main.tex", { executable: "tectonic", spawnImpl: compilerFixture(() => fs.unlinkSync(path.join(root, "paper/main.tex"))) });
+  assert.equal(result.ok, false);
+  assert.equal(result.source_snapshot.status, "stale");
+  assert.equal(readManuscriptSnapshot(root, result.source_snapshot.manifest_path).current, false);
+});
+
+test("a manuscript input created and removed during compilation never certifies the PDF as current", async t => {
+  const root = fixture(t);
+  let reportEvent;
+  t.mock.method(fs, "watch", (_directory, _options, listener) => {
+    reportEvent = listener;
+    return Object.assign(new EventEmitter(), { close() {} });
+  });
+  const result = await compileLatexDocument(root, "paper/main.tex", {
+    executable: "tectonic",
+    spawnImpl: transientCompilerFixture("generated.tex", { onCreated: name => reportEvent("rename", name) }),
+  });
+  assert.equal(result.ok, true, "the compiler preview remains available");
+  assert.match(result.pdf_path, /main\.pdf$/);
+  assert.equal(result.source_snapshot.status, "unverified");
+  assert.equal(result.source_snapshot.source_changed, false);
+  assert.deepEqual(result.source_snapshot.transient_inputs, ["paper/generated.tex"]);
+  assert.match(result.diagnostics[0].message, /paper\/generated\.tex/);
+  assert.equal(result.diagnostics[0].detail, "paper/generated.tex");
+  assert.equal(fs.existsSync(path.join(root, "paper/generated.tex")), false, "the input is gone when the receipt is written");
+  const checked = readManuscriptSnapshot(root, result.source_snapshot.manifest_path);
+  assert.equal(checked.source_matches, true);
+  assert.equal(checked.pdf_matches, true);
+  assert.equal(checked.current, false, "a vanished input cannot be certified by matching hashes");
+  assert.match(checked.verification_reason, /paper\/generated\.tex/);
+});
+
+test("a transient PDF graphic cannot certify the compiled manuscript", async t => {
+  const root = fixture(t);
+  const result = await compileLatexDocument(root, "paper/main.tex", { executable: "tectonic", spawnImpl: transientCompilerFixture("figures/plot-extra.pdf") });
+  assert.equal(result.ok, true);
+  assert.equal(readManuscriptSnapshot(root, result.source_snapshot.manifest_path).current, false);
+});
+
+test("a bibliography supplied in the manuscript directory during compilation invalidates the receipt", async t => {
+  const root = fixture(t);
+  fs.appendFileSync(path.join(root, "paper/main.tex"), "\\input{main.bbl}\n");
+  const result = await compileLatexDocument(root, "paper/main.tex", {
+    executable: "tectonic", spawnImpl: transientCompilerFixture("main.bbl"),
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.source_snapshot.status, "unverified");
+  assert.equal(readManuscriptSnapshot(root, result.source_snapshot.manifest_path).current, false);
+});
+
+test("directory mutations still invalidate a receipt when a watcher delivers no filenames", async t => {
+  const root = fixture(t);
+  t.mock.method(fs, "watch", () => Object.assign(new EventEmitter(), { close() {} }));
+  const result = await compileLatexDocument(root, "paper/main.tex", { executable: "tectonic", spawnImpl: transientCompilerFixture("figures/plot-extra.pdf") });
+  assert.equal(result.ok, true);
+  assert.equal(result.source_snapshot.status, "unverified");
+  assert.equal(readManuscriptSnapshot(root, result.source_snapshot.manifest_path).current, false);
+});
+
+test("a desktop metadata notification does not explain a missed change to directory entries", async t => {
+  const root = fixture(t);
+  fs.writeFileSync(path.join(root, "paper/.DS_Store"), "earlier metadata");
+  let notify;
+  t.mock.method(fs, "watch", (_directory, _options, listener) => {
+    notify = listener;
+    return Object.assign(new EventEmitter(), { close() {} });
+  });
+  const result = await compileLatexDocument(root, "paper/main.tex", {
+    executable: "tectonic",
+    spawnImpl: transientCompilerFixture("generated.tex", { onCreated() {
+      fs.writeFileSync(path.join(root, "paper/.DS_Store"), "later metadata");
+      notify("change", ".DS_Store");
+    } }),
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.source_snapshot.status, "unverified");
+  assert.equal(readManuscriptSnapshot(root, result.source_snapshot.manifest_path).current, false);
+});
+
+test("a surviving sibling directory cannot explain away a missed compiler input", async t => {
+  const root = fixture(t);
+  let notify;
+  t.mock.method(fs, "watch", (_directory, _options, listener) => {
+    notify = listener;
+    return Object.assign(new EventEmitter(), { close() {} });
+  });
+  const result = await compileLatexDocument(root, "paper/main.tex", {
+    executable: "tectonic",
+    spawnImpl: transientCompilerFixture("generated.tex", { onCreated() {
+      fs.mkdirSync(path.join(root, "paper/scratch"));
+      notify("rename", "scratch");
+    } }),
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.source_snapshot.status, "unverified");
+  assert.equal(readManuscriptSnapshot(root, result.source_snapshot.manifest_path).current, false);
+});
+
+test("intermediates written in the configured compiler output directory do not invalidate the receipt", async t => {
+  const root = fixture(t);
+  const result = await compileLatexDocument(root, "paper/main.tex", { executable: "tectonic", spawnImpl: transientCompilerFixture("main.aux", { inBuildDirectory: true }) });
+  assert.equal(result.ok, true);
+  assert.equal(result.source_snapshot.status, "current");
+  assert.deepEqual(result.source_snapshot.transient_inputs, []);
+  assert.equal(result.source_snapshot.observation.available, true);
+  const checked = readManuscriptSnapshot(root, result.source_snapshot.manifest_path);
+  assert.equal(checked.current, true);
+  assert.equal(checked.verification_reason, "");
+});
+
+test("desktop metadata updates leave the PDF and source receipt current", async t => {
+  const root = fixture(t);
+  const names = [".DS_Store", "Thumbs.db", "figures/._plot.png"];
+  // A Finder or Explorer metadata change in an existing project must leave its
+  // receipt current, including when bytes change without a directory-entry event.
+  const version = captureManuscriptSources(root, "paper/main.tex").source_version;
+  for (const name of names) fs.writeFileSync(path.join(root, "paper", name), "initial metadata");
+  assert.equal(captureManuscriptSources(root, "paper/main.tex").source_version, version);
+  const result = await compileLatexDocument(root, "paper/main.tex", {
+    executable: "tectonic",
+    spawnImpl: compilerFixture(cwd => {
+      for (const name of names) fs.writeFileSync(path.join(cwd, name), "metadata");
+    }),
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.source_snapshot.status, "current");
+  assert.equal(readManuscriptSnapshot(root, result.source_snapshot.manifest_path).current, true);
+});
+
+test("a normal compile remains current and records no transient inputs", async t => {
+  const root = fixture(t);
+  const result = await compileLatexDocument(root, "paper/main.tex", { executable: "tectonic", spawnImpl: compilerFixture() });
+  assert.equal(result.ok, true);
+  assert.equal(result.source_snapshot.status, "current");
+  assert.deepEqual(result.source_snapshot.transient_inputs, []);
+  assert.equal(result.source_snapshot.observation.available, true);
+  assert.equal(readManuscriptSnapshot(root, result.source_snapshot.manifest_path).current, true);
+});
+
+test("an unavailable watcher keeps the preview but marks the receipt unverified", async t => {
+  const root = fixture(t), watch = fs.watch;
+  fs.watch = () => { throw new Error("directory observation unavailable"); };
+  try {
+    const result = await compileLatexDocument(root, "paper/main.tex", { executable: "tectonic", spawnImpl: compilerFixture() });
+    assert.equal(result.ok, true);
+    assert.equal(result.source_snapshot.status, "unverified");
+    assert.deepEqual(result.source_snapshot.observation, { available: false, error: "directory observation unavailable" });
+    assert.match(result.diagnostics[0].message, /could not be observed/);
+    const checked = readManuscriptSnapshot(root, result.source_snapshot.manifest_path);
+    assert.equal(checked.current, false);
+    assert.match(checked.verification_reason, /could not be observed/);
+  } finally { fs.watch = watch; }
+});
+
+test("untracked symbolic-link inputs cannot be handed off as a verified current build", async t => {
+  const root = fixture(t);
+  fs.symlinkSync(path.join(root, "paper/figures"), path.join(root, "paper/linked-figures"), process.platform === "win32" ? "junction" : "dir");
+  const result = await compileLatexDocument(root, "paper/main.tex", { executable: "tectonic", spawnImpl: compilerFixture() });
+  assert.equal(result.ok, true, "preview remains available");
+  assert.equal(result.source_snapshot.status, "unverified");
+  assert.equal(result.source_snapshot.requested_source.untracked_inputs[0].path, "paper/linked-figures");
+  const checked = readManuscriptSnapshot(root, result.source_snapshot.manifest_path);
+  assert.equal(checked.source_matches, true);
+  assert.equal(checked.pdf_matches, true);
+  assert.equal(checked.current, false, "unknown input coverage is not certified by matching hashes");
+  const other = fixture(t);
+  fs.mkdirSync(path.dirname(path.join(other, result.source_snapshot.manifest_path)), { recursive: true });
+  fs.copyFileSync(path.join(root, result.source_snapshot.manifest_path), path.join(other, result.source_snapshot.manifest_path));
+  assert.throws(() => readManuscriptSnapshot(other, result.source_snapshot.manifest_path), /does not belong/);
+});
+
+test("the actual preload and snapshot handler recheck disk bytes at handoff time", async t => {
+  const vm = require("node:vm");
+  const root = fixture(t), result = await compileLatexDocument(root, "paper/main.tex", { executable: "tectonic", spawnImpl: compilerFixture() });
+  const handlers = new Map(); let api;
+  const main = fs.readFileSync(path.join(__dirname, "main.cjs"), "utf8");
+  const begin = main.indexOf('  ipcMain.handle("paper:build-snapshot",');
+  const end = main.indexOf('  ipcMain.handle("paper:compile",', begin);
+  assert.ok(begin >= 0 && end > begin, "keep the actual handler in this boundary probe");
+  vm.runInNewContext(main.slice(begin, end), {
+    ipcMain: { handle: (name, callback) => handlers.set(name, callback) },
+    resolveWorkspace: value => { assert.equal(value, root); return root; },
+    require: name => { assert.equal(name, "./manuscript-snapshot.cjs"); return require(name); },
+  });
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname, "preload.cjs"), "utf8"), {
+    process: { platform: process.platform },
+    require: name => {
+      assert.equal(name, "electron");
+      return { contextBridge: { exposeInMainWorld: (_name, value) => { api = value; } }, ipcRenderer: { invoke: (name, input) => handlers.get(name)({}, input) }, webUtils: {} };
+    },
+  });
+  assert.equal((await api.readManuscriptSnapshot(root, result.source_snapshot.manifest_path)).current, true);
+  fs.appendFileSync(path.join(root, "paper/refs.bib"), "Changed after preview");
+  const checked = await api.readManuscriptSnapshot(root, result.source_snapshot.manifest_path);
+  assert.equal(checked.current, false); assert.equal(checked.source_matches, false); assert.equal(checked.pdf_matches, true);
+});
+
+test("retargeting a linked main file in the same source directory invalidates its receipt", async t => {
+  const root = fixture(t);
+  fs.mkdirSync(path.join(root, "entry"));
+  const entry = path.join(root, "entry/main.tex");
+  fs.symlinkSync(path.join(root, "paper/main.tex"), entry, "file");
+  const result = await compileLatexDocument(root, "entry/main.tex", { executable: "tectonic", spawnImpl: compilerFixture() });
+  assert.equal(readManuscriptSnapshot(root, result.source_snapshot.manifest_path).current, true);
+  fs.unlinkSync(entry);
+  fs.symlinkSync(path.join(root, "paper/section.tex"), entry, "file");
+  assert.equal(readManuscriptSnapshot(root, result.source_snapshot.manifest_path).current, false);
+});
+
+test("the compiler and the starting snapshot share the resolved main file", async t => {
+  const root = fixture(t);
+  fs.mkdirSync(path.join(root, "entry"));
+  const entry = path.join(root, "entry/main.tex");
+  fs.symlinkSync(path.join(root, "paper/main.tex"), entry, "file");
+  const requestedSource = captureManuscriptSources(root, "entry/main.tex");
+  const realpath = fs.realpathSync;
+  let reads = 0;
+  t.mock.method(fs, "realpathSync", function(file, ...args) {
+    if (file === entry && ++reads === 1) return path.join(root, "paper/section.tex");
+    return realpath(file, ...args);
+  });
+  const result = await compileLatexDocument(root, "entry/main.tex", {
+    executable: "tectonic", requestedSource,
+    spawnImpl() { throw new Error("Unexpected invocation on the retargeted document"); },
+  });
+  assert.equal(result.engine, "not-started");
+  assert.equal(result.source_snapshot.status, "stale");
+});
+
+test("repeated no-output builds retain the last PDF and a bounded set of diagnostic logs", async t => {
+  const root = fixture(t);
+  const source = "paper/main.tex";
+  const options = { executable: "tectonic", spawnImpl: compilerFixture() };
+  const success = await compileLatexDocument(root, source, options);
+  const requestedSource = success.source_snapshot.requested_source;
+  fs.appendFileSync(path.join(root, "paper/section.tex"), " updated");
+  for (let i = 0; i < 7; i++) {
+    const failed = await compileLatexDocument(root, source, { ...options, requestedSource });
+    assert.equal(failed.source_snapshot.pdf, null);
+  }
+  const parent = path.dirname(path.dirname(path.join(root, success.source_snapshot.manifest_path)));
+  assert.equal(fs.readdirSync(parent).length, 6);
+  assert.equal(readManuscriptSnapshot(root, success.source_snapshot.manifest_path).pdf_matches, true);
+});
+
+test("queued builds coalesce unchanged inputs, distinguish changed section/bib, and preserve root ownership", async t => {
+  const a = fixture(t), b = fixture(t), runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-compiler-cache-"));
+  t.after(() => fs.rmSync(runtimeRoot, { recursive: true, force: true }));
+  const platform = process.platform, arch = process.arch, binary = Buffer.from("controlled compiler, never executed");
+  const file = path.join(runtimeRoot, "engines/test", `${platform}-${arch}`, platform === "win32" ? "tectonic.exe" : "tectonic");
+  fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, binary);
+  let active = 0, maximum = 0;
+  const base = compilerFixture(() => { active++; maximum = Math.max(maximum, active); }, 25);
+  const spawnImpl = (...args) => { const child = base(...args); child.once("close", () => active--); return child; };
+  const compile = createManagedCompiler({ runtimeRoot, platform, arch, engineManifest: { version: "test", platforms: { [`${platform}-${arch}`]: { executableSha256: hash(binary) } } }, spawnImpl });
+  const first = compile(a, "paper/main.tex");
+  const queuedOld = compile(b, "paper/main.tex");
+  assert.equal(queuedOld, compile(b, "paper/main.tex"));
+  fs.writeFileSync(path.join(b, "paper/section.tex"), "B updated section"); fs.writeFileSync(path.join(b, "paper/refs.bib"), "B updated bibliography");
+  const queuedNew = compile(b, "paper/main.tex");
+  assert.notEqual(queuedOld, queuedNew);
+  const [ra, old, rb] = await Promise.all([first, queuedOld, queuedNew]);
+  assert.equal(maximum, 1);
+  assert.equal(ra.ok, true); assert.equal(ra.source_snapshot.workspace, a);
+  assert.equal(old.ok, false); assert.equal(old.source_snapshot.status, "stale");
+  assert.match(old.log, /changed while this build was queued/);
+  assert.equal(rb.ok, true); assert.equal(rb.source_snapshot.workspace, b);
+  assert.match(rb.log, /B updated section/);
+  assert.notEqual(old.source_snapshot.requested_source.source_version, rb.source_snapshot.requested_source.source_version);
+});
+
+test("only five completed previews remain while active builds survive", async t => {
+  const root = fixture(t), spawnImpl = compilerFixture();
+  const first = await compileLatexDocument(root, "paper/main.tex", { executable: "tectonic", spawnImpl });
+  const parent = path.dirname(path.dirname(path.join(root, first.source_snapshot.manifest_path)));
+  const active = path.join(parent, "00000000-0000-0000-0000-000000000000");
+  fs.mkdirSync(active); fs.writeFileSync(path.join(active, "partial.pdf"), "active compiler output");
+  let latest;
+  for (let index = 0; index < 7; index++) {
+    fs.writeFileSync(path.join(root, "paper/section.tex"), `Preview ${index}`);
+    latest = await compileLatexDocument(root, "paper/main.tex", { executable: "tectonic", spawnImpl });
+    assert.deepEqual(latest.preview_cleanup.errors, []);
+  }
+  assert.equal(fs.existsSync(active), true);
+  const completed = fs.readdirSync(parent).filter(name => fs.existsSync(path.join(parent, name, "source-snapshot.json")));
+  assert.equal(completed.length, 5);
+  assert.equal(fs.existsSync(path.join(root, first.pdf_path)), false);
+  assert.equal(readManuscriptSnapshot(root, latest.source_snapshot.manifest_path).current, true);
+});

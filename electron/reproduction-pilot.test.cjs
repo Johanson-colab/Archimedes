@@ -431,3 +431,19 @@ test("edit_file refuses ambiguous text and records a unique replacement", async 
   await runPilot({ steps: [step("install")], backend: backend({}, files), complete: unique.complete });
   assert.equal(files["run.sh"], "echo bye\n");
 });
+
+test("a later file read error retains earlier command output and step evidence", async () => {
+  const worker = backend({ "measure": { output: "Samples: 12" } });
+  worker.readFile = async () => { throw new Error("Read limit reached"); };
+  const brain = model([
+    { action: "run", command: "measure" },
+    { action: "advance", step: "measure", verdict: "passed", evidence: "Samples: 12" },
+    { action: "read_file", path: "table.csv" },
+  ]);
+  const result = await runPilot({ steps: [step("measure"), step("read")], backend: worker, complete: brain.complete });
+  assert.equal(result.status, "failed");
+  assert.match(result.summary, /table.csv.*Read limit reached/);
+  assert.match(result.log, /Samples: 12/);
+  assert.equal(result.steps[0].evidence, "Samples: 12");
+  assert.equal(result.steps[0].status, "passed");
+});

@@ -133,6 +133,18 @@ test("BibTeX ignores commented-out entries with nested braces and tolerates whit
 });
 
 
+test("quoted parentheses in skipped directives preserve the following references", () => {
+  const source = [
+    '@string(label = "opening (")',
+    '@preamble("closing ) @article{hidden,title={Inside quoted text}}")',
+    '@comment(a comment with a " character)',
+    '@article{visible,title={Retained reference}}',
+  ].join("\n");
+  const parsed = scope.parseBibliography(source);
+  assert.deepEqual(parsed.entries.map(entry => entry.citekey), ["visible"]);
+  assert.equal(parsed.warnings.length, 3);
+});
+
 test("BibTeX preview rejects citation keys that collide only by case", async () => {
   const data = database("Key case"); let unmount;
   try {

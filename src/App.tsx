@@ -1,4 +1,5 @@
 import { Fragment, lazy, memo, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent as ReactClipboardEvent, type ReactNode } from "react";
+import { flushSync } from "react-dom";
 import ReactMarkdown from "react-markdown";
 import { WorkspaceMarkdownLink, WorkspaceMarkdownProvider, workspaceMarkdownUrlTransform } from "./WorkspaceMarkdownLink";
 import remarkGfm from "remark-gfm";
@@ -53,8 +54,8 @@ import BrowserView from "./BrowserView";
 import { DEFAULT_WORKBENCH_PREFERENCES, activeWorkbenchPaneTabs, normalizeWorkbenchPreferences, selectWorkbenchTab, type WorkbenchTabId, type WorkbenchTabPreferences } from "./workbench-tabs";
 import ArtifactsPanel from "./ArtifactsPanel";
 import ChatActivityTimeline from "./ChatActivityTimeline";
-import NativeAgentPanel, { NativeContextUsage, NativeQuestionCard } from "./NativeAgentPanel";
-import { mergeNativeEvent, nativeTurnEvents, nativeUsage, updateNativeQuestions } from "./native-agent-state";
+import NativeAgentPanel, { NativeContextUsage, NativeQuestionCard, NativeSessionBusyNotice } from "./NativeAgentPanel";
+import { mergeNativeEvent, nativeTurnEvents, nativeUsage, updateNativeQuestions, type NativeSessionBackend } from "./native-agent-state";
 import HarnessPicker from "./HarnessPicker";
 import NewChatModePicker, { draftForNewChatMode, RESEARCH_EXAMPLE, type NewChatMode } from "./NewChatModePicker";
 import JourneyView from "./JourneyView";
@@ -183,6 +184,7 @@ type Message = {
 type TimelineEvent = {
   title: string;
   detail: string;
+  snapshotCoverage?: WorkspaceSnapshotCoverage;
   state: "done" | "active" | "waiting";
 };
 
@@ -1396,6 +1398,9 @@ function App() {
   const [trajectoryEvents, setTrajectoryEvents] = useState<ResearchEvent[]>([]);
   const [workspace, setWorkspace] = useState(DEFAULT_WORKSPACE);
   const [workspaceReady, setWorkspaceReady] = useState(false);
+  const [workspaceOpenError, setWorkspaceOpenError] = useState("");
+  const [workspaceOpening, setWorkspaceOpening] = useState(false);
+  const workspaceOpeningRef = useRef(false);
   const [projects, setProjects] = useState<ResearchProject[]>([]);
   const [archivedProjects, setArchivedProjects] = useState<ResearchProject[]>([]);
   const [threads, setThreads] = useState<ResearchThread[]>([]);
@@ -1558,10 +1563,10 @@ function App() {
   // the only one whose prompts can actually be answered. Claiming it here lets
   // the agent veto a write instead of waiting for a prompt nobody can see.
   useEffect(() => {
-    if (!activeThreadId || typeof desktopBridge?.claimApprovals !== "function") return;
-    void desktopBridge.claimApprovals(activeThreadId, true).catch(() => {});
-    return () => { void desktopBridge.claimApprovals(activeThreadId, false).catch(() => {}); };
-  }, [activeThreadId]);
+    if (!workspace || !activeThreadId || typeof desktopBridge?.claimApprovals !== "function") return;
+    void desktopBridge.claimApprovals(activeThreadId, true, workspace).catch(() => {});
+    return () => { void desktopBridge.claimApprovals(activeThreadId, false, workspace).catch(() => {}); };
+  }, [activeThreadId, workspace]);
   useEffect(() => {
     if (!activeProjectId || !authState?.user || typeof desktopBridge?.joinProjectPresence !== "function") {
       setPresenceMembers([]);
@@ -2265,8 +2270,8 @@ function App() {
         if (event.threadId) setThreads((current) => current.map((thread) => thread.id === event.threadId ? { ...thread, pending_actions: (thread.pending_actions ?? 0) + 1 } : thread));
       }
       if (isGraphEvent && event.threadId && activeThreadIdRef.current !== event.threadId) return;
-      const state = event.type === "complete" || event.type === "artifact" || event.type === "graph_update" || event.toolCall?.status === "completed" ? "done" : event.type === "configuration" || event.type === "failed" || event.type === "incomplete" || event.type === "interrupted" || event.toolCall?.status === "failed" || event.toolCall?.status === "interrupted" ? "waiting" : "active";
-      setEvents((current) => [...current.filter((item) => item.title !== event.title), { title: event.title, detail: event.detail, state }]);
+      const state = event.type === "complete" || event.type === "artifact" || event.type === "graph_update" || event.snapshotCoverage || event.toolCall?.status === "completed" ? "done" : event.type === "configuration" || event.type === "failed" || event.type === "incomplete" || event.type === "interrupted" || event.toolCall?.status === "failed" || event.toolCall?.status === "interrupted" ? "waiting" : "active";
+      setEvents((current) => [...current.filter((item) => item.title !== event.title), { title: event.title, detail: event.detail, snapshotCoverage: event.snapshotCoverage, state }]);
     });
     return unsubscribe;
   }, []);
@@ -2318,34 +2323,39 @@ function App() {
   }, [activeProjectId, agentBusy]);
 
   async function chooseWorkspace() {
-    if (agentBusy || sideBusy || commandLockRef.current) return;
+    if (agentBusy || sideBusy || commandLockRef.current || workspaceOpeningRef.current) return;
     const selected = await desktopBridge.chooseWorkspace();
     if (selected) await loadWorkspace(selected);
   }
 
   async function loadWorkspace(workspacePath: string) {
-    if (agentBusy || sideBusy || commandLockRef.current) return;
+    if (workspaceOpeningRef.current || agentBusy || sideBusy || commandLockRef.current) return;
     if (hasDirtyFileEditorScopes(fileEditorScopesRef.current) && !(await confirm({ title: "Discard unsaved changes?", description: "Artifact changes that have not been saved will be lost.", confirmLabel: "Discard changes", destructive: true }))) return;
-    clearPendingAssistantDeltas();
-    setWorkspaceReady(false);
-    const snapshot = await desktopBridge.openWorkspace(workspacePath);
-    setSideThread(null);
-    setWorkspace(snapshot.workspace);
-    setProjects(snapshot.projects ?? []);
-    setArchivedProjects(snapshot.archivedProjects ?? []);
-    setThreads(snapshot.threads);
-    setArchivedThreads(snapshot.archivedThreads ?? []);
-    setWorkspaces(snapshot.workspaces ?? []);
-    const nextTree = await desktopBridge.listWorkspaceFiles(snapshot.workspace);
-    setFileTree(nextTree);
-    setLoadingDirectories(new Set());
-    openFilesRef.current = [];
-    setOpenFiles([]);
-    setSelectedFilePath(null);
-    setSelectedFile(null);
-    setFileError("");
-    replaceFileEditorScopes({});
-    setWorkspaceReady(true);
+    if (workspaceOpeningRef.current) return;
+    workspaceOpeningRef.current = true;
+    setWorkspaceOpening(true);
+    try {
+      await openDataWorkspace(workspacePath);
+    } finally {
+      workspaceOpeningRef.current = false;
+      setWorkspaceOpening(false);
+    }
+  }
+
+  async function openDataWorkspace(workspacePath: string) {
+    const errorMessage = (error: unknown) => (error instanceof Error ? error.message : String(error))
+      .replace(/^Error invoking remote method '[^']+':\s*/i, "").replace(/^Error:\s*/i, "");
+    const snapshot = await desktopBridge.openWorkspace(workspacePath).catch(error => {
+      setWorkspaceOpenError(errorMessage(error));
+      return null;
+    });
+    if (!snapshot) return;
+    flushSync(() => setWorkspaceReady(false));
+    const readErrors: string[] = [];
+    const nextTree = await desktopBridge.listWorkspaceFiles(snapshot.workspace).catch(error => {
+      readErrors.push(errorMessage(error));
+      return { entries: [], count: 0, truncated: false };
+    });
 
     // Reopen the project the user was last looking at. Falling back to the most
     // recent thread alone lands people in whichever project they last chatted
@@ -2371,34 +2381,48 @@ function App() {
       ? snapshot.threads.find((candidate) => candidate.project_id === restoreProjectId) ?? null
       : snapshot.threads[0] ?? null;
 
-    if (restoreThread) {
-      const thread = await desktopBridge.getResearchThread(restoreThread.id, snapshot.workspace);
-      setMessages(thread.messages.length ? thread.messages : initialMessages);
-      setTrajectoryEvents(thread.events ?? []);
+    const thread = restoreThread ? await desktopBridge.getResearchThread(restoreThread.id, snapshot.workspace).catch(error => {
+      readErrors.push(errorMessage(error));
+      return null;
+    }) : null;
+    flushSync(() => {
+      clearPendingAssistantDeltas();
+      setSideThread(null);
+      setWorkspace(snapshot.workspace);
+      setProjects(snapshot.projects ?? []);
+      setArchivedProjects(snapshot.archivedProjects ?? []);
+      setThreads(snapshot.threads);
+      setArchivedThreads(snapshot.archivedThreads ?? []);
+      setWorkspaces(snapshot.workspaces ?? []);
+      if (snapshot.workspace !== workspace) {
+        setContextItems([]);
+        setComposerRequest(null);
+      }
+      setFileTree(nextTree);
+      setLoadingDirectories(new Set());
+      openFilesRef.current = [];
+      setOpenFiles([]);
+      setSelectedFilePath(null);
+      setSelectedFile(null);
+      setFileError("");
+      replaceFileEditorScopes({});
+      setMessages(thread?.messages.length ? thread.messages : initialMessages);
+      setTrajectoryEvents(thread?.events ?? []);
       setEvents([]);
-      setActiveThreadId(thread.id);
-      setBoundHarness(thread.harness ?? null);
-      setActiveProjectId(thread.project_id);
-      if (thread.workspace_id) setActiveWorkspaceId(thread.workspace_id);
-      setResearchMode(thread.mode === "experiment-setup" ? "experiment-setup" : chatModeFromThread(thread.mode, thread.events));
-      setChangeSets(thread.changeSets ?? []);
-    } else {
-      setMessages(initialMessages);
-      setTrajectoryEvents([]);
-      setEvents([]);
-      setActiveThreadId(null);
-      setBoundHarness(null);
-      const nextProjectId = restoreProjectId ?? snapshot.projects?.[0]?.id ?? null;
+      setActiveThreadId(thread?.id ?? null);
+      setBoundHarness(thread?.harness ?? null);
+      const nextProjectId = thread?.project_id ?? restoreProjectId ?? snapshot.projects?.[0]?.id ?? null;
       setActiveProjectId(nextProjectId);
       const nextWorkspace = (snapshot.workspaces ?? []).find((entry) => entry.project_id === nextProjectId && entry.is_default)
         ?? (snapshot.workspaces ?? []).find((entry) => entry.project_id === nextProjectId);
-      setActiveWorkspaceId(nextWorkspace?.id ?? null);
-      setChangeSets([]);
-    }
-
-    const action = snapshot.actions.find((candidate) => candidate.status === "pending");
-    setPendingAction(action ? { ...action, source: "agent" } : null);
-
+      setActiveWorkspaceId(thread?.workspace_id ?? nextWorkspace?.id ?? null);
+      if (thread) setResearchMode(thread.mode === "experiment-setup" ? "experiment-setup" : chatModeFromThread(thread.mode, thread.events));
+      setChangeSets(thread?.changeSets ?? []);
+      const action = snapshot.actions.find((candidate) => candidate.status === "pending");
+      setPendingAction(action ? { ...action, source: "agent" } : null);
+      setWorkspaceOpenError(readErrors.join("\n"));
+      setWorkspaceReady(true);
+    });
   }
 
   function replaceFileEditorScopes(next: FileEditorScopes) {
@@ -2507,7 +2531,7 @@ function App() {
   }
 
   function startNewTask(projectId = activeProjectId, workspaceId = activeWorkspaceId) {
-    if (agentBusy) return;
+    if (agentBusy || workspaceOpeningRef.current) return;
     writeComposerDraft(`new:${projectId ?? "none"}:${executionWorkspace}`, null);
     setMainSection("chat");
     clearPendingAssistantDeltas();
@@ -2588,6 +2612,7 @@ function App() {
   }
 
   async function openResearchThread(threadSummary: ResearchThread) {
+    if (workspaceOpeningRef.current) return;
     if (sideThread?.id === threadSummary.id) {
       if (sideBusy) return;
       setSideThread(null);
@@ -2901,7 +2926,7 @@ function App() {
     const question = draft.trim();
     const submittedContext = submittedContextOverride ?? contextItems;
     const hasPastedImage = submittedContext.some((item) => item.type === "image");
-    if ((!question && !hasPastedImage) || agentBusy || commandLockRef.current) return false;
+    if ((!question && !hasPastedImage) || agentBusy || commandLockRef.current || workspaceOpeningRef.current) return false;
     const requestPrompt = question || "Please analyze the attached image.";
     const submittedThreadId = forceNew ? null : activeThreadIdRef.current;
 
@@ -3865,6 +3890,11 @@ function App() {
         onClose={() => setModal(null)}
         onCreateFile={() => void createFile()}
       />
+      <Dialog open={Boolean(workspaceOpenError)} onClose={() => setWorkspaceOpenError("")} role="alertdialog" size="compact" ariaLabelledBy="workspace-open-error-heading" ariaDescribedBy="workspace-open-error-message">
+        <header className="app-dialog-header"><h2 id="workspace-open-error-heading">{t("Unable to open workspace")}</h2></header>
+        <div className="app-dialog-body" id="workspace-open-error-message">{t(workspaceOpenError)}</div>
+        <footer className="app-dialog-footer"><button className="primary-button" onClick={() => setWorkspaceOpenError("")}>{t("Close")}</button></footer>
+      </Dialog>
       <TerminalSettingsModal open={terminalSettingsOpen && terminalSettingsMode === "onboarding"} mode="onboarding" settings={terminalSettings} workspace={executionWorkspace} onClose={closeTerminalSettings} onSave={saveTerminalSettings} onOpenExternal={openExternalTerminal} />
       <AuthModal
         open={authModalOpen}
@@ -3971,6 +4001,9 @@ function App() {
       />
       <CommandPalette open={paletteOpen} commands={paletteCommands} onClose={() => setPaletteOpen(false)} />
       <ProjectRemoveModal project={projectToRemove} onClose={() => setProjectToRemove(null)} onRemove={() => projectToRemove && void removeProject(projectToRemove)} />
+      <Dialog open={workspaceOpening} blocking size="compact" className="workspace-opening-dialog" ariaLabel={t("Opening workspace")}>
+        <div role="status"><LoaderCircle className="spin" size={16} />{t("Opening workspace")}</div>
+      </Dialog>
     </main>
   );
 }
@@ -4039,14 +4072,20 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
   });
   const hasCommentaryAtTail = lastNativeActivity?.kind === "commentary" && Boolean(lastNativeActivity.output || lastNativeActivity.detail);
   const thinking = agentBusy && !hasStreamingText && !hasRunningNativeTool && !hasCommentaryAtTail && !pendingAction;
-  const nativeEventsByTurn = useMemo(() => {
-    const grouped = new Map<string, ResearchEvent[]>();
+  const { nativeEventsByTurn, nativeBusyTurns } = useMemo(() => {
+    const activity = new Map<string, ResearchEvent[]>();
+    const busy = new Map<string, NativeSessionBackend>();
     for (const event of trajectoryEvents) {
+      if (event.type === "native_session_busy") {
+        const backend = (event.payload as { backend?: unknown } | null)?.backend;
+        if (backend === "codex" || backend === "claude" || backend === "opencode") busy.set(event.turn_id, backend);
+        continue;
+      }
       if (!event.type.startsWith("native_")) continue;
-      const turn = grouped.get(event.turn_id) ?? [];
-      turn.push(event); grouped.set(event.turn_id, turn);
+      const turn = activity.get(event.turn_id) ?? [];
+      turn.push(event); activity.set(event.turn_id, turn);
     }
-    return grouped;
+    return { nativeEventsByTurn: activity, nativeBusyTurns: busy };
   }, [trajectoryEvents]);
   const changeSetsByTurn = useMemo(() => {
     const grouped = new Map<string, WorkspaceChangeSet[]>();
@@ -4123,7 +4162,7 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
           Show {Math.min(HISTORY_MESSAGE_PAGE_SIZE, historyStart)} earlier {Math.min(HISTORY_MESSAGE_PAGE_SIZE, historyStart) === 1 ? "message" : "messages"}
         </button>}
         {visibleMessages.slice(0, lastUserIndex + 1).map((message, index) => <div key={message.id}>
-          <ConversationMessage message={message} streaming={agentBusy && message.id.endsWith(":stream")} />
+          <ConversationMessage message={message} streaming={agentBusy && message.id.endsWith(":stream")} busyBackend={message.turn_id ? nativeBusyTurns.get(message.turn_id) : undefined} />
           {message.role === "user" && index < lastUserIndex && message.turn_id && nativeEventsByTurn.has(message.turn_id) && <NativeAgentPanel events={nativeEventsByTurn.get(message.turn_id)!} busy={false} />}
           {message.turn_id && message.turn_id !== currentTurnId && lastTurnMessageIndex.get(message.turn_id) === index && (changeSetsByTurn.get(message.turn_id) ?? []).map((changeSet) => <WorkspaceChangesCard key={changeSet.id} changeSet={changeSet} onOpenFile={onOpenFile} />)}
         </div>)}
@@ -4131,7 +4170,7 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
         {visibleMessages.slice(lastUserIndex + 1).map((message, offset) => {
           const index = lastUserIndex + 1 + offset;
           return <div key={message.id}>
-            <ConversationMessage message={message} streaming={agentBusy && message.id.endsWith(":stream")} />
+            <ConversationMessage message={message} streaming={agentBusy && message.id.endsWith(":stream")} busyBackend={message.turn_id ? nativeBusyTurns.get(message.turn_id) : undefined} />
             {message.turn_id && message.turn_id !== currentTurnId && lastTurnMessageIndex.get(message.turn_id) === index && (changeSetsByTurn.get(message.turn_id) ?? []).map((changeSet) => <WorkspaceChangesCard key={changeSet.id} changeSet={changeSet} onOpenFile={onOpenFile} />)}
           </div>;
         })}
@@ -4858,14 +4897,16 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
   </div>;
 }
 
-const ConversationMessage = memo(function ConversationMessage({ message, streaming }: { message: Message; streaming: boolean }) {
+const ConversationMessage = memo(function ConversationMessage({ message, streaming, busyBackend }: { message: Message; streaming: boolean; busyBackend?: NativeSessionBackend }) {
   return <article className={`conversation-message ${message.role}`} data-session-message-id={message.id} data-turn-id={message.role === "user" ? message.id : undefined}>
     <div className="conversation-message-content">
     {message.role === "user" && Boolean(message.attachments?.length) && <div className="message-attachments">{message.attachments?.map((attachment) => <MessageAttachmentView key={attachment.position} attachment={attachment} turnId={message.turn_id} />)}</div>}
     <div className="conversation-message-copy">
       <div className="conversation-message-role">{message.role === "assistant" ? "Archimedes" : "You"}</div>
       {message.role === "assistant"
-        ? streaming ? <StreamingMarkdownMessage content={message.text} /> : <MarkdownMessage content={message.text} />
+        ? streaming ? <StreamingMarkdownMessage content={message.text} /> : busyBackend
+          ? <NativeSessionBusyNotice backend={busyBackend} />
+          : <MarkdownMessage content={message.text} />
         : <p>{message.text}</p>}
       {Boolean(message.sources?.length) && <div className="conversation-sources" aria-label="Sources read by Archimedes">
         {message.sources?.map((source, index) => <a key={`${source.url}:${source.startPage}:${index}`} href={source.startPage ? `${source.url}#page=${source.startPage}` : source.url} target="_blank" rel="noreferrer" title={[source.title, source.url, source.query && `Query: ${source.query}`, source.excerpt, source.retrievedAt && `Read: ${source.retrievedAt}`].filter(Boolean).join("\n\n")}>

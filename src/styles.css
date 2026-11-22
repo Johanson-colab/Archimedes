@@ -7433,6 +7433,9 @@ html[data-card-style="outlined"] :is(.settings-group, .library-card, .daily-pape
 }
 .journey-map-scrim { background: var(--workbench-ground); backdrop-filter: none; }
 .command-palette-backdrop.app-dialog-overlay { display: flex; align-items: flex-start; justify-content: center; padding: min(12vh, 120px) 20px 20px; }
+.workspace-opening-dialog { padding: 0; }
+.workspace-opening-dialog::backdrop { background: color-mix(in srgb, var(--text-muted) 24%, transparent); backdrop-filter: blur(7px); }
+.workspace-opening-dialog > div { display: flex; align-items: center; gap: 10px; padding: 18px 20px; }
 .app-dialog {
   color: var(--night-ink);
   background: var(--night-panel);

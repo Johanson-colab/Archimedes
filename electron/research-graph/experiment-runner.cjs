@@ -41,7 +41,18 @@ function runDirectory(workspace, runId) {
  * failed-only experiment stays provisional and may be repaired with a new
  * command.
  */
-function startExperimentRun({
+function startExperimentRun(options) {
+  const owner = store.captureStore();
+  try {
+    const started = owner.store.run(() => startInWorkspace(options));
+    return { ...started, completion: started.completion.finally(owner.release) };
+  } catch (error) {
+    owner.release();
+    throw error;
+  }
+}
+
+function startInWorkspace({
   projectId,
   threadId,
   nodeId,

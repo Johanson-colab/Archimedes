@@ -26,19 +26,19 @@ test("projects bind directories and new sessions inherit the project folder", ()
   try {
     store.openWorkspace(primary);
     const project = store.createResearchProject({ name: "Bound project", workspacePath: projectFolder });
-    assert.equal(project.workspace_path, path.resolve(projectFolder));
+    assert.equal(project.workspace_path, fs.realpathSync(projectFolder));
 
     const thread = store.createResearchThread({ prompt: "First bound chat", mode: "idea-spark", projectId: project.id });
-    assert.equal(thread.workspace_path, path.resolve(projectFolder));
-    assert.equal(store.getResearchThread(thread.id).workspace_path, path.resolve(projectFolder));
+    assert.equal(thread.workspace_path, fs.realpathSync(projectFolder));
+    assert.equal(store.getResearchThread(thread.id).workspace_path, fs.realpathSync(projectFolder));
 
     // Rebinding a project changes the default for new chats without silently
     // moving work that already ran in the previous folder.
     const updated = store.setResearchProjectWorkspace(project.id, nextFolder);
-    assert.equal(updated.workspace_path, path.resolve(nextFolder));
+    assert.equal(updated.workspace_path, fs.realpathSync(nextFolder));
     const nextThread = store.createResearchThread({ prompt: "Second bound chat", mode: "idea-spark", projectId: project.id });
-    assert.equal(nextThread.workspace_path, path.resolve(nextFolder));
-    assert.equal(store.getResearchThread(thread.id).workspace_path, path.resolve(projectFolder));
+    assert.equal(nextThread.workspace_path, fs.realpathSync(nextFolder));
+    assert.equal(store.getResearchThread(thread.id).workspace_path, fs.realpathSync(projectFolder));
   } finally {
     closeStore();
     fs.rmSync(root, { recursive: true, force: true });
@@ -50,7 +50,7 @@ test("legacy projects adopt the primary workspace and reject missing folders", (
   try {
     store.openWorkspace(primary);
     const project = store.createResearchProject({ name: "Legacy project" });
-    assert.equal(project.workspace_path, path.resolve(primary));
+    assert.equal(project.workspace_path, fs.realpathSync(primary));
     assert.throws(() => store.createResearchProject({ name: "Missing", workspacePath: path.join(root, "missing") }), /project folder/i);
     assert.throws(() => store.setResearchProjectWorkspace(project.id, path.join(root, "missing")), /project folder/i);
   } finally {

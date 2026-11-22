@@ -51,8 +51,8 @@ export function parseBibliography(input: string): { entries: BibliographyEntry[]
   const skipWhitespace = () => { while (cursor < input.length && /\s/.test(input[cursor])) cursor++; };
   // Directive bodies are opaque: nested braces and parentheses must not expose
   // a commented-out entry to the entry parser.
-  const skipDelimited = (open: string, close: string) => {
-    let depth = 1, braces = 0;
+  const skipDelimited = (open: string, close: string, quotedValues: boolean) => {
+    let depth = 1, braces = 0, quoted = false;
     while (cursor < input.length) {
       const character = input[cursor];
       if (character === "\\") { cursor += 2; continue; }
@@ -62,8 +62,9 @@ export function parseBibliography(input: string): { entries: BibliographyEntry[]
       } else {
         if (character === "{") braces++;
         else if (character === "}" && braces > 0) braces--;
-        else if (character === "(" && braces === 0) depth++;
-        else if (character === ")" && braces === 0 && --depth === 0) { cursor++; return; }
+        else if (character === '"' && braces === 0 && quotedValues) quoted = !quoted;
+        else if (character === "(" && braces === 0 && !quoted) depth++;
+        else if (character === close && braces === 0 && !quoted && --depth === 0) { cursor++; return; }
       }
       cursor++;
     }
@@ -100,7 +101,7 @@ export function parseBibliography(input: string): { entries: BibliographyEntry[]
     const open = input[cursor], close = open === "{" ? "}" : ")";
     cursor++;
     if (["comment", "preamble", "string"].includes(kind[0].toLowerCase())) {
-      try { skipDelimited(open, close); } catch { cursor = input.length; }
+      try { skipDelimited(open, close, kind[0].toLowerCase() !== "comment"); } catch { cursor = input.length; }
       warnings.push(`Skipped @${kind[0]} directive`); continue;
     }
     skipWhitespace();

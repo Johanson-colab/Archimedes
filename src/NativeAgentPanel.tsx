@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { ChevronDown, Terminal, Wrench } from "lucide-react";
 import { useUISettings } from "./i18n";
-import { nativeTurnEvents } from "./native-agent-state";
+import { InlineNotice } from "./InlineNotice";
+import { nativeTurnEvents, type NativeSessionBackend } from "./native-agent-state";
 import "./native-agent.css";
 
 export default function NativeAgentPanel({ events, busy, thinking = false }: { events: ResearchEvent[]; busy: boolean; thinking?: boolean }) {
@@ -57,6 +58,14 @@ export function NativeQuestionCard({ question, onAnswer }: { question: NativeAge
     {error && <p role="alert">{error}</p>}
     <button type="submit" className="secondary-button" disabled={busy || question.questions.some((item) => !answers.get(item.id)?.trim())}>{t(busy ? "Sending" : "Send answer")}</button>
   </form>;
+}
+
+export function NativeSessionBusyNotice({ backend }: { backend: NativeSessionBackend }) {
+  const { t } = useUISettings();
+  const harness = { codex: "Codex", claude: "Claude Code", opencode: "OpenCode" }[backend];
+  return <InlineNotice tone="warning" className="native-session-busy-notice">
+    {t("Another workspace is using this {harness} conversation. Wait for its active turn to finish.", { harness })}
+  </InlineNotice>;
 }
 
 export function NativeContextUsage({ usage }: { usage: NativeAgentUsage | null }) {

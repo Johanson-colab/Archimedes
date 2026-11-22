@@ -46,7 +46,7 @@ test("opening an existing database attaches projects and sessions to a shared wo
     assert.ok(shared);
     assert.equal(shared.kind, "shared");
     assert.ok(nameLibrary.some((entry) => entry.name === shared.name));
-    assert.equal(shared.root, path.resolve(projectFolder));
+    assert.equal(shared.root, fs.realpathSync(projectFolder));
     assert.equal(shared.is_default, true);
     assert.equal(store.getResearchThread(thread.id).workspace_id, shared.id);
 

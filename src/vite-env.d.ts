@@ -111,6 +111,7 @@ interface ResearchDeskBridge {
     createLatexDirectory: (workspace: string, path: string) => Promise<LatexDirectoryResult>;
     importLatexFolder: (workspace: string) => Promise<LatexImportResult>;
     compileLatexDocument: (workspace: string, path: string) => Promise<LatexCompileResult>;
+    readManuscriptSnapshot?: (workspace: string, manifestPath: string) => Promise<import("./manuscript-snapshot").ManuscriptBuildVerification>;
     onLatexCompileProgress?: (callback: (input: { path: string; stage: string; log?: string }) => void) => () => void;
     getResearchTurnImage: (threadId: string, turnId: string, position: number, workspace?: string) => Promise<string | null>;
     getResearchThread: (threadId: string, workspace?: string) => Promise<ResearchThreadDetail>;
@@ -248,7 +249,7 @@ interface ResearchDeskBridge {
     getPaperBibliography: (paperId: string) => Promise<{ paper_id: string; citekey: string; entryType: string; updated_at: string | null }>;
     setPaperBibliography: (paperId: string, patch: { citekey?: string; entryType?: string }) => Promise<{ paper_id: string; citekey: string; entryType: string; updated_at: string | null }>;
     repairLibraryPaperMetadata: (paperId: string, patch: import("./bibliography").MetadataPatch) => Promise<LibraryPaper>;
-    updateLibraryPaper: (paperId: string, patch: { title?: string; reading_status?: ReadingStatus; starred?: boolean; notes?: string; tags?: string[] }) => Promise<LibraryPaper>;
+    updateLibraryPaper: (paperId: string, patch: { title?: string; reading_status?: ReadingStatus; starred?: boolean; notes?: string; tags?: string[] }, dataRoot?: string) => Promise<LibraryPaper>;
     removeLibraryPaper: (libraryId: string, paperId: string) => Promise<{ removed: boolean }>;
     getLibraryPaperReader: (paperId: string, workspace?: string, projectId?: string | null) => Promise<PaperReaderState>;
     getLibraryPaperChatThread: (paperId: string, workspace?: string, projectId?: string | null) => Promise<ResearchThreadDetail | null>;
@@ -269,7 +270,7 @@ interface ResearchDeskBridge {
     writeClipboardText: (text: string) => Promise<void>;
     readClipboardImage: () => Promise<ContextImage | null>;
     saveTask: (task: { prompt: string; response: string; status?: string }) => Promise<SavedTask>;
-    runAgent: (input: { prompt: string; workspace: string; threadId?: string; projectId?: string; workspaceId?: string; visibility?: "project" | "private"; mode: ResearchMode; researchSkill?: "idea-spark" | "paper-to-slides"; mineruToken?: string; reasoningEffort?: ReasoningEffort; contextLength?: ContextLength; contextItems?: ContextAttachment[]; capabilities?: { write: "ask" | "deny"; command: "ask" | "deny" }; origin?: "research" | "paper"; backend?: AgentBackendConfig["backend"]; title?: string; clientRunId?: string }) => Promise<AgentRunResult>;
+    runAgent: (input: { prompt: string; workspace: string; paperId?: string; threadId?: string; projectId?: string; workspaceId?: string; visibility?: "project" | "private"; mode: ResearchMode; researchSkill?: "idea-spark" | "paper-to-slides"; mineruToken?: string; reasoningEffort?: ReasoningEffort; contextLength?: ContextLength; contextItems?: ContextAttachment[]; capabilities?: { write: "ask" | "deny"; command: "ask" | "deny" }; origin?: "research" | "paper"; backend?: AgentBackendConfig["backend"]; title?: string; clientRunId?: string }) => Promise<AgentRunResult>;
     getAgentBackendConfig: () => Promise<AgentBackendConfig>;
     saveAgentBackendConfig: (input: AgentBackendConfig) => Promise<AgentBackendConfig>;
     listCodexModelCatalog: (input: AgentBackendConfig) => Promise<{ models: NativeAgentModel[]; effectiveModelId?: string }>;
@@ -277,7 +278,7 @@ interface ResearchDeskBridge {
     checkAgentBackend: (input: AgentBackendConfig) => Promise<{ ready: boolean; models: NativeAgentModel[]; effectiveModelId?: string; message: string }>;
     steerNativeAgent: (threadId: string, text: string, workspace?: string) => Promise<unknown>;
     answerNativeAgentQuestion: (threadId: string, questionId: string, answers: Record<string, string[]>, workspace?: string) => Promise<unknown>;
-    claimApprovals: (threadId: string, claimed: boolean) => Promise<{ claimed: boolean }>;
+    claimApprovals: (threadId: string, claimed: boolean, workspace?: string) => Promise<{ claimed: boolean }>;
     runProactiveReply: (input: { prompt: string; context: Record<string, unknown> }) => Promise<{ text: string; model: string; provider: ModelProviderId }>;
     prepareFigurePlan: (input: { paperText: string; pdfData?: string; figureType: string; requirements: string; language: "en" | "zh"; connection?: FigureForgeConnection }) => Promise<{ plan: string; model: string; provider: string; source: "pdf" | "text" }>;
     analyzeFigureReferences: (input: { references: string[]; plan: string; model?: string; connection?: FigureForgeConnection }) => Promise<{ contract: import("./figureforge/design-contract.mjs").DesignContract; representative: number[]; imageRefs: number[] }>;
@@ -834,12 +835,15 @@ interface LatexImportResult {
 }
 
 interface LatexCompileDiagnostic {
+  messageKey?: string;
+  detail?: string;
   help?: string;
   line: number | null;
   message: string;
 }
 
 interface LatexCompileResult {
+  source_snapshot?: import("./manuscript-snapshot").ManuscriptBuildSnapshot;
   timed_out?: boolean;
   ok: boolean;
   engine: string;
@@ -1919,6 +1923,7 @@ interface NativeAgentPlan { explanation: string; steps: Array<{ step: string; st
 interface NativeAgentQuestion { id: string; questions: Array<{ id: string; header: string; question: string; isSecret?: boolean; options?: Array<{ label: string; description: string }> }> }
 
 interface AgentRunResult {
+  paperChatSaveError?: string;
   threadId: string;
   turnId: string;
   taskId: string;
@@ -1927,6 +1932,19 @@ interface AgentRunResult {
   error?: ModelIncompleteFailure;
   actions: AgentAction[];
   thread: ResearchThreadDetail;
+}
+
+interface WorkspaceSnapshotScanCoverage {
+  entries: number;
+  metadataOnly: number;
+  ignoredDirectories: number;
+  entryLimitReached: boolean;
+  byteBudgetReached: boolean;
+}
+
+interface WorkspaceSnapshotCoverage {
+  before: WorkspaceSnapshotScanCoverage;
+  after: WorkspaceSnapshotScanCoverage;
 }
 
 interface ModelIncompleteFailure { code: "MODEL_RESPONSE_INCOMPLETE"; reason: string; provider: string; finishReason?: string | null }
@@ -1942,6 +1960,7 @@ interface AgentEvent {
   error?: ModelIncompleteFailure;
   action?: AgentAction;
   changeSet?: WorkspaceChangeSet;
+  snapshotCoverage?: WorkspaceSnapshotCoverage;
   toolCall?: { id?: string; name?: string; source: string; status: "running" | "completed" | "failed" | "interrupted"; durationMs: number };
   activity?: NativeAgentActivity;
   usage?: NativeAgentUsage | null;
