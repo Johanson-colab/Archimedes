@@ -263,6 +263,7 @@ export const library: Record<string, string> = {
   "The illustrated reading could not be restored.": "无法恢复图文精读。",
   "The PDF could not be imported.": "无法导入 PDF。",
   "The public PDF can be cached locally and opened in the reader.": "公开 PDF 可以缓存到本地，并在阅读器中打开。",
+  "This paper belongs to another data folder.": "此论文属于另一个数据文件夹。",
   "This paper will be removed from the selected library.": "论文将从当前文献库中移除。",
   "This project has no papers yet": "当前项目还没有论文",
   "This region will be sent to AI as a high-resolution image.": "该区域将作为高清图片发送给 AI。",

@@ -11,6 +11,8 @@ export function nativeTurnEvents(events: ResearchEvent[]): ResearchEvent[] {
   return events.filter((event) => event.turn_id === turnId && event.type.startsWith("native_"));
 }
 
+export type NativeSessionBackend = Exclude<AgentBackendConfig["backend"], "api">;
+
 export function nativeUsage(events: ResearchEvent[]): NativeAgentUsage | null {
   const event = [...events].reverse().find((item) => item.type === "native_usage");
   const usage = (event?.payload as { usage?: NativeAgentUsage | null } | undefined)?.usage;

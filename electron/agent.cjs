@@ -1,13 +1,13 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { randomUUID } = require("node:crypto");
-const store = require("./store.cjs");
+const defaultStore = require("./store.cjs");
 const { getActiveModelConfig } = require("./model-config.cjs");
 const { searchAcademicPapers } = require("./literature.cjs");
 const { searchWeb } = require("./web-search.cjs");
 const { prepareConversation } = require("./agent/context.cjs");
 const { workspaceInstructions } = require("./thread-commands.cjs");
-const { hasApprovalSurface, resolveApproval, setApprovalSurface, waitForApproval } = require("./agent/approval-manager.cjs");
+const { hasApprovalSurface: hasClaimedSurface, resolveApproval, setApprovalSurface: claimApprovalSurface, waitForApproval } = require("./agent/approval-manager.cjs");
 const { StreamContentGuard, normalizeAssistantMessage } = require("./agent/model-response.cjs");
 const { ModelIncompleteError, assertModelCompletion } = require("./agent/model-completion.cjs");
 const { completeAnthropic } = require("./agent/anthropic.cjs");
@@ -19,6 +19,7 @@ const { contextCharacterLimit, normalizeContextLength, normalizeReasoningEffort:
 const { snapshotWorkspace, compareWorkspaceSnapshots, workspacePath: existingWorkspacePath } = require("./workspace-files.cjs");
 const { artifactKind } = require("./artifacts.cjs");
 const { runNative } = require("./agent/external-backend.cjs");
+const { NativeSessionBusyError } = require("./agent/native-session-busy.cjs");
 const { runApprovedCommand } = require("./agent/command-runner.cjs");
 const { readLines, searchWorkspace, prepareWrite, prepareEdit, readCommandLog, visibleExisting } = require("./agent/workspace-tools.cjs");
 const { ToolRegistry } = require("./agent/tool-registry.cjs");
@@ -708,9 +709,10 @@ function parseArguments(serialized) {
   catch { throw new Error("The model returned invalid tool arguments."); }
 }
 
-function sessionExperiment({ threadId, experiment }) {  if (!threadId) throw new Error("Experiments require an active Research session.");
-  const thread = store.getResearchThread(threadId);
-  const listed = store.listResearchGraph({ projectId: thread.project_id, threadId });
+function sessionExperiment({ threadId, experiment }) {
+  if (!threadId) throw new Error("Experiments require an active Research session.");
+  const thread = defaultStore.getResearchThread(threadId);
+  const listed = defaultStore.listResearchGraph({ projectId: thread.project_id, threadId });
   const key = String(experiment || "").trim();
   if (!key) throw new Error("An experiment id or title is required.");
   const node = listed.nodes.find((item) => item.id === key)
@@ -723,8 +725,8 @@ function sessionExperiment({ threadId, experiment }) {  if (!threadId) throw new
 
 function sessionIdea({ threadId, idea }) {
   if (!threadId) throw new Error("Experiments require an active Research session.");
-  const thread = store.getResearchThread(threadId);
-  const listed = store.listResearchGraph({ projectId: thread.project_id, threadId });
+  const thread = defaultStore.getResearchThread(threadId);
+  const listed = defaultStore.listResearchGraph({ projectId: thread.project_id, threadId });
   const key = String(idea || "").trim();
   if (!key) throw new Error("An idea id or title is required.");
   const node = listed.nodes.find((item) => item.id === key)
@@ -736,7 +738,7 @@ function sessionIdea({ threadId, idea }) {
 }
 
 function sessionExperimentRun({ threadId, runId }) {
-  const run = store.getExperimentRun(String(runId || "").trim());
+  const run = defaultStore.getExperimentRun(String(runId || "").trim());
   if (!run) throw new Error("Experiment run not found.");
   if (run.thread_id !== threadId) throw new Error("The experiment run does not belong to this session.");
   return run;
@@ -762,18 +764,19 @@ function graphUpdateEvent({ thread, turnId, nodeIds = [], edgeIds = [], nodeCoun
 async function waitForExperimentRun(runId, timeoutSeconds = 20) {
   const seconds = Math.max(1, Math.min(30, Number(timeoutSeconds) || 20));
   const deadline = Date.now() + seconds * 1000;
-  let run = store.getExperimentRun(runId);
+  let run = defaultStore.getExperimentRun(runId);
   if (!run) throw new Error("Experiment run not found.");
   while (!["succeeded", "failed", "cancelled"].includes(run.status) && Date.now() < deadline) {
     await new Promise((resolve) => setTimeout(resolve, 500));
-    run = store.getExperimentRun(runId);
+    run = defaultStore.getExperimentRun(runId);
     if (!run) throw new Error("Experiment run not found.");
   }
   const log = experimentRuns.readExperimentRunLog({ runId, maxBytes: 4_000 });
   return { ...run, log_tail: log.text };
 }
 
-async function executeBuiltInTool({ root, taskId, threadId, turnId, call, emit, contextItems, foundPapers, pdfCache, signal, capabilities = DEFAULT_CAPABILITIES, browser, config, recordEvent = () => {}, registry = defaultToolRegistry, researchRun, reasoningEffort, isRequestActive = () => true }, args) {
+async function executeBuiltInTool({ root, taskId, threadId, turnId, call, emit, contextItems, foundPapers, pdfCache, signal, capabilities = DEFAULT_CAPABILITIES, browser, config, recordEvent = () => {}, registry = defaultToolRegistry, researchRun, reasoningEffort, isRequestActive = () => true, dataStore = defaultStore.currentStore() }, args) {
+  const store = dataStore;
   const name = call.function.name;
 
   if (name === "list_skills") return { content: JSON.stringify({ skills: discoverSkills(root) }) };
@@ -819,7 +822,7 @@ async function executeBuiltInTool({ root, taskId, threadId, turnId, call, emit, 
         if (!message.tool_calls.length) { response = message.content || ""; break; }
         for (const child of message.tool_calls) {
           try {
-            const result = await executeTool({ root, taskId, threadId, turnId, call: child, emit, contextItems, foundPapers, pdfCache, signal, capabilities, browser, config, recordEvent: workerRecord, registry, researchRun, preflight: (toolName, toolArgs) => {
+            const result = await executeTool({ root, taskId, threadId, turnId, call: child, emit, contextItems, foundPapers, pdfCache, signal, capabilities, browser, config, recordEvent: workerRecord, registry, researchRun, dataStore, preflight: (toolName, toolArgs) => {
               if (!allowed.has(toolName)) throw new Error("Tool unavailable in isolated phase.");
               if ((toolName === "write_artifact" || toolName === "edit_workspace_file") && !outputs.includes(String(toolArgs.path || "").replaceAll("\\", "/"))) throw new Error("The file was not declared as a phase output.");
             } });
@@ -1014,7 +1017,7 @@ async function executeBuiltInTool({ root, taskId, threadId, turnId, call, emit, 
     const proposal = name === "edit_workspace_file" ? prepareEdit(root, args.path, args.old_text, args.new_text, args.replace_all === true) : prepareWrite(root, args.path, args.content);
     const relative = proposal.path;
     const action = store.createAction({ taskId, kind: "write", payload: proposal });
-    const waiting = waitForApproval(action.id, signal, threadId);
+    const waiting = waitForApproval(action.id, signal, store.runtimeThreadId(threadId));
     emit({ type: "approval", title: "Approval required", detail: `Write ${relative}`, action });
     let decision;
     try { decision = await waiting; }
@@ -1031,7 +1034,7 @@ async function executeBuiltInTool({ root, taskId, threadId, turnId, call, emit, 
     const workingDirectory = existingWorkspacePath(root, args.cwd || "");
     if (!fs.statSync(workingDirectory).isDirectory()) throw new Error("The command working directory is not a directory.");
     const action = store.createAction({ taskId, kind: "command", payload: { command: args.command.trim(), cwd: workingDirectory, managedByAgent: true } });
-    const waiting = waitForApproval(action.id, signal, threadId);
+    const waiting = waitForApproval(action.id, signal, store.runtimeThreadId(threadId));
     emit({ type: "approval", title: "Approval required", detail: args.command.trim(), action });
     let decision;
     try { decision = await waiting; }
@@ -1155,7 +1158,7 @@ async function executeBuiltInTool({ root, taskId, threadId, turnId, call, emit, 
       command: `Create an isolated Git worktree from ${baseDescription}`,
       cwd: root, experimentId: experiment.id, experimentTitle: experiment.title, managedByAgent: true,
     } });
-    const waiting = waitForApproval(action.id, signal, threadId);
+    const waiting = waitForApproval(action.id, signal, store.runtimeThreadId(threadId));
     emit({ type: "approval", title: "Approval required", detail: "Create an experiment worktree from committed code; uncommitted files are not copied.", action });
     let decision;
     try { decision = await waiting; } catch (error) {
@@ -1196,7 +1199,7 @@ async function executeBuiltInTool({ root, taskId, threadId, turnId, call, emit, 
       kind: "command",
       payload: { command, cwd: workingDirectory, experimentId: experiment.id, experimentTitle: experiment.title, managedByAgent: true },
     });
-    const waiting = waitForApproval(action.id, signal, threadId);
+    const waiting = waitForApproval(action.id, signal, store.runtimeThreadId(threadId));
     emit({ type: "approval", title: "Approval required", detail: command, action });
     let decision;
     try {
@@ -1443,7 +1446,14 @@ async function translatePaperSelection({ text, targetLanguage = "Simplified Chin
   return { translation };
 }
 
-async function runAgent({ prompt, workspace, threadId, projectId, workspaceId, visibility = "project", mode = "standard", researchSkill, mineruToken, reasoningEffort = "medium", contextLength = "standard", contextItems = [], capabilities, origin, title, emit = () => {}, browser, transient = false, externalBackend = null, externalSignal, toolRegistry = defaultToolRegistry, autoBuildGraph = true }) {
+async function runAgent(options) {
+  const captured = (options.dataStore || defaultStore).captureStore();
+  try { return await captured.store.run(() => runAgentInStore({ ...options, dataStore: captured.store })); }
+  finally { captured.release(); }
+}
+
+async function runAgentInStore({ prompt, workspace, threadId, projectId, workspaceId, visibility = "project", mode = "standard", researchSkill, mineruToken, reasoningEffort = "medium", contextLength = "standard", contextItems = [], capabilities, origin, title, emit = () => {}, browser, transient = false, externalBackend = null, externalSignal, toolRegistry = defaultToolRegistry, autoBuildGraph = true, dataStore }) {
+  const store = dataStore;
   if (externalBackend && (transient || origin !== "research" || capabilities?.write !== "ask" || capabilities?.command !== "ask")) throw new Error("The native backend is available only for main Work conversations with an approval surface.");
   const transientThread = {
     id: randomUUID(), project_id: null, title: "Internal review run", mode, status: "running", context_summary: "",
@@ -1451,7 +1461,8 @@ async function runAgent({ prompt, workspace, threadId, projectId, workspaceId, v
   };
   const thread = transient ? transientThread : threadId ? store.getResearchThread(threadId) : store.createResearchThread({ prompt, mode, projectId, workspacePath: workspace, workspaceId, visibility, kind: origin === "paper" ? "paper" : "research", title });
   if (!transient && origin !== "paper") store.bindResearchThreadHarness(thread.id, externalBackend?.backend || "api");
-  if (activeRuns.has(thread.id)) throw new Error("This research thread already has a running turn.");
+  const runtimeId = store.runtimeThreadId(thread.id);
+  if (activeRuns.has(runtimeId)) throw new Error("This research thread already has a running turn.");
   const task = transient ? { id: randomUUID(), prompt, response: "", status: "running" } : store.startTask({ prompt });
   const turn = transient
     ? { id: randomUUID(), thread_id: thread.id, task_id: task.id, mode, user_message: prompt, assistant_message: "", status: "running", created_at: new Date().toISOString(), completed_at: null }
@@ -1467,7 +1478,7 @@ async function runAgent({ prompt, workspace, threadId, projectId, workspaceId, v
   const actions = [];
   let experimentBridge = null;
   let experimentToolsUsed = false;
-  activeRuns.set(thread.id, controller);
+  activeRuns.set(runtimeId, controller);
 
   const emitTurn = (payload) => emit({ ...payload, threadId: thread.id, turnId: turn.id });
   const recordEvent = (event) => {
@@ -1493,6 +1504,7 @@ async function runAgent({ prompt, workspace, threadId, projectId, workspaceId, v
   };
   const scheduleGraphAutoBuild = (response) => {
     if (!autoBuildGraph || transient || origin !== "research" || !["research", "experiment-setup"].includes(mode) || !thread.project_id) return;
+    const graphOwner = store.captureStore();
     void graphAutoBuild.maybeAutoBuild({
       projectId: thread.project_id,
       threadId: thread.id,
@@ -1509,7 +1521,7 @@ async function runAgent({ prompt, workspace, threadId, projectId, workspaceId, v
       recordEvent,
       complete,
       runNative,
-    }).catch((error) => console.warn("[research-graph] auto-build failed:", error?.message || String(error)));
+    }).catch((error) => console.warn("[research-graph] auto-build failed:", error?.message || String(error))).finally(graphOwner.release);
   };
 
   try {
@@ -1521,12 +1533,12 @@ async function runAgent({ prompt, workspace, threadId, projectId, workspaceId, v
     }
     if (externalBackend) {
       const approveNative = async (payload) => {
-        if (controller.signal.aborted || !hasApprovalSurface(thread.id)) return false;
+        if (controller.signal.aborted || !hasClaimedSurface(runtimeId)) return false;
         const { signal: approvalSignal, ...actionPayload } = payload;
         const action = store.createAction({ taskId: task.id, kind: "command", payload: { ...actionPayload, externalAgent: externalBackend.backend } });
         actions.push(action);
         // Register before exposing the card, so an immediate click cannot be lost.
-        const waiting = waitForApproval(action.id, approvalSignal || controller.signal, thread.id);
+        const waiting = waitForApproval(action.id, approvalSignal || controller.signal, runtimeId);
         emitTurn({ type: "approval", title: "Native approval required", detail: payload.command, action });
         try { return (await waiting).approved; }
         finally {
@@ -1543,7 +1555,7 @@ async function runAgent({ prompt, workspace, threadId, projectId, workspaceId, v
         experimentToolsUsed = true;
         const call = { id: randomUUID(), function: { name, arguments: JSON.stringify(args) } };
         const result = await executeTool({ root: workspace, taskId: task.id, threadId: thread.id, turnId: turn.id, call,
-          emit: emitTurn, recordEvent, signal: requestSignal, isRequestActive, preflight: () => { if (!isRequestActive()) throw new Error("The experiment request has ended."); }, capabilities: { write: "ask", command: "ask" }, registry: toolRegistry });
+          emit: emitTurn, recordEvent, signal: requestSignal, isRequestActive, dataStore, preflight: () => { if (!isRequestActive()) throw new Error("The experiment request has ended."); }, capabilities: { write: "ask", command: "ask" }, registry: toolRegistry });
         if (result.action) actions.push(result.action);
         return JSON.parse(result.content);
       };
@@ -1572,7 +1584,7 @@ async function runAgent({ prompt, workspace, threadId, projectId, workspaceId, v
         } catch { /* Do not block a native conversation if its graph is unavailable. */ }
       }
       const nativeResponse = await runNative({
-        config: externalBackend, workspace, thread: store.getResearchThread(thread.id), turn, contextItems, researchSkill, mineruToken,
+        config: externalBackend, workspace, thread: store.getResearchThread(thread.id), turn, contextItems, researchSkill, mineruToken, runtimeId,
         experimentBridgeInstructions, experimentDynamicTools, invokeExperimentTool: liveExperimentAllowed ? invokeExperimentTool : null,
         signal: controller.signal, emit: emitTurn, recordEvent, bindings: store.nativeAgentBindings(thread.id),
         approve: approveNative,
@@ -1665,7 +1677,7 @@ async function runAgent({ prompt, workspace, threadId, projectId, workspaceId, v
 
       for (const call of message.tool_calls) {
         try {
-          const result = await executeTool({ root: workspace, taskId: task.id, threadId: thread.id, turnId: turn.id, call, emit: emitTurn, contextItems, foundPapers, pdfCache, signal: controller.signal, capabilities: turnCapabilities, browser, config, recordEvent, registry: toolRegistry, researchRun, reasoningEffort: resolvedReasoningEffort, preflight: (name, args) => {
+          const result = await executeTool({ root: workspace, taskId: task.id, threadId: thread.id, turnId: turn.id, call, emit: emitTurn, contextItems, foundPapers, pdfCache, signal: controller.signal, capabilities: turnCapabilities, browser, config, recordEvent, registry: toolRegistry, researchRun, dataStore, reasoningEffort: resolvedReasoningEffort, preflight: (name, args) => {
             if (name === "search_academic_papers") {
               if (academicSearches >= policy.maxAcademicSearches) throw new Error("The academic search budget is exhausted. Synthesize the findings already collected.");
               academicSearches += 1;
@@ -1718,6 +1730,9 @@ async function runAgent({ prompt, workspace, threadId, projectId, workspaceId, v
       emitTurn({ type: "incomplete", title: "Response incomplete", detail: "Partial text was kept. Continue in this chat to retry; no tool from the unfinished response was executed.", error: failure });
       return { ...finish(`${error.partialResponse ? `${error.partialResponse}\n\n` : ""}This model response is incomplete: ${error.message} Continue in this chat to retry.`, "incomplete"), error: failure };
     }
+    if (error instanceof NativeSessionBusyError) {
+      recordEvent({ type: "native_session_busy", payload: { backend: error.backend } });
+    }
     const response = `${error.partialResponse ? `${error.partialResponse}\n\n` : ""}Archimedes could not complete this task: ${error.message || String(error)}`;
     emitTurn({ type: "failed", title: "Research turn failed", detail: "The turn record was saved for inspection" });
     return finish(response, "failed");
@@ -1725,18 +1740,27 @@ async function runAgent({ prompt, workspace, threadId, projectId, workspaceId, v
     externalSignal?.removeEventListener("abort", onExternalAbort);
     controller.abort();
     experimentBridge?.close();
-    activeRuns.delete(thread.id);
+    activeRuns.delete(runtimeId);
   }
 }
 
-function interruptAgent(threadId) {
-  const controller = activeRuns.get(threadId);
+function interruptAgent(threadId, workspace) {
+  const controller = activeRuns.get(defaultStore.runtimeThreadId(threadId, workspace));
   if (!controller) return false;
   controller.abort();
   return true;
 }
 
+function hasApprovalSurface(threadId) {
+  return hasClaimedSurface(defaultStore.runtimeThreadId(threadId));
+}
+
+function setApprovalSurface(threadId, active, workspace) {
+  return claimApprovalSurface(defaultStore.runtimeThreadId(threadId, workspace), active);
+}
+
 async function retryGraphExtraction({ threadId, turnId, dataWorkspace, backendConfig }) {
+  const store = defaultStore.currentStore();
   const thread = store.getResearchThread(threadId);
   if (!thread.project_id || !store.canAccessProject(thread.project_id, "editor")) throw new Error("You do not have permission to update this research graph.");
   const turn = thread.turns.find((item) => item.id === turnId);
