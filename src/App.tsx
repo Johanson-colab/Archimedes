@@ -3742,6 +3742,7 @@ function App() {
             mode={pathMode}
             workspace={workspace}
             extractionPending={Boolean(pathThread && Object.keys(graphPending).some((key) => key.startsWith(`${pathThread.id}:`)))}
+            turnRunning={Boolean(pathThreadIsActive && agentBusy)}
             version={graphVersion}
             update={graphUpdate}
             pinned={pathIsPinned}
