@@ -1459,7 +1459,7 @@ async function runAgent(options) {
   finally { captured.release(); }
 }
 
-async function runAgentInStore({ prompt, workspace, threadId, projectId, workspaceId, visibility = "project", mode = "standard", researchSkill, mineruToken, reasoningEffort = "medium", contextLength = "standard", contextItems = [], capabilities, origin, title, emit = () => {}, browser, transient = false, externalBackend = null, externalSignal, toolRegistry = defaultToolRegistry, autoBuildGraph = true, dataStore }) {
+async function runAgentInStore({ prompt, workspace, threadId, projectId, workspaceId, visibility = "project", mode = "standard", researchSkill, mineruToken, reasoningEffort = "medium", contextLength = "standard", contextItems = [], capabilities, origin, title, emit = () => {}, browser, transient = false, externalBackend = null, externalSignal, toolRegistry = defaultToolRegistry, autoBuildGraph = true, remoteServer = null, dataStore }) {
   const store = dataStore;
   if (externalBackend && (transient || origin !== "research" || capabilities?.write !== "ask" || capabilities?.command !== "ask")) throw new Error("The native backend is available only for main Work conversations with an approval surface.");
   const transientThread = {
@@ -1554,10 +1554,16 @@ async function runAgentInStore({ prompt, workspace, threadId, projectId, workspa
           emitTurn({ type: "native_approval_resolved", title: "Native approval resolved", detail: "The native request is no longer pending", action: { ...action } });
         }
       };
-      const liveExperimentAllowed = ["research", "experiment-setup"].includes(mode)
+      const liveNativeAllowed = ["research", "experiment-setup"].includes(mode)
         && externalBackend.permissionMode !== "read-only" && externalBackend.permissionMode !== "plan";
+      const liveExperimentAllowed = liveNativeAllowed && !remoteServer;
       const experimentToolNames = new Set(["create_experiment", "prepare_experiment_workspace", "run_experiment", "wait_experiment", "read_experiment_log", "record_experiment_activity", "record_experiment_evidence", "create_experiment_result"]);
       const invokeExperimentTool = async (name, args, requestSignal, isRequestActive = () => true) => {
+        if (name === "ssh_remote_exec") {
+          if (!remoteServer || externalBackend.backend !== "codex" || !liveNativeAllowed) throw new Error("No remote SSH workspace is selected for this Research turn.");
+          if (!isRequestActive() || requestSignal?.aborted) throw new Error("This remote operation has ended.");
+          return require("./agent/ssh-workspace.cjs").runSshWorkspace({ server: remoteServer, command: args.command, cwd: args.cwd, signal: requestSignal, approve: approveNative });
+        }
         if (!liveExperimentAllowed || !experimentToolNames.has(name)) throw new Error("This experiment tool is unavailable in this session.");
         experimentToolsUsed = true;
         const call = { id: randomUUID(), function: { name, arguments: JSON.stringify(args) } };
@@ -1578,7 +1584,9 @@ async function runAgentInStore({ prompt, workspace, threadId, projectId, workspa
         ? toolRegistry.definitions().filter((item) => experimentToolNames.has(item.function.name)).map((item) => ({
           type: "function", name: item.function.name, description: item.function.description, inputSchema: item.function.parameters,
         })) : [];
-      let experimentBridgeInstructions = experimentBridge?.instructions || (liveExperimentAllowed ? "" : "Experiment tools are unavailable in the current read-only or plan permission mode. Do not emit experiment directives or start runs.");
+      if (liveNativeAllowed && externalBackend.backend === "codex") experimentDynamicTools.push({ type: "function", name: "ssh_remote_exec", description: "Execute one explicitly approved shell command on the selected SSH server. This is remote shell execution, not a managed Research Graph experiment run. Output is bounded; a timeout or cancellation does not confirm remote process termination.", inputSchema: { type: "object", properties: { command: { type: "string", description: "Exact remote shell command." }, cwd: { type: "string", description: "Optional absolute remote working directory or ~/ path." } }, required: ["command"], additionalProperties: false } });
+      let experimentBridgeInstructions = experimentBridge?.instructions || (remoteServer ? "Managed experiment tools are local-only and unavailable while an SSH workspace is selected. Do not emit experiment directives or claim a remote command is a managed Run." : liveExperimentAllowed ? "" : "Experiment tools are unavailable in the current read-only or plan permission mode. Do not emit experiment directives or start runs.");
+      if (remoteServer) experimentBridgeInstructions += `\n\nRemote SSH workspace selected: ${remoteServer.user}@${remoteServer.host}:${remoteServer.port}, default directory ${remoteServer.workspace}. Use ssh_remote_exec for remote operations; ordinary native Codex shell and file tools remain LOCAL. Never assume a remote command is a managed experiment run. Each remote command requires user approval. Do not run local commands to represent remote actions. On timeout, cancellation, or disconnect the remote process status is unknown; inspect before retrying.`;
       if (liveExperimentAllowed && experimentDynamicTools.length && !experimentBridgeInstructions) {
         experimentBridgeInstructions = "If direct experiment tools are available, use them only for an explicitly requested experiment. Never repeat a completed run. If unavailable, use the following legacy fallback:\n" + experimentDirectives.experimentPrompt();
       }
@@ -1592,10 +1600,11 @@ async function runAgentInStore({ prompt, workspace, threadId, projectId, workspa
       }
       const nativeResponse = await runNative({
         config: externalBackend, workspace, thread: store.getResearchThread(thread.id), turn, contextItems, researchSkill, mineruToken, runtimeId,
-        experimentBridgeInstructions, experimentDynamicTools, invokeExperimentTool: liveExperimentAllowed ? invokeExperimentTool : null,
+        experimentBridgeInstructions, experimentDynamicTools, invokeExperimentTool: liveNativeAllowed ? invokeExperimentTool : null,
         signal: controller.signal, emit: emitTurn, recordEvent, bindings: store.nativeAgentBindings(thread.id),
         approve: approveNative,
       });
+      if (externalBackend.backend === "codex" && liveNativeAllowed && !thread.turns.length) recordEvent({ type: "remote_tools_available", payload: { version: 1 } });
       let response = nativeResponse;
       if (["research", "experiment-setup"].includes(mode)) {
         const extracted = experimentDirectives.extractExperimentDirectives(nativeResponse);

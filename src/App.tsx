@@ -1473,6 +1473,10 @@ function App() {
   const [contextLength, setContextLength] = useState<ContextLength>(readContextLength);
   const [modelCapabilities, setModelCapabilities] = useState<ModelCapabilities>(previewModelCapabilities);
   const [nativeBackend, setNativeBackend] = useState<AgentBackendConfig | null>(null);
+  const [remoteServers, setRemoteServers] = useState<SshServer[]>([]);
+  const [remoteServerId, setRemoteServerId] = useState("");
+  const refreshRemoteServers = useCallback(() => { void desktopBridge.listSshServers().then(setRemoteServers).catch(() => setRemoteServers([])); }, []);
+  useEffect(() => { refreshRemoteServers(); }, [refreshRemoteServers]);
   const [boundHarness, setBoundHarness] = useState<AgentBackendConfig["backend"] | null>(null);
   const selectedHarness = boundHarness || nativeBackend?.backend || "api";
   const selectedNativeBackend = selectedHarness !== "api"
@@ -2532,6 +2536,7 @@ function App() {
 
   function startNewTask(projectId = activeProjectId, workspaceId = activeWorkspaceId) {
     if (agentBusy || workspaceOpeningRef.current) return;
+    setRemoteServerId("");
     writeComposerDraft(`new:${projectId ?? "none"}:${executionWorkspace}`, null);
     setMainSection("chat");
     clearPendingAssistantDeltas();
@@ -2613,6 +2618,7 @@ function App() {
 
   async function openResearchThread(threadSummary: ResearchThread) {
     if (workspaceOpeningRef.current) return;
+    setRemoteServerId("");
     if (sideThread?.id === threadSummary.id) {
       if (sideBusy) return;
       setSideThread(null);
@@ -2943,7 +2949,7 @@ function App() {
     setEvents(selectedNativeBackend ? [] : [{ title: "Evidence synthesis", detail: "Reading workspace and knowledge context", state: "active" }]);
 
     try {
-      const result = await desktopBridge.runAgent({ prompt: requestPrompt, workspace: executionWorkspace, threadId: forceNew ? undefined : activeThreadId || undefined, projectId: activeProjectId || undefined, workspaceId: activeWorkspace?.id, visibility: threadVisibility, mode: requestedMode, researchSkill, mineruToken, reasoningEffort: requestedReasoningEffort, contextLength: requestedContextLength, contextItems: submittedContext, capabilities: { write: "ask", command: "ask" }, origin: "research", backend: backendOverride || selectedHarness });
+      const result = await desktopBridge.runAgent({ prompt: requestPrompt, workspace: executionWorkspace, threadId: forceNew ? undefined : activeThreadId || undefined, projectId: activeProjectId || undefined, workspaceId: activeWorkspace?.id, visibility: threadVisibility, mode: requestedMode, researchSkill, mineruToken, reasoningEffort: requestedReasoningEffort, contextLength: requestedContextLength, contextItems: submittedContext, capabilities: { write: "ask", command: "ask" }, origin: "research", backend: backendOverride || selectedHarness, ...(remoteServerId && !researchSkill && (backendOverride || selectedHarness) === "codex" && ["research", "experiment-setup"].includes(requestedMode) ? { remoteServerId } : {}) });
       setThreads((current) => [result.thread, ...current.filter((thread) => thread.id !== result.threadId)]);
       setNativeStream((current) => current.threadId === result.threadId ? { threadId: "", events: [] } : current);
       setNativeQuestions((current) => current.filter((item) => item.threadId !== result.threadId));
@@ -3646,6 +3652,10 @@ function App() {
               events={events}
               trajectoryEvents={combinedTrajectoryEvents}
               nativeBackend={selectedNativeBackend}
+              remoteServers={remoteServers}
+              remoteServerId={remoteServerId}
+              onRemoteServerChange={setRemoteServerId}
+              onRefreshRemoteServers={refreshRemoteServers}
               harnessBound={Boolean(boundHarness)}
               onHarnessChange={async (backend) => {
                 if (agentBusy) throw new Error(t("Stop the running turn before using this command."));
@@ -4209,7 +4219,7 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
   </div>;
 });
 
-function ConversationView({ messages, events, trajectoryEvents, nativeBackend, harnessBound, onHarnessChange, nativeQuestions, onNativeAnswer, onNativeSteer, workspace, projectId, agentBusy, interrupting, canInterrupt, pendingAction, changeSets, researchMode, researchGraphOpen, onToggleResearchGraph, onResearchGraphAvailability, reasoningEffort, contextLength, modelCapabilities, contextItems, onOpenWorkspaceSettings, onCommand, contextSummary, compactedThroughTurnId, onSubmit, onInterrupt, onResearchMode, onAddContext, onRemoveContext, onApprove, onReject, onOpenFile, showWelcome, onWelcomeAction, composerRequest, draftKey, currentFile, currentSelection, onComposerRequestApplied, initialScrollTop, onScrollTop, commentScope, addingComment, commentsShowResolved, onExitComments }: {
+function ConversationView({ messages, events, trajectoryEvents, remoteServers, remoteServerId, onRemoteServerChange, onRefreshRemoteServers, nativeBackend, harnessBound, onHarnessChange, nativeQuestions, onNativeAnswer, onNativeSteer, workspace, projectId, agentBusy, interrupting, canInterrupt, pendingAction, changeSets, researchMode, researchGraphOpen, onToggleResearchGraph, onResearchGraphAvailability, reasoningEffort, contextLength, modelCapabilities, contextItems, onOpenWorkspaceSettings, onCommand, contextSummary, compactedThroughTurnId, onSubmit, onInterrupt, onResearchMode, onAddContext, onRemoveContext, onApprove, onReject, onOpenFile, showWelcome, onWelcomeAction, composerRequest, draftKey, currentFile, currentSelection, onComposerRequestApplied, initialScrollTop, onScrollTop, commentScope, addingComment, commentsShowResolved, onExitComments }: {
   commentScope: SessionCommentsScope | null;
   addingComment: boolean;
   commentsShowResolved: boolean;
@@ -4218,6 +4228,10 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
   events: TimelineEvent[];
   trajectoryEvents: ResearchEvent[];
   nativeBackend: AgentBackendConfig | null;
+  remoteServers: SshServer[];
+  remoteServerId: string;
+  onRemoteServerChange: (id: string) => void;
+  onRefreshRemoteServers: () => void;
   harnessBound: boolean;
   onHarnessChange: (backend: AgentBackendConfig["backend"]) => Promise<void>;
   nativeQuestions: NativeAgentQuestion[];
@@ -4357,6 +4371,9 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
   }, [prompt]);
 
   const predictedMode: NewChatMode = showWelcome ? newChatMode : chatModeFromThread(researchMode, trajectoryEvents);
+  useEffect(() => {
+    if (nativeBackend?.backend !== "codex" || (predictedMode !== "research" && (showWelcome || researchMode !== "experiment-setup"))) onRemoteServerChange("");
+  }, [nativeBackend?.backend, predictedMode, researchMode, showWelcome, onRemoteServerChange]);
   useEffect(() => {
     onResearchGraphAvailability(predictedMode === "research" || (!showWelcome && researchMode === "experiment-setup"));
   }, [onResearchGraphAvailability, predictedMode, researchMode, showWelcome]);
@@ -4828,6 +4845,13 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
         <div className="conversation-composer-footer">
           <ContextPicker bridge={desktopBridge} workspace={workspace} projectId={projectId} items={contextItems} openRequest={contextPickerRequest} currentFile={currentFile} currentSelection={currentSelection} onAdd={addContextItems} />
           <HarnessPicker backend={nativeBackend?.backend || "api"} bound={harnessBound} busy={agentBusy} onChange={onHarnessChange} onSettings={() => { void onCommand("model"); }} />
+          {nativeBackend?.backend === "codex" && (predictedMode === "research" || (!showWelcome && researchMode === "experiment-setup")) && <label className="composer-context" title={t("Native Codex tools remain local; selected SSH commands require approval.")}>
+            <span>{t("SSH workspace")}</span>
+            <select aria-label={t("SSH workspace")} value={remoteServerId} disabled={agentBusy} onFocus={onRefreshRemoteServers} onChange={event => onRemoteServerChange(event.target.value)}>
+              <option value="">{t("Local")}</option>
+              {remoteServers.map(server => <option key={server.id} value={server.id}>{server.name} · {server.user}@{server.host}</option>)}
+            </select>
+          </label>}
           <button
             type="button"
             className="composer-context"

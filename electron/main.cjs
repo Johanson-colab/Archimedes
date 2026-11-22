@@ -1993,6 +1993,17 @@ app.whenReady().then(async () => {
     if (!["api", "codex", "claude", "opencode"].includes(selectedBackend)) throw new Error("Unknown Agent backend.");
     const backend = selectedBackend === "api" ? configuredBackend : { ...configuredBackend, ...configuredBackend.profiles[selectedBackend], backend: selectedBackend };
     const externalBackend = input.origin === "research" && selectedBackend !== "api" ? backend : null;
+    let remoteServer = null;
+    if (input.remoteServerId) {
+      if (input.origin !== "research" || selectedBackend !== "codex" || !["research", "experiment-setup"].includes(mode)) throw new Error("SSH workspace is available only in Codex Research mode.");
+      if (["read-only", "plan"].includes(backend.permissionMode)) throw new Error("SSH workspace needs an approval-enabled Codex permission mode.");
+      remoteServer = sshServers.listServers().find(server => server.id === input.remoteServerId);
+      if (!remoteServer) throw new Error("The selected SSH server no longer exists.");
+      if (input.threadId) {
+        const existing = store.getResearchThread(input.threadId);
+        if (existing.turns.length && !(existing.events || []).some(event => event.type === "remote_tools_available")) throw new Error("Start a new Research conversation to enable SSH tools; existing native sessions cannot register them retroactively.");
+      }
+    }
     if (input.researchSkill != null && !["idea-spark", "paper-to-slides"].includes(input.researchSkill)) throw new Error("Unknown Research skill.");
     if (input.researchSkill === "paper-to-slides" && !["codex", "claude"].includes(selectedBackend)) throw new Error("Paper to Slides requires Codex or Claude Code.");
     if (input.researchSkill && input.origin !== "research") throw new Error("Research skills are available only in Work conversations.");
@@ -2005,6 +2016,7 @@ app.whenReady().then(async () => {
     const result = await runWindowAgent({ sender: event.sender, native: Boolean(externalBackend), run: ({ externalSignal, emit }) => agent.runAgent({
       dataStore,
       externalBackend,
+      remoteServer,
       researchSkill: input.researchSkill,
       mineruToken: input.mineruToken || undefined,
       externalSignal,
