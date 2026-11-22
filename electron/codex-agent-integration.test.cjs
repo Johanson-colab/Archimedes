@@ -63,6 +63,20 @@ readline.createInterface({input:process.stdin}).on('line',line=>{
     assert.equal(result.response, "Native fixture answer");
     assert.equal(store.nativeAgentBindings(result.threadId).get().last_turn_id, result.turnId);
     assert.equal(JSON.stringify(store.getResearchThread(result.threadId)).includes("native-fixture"), false);
+    // New threads are summaries without `turns`. Research must save the answer
+    // and register the SSH tool marker both with and without a selected host.
+    for (const remoteServer of [null, { id: 'test-host', user: 'ubuntu', host: 'example.test', port: 22, workspace: '/tmp' }]) {
+      const options = { workspace: directory, mode: 'research', origin: 'research', capabilities: { write: 'ask', command: 'ask' }, externalBackend: { backend: 'codex', binary, model: '', permissionMode: 'ask' }, autoBuildGraph: false, remoteServer };
+      const first = await nativeAgent.runAgent({ ...options, prompt: 'First research turn' });
+      assert.equal(first.status, 'completed');
+      assert.equal(first.response, 'Native fixture answer');
+      const marker = first.thread.events.find(event => event.type === 'remote_tools_available');
+      assert.equal(marker?.payload?.version, require('./agent/ssh-workspace.cjs').FILE_TOOLS_VERSION);
+      const next = await nativeAgent.runAgent({ ...options, prompt: 'Follow up', threadId: first.threadId });
+      assert.equal(next.status, 'completed');
+      assert.equal(next.thread.turns.length, 2);
+      assert.equal(next.thread.events.filter(event => event.type === 'remote_tools_available').length, 1);
+    }
     await assert.rejects(agent.runAgent({ prompt: "switch", workspace: directory, threadId: result.threadId, origin: "research", mode: "free-chat" }), /different harness/);
     assert.equal(store.getResearchThread(result.threadId).turns.length, 1);
     const fork = store.forkResearchThread(result.threadId);

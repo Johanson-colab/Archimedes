@@ -1620,7 +1620,9 @@ async function runAgentInStore({ prompt, workspace, threadId, projectId, workspa
         signal: controller.signal, emit: emitTurn, recordEvent, bindings: store.nativeAgentBindings(thread.id),
         approve: approveNative,
       });
-      if (externalBackend.backend === "codex" && liveNativeAllowed && !thread.turns.length) recordEvent({ type: "remote_tools_available", payload: { version: require("./agent/ssh-workspace.cjs").FILE_TOOLS_VERSION } });
+      // Newly created threads are summaries with turn_count, while reopened
+      // threads include turns; both describe the state before this turn.
+      if (externalBackend.backend === "codex" && liveNativeAllowed && (thread.turn_count ?? thread.turns?.length ?? 0) === 0) recordEvent({ type: "remote_tools_available", payload: { version: require("./agent/ssh-workspace.cjs").FILE_TOOLS_VERSION } });
       let response = nativeResponse;
       if (["research", "experiment-setup"].includes(mode)) {
         const extracted = experimentDirectives.extractExperimentDirectives(nativeResponse);
