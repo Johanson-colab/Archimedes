@@ -1,5 +1,4 @@
 const { app, BrowserWindow, Menu, ipcMain, dialog, nativeTheme, net, protocol, clipboard } = require("electron");
-const { spawn } = require("node:child_process");
 const { randomUUID } = require("node:crypto");
 const os = require("node:os");
 const fs = require("node:fs");
@@ -11,6 +10,8 @@ const { runPaperReview } = require("./paper-review-orchestrator.cjs");
 const { browserUse } = require("./agent/browser-use.cjs");
 const { loadLocalAgentEnvironment } = require("./config.cjs");
 const terminalSettings = require("./terminal-settings.cjs");
+const { spawnCommand } = require("./command-runner.cjs");
+const { stopProcessTree } = require("./process-tree.cjs");
 const modelConfig = require("./model-config.cjs");
 const { getModelCapabilities, normalizeContextLength, normalizeReasoningEffort } = require("./agent/model-capabilities.cjs");
 const webSearch = require("./web-search.cjs");
@@ -64,6 +65,7 @@ function closeInteractiveTerminal(sessionId) {
   if (!session) return;
   interactiveTerminalSessions.delete(sessionId);
   try {
+    if (process.platform === "win32") stopProcessTree(session.process);
     session.process.kill();
   } catch {
     // The shell may already have exited.
@@ -72,7 +74,7 @@ function closeInteractiveTerminal(sessionId) {
 
 function closeAllTerminals() {
   for (const sessionId of interactiveTerminalSessions.keys()) closeInteractiveTerminal(sessionId);
-  for (const session of commandSessions.values()) session.process.kill("SIGTERM");
+  for (const session of commandSessions.values()) stopProcessTree(session.process);
   commandSessions.clear();
 }
 
@@ -82,7 +84,7 @@ function closeWindowTerminals(senderId) {
   }
   for (const [sessionId, session] of commandSessions) {
     if (session.senderId !== senderId) continue;
-    session.process.kill("SIGTERM");
+    stopProcessTree(session.process);
     commandSessions.delete(sessionId);
   }
 }
@@ -1063,9 +1065,7 @@ app.whenReady().then(() => {
     const beforeSnapshot = typeof actionId === "string" ? workspaceFiles.snapshotWorkspace(workspace) : null;
     const sessionId = randomUUID();
     const commandRun = store.startCommand({ command, cwd: workspace });
-    const shell = process.platform === "win32" ? "cmd.exe" : "/bin/zsh";
-    const args = process.platform === "win32" ? ["/d", "/s", "/c", command] : ["-lc", command];
-    const child = spawn(shell, args, {
+    const child = spawnCommand(command, terminalSettings.shellLaunch(), {
       cwd: workspace,
       env: process.env,
     });
@@ -1077,8 +1077,10 @@ app.whenReady().then(() => {
         event.sender.send("terminal:data", { sessionId, commandRunId: commandRun.id, data });
       }
     };
-    child.stdout.on("data", (chunk) => send(chunk.toString()));
-    child.stderr.on("data", (chunk) => send(chunk.toString()));
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", send);
+    child.stderr.on("data", send);
     child.on("error", (error) => send(`\n[process error] ${error.message}\n`));
     child.on("close", (code) => {
       send(`\n[process exited with code ${code ?? "unknown"}]\n`);
@@ -1107,7 +1109,7 @@ app.whenReady().then(() => {
 
   ipcMain.handle("terminal:stop", (event, sessionId) => {
     const session = commandSessions.get(sessionId);
-    if (session?.senderId === event.sender.id) session.process.kill("SIGTERM");
+    if (session?.senderId === event.sender.id) stopProcessTree(session.process);
   });
 
   ipcMain.handle("terminal:get-settings", () => terminalSettings.terminalSettings());
@@ -1121,6 +1123,8 @@ app.whenReady().then(() => {
     const { shell, args } = terminalSettings.shellLaunch();
     const sessionId = randomUUID();
     const terminalProcess = pty.spawn(shell, args, {
+      // The bundled ConPTY avoids the legacy AttachConsole helper's close race.
+      ...(process.platform === "win32" ? { useConptyDll: true } : {}),
       name: "xterm-256color",
       cols,
       rows,
