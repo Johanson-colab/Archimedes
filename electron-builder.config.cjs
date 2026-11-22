@@ -6,6 +6,7 @@ module.exports = {
   directories: { output: "release", buildResources: "electron/assets" },
   asar: true,
   beforePack: "./scripts/prepare-latex-engine.cjs",
+  afterPack: "./scripts/verify-package.cjs",
   npmRebuild: true,
   files: [
     "dist/**/*", "electron/**/*", "shared/**/*", "server/**/*", "scripts/**/*", "package.json",
