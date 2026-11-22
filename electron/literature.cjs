@@ -179,13 +179,13 @@ function matchesDailyQuery(paper, query) {
   return terms.every((term) => haystack.includes(term));
 }
 
-function buildArxivKeywordQuery(query) {
+function buildArxivKeywordQuery(query, { research = false } = {}) {
   const text = String(query || "").replace(/["\r\n]+/g, " ").replace(/\s+/g, " ").trim();
   if (!text) return "";
   // A full title is a phrase. arXiv returns nothing for an AND of every word in
   // a title: "all:One AND all:Reflection AND all:Is ..." fails on stopwords and
   // punctuation even though the paper exists.
-  if (text.split(" ").length >= 5 || text.includes(":")) return `all:"${text}"`;
+  if (!research && (text.split(" ").length >= 5 || text.includes(":"))) return `all:"${text}"`;
   const terms = text
     .match(/"[^"]+"|\S+/g)
     ?.map((term) => term.replace(/^"|"$/g, "").replace(/[^\p{L}\p{N}_-]+/gu, " ").trim())
@@ -535,8 +535,8 @@ async function searchOpenAlex(query, limit, fetchImpl = fetch) {
   return (payload.results || []).map(normalizeOpenAlexWork);
 }
 
-async function searchArxivKeywords(query, limit, fetchImpl = fetch) {
-  const searchQuery = buildArxivKeywordQuery(query);
+async function searchArxivKeywords(query, limit, fetchImpl = fetch, options = {}) {
+  const searchQuery = buildArxivKeywordQuery(query, options);
   if (!searchQuery) return [];
   const params = new URLSearchParams({
     search_query: searchQuery,
