@@ -1031,6 +1031,11 @@ app.whenReady().then(async () => {
     fetchImpl: (...args) => net.fetch(...args),
   });
 
+  ipcMain.handle("paper:build-snapshot", (_event, input = {}) => {
+    const workspace = resolveWorkspace(input.workspace);
+    return require("./manuscript-snapshot.cjs").readManuscriptSnapshot(workspace, input.manifestPath);
+  });
+
   ipcMain.handle("paper:compile", async (event, input = {}) => {
     const workspace = resolveWorkspace(input.workspace);
     const result = await managedPaperCompiler(workspace, input.path, (stage, log) => {
