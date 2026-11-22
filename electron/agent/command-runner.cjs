@@ -3,6 +3,8 @@ const path = require('node:path');
 const { spawn } = require('node:child_process');
 const { randomUUID } = require('node:crypto');
 const { StringDecoder } = require('node:string_decoder');
+const { spawnCommand } = require('../command-runner.cjs');
+const terminalSettings = require('../terminal-settings.cjs');
 
 const OUTPUT_LIMIT = 32_000;
 const LOG_LIMIT = 10 * 1024 * 1024;
@@ -28,10 +30,8 @@ function runApprovedCommand({ root, cwd, command, timeoutSeconds, signal, onUpda
   const timeoutMs = Number.isFinite(requested) && requested > 0 ? Math.min(Math.round(requested * 1000), MAX_TIMEOUT_MS) : DEFAULT_TIMEOUT_MS;
   const log = createLog(root);
   const started = Date.now();
-  const shell = process.platform === 'win32' ? (process.env.ComSpec || 'cmd.exe') : fs.existsSync('/bin/zsh') ? '/bin/zsh' : '/bin/sh';
-  const args = process.platform === 'win32' ? ['/d', '/s', '/c', command] : ['-lc', command];
   let child;
-  try { child = spawn(shell, args, { cwd, env: process.env, windowsHide: true, detached: process.platform !== 'win32', stdio: ['ignore', 'pipe', 'pipe'] }); }
+  try { child = spawnCommand(command, terminalSettings.shellLaunch(), { cwd, env: process.env, windowsHide: true, detached: process.platform !== 'win32', stdio: ['ignore', 'pipe', 'pipe'] }); }
   catch (error) { fs.closeSync(log.fd); throw error; }
   return new Promise((resolve, reject) => {
     let tail = '', bytes = 0, logBytes = 0, logTruncated = false, timedOut = false, aborted = false, settled = false, spawnError, ioError;
