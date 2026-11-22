@@ -1053,7 +1053,14 @@ async function executeBuiltInTool({ root, taskId, threadId, turnId, call, emit, 
       throw error;
     } finally {
       try {
-        const changes = compareWorkspaceSnapshots(before, snapshotWorkspace(root));
+        const after = snapshotWorkspace(root);
+        const changes = compareWorkspaceSnapshots(before, after);
+        const snapshotCoverage = { before: before.coverage, after: after.coverage };
+        store.updateActionPayload(action.id, { snapshotCoverage });
+        if ([before.coverage, after.coverage].some((scan) => scan.entryLimitReached || scan.byteBudgetReached)) {
+          recordEvent({ type: "workspace_snapshot_coverage", payload: snapshotCoverage });
+          emit({ type: "tool", title: "Workspace change scan is limited", detail: "", snapshotCoverage });
+        }
         if (changes.length) {
           const updated = store.updateActionPayload(action.id, { changes });
           emit({ type: "workspace_change", title: "Workspace changed", detail: `${changes.length} files`, changeSet: { id: updated.id, actionId: updated.id, taskId, threadId, turnId, kind: updated.kind, changes, createdAt: updated.created_at } });

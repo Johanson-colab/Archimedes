@@ -16,6 +16,7 @@ const MAX_SNAPSHOT_ENTRIES = 5_000;
 const MAX_TEXT_BYTES = 2_000_000;
 const MAX_SNAPSHOT_TEXT_BYTES = 1_000_000;
 const MAX_SNAPSHOT_TOTAL_TEXT_BYTES = 8_000_000;
+const SNAPSHOT_GENERATED_DIRECTORY_NAMES = new Set([".venv", "venv", "__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache", ".tox", ".nox"]);
 
 function normalizeRelative(value = "") {
   return String(value || "").replaceAll("\\", "/").replace(/^\/+/, "");
@@ -155,6 +156,7 @@ function writeWorkspaceTextFile(root, relative, content) {
 function snapshotWorkspace(root) {
   const files = new Map();
   let retainedTextBytes = 0;
+  const coverage = { entries: 0, textBytesRead: 0, metadataOnly: 0, ignoredDirectories: 0, generatedDirectories: 0, byteBudgetReached: false, entryLimitReached: false };
 
   function visit(directory) {
     let entries;
@@ -164,7 +166,15 @@ function snapshotWorkspace(root) {
       return;
     }
     for (const entry of entries) {
-      if (files.size >= MAX_SNAPSHOT_ENTRIES || IGNORED_NAMES.has(entry.name) || entry.isSymbolicLink()) continue;
+      if (files.size >= MAX_SNAPSHOT_ENTRIES) { coverage.entryLimitReached = true; break; }
+      const generatedDirectory = entry.isDirectory() && SNAPSHOT_GENERATED_DIRECTORY_NAMES.has(entry.name);
+      if (IGNORED_NAMES.has(entry.name) || generatedDirectory || entry.isSymbolicLink()) {
+        if (entry.isDirectory()) {
+          coverage.ignoredDirectories += 1;
+          if (generatedDirectory) coverage.generatedDirectories += 1;
+        }
+        continue;
+      }
       const target = path.join(directory, entry.name);
       if (entry.isDirectory()) {
         visit(target);
@@ -173,19 +183,27 @@ function snapshotWorkspace(root) {
       if (!entry.isFile()) continue;
       const stats = fs.statSync(target);
       const kind = fileKind(target);
-      const text = (kind === "text" || kind === "markdown") && stats.size <= MAX_SNAPSHOT_TEXT_BYTES
+      // The I/O budget must apply before reading/hashing, not merely before
+      // retaining text. Beyond it, size/time metadata still detects changes.
+      const isText = kind === "text" || kind === "markdown";
+      if (isText && (stats.size > MAX_SNAPSHOT_TEXT_BYTES || retainedTextBytes + stats.size > MAX_SNAPSHOT_TOTAL_TEXT_BYTES)) coverage.byteBudgetReached = true;
+      const text = isText && stats.size <= MAX_SNAPSHOT_TEXT_BYTES
+        && retainedTextBytes + stats.size <= MAX_SNAPSHOT_TOTAL_TEXT_BYTES
         ? fs.readFileSync(target, "utf8")
         : null;
+      const metadata = `${stats.size}:${stats.mtimeMs}:${stats.ctimeMs}`;
       const fingerprint = text === null
-        ? `${stats.size}:${stats.mtimeMs}`
+        ? metadata
         : createHash("sha1").update(text).digest("hex");
-      const content = text !== null && retainedTextBytes + stats.size <= MAX_SNAPSHOT_TOTAL_TEXT_BYTES ? text : null;
-      if (content !== null) retainedTextBytes += stats.size;
-      files.set(relativePath(root, target), { kind, content, fingerprint });
+      if (text !== null) { retainedTextBytes += stats.size; coverage.textBytesRead += stats.size; }
+      else coverage.metadataOnly += 1;
+      files.set(relativePath(root, target), { kind, content: text, fingerprint, metadata, tracking: text === null ? "metadata" : "content" });
     }
   }
 
   visit(workspacePath(root));
+  coverage.entries = files.size;
+  Object.defineProperty(files, "coverage", { value: coverage });
   return files;
 }
 
@@ -204,6 +222,9 @@ function compareWorkspaceSnapshots(before, after) {
       continue;
     }
     if (!previous || !next || previous.fingerprint === next.fingerprint) continue;
+    // Adding an earlier file can shift the text budget. That alone must not
+    // report an untouched file as modified when its tracking mode changes.
+    if (previous.tracking !== next.tracking && previous.metadata === next.metadata) continue;
     const stats = previous.content !== null && next.content !== null
       ? lineStats(previous.content, next.content)
       : { additions: 0, deletions: 0 };

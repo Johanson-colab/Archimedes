@@ -184,6 +184,7 @@ type Message = {
 type TimelineEvent = {
   title: string;
   detail: string;
+  snapshotCoverage?: WorkspaceSnapshotCoverage;
   state: "done" | "active" | "waiting";
 };
 
@@ -2269,8 +2270,8 @@ function App() {
         if (event.threadId) setThreads((current) => current.map((thread) => thread.id === event.threadId ? { ...thread, pending_actions: (thread.pending_actions ?? 0) + 1 } : thread));
       }
       if (isGraphEvent && event.threadId && activeThreadIdRef.current !== event.threadId) return;
-      const state = event.type === "complete" || event.type === "artifact" || event.type === "graph_update" || event.toolCall?.status === "completed" ? "done" : event.type === "configuration" || event.type === "failed" || event.type === "incomplete" || event.type === "interrupted" || event.toolCall?.status === "failed" || event.toolCall?.status === "interrupted" ? "waiting" : "active";
-      setEvents((current) => [...current.filter((item) => item.title !== event.title), { title: event.title, detail: event.detail, state }]);
+      const state = event.type === "complete" || event.type === "artifact" || event.type === "graph_update" || event.snapshotCoverage || event.toolCall?.status === "completed" ? "done" : event.type === "configuration" || event.type === "failed" || event.type === "incomplete" || event.type === "interrupted" || event.toolCall?.status === "failed" || event.toolCall?.status === "interrupted" ? "waiting" : "active";
+      setEvents((current) => [...current.filter((item) => item.title !== event.title), { title: event.title, detail: event.detail, snapshotCoverage: event.snapshotCoverage, state }]);
     });
     return unsubscribe;
   }, []);
