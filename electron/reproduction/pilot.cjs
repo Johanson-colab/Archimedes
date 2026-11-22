@@ -596,18 +596,24 @@ async function runPilot({
       continue;
     }
 
-    if (action === "read_file") {
+    let used = "";
+    let content = null;
+    if (action === "read_file" || action === "edit_file") {
       const requested = String(decision.path || "").trim();
-      if (!requested) { turnHint = "read_file needs a path inside the checkout."; continue; }
-      let used = "";
-      let content = null;
-      for (const candidate of candidatePaths(requested, repoName)) {
-        try {
+      if (!requested) { turnHint = `${action} needs a path inside the checkout.`; continue; }
+      try {
+        for (const candidate of candidatePaths(requested, repoName)) {
           const value = await backend.readFile(candidate);
-          if (value !== null && value !== undefined) { content = value; used = candidate; break; }
-        } catch { /* try the next candidate */ }
+          if (value != null) { content = value; used = candidate; break; }
+        }
+      } catch (error) {
+        finish("failed", `${action} failed for ${requested}: ${error.message}`);
+        break;
       }
       if (content === null) { turnHint = `${requested} does not exist in the checkout. Try ls first.`; continue; }
+    }
+
+    if (action === "read_file") {
       const lines = String(content).split("\n");
       const offset = Math.max(0, Math.trunc(Number(decision.offset) || 0));
       const limit = Math.min(2_000, Math.max(1, Math.trunc(Number(decision.limit) || 200)));
@@ -637,20 +643,10 @@ async function runPilot({
     }
 
     if (action === "edit_file") {
-      const relative = String(decision.path || "").trim();
       const oldText = String(decision.old ?? "");
       const newText = String(decision.new ?? "");
-      if (!relative || !oldText) { turnHint = "edit_file needs a path and the exact text to replace."; continue; }
+      if (!oldText) { turnHint = "edit_file needs a path and the exact text to replace."; continue; }
       if (oldText.length > 50_000 || newText.length > 50_000) { turnHint = "That edit is too large."; continue; }
-      let used = "";
-      let content = null;
-      for (const candidate of candidatePaths(relative, repoName)) {
-        try {
-          const value = await backend.readFile(candidate);
-          if (value !== null && value !== undefined) { content = value; used = candidate; break; }
-        } catch { /* try the next candidate */ }
-      }
-      if (content === null) { turnHint = `${relative} does not exist in the checkout.`; continue; }
       const first = content.indexOf(oldText);
       if (first < 0) { turnHint = "The old text does not appear in that file. Read it first and copy the exact lines."; continue; }
       if (content.indexOf(oldText, first + oldText.length) >= 0) {
