@@ -1586,11 +1586,12 @@ async function runAgentInStore({ prompt, workspace, threadId, projectId, workspa
         if (result.action) actions.push(result.action);
         return JSON.parse(result.content);
       };
-      if (liveExperimentAllowed) {
+      if (liveExperimentAllowed || (liveNativeAllowed && remoteServer && externalBackend.backend === "codex")) {
         try {
-          experimentBridge = await createExperimentBridge({ workspace, signal: controller.signal, invoke: invokeExperimentTool });
+          experimentBridge = await createExperimentBridge({ workspace, signal: controller.signal, invoke: invokeExperimentTool, mode: remoteServer ? "ssh" : "experiment" });
         } catch (error) {
           if (controller.signal.aborted) throw error;
+          if (remoteServer) throw new Error(`SSH workspace bridge unavailable: ${error.message}. The existing Codex session was preserved; no remote request was sent.`);
           emitTurn({ type: "status", title: "Experiment bridge unavailable", detail: "Live CLI access is unavailable; direct Codex tools or the existing directive fallback may still be available." });
         }
       }
@@ -1601,8 +1602,8 @@ async function runAgentInStore({ prompt, workspace, threadId, projectId, workspa
           type: "function", name: item.function.name, description: item.function.description, inputSchema: item.function.parameters,
         })) : [];
       if (liveNativeAllowed && externalBackend.backend === "codex") experimentDynamicTools.push({ type: "function", name: "ssh_remote_exec", description: "Execute one explicitly approved shell command on the selected SSH server. This is remote shell execution, not a managed Research Graph experiment run. Output is bounded; a timeout or cancellation does not confirm remote process termination.", inputSchema: { type: "object", properties: { command: { type: "string", description: "Exact remote shell command." }, cwd: { type: "string", description: "Optional absolute remote working directory or ~/ path." } }, required: ["command"], additionalProperties: false } }, ...require("./agent/ssh-workspace.cjs").fileToolDefinitions);
-      let experimentBridgeInstructions = experimentBridge?.instructions || (remoteServer ? "Managed experiment tools are local-only and unavailable while an SSH workspace is selected. Do not emit experiment directives or claim a remote command is a managed Run." : liveExperimentAllowed ? "" : "Experiment tools are unavailable in the current read-only or plan permission mode. Do not emit experiment directives or start runs.");
-      if (remoteServer) experimentBridgeInstructions += `\n\nRemote SSH workspace selected: ${remoteServer.user}@${remoteServer.host}:${remoteServer.port}, default directory ${remoteServer.workspace}. For remote work use ssh_remote_read to read files, ssh_remote_edit for exact changes, and ssh_remote_exec for commands; all require approval. Their paths are on the remote machine. Ordinary native Codex shell and file tools remain LOCAL, so never use them as if they accessed the remote workspace. Remote shell operations are not managed experiment runs. On timeout, cancellation, or disconnect the remote process status is unknown; inspect before retrying.`;
+      let experimentBridgeInstructions = experimentBridge?.instructions || (liveExperimentAllowed ? "" : "Experiment tools are unavailable in the current read-only or plan permission mode. Do not emit experiment directives or start runs.");
+      if (remoteServer) experimentBridgeInstructions += `\n\nRemote SSH workspace selected: ${remoteServer.user}@${remoteServer.host}:${remoteServer.port}, default directory ${remoteServer.workspace}. Use ssh_remote_read, ssh_remote_edit and ssh_remote_exec for remote work; if these native dynamic tools are not listed, use the CLI bridge above through your local shell. All remote operations require approval. Managed experiment tools are local-only and unavailable here; do not emit experiment directives or claim a remote command is a managed Run. Ordinary Codex shell and file tools remain LOCAL; the bridge is the only local command that routes these operations remotely. On timeout, cancellation, or disconnect the remote process status is unknown; inspect before retrying.`;
       if (liveExperimentAllowed && experimentDynamicTools.length && !experimentBridgeInstructions) {
         experimentBridgeInstructions = "If direct experiment tools are available, use them only for an explicitly requested experiment. Never repeat a completed run. If unavailable, use the following legacy fallback:\n" + experimentDirectives.experimentPrompt();
       }

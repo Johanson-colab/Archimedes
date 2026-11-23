@@ -27,7 +27,7 @@ readline.createInterface({input:process.stdin}).on('line',line=>{
    send({id:m.id,result:{turn:{id:'native-turn'}}});
    if(m.method==='thread/compact/start')send({method:'turn/started',params:{threadId:'native-fixture',turnId:'native-turn',turn:{id:'native-turn'}}});
    if(m.method==='thread/compact/start')send({method:'item/completed',params:{threadId:'native-fixture',turnId:'native-turn',item:{id:'compact',type:'contextCompaction'}}});
-   else send({method:'item/agentMessage/delta',params:{threadId:'native-fixture',turnId:'native-turn',itemId:'answer',delta:'Native fixture answer'}});
+   else { const prompt=m.params.input[0].text; const answer=prompt.includes('Require SSH bridge proof') ? (prompt.includes('Remote SSH operations are available through an Archimedes local CLI bridge') ? 'SSH bridge available' : 'SSH bridge missing') : 'Native fixture answer'; send({method:'item/agentMessage/delta',params:{threadId:'native-fixture',turnId:'native-turn',itemId:'answer',delta:answer}}); }
    send({method:'turn/completed',params:{threadId:'native-fixture',turn:{id:'native-turn',status:'completed'}}});
  }else send({id:m.id,result});
 });
@@ -67,6 +67,12 @@ readline.createInterface({input:process.stdin}).on('line',line=>{
     assert.equal(result.response, "Native fixture answer");
     assert.equal(store.nativeAgentBindings(result.threadId).get().last_turn_id, result.turnId);
     assert.equal(JSON.stringify(store.getResearchThread(result.threadId)).includes("native-fixture"), false);
+    const legacyFirst = await nativeAgent.runAgent({ prompt: 'Legacy standard chat', workspace: directory, mode: 'free-chat', origin: 'research', capabilities: { write: 'ask', command: 'ask' }, externalBackend: { backend: 'codex', binary, model: '', permissionMode: 'ask' }, autoBuildGraph: false });
+    const legacyBinding = store.nativeAgentBindings(legacyFirst.threadId).get();
+    const legacyRemote = await nativeAgent.runAgent({ prompt: 'Require SSH bridge proof', workspace: directory, threadId: legacyFirst.threadId, mode: 'research', origin: 'research', capabilities: { write: 'ask', command: 'ask' }, externalBackend: { backend: 'codex', binary, model: '', permissionMode: 'ask' }, autoBuildGraph: false, remoteServer: { id: 'test-host', user: 'ubuntu', host: 'example.test', port: 22, workspace: '/tmp' } });
+    assert.equal(legacyRemote.response, 'SSH bridge available');
+    assert.equal(store.nativeAgentBindings(legacyFirst.threadId).get().native_thread_id, legacyBinding.native_thread_id);
+    assert.equal(legacyRemote.thread.turns.length, 2);
     // New threads are summaries without `turns`. Research must save the answer
     // and register the SSH tool marker both with and without a selected host.
     for (const remoteServer of [null, { id: 'test-host', user: 'ubuntu', host: 'example.test', port: 22, workspace: '/tmp' }]) {
