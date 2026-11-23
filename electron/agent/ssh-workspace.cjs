@@ -11,7 +11,7 @@ function remotePath(value) {
   if (!value.startsWith('/')) throw new Error('Remote working directory must be absolute or start with ~/.');
   return quote(value);
 }
-async function runSshWorkspace({ server, command, cwd, approve, signal, spawnImpl = spawn, displayCommand }) {
+async function runSshWorkspace({ server, command, cwd, approve, signal, spawnImpl = spawn, displayCommand, remoteOperation = 'ssh_remote_exec' }) {
   if (!server?.id || typeof approve !== 'function') throw new Error('Select a saved SSH server and an approval surface.');
   if (typeof command !== 'string' || !command.trim() || command.length > MAX_COMMAND || command.includes('\0')) throw new Error('Enter a valid remote command.');
   const { target, password, env } = authFor(server);
@@ -19,7 +19,7 @@ async function runSshWorkspace({ server, command, cwd, approve, signal, spawnImp
   if (directory.length > 2000 || /[\0\r\n]/.test(directory)) throw new Error('Invalid remote working directory.');
   const dir = remotePath(directory);
   if (signal?.aborted) throw new Error('Remote operation cancelled before approval.');
-  const accepted = await approve({ command: `SSH ${target.user}@${target.host}:${target.port}\nDirectory: ${directory}\n${displayCommand || command}`, cwd: directory, reason: 'This operation runs on the selected remote server.', signal });
+  const accepted = await approve({ command: `SSH ${target.user}@${target.host}:${target.port}\nDirectory: ${directory}\n${displayCommand || command}`, cwd: directory, reason: 'This operation runs on the selected remote server.', remoteOperation, signal });
   if (!accepted || signal?.aborted) throw new Error('Remote command was not approved.');
   const remoteCommand = `cd -- ${dir} || exit 1; exec bash -lc ${quote(command)}`;
   const args = connectionArgs(target, remoteCommand, { allowPassword: Boolean(password) });
@@ -71,6 +71,6 @@ function buildRemoteFileOperation(name, args) {
 
 async function runRemoteFileOperation({ name, args, ...options }) {
   const operation = buildRemoteFileOperation(name, args);
-  return runSshWorkspace({ ...options, ...operation });
+  return runSshWorkspace({ ...options, ...operation, remoteOperation: name });
 }
 module.exports = { runSshWorkspace, runRemoteFileOperation, buildRemoteFileOperation, fileToolDefinitions, FILE_TOOLS_VERSION, FILE_TOOL_NAMES, remotePath };

@@ -1899,7 +1899,7 @@ interface AgentAction {
   id: string;
   task_id: string;
   kind: "write" | "command";
-  payload: { path?: string; content?: string; command?: string; cwd?: string; managedByAgent?: boolean; editPreview?: { before: string; after: string }; externalAgent?: "codex" | "claude" | "opencode"; change?: WorkspaceFileChange; changes?: WorkspaceFileChange[] };
+  payload: { path?: string; content?: string; command?: string; cwd?: string; managedByAgent?: boolean; remoteOperation?: "ssh_remote_exec" | "ssh_remote_read" | "ssh_remote_edit"; editPreview?: { before: string; after: string }; externalAgent?: "codex" | "claude" | "opencode"; change?: WorkspaceFileChange; changes?: WorkspaceFileChange[] };
   status: "pending" | "approved" | "rejected";
   created_at: string;
   resolved_at: string | null;

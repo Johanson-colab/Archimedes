@@ -1,5 +1,6 @@
 import { Fragment, lazy, memo, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent as ReactClipboardEvent, type ReactNode } from "react";
 import { flushSync } from "react-dom";
+import { startApprovalCountdown } from "./approval-countdown.mjs";
 import ReactMarkdown from "react-markdown";
 import { WorkspaceMarkdownLink, WorkspaceMarkdownProvider, workspaceMarkdownUrlTransform } from "./WorkspaceMarkdownLink";
 import remarkGfm from "remark-gfm";
@@ -189,7 +190,7 @@ type TimelineEvent = {
   state: "done" | "active" | "waiting";
 };
 
-type PendingAction = AgentAction & { source: "agent" | "manual" };
+type PendingAction = AgentAction & { source: "agent" | "manual"; ownerThreadId?: string | null };
 type Modal = "file" | null;
 type ResearchMode = NewChatMode | "free-chat" | "idea-spark" | "experiment-setup" | "paper-generation" | "paper-review" | "deep-research";
 type ReasoningEffort = "low" | "medium" | "high";
@@ -1426,6 +1427,7 @@ function App() {
   useEffect(() => { setCommentsOpen(false); }, [activeThreadId]);
   const [runningThreadId, setRunningThreadId] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
+  const pendingActionDecisionRef = useRef<string | null>(null);
   const [workbenchOpen, setWorkbenchOpen] = useState(false);
   const [workbenchPreferences, setWorkbenchPreferences] = useState<WorkbenchTabPreferences>(DEFAULT_WORKBENCH_PREFERENCES);
   const workbenchLayout = workbenchPreferences.layout;
@@ -2271,7 +2273,7 @@ function App() {
         setPendingAction((current) => current && (!event.threadId || activeThreadIdRef.current === event.threadId) ? null : current);
       }
       if (event.type === "approval" && event.action && (!event.threadId || activeThreadIdRef.current === event.threadId)) {
-        setPendingAction({ ...event.action, source: "agent" });
+        setPendingAction({ ...event.action, source: "agent", ownerThreadId: event.threadId });
         if (event.threadId) setThreads((current) => current.map((thread) => thread.id === event.threadId ? { ...thread, pending_actions: (thread.pending_actions ?? 0) + 1 } : thread));
       }
       if (isGraphEvent && event.threadId && activeThreadIdRef.current !== event.threadId) return;
@@ -2424,7 +2426,7 @@ function App() {
       if (thread) setResearchMode(thread.mode === "experiment-setup" ? "experiment-setup" : chatModeFromThread(thread.mode, thread.events));
       setChangeSets(thread?.changeSets ?? []);
       const action = snapshot.actions.find((candidate) => candidate.status === "pending");
-      setPendingAction(action ? { ...action, source: "agent" } : null);
+      setPendingAction(action ? { ...action, source: "agent", ownerThreadId: thread?.turns.some(turn => turn.task_id === action.task_id) ? thread.id : null } : null);
       setWorkspaceOpenError(readErrors.join("\n"));
       setWorkspaceReady(true);
     });
@@ -2624,6 +2626,7 @@ function App() {
       if (sideBusy) return;
       setSideThread(null);
     }
+    if (activeThreadIdRef.current !== threadSummary.id) setPendingAction(null);
     clearPendingAssistantDeltas();
     setMainSection("chat");
     activeThreadIdRef.current = threadSummary.id;
@@ -2979,7 +2982,7 @@ function App() {
         setChangeSets(result.thread.changeSets ?? []);
         setEvents((current) => current.map((event) => event.title === "Evidence synthesis" ? { ...event, detail: "Turn saved to this research session", state: "done" } : event));
         const proposedAction = result.actions.find((action) => action.status === "pending");
-        if (proposedAction) setPendingAction({ ...proposedAction, source: "agent" });
+        if (proposedAction) setPendingAction({ ...proposedAction, source: "agent", ownerThreadId: result.threadId });
       }
       setContextItems((current) => current.filter((item) => !submittedContext.some((submitted) => submitted.id === item.id)));
       return true;
@@ -3279,12 +3282,13 @@ function App() {
     setThreads((current) => current.map((thread) => thread.id === threadId ? { ...thread, pending_actions: Math.max(0, (thread.pending_actions ?? 0) - 1) } : thread));
   }
 
-  async function approvePendingAction() {
+  async function approvePendingAction(expectedActionId?: string) {
     const action = pendingAction;
-    if (!action) return;
+    if (!action || (expectedActionId && action.id !== expectedActionId) || (action.ownerThreadId && activeThreadIdRef.current !== action.ownerThreadId) || pendingActionDecisionRef.current === action.id) return;
+    pendingActionDecisionRef.current = action.id;
     try {
       if (action.source === "agent") await desktopBridge.approveAgentAction(action.id);
-      setPendingAction(null);
+      setPendingAction(current => current?.id === action.id ? null : current);
       clearThreadPendingAction();
       if (action.kind === "command" && action.payload.command && !action.payload.externalAgent && !action.payload.managedByAgent) {
         await runCommand(action.payload.command, action.id);
@@ -3294,7 +3298,7 @@ function App() {
     } catch (error) {
       if (String(error).includes("file changed while awaiting approval")) { setPendingAction(null); clearThreadPendingAction(); }
       setMessages((current) => [...current, { id: crypto.randomUUID(), role: "assistant", text: `Could not approve this action: ${String(error)}` }]);
-    }
+    } finally { if (pendingActionDecisionRef.current === action.id) pendingActionDecisionRef.current = null; }
   }
 
   function reviewPendingAction() {
@@ -3303,12 +3307,15 @@ function App() {
     });
   }
 
-  async function rejectPendingAction() {
+  async function rejectPendingAction(expectedActionId?: string) {
     const action = pendingAction;
-    if (!action) return;
-    if (action.source === "agent") await desktopBridge.rejectAgentAction(action.id);
-    setPendingAction(null);
-    clearThreadPendingAction();
+    if (!action || (expectedActionId && action.id !== expectedActionId) || (action.ownerThreadId && activeThreadIdRef.current !== action.ownerThreadId) || pendingActionDecisionRef.current === action.id) return;
+    pendingActionDecisionRef.current = action.id;
+    try {
+      if (action.source === "agent") await desktopBridge.rejectAgentAction(action.id);
+      setPendingAction(current => current?.id === action.id ? null : current);
+      clearThreadPendingAction();
+    } finally { if (pendingActionDecisionRef.current === action.id) pendingActionDecisionRef.current = null; }
   }
 
   function openWelcomeWorkflow(action: ResearchWelcomeAction) {
@@ -3698,8 +3705,8 @@ function App() {
               contextItems={contextItems}
               onAddContext={(added) => setContextItems((current) => [...current, ...added.filter((item) => !current.some((candidate) => candidate.id === item.id))].slice(0, 12))}
               onRemoveContext={(id) => setContextItems((current) => current.filter((item) => item.id !== id))}
-              onApprove={() => void approvePendingAction()}
-              onReject={() => void rejectPendingAction()}
+              onApprove={(id) => void approvePendingAction(id)}
+              onReject={(id) => void rejectPendingAction(id)}
               onOpenFile={openChangedFile}
               showWelcome={activeThreadId === null && messages.length === 1 && messages[0]?.id === "welcome" && !agentBusy}
               onWelcomeAction={openWelcomeWorkflow}
@@ -4035,8 +4042,8 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
   changeSets: WorkspaceChangeSet[];
   welcomeVisible: boolean;
   onWelcomeAction: (action: ResearchWelcomeAction) => void;
-  onApprove: () => void;
-  onReject: () => void;
+  onApprove: (expectedActionId?: string) => void;
+  onReject: (expectedActionId?: string) => void;
   onOpenFile: (filePath: string) => void;
   initialScrollTop: number | null;
   onScrollTop: (top: number) => void;
@@ -4045,23 +4052,13 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
   const [autoRunIn, setAutoRunIn] = useState<number | null>(null);
   const approveRef = useRef(onApprove);
   useEffect(() => { approveRef.current = onApprove; }, [onApprove]);
-  const autoRunId = pendingAction?.kind === "command" && pendingAction.payload.managedByAgent ? pendingAction.id : null;
+  const autoRunId = pendingAction?.kind === "command" && (pendingAction.payload.managedByAgent || (agentBusy && pendingAction.ownerThreadId && pendingAction.payload.remoteOperation === "ssh_remote_exec")) ? pendingAction.id : null;
   useEffect(() => {
     if (!autoRunId) {
       setAutoRunIn(null);
       return;
     }
-    const started = Date.now();
-    setAutoRunIn(10);
-    const timer = window.setInterval(() => {
-      const remaining = Math.max(0, 10 - Math.floor((Date.now() - started) / 1000));
-      setAutoRunIn(remaining);
-      if (remaining <= 0) {
-        window.clearInterval(timer);
-        approveRef.current();
-      }
-    }, 200);
-    return () => window.clearInterval(timer);
+    return startApprovalCountdown(setAutoRunIn, () => approveRef.current(autoRunId));
   }, [autoRunId]);
   const [historyStart, setHistoryStart] = useState(() => Math.max(0, messages.length - INITIAL_VISIBLE_MESSAGE_COUNT));
   const historyExpandedRef = useRef(false);
@@ -4201,9 +4198,9 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
               <strong>{t("After")}</strong><pre>{pendingAction.payload.editPreview.after}</pre>
             </details>}
             <div className="approval-actions">
-              {autoRunIn !== null && <span className="approval-countdown">{t("Auto-run in {seconds}s", { seconds: autoRunIn })}</span>}
-              <button className="approval-dismiss" onClick={onReject}>Dismiss</button>
-              <button className="approval-apply" onClick={onApprove}>{pendingAction.kind === "write" ? "Apply" : "Run"}</button>
+              {autoRunId && autoRunIn !== null && <span className="approval-countdown">{t("Auto-run in {seconds}s", { seconds: autoRunIn })}</span>}
+              <button className="approval-dismiss" onClick={() => onReject(pendingAction.id)}>Dismiss</button>
+              <button className="approval-apply" onClick={() => onApprove(pendingAction.id)}>{pendingAction.kind === "write" ? "Apply" : "Run"}</button>
             </div>
           </div>
         </section>}
@@ -4264,8 +4261,8 @@ function ConversationView({ messages, events, trajectoryEvents, remoteServers, r
   onResearchMode: (mode: ResearchMode) => void;
   onAddContext: (items: ContextAttachment[]) => void;
   onRemoveContext: (id: string) => void;
-  onApprove: () => void;
-  onReject: () => void;
+  onApprove: (expectedActionId?: string) => void;
+  onReject: (expectedActionId?: string) => void;
   onOpenFile: (filePath: string) => void;
   showWelcome: boolean;
   onWelcomeAction: (action: ResearchWelcomeAction) => void;
@@ -4309,8 +4306,8 @@ function ConversationView({ messages, events, trajectoryEvents, remoteServers, r
   // handlers stable without retaining stale closures from the parent render.
   const historyHandlersRef = useRef({ onApprove, onReject, onOpenFile, onWelcomeAction });
   historyHandlersRef.current = { onApprove, onReject, onOpenFile, onWelcomeAction };
-  const approveHistoryAction = useCallback(() => historyHandlersRef.current.onApprove(), []);
-  const rejectHistoryAction = useCallback(() => historyHandlersRef.current.onReject(), []);
+  const approveHistoryAction = useCallback((id?: string) => historyHandlersRef.current.onApprove(id), []);
+  const rejectHistoryAction = useCallback((id?: string) => historyHandlersRef.current.onReject(id), []);
   const openHistoryFile = useCallback((path: string) => historyHandlersRef.current.onOpenFile(path), []);
   const [welcomeDismissed, setWelcomeDismissed] = useState(false);
   const [newChatMode, setNewChatMode] = useState<NewChatMode>(storedDraftRef.current?.newChatMode ?? "standard");
