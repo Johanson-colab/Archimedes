@@ -1187,6 +1187,7 @@ interface ConferenceSearchOptions {
   forceRefresh?: boolean;
 }
 interface ConferenceSearchResponse {
+  abstracts_pending?: boolean;
   papers: DailyPaper[];
   total: number;
   catalog_total: number;

@@ -106,3 +106,29 @@ test("conference connection failures do not expose raw Electron RPC and AbortErr
   assert.doesNotMatch(text(), /AbortError|invoking remote method/);
   await React.act(async () => root.unmount());
 });
+
+test("title rows appear while abstracts are pending and late progress cannot replace completed abstracts", async () => {
+  let finish, lateProgress;
+  let cachedReads = 0;
+  const titles = { ...catalog("Available title"), abstracts_pending: true, warnings: ["Abstracts are loading; titles and official links are ready."] };
+  const complete = catalog("Available title"); complete.papers[0].abstract = "Recovered full abstract";
+  const bridge = { getCachedConferencePapers: async () => {
+    cachedReads++;
+    if (cachedReads === 1) return null;
+    if (cachedReads === 2) return titles;
+    return new Promise(resolve => { lateProgress = resolve; });
+  }, searchConferencePapers: () => new Promise(resolve => { finish = resolve; }) };
+  const root = createRoot(document.getElementById("root"));
+  await React.act(async () => root.render(React.createElement(ConferenceDiscovery, { bridge, targetLibraryId: "library", topic: "all", onImported: async () => {} })));
+  await React.act(async () => new Promise(resolve => setTimeout(resolve, 1100)));
+  assert.match(text(), /Available title/); assert.match(text(), /Abstracts are loading/);
+  await React.act(async () => new Promise(resolve => setTimeout(resolve, 1000)));
+  assert.ok(lateProgress);
+  await React.act(async () => finish(complete));
+  await React.act(async () => lateProgress(titles));
+  assert.match(text(), /Recovered full abstract/); assert.doesNotMatch(text(), /Abstracts are loading/);
+  const before = cachedReads;
+  await React.act(async () => root.unmount());
+  await new Promise(resolve => setTimeout(resolve, 1100));
+  assert.equal(cachedReads, before, "progress polling stops on completion and unmount");
+});

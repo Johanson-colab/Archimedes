@@ -37,12 +37,16 @@ export default function ConferenceDiscovery({ bridge, targetLibraryId, topic, on
   const [added, setAdded] = useState<Set<string>>(new Set());
   const requestRef = useRef(0);
   const responses = useRef(new Map<string, ConferenceSearchResponse>());
+  const progressTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const stopProgress = useCallback(() => { if (progressTimer.current !== null) clearInterval(progressTimer.current); progressTimer.current = null; }, []);
   const selected = conferenceCatalog.find((entry) => entry.id === conference)!;
   const load = useCallback(async (forceRefresh = false) => {
+    stopProgress();
     const request = ++requestRef.current;
     const options = { conference, year, presentation, topic, query: submittedQuery, offset, limit: PAGE_SIZE };
     const key = JSON.stringify(options);
     let previous = responses.current.get(key) || null;
+    let acceptProgress = true;
     setLoading(true); setError(""); setResponse(previous);
     try {
       if (!forceRefresh && !previous && bridge.getCachedConferencePapers) {
@@ -50,7 +54,21 @@ export default function ConferenceDiscovery({ bridge, targetLibraryId, topic, on
         if (request !== requestRef.current) return;
         if (previous) { responses.current.set(key, previous); if (responses.current.size > 24) responses.current.delete(responses.current.keys().next().value!); setResponse(previous); }
       }
-      if (!forceRefresh && previous && !previous.stale && Date.now() - Date.parse(previous.fetched_at) < 6 * 60 * 60 * 1000) return;
+      if (!forceRefresh && previous && !previous.stale && !previous.abstracts_pending
+        && !previous.warnings.includes("Abstracts could not be loaded; titles and official links remain available.")
+        && Date.now() - Date.parse(previous.fetched_at) < 6 * 60 * 60 * 1000) return;
+      if (bridge.getCachedConferencePapers) {
+        let polling = false;
+        progressTimer.current = setInterval(async () => {
+          if (polling || request !== requestRef.current) return;
+          polling = true;
+          try {
+            const snapshot = await bridge.getCachedConferencePapers!(options);
+            if (acceptProgress && request === requestRef.current && snapshot) setResponse(snapshot);
+          } catch { /* The live request remains responsible for reporting errors. */ }
+          finally { polling = false; }
+        }, 1000);
+      }
       const next = await bridge.searchConferencePapers({ ...options, forceRefresh });
       if (request === requestRef.current) {
         if (forceRefresh || !next.cached) responses.current.clear();
@@ -60,9 +78,9 @@ export default function ConferenceDiscovery({ bridge, targetLibraryId, topic, on
       }
     } catch (failure) {
       if (request === requestRef.current) setError(errorMessage(failure));
-    } finally { if (request === requestRef.current) setLoading(false); }
-  }, [bridge, conference, year, presentation, topic, submittedQuery, offset]);
-  useEffect(() => { if (active) void load(); return () => { requestRef.current += 1; }; }, [load, active]);
+    } finally { acceptProgress = false; if (request === requestRef.current) { stopProgress(); setLoading(false); } }
+  }, [bridge, conference, year, presentation, topic, submittedQuery, offset, stopProgress]);
+  useEffect(() => { if (active) void load(); return () => { requestRef.current += 1; stopProgress(); }; }, [load, active, stopProgress]);
   useEffect(() => { setOffset(0); }, [topic]);
   function search() {
     setOffset(0);
@@ -107,6 +125,7 @@ export default function ConferenceDiscovery({ bridge, targetLibraryId, topic, on
     {response?.warnings.map((warning) => <InlineNotice tone="warning" className="conference-notice" key={warning}>{t(warning)}</InlineNotice>)}
     {loading && !response ? <StateView tone="loading" className="library-loading" icon={<LoaderCircle className="spin" size={18} />} title={`Loading the official ${selected.label} ${year} catalog…`} />
       : !response ? <StateView tone="error" className="daily-empty" icon={<RefreshCw size={24} />} title="The official catalog is temporarily unavailable" action={<button className="secondary-button" onClick={() => void load(true)}>Retry</button>} />
+      : !response.papers.length && response.abstracts_pending ? <StateView tone="loading" className="library-loading" icon={<LoaderCircle className="spin" size={18} />} title={t("Loading abstracts to complete this search…")} />
       : !response.papers.length ? <StateView className="daily-empty" icon={<BookOpen size={24} />} title={response.status === "not_held" ? "No edition was held that year" : response.status === "not_published" ? "The official paper catalog is not public yet" : "No papers match these filters"} description={response.status === "not_published" ? `The official ${selected.label} ${year} accepted-paper catalog is not available yet. Choose another year or try again later.` : "Try another conference, year, or presentation format."} />
       : <div className="daily-paper-list">{response.papers.map((paper) => {
         const metadata = paper.conference!;

@@ -11,7 +11,7 @@ Base: `b4a4480` on `main`. This repair covers browsing, return navigation, keywo
 - Use Electron `net.fetch` for discovery and conference retrieval so these requests follow the desktop's network/proxy configuration.
 - Bound feed/API attempts and validate Atom responses. An unreadable response or API error must not become a cached “zero papers” success.
 - On archive failure, browsing can fall back to official RSS announcements, with incomplete date coverage disclosed. Keyword searches can fall back to OpenAlex, clearly identifying its different coverage/ranking. OpenAlex uses an Environment API key if configured. A fallback with no records does not establish an empty primary search.
-- Optional conference abstracts have a shorter deadline and malformed/missing abstracts cannot discard valid titles/official links. Missing abstracts alone do not trigger expensive CVF catalog rebuilding.
+- Conference abstracts use the same validated segmented downloader as titles. Title snapshots are available while abstracts download and completion updates the visible search automatically. Missing or malformed abstracts cannot discard valid titles/links or erase previously cached abstracts. Legacy incomplete caches retry instead of remaining fresh for six hours, with a one-minute cooldown after a failed attempt. Missing abstracts alone do not trigger expensive CVF catalog rebuilding.
 
 ## Measured network behavior
 
@@ -33,9 +33,9 @@ Upstream arXiv rate limits and cold network failures remain possible. Existing c
 
 ## Automated verification
 
-- Focused discovery, conference, figure, transfer and real-component UI tests: 67 passed.
+- Focused discovery, conference, figure, transfer and real-component UI tests: 71 passed.
 - `npm run lint`, `npm run build`, and `npm run check:theme`: passed.
-- Full suite: 1,545 tests, 1,536 passed, 5 skipped, 4 failed.
+- Full suite: 1,549 tests, 1,540 passed, 5 skipped, 4 failed.
 - All four failures were reproduced in a separate unchanged `b4a4480` checkout: experiment retry-audit temporary-path assertion on macOS, ordering in `native.ts`, locally missing LaTeX `phvr7t` font, and an outdated Library `searchKind` tab audit. No unrelated tests were weakened.
 - UI behavior tests exercise stale-first rendering, rapid query/year changes, returning to a saved search without another request, saving into the selected Library, and reselecting the active feed/topic during an initial request.
 
@@ -65,3 +65,23 @@ Matched 1180 × 820 Paper-theme fixtures for an interrupted request (before = co
 | Before | After |
 | --- | --- |
 | ![](assets/conference-transfer-recovery/conference-error-before.png) | ![](assets/conference-transfer-recovery/conference-error-after.png) |
+
+
+## Follow-up: reliable abstract loading
+
+The previous eight-second, single-response abstract download was still vulnerable to the same transfer interruption as the large title catalog. Both files now use the range downloader. The title cache is written as soon as the main catalog is parsed, with an explicit pending state; the active renderer checks cached progress once per second while its live request runs, then replaces the title snapshot with complete abstracts. Polling is non-overlapping and stops on completion, selection change, hiding and unmount; late progress cannot overwrite a completed response. An abstract-only keyword query shows a loading state until its evidence arrives instead of an incorrect empty result.
+
+A legacy cache carrying the missing-abstract warning is refreshed automatically, regardless of its six-hour catalog TTL. A failed attempt waits at least one minute before automatic retry. During failed refreshes, existing abstracts are preserved. Malformed/empty abstract maps are not treated as a successful enrichment.
+
+Live Electron verification:
+
+- ICML 2026: 6,430 records, first 40 of 40 returned papers with abstracts, no missing-abstract warning; 14.2 seconds for complete retrieval in this probe.
+- ICLR 2026: one probe still had a transient abstract failure. Its abstract file subsequently downloaded in 9.1 seconds; the complete search retry returned 5,410 records, all 5,410 with abstracts, first 40 of 40 populated and no warning, in 21.2 seconds. This is evidence of working recovery, not a guarantee that upstream connections never fail.
+- Actual desktop: restarted using the current production renderer build, opened the normal workspace and observed its missing-abstract ICML cache upgrade automatically to official records with visible abstract paragraphs; the warning disappeared.
+- Added integration tests for early title visibility, completion of abstract-only searches, fresh legacy-cache repair, cooldown, preservation of known abstracts, a broken abstract segment retrying independently, late-progress protection, and timer cleanup. Final focused suite: 71 passed. Full suite: 1,549 tests, 1,540 passed, 5 skipped, the same 4 inherited failures.
+
+Matched Paper-theme 1180 × 820 fixtures of the old missing-abstract state versus a successful enrichment (the public example is a UI fixture, not its actual conference membership):
+
+| Before | After |
+| --- | --- |
+| ![](assets/conference-abstract-recovery/abstracts-before.png) | ![](assets/conference-abstract-recovery/abstracts-after.png) |
