@@ -92,8 +92,8 @@ function deduplicate(papers) {
   return [...byTitle.values()];
 }
 
-async function get(url, context, optional = false) {
-  const response = await context.fetchImpl(url, { headers: { "User-Agent": "Archimedes-Research/0.1", Accept: "application/json,text/html" }, signal: AbortSignal.timeout(45000) });
+async function get(url, context, optional = false, timeoutMs = 30000) {
+  const response = await context.fetchImpl(url, { headers: { "User-Agent": "Archimedes-Research/0.1", Accept: "application/json,text/html" }, signal: AbortSignal.timeout(timeoutMs) });
   if (optional && [404, 410].includes(response.status)) return null;
   if (!response.ok) throw new Error(`Official source returned HTTP ${response.status}: ${url}`);
   const text = await response.text();
@@ -165,13 +165,19 @@ function enrichSchedule(papers, html, presentation, sourceUrl, abstracts = {}) {
 async function loadVirtual(meta, context) {
   const sourceUrl = `${meta.host}/static/virtual/data/${meta.id}-${meta.year}-orals-posters.json`;
   const abstractUrl = `${meta.host}/static/virtual/data/${meta.id}-${meta.year}-abstracts.json`;
-  const [catalogText, abstractResult] = await Promise.all([get(sourceUrl, context, true), get(abstractUrl, context, true).catch(() => null)]);
+  const [catalogText, abstractResult] = await Promise.all([get(sourceUrl, context, true), get(abstractUrl, context, true, 8000).catch(() => null)]);
   if (!catalogText) return { papers: [], status: "not_published", sources: [sourceUrl] };
   let payload = JSON.parse(catalogText);
   if (!Array.isArray(payload.results)) throw new Error("The official conference catalog format has changed.");
   const rows = [...payload.results];
-  const abstracts = abstractResult ? JSON.parse(abstractResult) : {};
-  const warnings = [];
+  let abstracts = {};
+  let hasAbstracts = false;
+  try {
+    if (abstractResult) { abstracts = JSON.parse(abstractResult); hasAbstracts = Boolean(abstracts && typeof abstracts === "object"); }
+  } catch { /* Optional enrichment must not discard a valid paper catalog. */ }
+  if (!hasAbstracts) abstracts = {};
+  const warnings = hasAbstracts ? [] : ["Abstracts could not be loaded; titles and official links remain available."];
+  let incompleteCatalog = false;
   const visited = new Set();
   while (payload.next) {
     const next = publicUrl(payload.next, meta.host);
@@ -182,6 +188,7 @@ async function loadVirtual(meta, context) {
       if (!Array.isArray(payload.results)) throw new Error("Invalid catalog page.");
       rows.push(...payload.results);
     } catch (error) {
+      incompleteCatalog = true;
       warnings.push("The official presentation catalog could not be loaded completely.");
       break;
     }
@@ -189,8 +196,8 @@ async function loadVirtual(meta, context) {
   }
   let papers = normalizeVirtualRows(rows, abstracts, meta, sourceUrl);
   const sources = [sourceUrl];
-  if (abstractResult) sources.push(abstractUrl);
-  if (warnings.length && ["cvpr", "iccv"].includes(meta.id)) {
+  if (hasAbstracts) sources.push(abstractUrl);
+  if (incompleteCatalog && ["cvpr", "iccv"].includes(meta.id)) {
     const proceedingsUrl = `https://openaccess.thecvf.com/${meta.label}${meta.year}?day=all`;
     const html = await get(proceedingsUrl, context);
     papers.push(...parseCvf(html, meta, proceedingsUrl));
@@ -204,7 +211,7 @@ async function loadVirtual(meta, context) {
       } catch { /* Proceedings remain verifiable even if a presentation schedule cannot be read. */ }
     }
     const unknown = papers.filter((paper) => paper.conference.presentation === "unknown").length;
-    warnings[0] = unknown ? `The official proceedings filled the catalog. ${unknown} papers could not be matched to an accessible presentation schedule and are marked Unclassified.` : "";
+    warnings[warnings.indexOf("The official presentation catalog could not be loaded completely.")] = unknown ? `The official proceedings filled the catalog. ${unknown} papers could not be matched to an accessible presentation schedule and are marked Unclassified.` : "";
   }
   return { papers: deduplicate(papers), status: warnings.some(Boolean) ? "partial" : "available", sources, warnings: warnings.filter(Boolean) };
 }
@@ -306,14 +313,15 @@ async function searchConferencePapers(input, options = {}) {
   const context = { fetchImpl: options.fetchImpl || fetch };
   // v2 stops surfacing access-controlled OpenReview forum links as paper records.
   const cacheKey = `conference-v2:${meta.id}:${meta.year}`;
-  let catalog = !input.forceRefresh ? options.readCache?.(cacheKey, TTL) : null;
+  let catalog = input.cacheOnly ? options.readCache?.(cacheKey) : !input.forceRefresh ? options.readCache?.(cacheKey, TTL) : null;
   let cached = Boolean(catalog);
-  let stale = false;
+  let stale = Boolean(input.cacheOnly && catalog && !(Date.now() - Date.parse(catalog.fetched_at) < TTL));
   if (meta.parity !== undefined && query.year % 2 !== meta.parity) {
     catalog = { papers: [], status: "not_held", sources: [meta.host], fetched_at: meta.retrieved_at,
       warnings: [`${meta.label} ${query.year} is not held. ${meta.label} runs in ${meta.parity ? "odd" : "even"}-numbered years.`] };
   }
   if (!catalog) {
+    if (input.cacheOnly) return null;
     const lockKey = `${options.scope || "default"}:${cacheKey}`;
     if (!pending.has(lockKey)) {
       pending.set(lockKey, (async () => {

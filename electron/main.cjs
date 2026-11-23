@@ -64,8 +64,21 @@ const webSearch = require("./web-search.cjs");
 const { createEnvironmentVault, setEnvironmentVault } = require("./environment-vault.cjs");
 let environmentVault;
 const sshServers = require("./ssh-servers.cjs");
-const { discoverDailyPapers, normalizeDailyOptions, resolveArxivFigure, searchAcademicPapers } = require("./literature.cjs");
+const { resolveArxivFigure, searchAcademicPapers } = require("./literature.cjs");
 const { createDailyFigureCache } = require("./daily-figure-cache.cjs");
+const loadDailyDiscovery = require("./daily-discovery.cjs").createDailyDiscovery({
+  discover: (options, { signal }) => require("./literature.cjs").discoverDailyPapers(options, {
+    signal,
+    fetchImpl: (url, init) => {
+      const target = new URL(url);
+      if (target.protocol === "https:" && target.hostname === "api.openalex.org") {
+        const key = environmentVault?.getForService("OPENALEX_API_KEY") || process.env.OPENALEX_API_KEY;
+        if (key) target.searchParams.set("api_key", key);
+      }
+      return net.fetch(target.toString(), init);
+    },
+  }),
+});
 const { deepSearchPapers } = require("./deep-paper-search.cjs");
 const { generateLiteratureReview, generateLiteratureOutline } = require("./literature-review.cjs");
 const { searchLiterature } = require("./literature-search.cjs");
@@ -1274,39 +1287,16 @@ app.whenReady().then(async () => {
     if (!input || typeof input !== "object") throw new Error("Conference search options are required.");
     const workspace = resolveWorkspace(windowWorkspaces.get(event.sender.id));
     return searchConferencePapers(input, {
+      fetchImpl: (...args) => net.fetch(...args),
       scope: workspace,
       readCache: (key, age) => { return store.getDailyFeedCache(key, age); },
       writeCache: (key, value) => { return store.setDailyFeedCache(key, value); },
     });
   });
 
-  ipcMain.handle("library:discover-daily", async (_event, input = {}) => {
+  ipcMain.handle("library:discover-daily", async (event, input = {}) => {
     if (!input || typeof input !== "object") throw new Error("Daily discovery options are required.");
-    const options = normalizeDailyOptions(input);
-    const cacheKey = JSON.stringify(options);
-    const cacheTtl = 20 * 60 * 1000;
-    if (!input.forceRefresh) {
-      const cached = store.getDailyFeedCache(cacheKey, cacheTtl);
-      if (cached) return { ...cached, options, cached: true, stale: false };
-    }
-
-    try {
-      const response = await discoverDailyPapers(options);
-      const saved = store.setDailyFeedCache(cacheKey, response);
-      return { ...saved, options, cached: false, stale: false };
-    } catch (error) {
-      const stale = store.getDailyFeedCache(cacheKey);
-      if (stale) {
-        return {
-          ...stale,
-          options,
-          cached: true,
-          stale: true,
-          warning: error instanceof Error ? error.message : "Live refresh failed; showing cached papers.",
-        };
-      }
-      throw error;
-    }
+    return loadDailyDiscovery(input, store.currentStore(), event.sender.id);
   });
 
   ipcMain.handle("library:daily-figure", async (_event, { arxivId, thumbnail = false } = {}) => {

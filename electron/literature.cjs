@@ -1,4 +1,4 @@
-const { XMLParser } = require("fast-xml-parser");
+const { XMLParser, XMLValidator } = require("fast-xml-parser");
 const { findRepositoryUrl } = require("./paper-repository.cjs");
 
 const S2_BASE_URL = "https://api.semanticscholar.org/graph/v1";
@@ -97,7 +97,7 @@ function asArray(value) {
 function normalizeArxivEntry(entry, requestedId) {
   const published = normalizeWhitespace(entry.published);
   const primaryCategory = entry["arxiv:primary_category"]?.term || "";
-  const arxivId = normalizeWhitespace(entry.id).match(/\/abs\/(.+?)(?:v\d+)?$/)?.[1] || requestedId;
+  const arxivId = normalizeWhitespace(entry.id).match(/(?:\/abs\/|oai:arXiv\.org:)(.+?)(?:v\d+)?$/)?.[1] || requestedId;
   const categories = asArray(entry.category).map((category) => category.term).filter(Boolean);
 
   return {
@@ -106,10 +106,10 @@ function normalizeArxivEntry(entry, requestedId) {
     arxiv_id: arxivId,
     doi: normalizeWhitespace(entry["arxiv:doi"]),
     title: normalizeWhitespace(entry.title) || "Untitled paper",
-    authors: asArray(entry.author).map((author) => normalizeWhitespace(author.name)).filter(Boolean),
+    authors: entry.author ? asArray(entry.author).map((author) => normalizeWhitespace(author.name)).filter(Boolean) : normalizeWhitespace(entry["dc:creator"]).split(/,\s*/).filter(Boolean),
     year: published ? Number(published.slice(0, 4)) || null : null,
     venue: primaryCategory ? `arXiv:${primaryCategory}` : "arXiv",
-    abstract: normalizeWhitespace(entry.summary),
+    abstract: normalizeWhitespace(entry.summary).replace(/^arXiv:[\d.v]+ Announce Type: [\w-]+ Abstract:\s*/i, ""),
     url: `https://arxiv.org/abs/${arxivId}`,
     pdf_url: `https://arxiv.org/pdf/${arxivId}`,
     citation_count: 0,
@@ -146,15 +146,14 @@ function normalizeDailyOptions(input = {}) {
   const requestedCategories = Array.isArray(input.categories) ? input.categories : [];
   const requested = [...new Set(requestedCategories.filter((category) => DAILY_CATEGORIES.has(category)))];
   const query = typeof input.query === "string" ? input.query.trim().slice(0, 160) : "";
-  // An explicit title search is not a topic feed. Otherwise a title that does
-  // not contain the topic's vocabulary is filtered out before the query runs.
-  const titleSearch = query.split(/\s+/).filter(Boolean).length >= 5;
+  // Explicit searches are independent of the browsing feed's date and topic.
+  const titleSearch = Boolean(query);
   const categories = titleSearch
     ? [...DAILY_CATEGORIES]
     : (topic === "all" && requested.length ? requested : DAILY_TOPICS[topic].categories);
   const parsedLimit = Number(input.limit);
   const limit = Number.isFinite(parsedLimit) ? Math.min(100, Math.max(1, Math.trunc(parsedLimit))) : 40;
-  return { mode, range, topic: titleSearch ? "all" : topic, categories, query, limit };
+  return { mode, range: titleSearch ? "all" : range, topic: titleSearch ? "all" : topic, categories, query, limit };
 }
 
 function rangeStart(range) {
@@ -162,10 +161,6 @@ function rangeStart(range) {
   if (range === "all") return new Date(0);
   const days = Number(range.slice(0, -1));
   return new Date(Date.now() - days * 24 * 60 * 60 * 1000);
-}
-
-function formatArxivDate(date) {
-  return date.toISOString().replace(/[-:TZ.]/g, "").slice(0, 12);
 }
 
 function normalizeForMatch(value) {
@@ -198,14 +193,25 @@ function buildTopicQuery(topic) {
   return terms.map((term) => `all:"${term}"`).join(" OR ");
 }
 
-async function discoverArxivPapers(options) {
+function parseArxivResults(text) {
+  if (XMLValidator.validate(text) !== true) throw new Error("arXiv returned an unreadable feed. Please retry in a moment.");
+  const payload = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: "" }).parse(text);
+  if (!Object.hasOwn(payload || {}, "feed")) throw new Error("arXiv returned an unreadable feed. Please retry in a moment.");
+  const entries = asArray(payload.feed?.entry);
+  if (entries.some(entry => String(entry.id || "").includes("api/errors"))) throw new Error("arXiv rejected this search query. Try simpler keywords.");
+  return entries.map(entry => normalizeArxivEntry(entry, "")).filter(paper => paper.arxiv_id);
+}
+
+async function discoverArxivPapers(options, fetchImpl = fetch) {
+  if (options.query) {
+    const papers = await searchArxivKeywords(options.query, options.limit, fetchImpl, { attempts: 1, timeoutMs: 15000 });
+    return papers;
+  }
   const categoryQuery = options.categories.map((category) => `cat:${category}`).join(" OR ");
-  const submittedRange = options.range === "all"
-    ? ""
-    : `submittedDate:[${formatArxivDate(rangeStart(options.range))} TO ${formatArxivDate(new Date())}]`;
+  // arXiv announces in batches. A minute-specific date clause creates a new
+  // uncached upstream query on every refresh; filter dates after the sorted feed.
   const topicQuery = buildTopicQuery(options.topic);
-  const keywordQuery = buildArxivKeywordQuery(options.query);
-  const searchQuery = [`(${categoryQuery})`, submittedRange, topicQuery ? `(${topicQuery})` : "", keywordQuery ? `(${keywordQuery})` : ""].filter(Boolean).join(" AND ");
+  const searchQuery = [`(${categoryQuery})`, topicQuery ? `(${topicQuery})` : ""].filter(Boolean).join(" AND ");
   const params = new URLSearchParams({
     search_query: searchQuery,
     start: "0",
@@ -215,14 +221,11 @@ async function discoverArxivPapers(options) {
   });
   const response = await fetchWithRetry(`${ARXIV_API_URL}?${params}`, {
     headers: { Accept: "application/atom+xml", "User-Agent": "Archimedes-Research/0.1" },
-  }, { provider: "arXiv", attempts: 2, timeoutMs: 25_000 });
-  if (!response.ok) throw new Error(`arXiv daily feed returned ${response.status}.`);
-
-  const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: "" });
-  const payload = parser.parse(await response.text());
-  return asArray(payload.feed?.entry)
-    .map((entry) => normalizeArxivEntry(entry, ""))
-    .slice(0, options.limit);
+  }, { provider: "arXiv", attempts: 1, timeoutMs: 8000, fetchImpl });
+  if (!response.ok) throw providerResponseError("arXiv", response);
+  const papers = parseArxivResults(await response.text());
+  const since = rangeStart(options.range).getTime();
+  return papers.filter(paper => options.range === "all" || Date.parse(paper.published_at) >= since).slice(0, options.limit);
 }
 
 function normalizeHuggingFacePaper(item) {
@@ -262,13 +265,13 @@ function matchesDailyTopic(paper, topic) {
   return terms.some((term) => haystack.includes(term.toLowerCase()));
 }
 
-async function discoverHuggingFacePapers(options) {
+async function discoverHuggingFacePapers(options, fetchImpl = fetch) {
   const params = new URLSearchParams({ sort: "trending", limit: "100" });
   let response;
   const errors = [];
   for (const baseUrl of HF_DAILY_PAPERS_URLS) {
     try {
-      const candidate = await fetch(`${baseUrl}?${params}`, {
+      const candidate = await fetchImpl(`${baseUrl}?${params}`, {
         headers: { Accept: "application/json", "User-Agent": "Archimedes-Research/0.1" },
         signal: AbortSignal.timeout(15_000),
       });
@@ -410,12 +413,43 @@ async function resolveArxivFigure(arxivId, fetchImpl = fetch) {
   return task;
 }
 
-async function discoverDailyPapers(input) {
+async function discoverDailyPapers(input, { fetchImpl = fetch, signal } = {}) {
+  const sourceFetch = (url, init = {}) => fetchImpl(url, { ...init, signal: signal ? AbortSignal.any([...(init.signal ? [init.signal] : []), signal]) : init.signal });
   const options = normalizeDailyOptions(input);
-  const papers = options.mode === "trending"
-    ? await discoverHuggingFacePapers(options)
-    : await discoverArxivPapers(options);
-  return { papers, providers: options.mode === "trending" ? ["hugging-face"] : ["arxiv"] };
+  const trending = options.mode === "trending" && !options.query;
+  try {
+    const papers = trending
+      ? await discoverHuggingFacePapers(options, sourceFetch)
+      : await discoverArxivPapers(options, sourceFetch);
+    return { papers, providers: trending ? ["hugging-face"] : ["arxiv"] };
+  } catch (error) {
+    if (signal?.aborted || trending) throw error;
+    if (options.query) {
+      // A fallback index is named explicitly: these are not arXiv-only matches.
+      if (detectPaperId(options.query)) throw error;
+      try {
+        const results = await searchOpenAlex(options.query, options.limit, sourceFetch, { attempts: 1, timeoutMs: 10000 });
+        if (!results.length) throw error;
+        const papers = results.map(paper => ({ ...paper, published_at: paper.published_at || "", discovered_at: "", categories: [], upvotes: 0, github_url: "", github_stars: 0 }));
+        return { papers, providers: ["openalex"], warning: "arXiv search is temporarily unavailable. Showing OpenAlex matches instead; coverage and ranking differ." };
+      } catch { throw error; }
+    }
+    // RSS is an independent official announcement feed, not an archive search.
+    // It can keep browsing usable during an API outage, with its scope disclosed.
+    const url = `https://rss.arxiv.org/atom/${options.categories.join("+")}`;
+    try {
+      const response = await sourceFetch(url, { signal: AbortSignal.timeout(8000) });
+      if (!response.ok) throw new Error(`arXiv RSS returned ${response.status}.`);
+      const since = rangeStart(options.range).getTime();
+      const papers = parseArxivResults(await response.text())
+        .filter(paper => matchesDailyTopic(paper, options.topic) && (options.range === "all" || Date.parse(paper.published_at) >= since))
+        .sort((a, b) => Date.parse(b.published_at) - Date.parse(a.published_at))
+        .slice(0, options.limit);
+      // A fallback with no matches cannot establish an empty archive/date range.
+      if (!papers.length) throw error;
+      return { papers, providers: ["arxiv-rss"], warning: "arXiv archive is temporarily unavailable. Showing recent official RSS announcements; the selected date range may be incomplete." };
+    } catch { throw error; }
+  }
 }
 
 function normalizeS2Paper(paper) {
@@ -508,6 +542,7 @@ function normalizeOpenAlexWork(work) {
     title: work.display_name || work.title || "Untitled paper",
     authors: (work.authorships || []).map((entry) => entry.author?.display_name).filter(Boolean),
     year: work.publication_year || null,
+    published_at: work.publication_date || "",
     venue: work.primary_location?.source?.display_name || "",
     abstract: reconstructAbstract(work.abstract_inverted_index),
     url: work.primary_location?.landing_page_url || work.doi || work.id || "",
@@ -517,7 +552,7 @@ function normalizeOpenAlexWork(work) {
   };
 }
 
-async function searchOpenAlex(query, limit, fetchImpl = fetch) {
+async function searchOpenAlex(query, limit, fetchImpl = fetch, options = {}) {
   const detectedId = detectPaperId(query);
   const searchQuery = detectedId?.startsWith("ARXIV:") ? detectedId.slice(6) : query;
   if (providerCoolingDown("OpenAlex")) {
@@ -526,7 +561,7 @@ async function searchOpenAlex(query, limit, fetchImpl = fetch) {
   const url = `${OPENALEX_BASE_URL}/works?search=${encodeURIComponent(searchQuery)}&per-page=${limit}`;
   const response = await fetchWithRetry(url, {
     headers: { Accept: "application/json", "User-Agent": "Archimedes-Research/0.1" },
-  }, { provider: "OpenAlex", attempts: 3, retryDelayMs: 1_200, timeoutMs: 15_000, fetchImpl });
+  }, { provider: "OpenAlex", attempts: options.attempts ?? 3, retryDelayMs: 1_200, timeoutMs: options.timeoutMs ?? 15_000, fetchImpl });
   if (!response.ok) {
     if (response.status === 429) noteProviderRateLimit("OpenAlex");
     throw providerResponseError("OpenAlex", response);
@@ -538,20 +573,22 @@ async function searchOpenAlex(query, limit, fetchImpl = fetch) {
 async function searchArxivKeywords(query, limit, fetchImpl = fetch, options = {}) {
   const searchQuery = buildArxivKeywordQuery(query, options);
   if (!searchQuery) return [];
-  const params = new URLSearchParams({
+  let params = new URLSearchParams({
     search_query: searchQuery,
     start: "0",
     max_results: String(limit),
     sortBy: "relevance",
     sortOrder: "descending",
   });
+  const detected = detectPaperId(query);
+  if (detected?.startsWith("ARXIV:")) {
+    params = new URLSearchParams({ id_list: detected.slice(6), max_results: "1" });
+  }
   const response = await fetchWithRetry(`${ARXIV_API_URL}?${params}`, {
     headers: { Accept: "application/atom+xml", "User-Agent": "Archimedes-Research/0.1" },
-  }, { provider: "arXiv", attempts: 2, timeoutMs: 25_000, fetchImpl });
+  }, { provider: "arXiv", attempts: options.attempts ?? 2, timeoutMs: options.timeoutMs ?? 25_000, fetchImpl });
   if (!response.ok) throw providerResponseError("arXiv", response);
-  const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: "" });
-  const payload = parser.parse(await response.text());
-  return asArray(payload.feed?.entry).map((entry) => normalizeArxivEntry(entry, "")).slice(0, limit);
+  return parseArxivResults(await response.text()).slice(0, limit);
 }
 
 async function searchAcademicPapers(query, requestedLimit) {

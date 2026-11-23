@@ -88,3 +88,22 @@ test("AAAI parser uses real PDF download links and excludes retractions", () => 
   assert.equal(papers.length, 1); assert.ok(papers[0].pdf_url.includes("/article/download/123/456"));
   assert.equal(papers[0].conference.presentation, "unknown");
 });
+
+test("cache-only conference lookup filters old records without starting a network request", async () => {
+  const catalog = { papers: normalizeVirtualRows([event()], {}, meta, source), sources: [source], fetched_at: "2020-01-01T00:00:00Z", status: "available" };
+  const fetchImpl = () => { throw Error("must not fetch"); };
+  assert.equal(await searchConferencePapers({ conference: "iclr", year: 2026, cacheOnly: true }, { fetchImpl }), null);
+  const result = await searchConferencePapers({ conference: "iclr", year: 2026, cacheOnly: true, query: "verified" }, { fetchImpl, readCache: () => catalog });
+  assert.equal(result.stale, true); assert.equal(result.papers.length, 1);
+});
+
+test("failed or malformed optional abstracts never discard official catalog titles and links", async () => {
+  for (const broken of [null, "not JSON"]) {
+    const result = await searchConferencePapers({ conference: "iclr", year: 2026, forceRefresh: true }, { fetchImpl: async (url, init) => {
+      if (url.includes("abstracts.json")) { assert.ok(init.signal); if (broken === null) throw Error("slow abstracts"); return new Response(broken); }
+      return new Response(JSON.stringify({ results: [event()], next: null }));
+    } });
+    assert.equal(result.papers[0].title, "A verified paper"); assert.equal(result.papers[0].url, "https://iclr.cc/virtual/2026/poster/1");
+    assert.equal(result.status, "partial"); assert.match(result.warnings[0], /titles and official links/);
+  }
+});
