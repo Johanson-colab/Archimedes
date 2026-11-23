@@ -7928,6 +7928,12 @@ html[data-menu-style="glass"] .menu-surface {
 }
 
 /* Composer controls: status, model options and context estimate. */
+.ssh-workspace-trigger { position: relative; }
+.ssh-workspace-trigger.selected { color: var(--text-primary); }
+.ssh-workspace-indicator { position: absolute; right: 2px; bottom: 2px; width: 6px; height: 6px; border: 1px solid var(--surface-panel); border-radius: 50%; background: var(--text-muted); }
+.ssh-workspace-menu-item .menu-item-body { min-width: 0; }
+.ssh-workspace-menu-item .menu-item-body > span, .ssh-workspace-menu-item .menu-item-body > small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ssh-workspace-menu-item .menu-item-body > small { margin-top: 2px; color: var(--text-muted); font-size: 11px; }
 .composer-model-controls { display: inline-flex; min-width: 0; align-items: center; gap: 2px; }
 .composer-model-controls .reasoning-effort-picker { display: inline-flex; }
 .composer-tool.context-length-trigger { gap: 6px; padding: 0 4px; }

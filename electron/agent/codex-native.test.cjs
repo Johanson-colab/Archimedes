@@ -218,14 +218,26 @@ test('native compaction resumes identical binding, records native context comple
   const result = await backend.compactNative(f.args);
   assert.equal(result.compacted, true);
   assert.equal(f.peer().calls.filter(c => c.method === 'thread/resume').length, 1);
+  assert.equal(f.peer().calls.find(c => c.method === 'thread/resume').params.excludeTurns, true);
   assert.equal(f.peer().calls.filter(c => c.method === 'thread/compact/start').length, 1);
   assert.equal(f.peer().calls.some(c => c.method === 'turn/start'), false);
   assert.equal(f.peer().closed, true);
   assert.equal(f.saves.at(-1).last_turn_id, 'prior');
   const dirty = fixture(p => complete(p));
-  await assert.rejects(backend.compactNative(dirty.args), /completed|binding|continuity/i);
+  await assert.rejects(backend.compactNative(dirty.args), /no native Codex session/i);
   const failed = fixture(p => p.send('turn/completed', { turn: { id: 'native-turn', status: 'failed' } }), { thread: f.args.thread, bindings: f.args.bindings });
   await assert.rejects(backend.compactNative(failed.args), /failed/); assert.equal(failed.peer().closed, true);
+});
+
+test('compaction identifies the mismatched binding field before starting a native process', async () => {
+  const f = fixture(p => complete(p));
+  f.args.thread.turns = [{ id: 'prior' }];
+  const binding = { native_thread_id: 'native-thread', workspace: fs.realpathSync(os.tmpdir()), model: '', last_turn_id: 'prior', backend: 'codex' };
+  for (const [change, expected] of [[{ model: 'previous-model' }, /selected model.*previous-model/], [{ workspace: '/different' }, /working directory differs/], [{ last_turn_id: null }, /did not confirm completion/], [{ last_turn_id: 'other' }, /local conversation has changed/]]) {
+    f.args.bindings.get = () => ({ ...binding, ...change });
+    await assert.rejects(backend.compactNative(f.args), expected);
+    assert.equal(f.peer(), undefined);
+  }
 });
 
 test('final-answer phase takes precedence over partial messages and resolved native questions expire', async () => {

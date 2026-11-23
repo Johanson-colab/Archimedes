@@ -21,9 +21,13 @@ readline.createInterface({input:process.stdin}).on('line',line=>{
  let result={};
  if(m.method==='account/read')result={account:{type:'chatgpt'}};
  if(m.method.startsWith('thread/'))result={thread:{id:'native-fixture'}};
- if(m.method==='turn/start'){
+ // Mimic a large stored thread: metadata-only resume must be requested.
+ if(m.method==='thread/resume' && !m.params.excludeTurns)result.thread.turns=[{output:'x'.repeat(8_000_001)}];
+ if(m.method==='turn/start' || m.method==='thread/compact/start'){
    send({id:m.id,result:{turn:{id:'native-turn'}}});
-   send({method:'item/agentMessage/delta',params:{threadId:'native-fixture',turnId:'native-turn',itemId:'answer',delta:'Native fixture answer'}});
+   if(m.method==='thread/compact/start')send({method:'turn/started',params:{threadId:'native-fixture',turnId:'native-turn',turn:{id:'native-turn'}}});
+   if(m.method==='thread/compact/start')send({method:'item/completed',params:{threadId:'native-fixture',turnId:'native-turn',item:{id:'compact',type:'contextCompaction'}}});
+   else { const prompt=m.params.input[0].text; const answer=prompt.includes('Require SSH bridge proof') ? (prompt.includes('Remote SSH operations are available through an Archimedes local CLI bridge') ? 'SSH bridge available' : 'SSH bridge missing') : 'Native fixture answer'; send({method:'item/agentMessage/delta',params:{threadId:'native-fixture',turnId:'native-turn',itemId:'answer',delta:answer}}); }
    send({method:'turn/completed',params:{threadId:'native-fixture',turn:{id:'native-turn',status:'completed'}}});
  }else send({id:m.id,result});
 });
@@ -63,6 +67,30 @@ readline.createInterface({input:process.stdin}).on('line',line=>{
     assert.equal(result.response, "Native fixture answer");
     assert.equal(store.nativeAgentBindings(result.threadId).get().last_turn_id, result.turnId);
     assert.equal(JSON.stringify(store.getResearchThread(result.threadId)).includes("native-fixture"), false);
+    const legacyFirst = await nativeAgent.runAgent({ prompt: 'Legacy standard chat', workspace: directory, mode: 'free-chat', origin: 'research', capabilities: { write: 'ask', command: 'ask' }, externalBackend: { backend: 'codex', binary, model: '', permissionMode: 'ask' }, autoBuildGraph: false });
+    const legacyBinding = store.nativeAgentBindings(legacyFirst.threadId).get();
+    const legacyRemote = await nativeAgent.runAgent({ prompt: 'Require SSH bridge proof', workspace: directory, threadId: legacyFirst.threadId, mode: 'research', origin: 'research', capabilities: { write: 'ask', command: 'ask' }, externalBackend: { backend: 'codex', binary, model: '', permissionMode: 'ask' }, autoBuildGraph: false, remoteServer: { id: 'test-host', user: 'ubuntu', host: 'example.test', port: 22, workspace: '/tmp' } });
+    assert.equal(legacyRemote.response, 'SSH bridge available');
+    assert.equal(store.nativeAgentBindings(legacyFirst.threadId).get().native_thread_id, legacyBinding.native_thread_id);
+    assert.equal(legacyRemote.thread.turns.length, 2);
+    // New threads are summaries without `turns`. Research must save the answer
+    // and register the SSH tool marker both with and without a selected host.
+    for (const remoteServer of [null, { id: 'test-host', user: 'ubuntu', host: 'example.test', port: 22, workspace: '/tmp' }]) {
+      const options = { workspace: directory, mode: 'research', origin: 'research', capabilities: { write: 'ask', command: 'ask' }, externalBackend: { backend: 'codex', binary, model: '', permissionMode: 'ask' }, autoBuildGraph: false, remoteServer };
+      const first = await nativeAgent.runAgent({ ...options, prompt: 'First research turn' });
+      assert.equal(first.status, 'completed');
+      assert.equal(first.response, 'Native fixture answer');
+      const marker = first.thread.events.find(event => event.type === 'remote_tools_available');
+      assert.equal(marker?.payload?.version, require('./agent/ssh-workspace.cjs').FILE_TOOLS_VERSION);
+      const next = await nativeAgent.runAgent({ ...options, prompt: 'Follow up', threadId: first.threadId });
+      assert.equal(next.status, 'completed');
+      assert.equal(next.thread.turns.length, 2);
+      assert.equal(next.thread.events.filter(event => event.type === 'remote_tools_available').length, 1);
+      const compacted = await require('./agent/codex-backend.cjs').compactNative({ config: options.externalBackend, workspace: directory, thread: next.thread, turn: next.thread.turns.at(-1), bindings: store.nativeAgentBindings(next.threadId) });
+      assert.equal(compacted.compacted, true);
+      assert.equal(store.nativeAgentBindings(next.threadId).get().last_turn_id, next.turnId);
+      assert.equal(store.getResearchThread(next.threadId).turns.length, 2);
+    }
     await assert.rejects(agent.runAgent({ prompt: "switch", workspace: directory, threadId: result.threadId, origin: "research", mode: "free-chat" }), /different harness/);
     assert.equal(store.getResearchThread(result.threadId).turns.length, 1);
     const fork = store.forkResearchThread(result.threadId);

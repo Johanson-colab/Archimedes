@@ -67,7 +67,7 @@ function buildExtractionPrompt({ userPrompt, assistantResponse, graph: listedGra
         { from: "n2", to: "n3", kind: "tests" },
         { from: "n3", to: "n4", kind: "produces" },
       ],
-      supersede: [{ nodeId: "existing-idea-id", reason: "Superseded by the new idea round" }],
+      supersede: [{ nodeId: "existing-idea-id", reason: "Explicitly rejected in this turn" }],
       reason: "short explanation",
     };
   return [
@@ -97,7 +97,7 @@ function buildExtractionPrompt({ userPrompt, assistantResponse, graph: listedGra
     "- Link new nodes to existing nodes when the answer clearly continues an existing thread.",
     "- If the request is a follow-up to an existing question, link new objects to that existing question instead of creating another question node.",
     "- Do not duplicate an existing node with the same kind and title.",
-    "- A new idea round supersedes the previous one. When this turn presents a new set of idea alternatives for the same question, list the previous idea nodes under that question in `supersede`. The app also retires previous direct idea children automatically when the patch adds at least two new ideas, so use `supersede` mainly to provide a specific reason or to retire an additional idea.",
+    "- Keep existing ideas unless this turn explicitly rejects, withdraws, or replaces a specific idea. Asking for more ideas or presenting new alternatives alone is not a rejection. Preserve ideas reused or refined in this answer. Only list explicitly rejected existing idea ids in `supersede`, with a reason grounded in this turn; if uncertain, leave the list empty.",
     "- Only idea nodes can be superseded. Never supersede question or experiment nodes.",
     "- Use the user's language for titles and summaries. Titles <= 120 characters; summaries <= 240 characters.",
     "- content must be a compact JSON object. Suggested fields:",

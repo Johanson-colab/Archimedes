@@ -8,11 +8,14 @@ const { randomBytes, timingSafeEqual } = require("node:crypto");
 const MAX_REQUEST = 128 * 1024;
 const MAX_RESPONSE = 1024 * 1024;
 const ALLOWED = new Set(["create_experiment", "prepare_experiment_workspace", "run_experiment", "wait_experiment", "read_experiment_log", "record_experiment_activity", "record_experiment_evidence", "create_experiment_result"]);
+const SSH_ALLOWED = new Set(["ssh_remote_read", "ssh_remote_edit", "ssh_remote_exec"]);
 function quote(value) { return `'${String(value).replaceAll("'", "'\\''")}'`; }
 
-async function createExperimentBridge({ workspace, invoke, signal, executable = process.execPath } = {}) {
+async function createExperimentBridge({ workspace, invoke, signal, executable = process.execPath, mode = "experiment" } = {}) {
   if (process.platform === "win32") throw new Error("The live experiment bridge is not yet available on Windows.");
   if (typeof invoke !== "function" || !workspace) throw new Error("A workspace and experiment handler are required.");
+  if (!["experiment", "ssh"].includes(mode)) throw new Error("Unknown bridge mode.");
+  const allowed = mode === "ssh" ? SSH_ALLOWED : ALLOWED;
   if (signal?.aborted) throw new Error("The research turn has already ended.");
   const root = fs.realpathSync(workspace);
   const appDirectory = path.join(root, ".archimedes");
@@ -51,7 +54,7 @@ async function createExperimentBridge({ workspace, invoke, signal, executable = 
       } catch { send(responsePath, { error: "Invalid experiment request." }); continue; }
       const provided = typeof request?.secret === "string" ? Buffer.from(request.secret) : Buffer.alloc(0);
       const expected = Buffer.from(secret);
-      if (provided.length !== expected.length || !timingSafeEqual(provided, expected) || !ALLOWED.has(request.method) || !request.arguments || typeof request.arguments !== "object" || Array.isArray(request.arguments) || !Number.isSafeInteger(request.pid) || request.pid < 1) {
+      if (provided.length !== expected.length || !timingSafeEqual(provided, expected) || !allowed.has(request.method) || !request.arguments || typeof request.arguments !== "object" || Array.isArray(request.arguments) || !Number.isSafeInteger(request.pid) || request.pid < 1) {
         send(responsePath, { error: "Experiment request is not authorized or is invalid." }); continue;
       }
       ownedFiles.add(requestPath);
@@ -88,7 +91,13 @@ async function createExperimentBridge({ workspace, invoke, signal, executable = 
   if (signal?.aborted) { close(); throw new Error("The research turn has already ended."); }
   const cli = path.join(__dirname, "experiment-bridge-cli.cjs");
   const command = `ELECTRON_RUN_AS_NODE=1 ${quote(executable)} ${quote(cli)} ${quote(credentialPath)}`;
-  const instructions = [
+  const instructions = mode === "ssh" ? [
+    "Remote SSH operations are available through an Archimedes local CLI bridge for this turn. If native dynamic tools ssh_remote_read, ssh_remote_edit or ssh_remote_exec are unavailable, use this bridge through your local command tool. The bridge routes the requested operation to the selected remote host and requests user approval; other native commands and files remain local.",
+    `Command prefix: ${command}`,
+    "Invoke as: <prefix> <tool_name> '<JSON object>'. Do not reveal or copy the connection file.",
+    'Read: ssh_remote_read {"path":"relative/or/absolute/path","offset":1,"limit":100}. Edit existing UTF-8 file: ssh_remote_edit {"path":"...","old_text":"exact unique text","new_text":"replacement"}. Execute remote shell: ssh_remote_exec {"command":"pwd"} (optional "cwd" must be an absolute or ~/ remote directory).',
+    "Remote commands are not managed experiment runs. Never use a local shell command as if it runs on the remote host. If a remote operation times out or disconnects, its remote process state is unknown; inspect before retrying.",
+  ].join("\n") : [
     "Live Archimedes experiment tools are available for this turn. If direct experiment tools are available, use them. Otherwise use the local CLI below. Use only when the user explicitly asks to undertake or run an experiment. Never repeat an existing run.",
     `Command prefix: ${command}`,
     "Invoke as: <prefix> <tool_name> '<JSON object>'. It returns JSON. Use exact existing idea/experiment ids or titles from the conversation; do not guess an ambiguous idea.",
