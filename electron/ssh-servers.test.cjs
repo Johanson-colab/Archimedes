@@ -35,7 +35,25 @@ test("a server is saved, listed and readable again", () => {
 
 test("the saved file is private to the user", () => {
   withSettings((root) => {
-    ssh.saveServer({ host: "h", user: "u" });
+    const saved = ssh.saveServer({ host: "h", user: "u" });
+    ssh.saveServer({ ...saved, name: "Updated server" });
+    if (process.platform === "win32") {
+      const { execFileSync } = require("node:child_process");
+      const script = `
+        $ErrorActionPreference = 'Stop'
+        $acl = Get-Acl -LiteralPath $env:ARCHIMEDES_SSH_SETTINGS_TEST
+        $sid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+        $rules = @($acl.GetAccessRules($true, $true, [System.Security.Principal.SecurityIdentifier]))
+        if (-not $acl.AreAccessRulesProtected) { throw 'ACL inheritance remains enabled' }
+        if ($rules.Count -ne 1) { throw 'Expected only the current user access rule' }
+        if ($rules[0].IdentityReference.Value -ne $sid -or $rules[0].AccessControlType -ne 'Allow' -or $rules[0].FileSystemRights -ne 'FullControl') { throw 'Unexpected access rule' }
+      `;
+      execFileSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script], {
+        windowsHide: true, timeout: 10_000,
+        env: { ...process.env, ARCHIMEDES_SSH_SETTINGS_TEST: path.join(root, "ssh-servers.json") },
+      });
+      return;
+    }
     const mode = fs.statSync(path.join(root, "ssh-servers.json")).mode & 0o777;
     assert.equal(mode, 0o600, "hosts and users are nobody else's business");
   });
