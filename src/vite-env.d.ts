@@ -189,6 +189,8 @@ interface ResearchDeskBridge {
     listLibraryPapers: (libraryId: string, query?: string) => Promise<LibraryPaper[]>;
     searchAcademicPapers: (query: string, limit?: number) => Promise<AcademicSearchResult[]>;
     discoverDailyPapers: (input?: DailyDiscoveryOptions) => Promise<DailyDiscoveryResponse>;
+    getCachedDailyPapers?: (input?: DailyDiscoveryOptions) => Promise<DailyDiscoveryResponse | null>;
+    getCachedConferencePapers?: (input: ConferenceSearchOptions) => Promise<ConferenceSearchResponse | null>;
     getDailyFigure?: (arxivId: string, options?: { thumbnail?: boolean }) => Promise<string>;
     listReproductions: () => Promise<Reproduction[]>;
     createReproduction: (input: ReproductionCreateInput) => Promise<Reproduction>;
@@ -1185,6 +1187,7 @@ interface ConferenceSearchOptions {
   forceRefresh?: boolean;
 }
 interface ConferenceSearchResponse {
+  abstracts_pending?: boolean;
   papers: DailyPaper[];
   total: number;
   catalog_total: number;

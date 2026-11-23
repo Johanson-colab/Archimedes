@@ -197,11 +197,11 @@ export default function LibraryView(props: LibraryViewProps) {
     renderEditor={(editorProps) => <LibraryEditor {...editorProps} active={active} />}
     renderImport={(importProps) => <PaperImportModal {...importProps} bridge={bridge} workspace={workspace} />}
   />;
-  return <DailyLibraryView key={projectId || "local"} bridge={bridge} projectId={projectId} initialMode={initialDailyMode} refreshVersion={libraryRefreshVersion} onLibraryImported={onLibraryImported} />;
+  return <DailyLibraryView key={projectId || "local"} bridge={bridge} projectId={projectId} initialMode={initialDailyMode} active={active} refreshVersion={libraryRefreshVersion} onLibraryImported={onLibraryImported} />;
 }
 
-function DailyLibraryView({ bridge, projectId, initialMode, refreshVersion, onLibraryImported }: {
-  bridge: ResearchDeskBridge; projectId?: string | null; initialMode?: DailyDiscoveryMode | "conference"; refreshVersion: number; onLibraryImported?: () => void;
+function DailyLibraryView({ bridge, projectId, initialMode, active = true, refreshVersion, onLibraryImported }: {
+  bridge: ResearchDeskBridge; projectId?: string | null; initialMode?: DailyDiscoveryMode | "conference"; active?: boolean; refreshVersion: number; onLibraryImported?: () => void;
 }) {
   const [libraries, setLibraries] = useState<ResearchLibrary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -217,7 +217,7 @@ function DailyLibraryView({ bridge, projectId, initialMode, refreshVersion, onLi
     void loadLibraries().catch(() => {});
     return () => { alive.current = false; };
   }, [loadLibraries, refreshVersion]);
-  return <DailyDiscovery initialMode={initialMode} bridge={bridge} libraries={libraries} loadingLibraries={loading} onImported={async () => { await loadLibraries(); onLibraryImported?.(); }} />;
+  return <DailyDiscovery initialMode={initialMode} active={active} bridge={bridge} libraries={libraries} loadingLibraries={loading} onImported={async () => { await loadLibraries(); onLibraryImported?.(); }} />;
 }
 
 function PaperInspector({ paper, onUpdate, onRemove, onRead, noteDrafts }: { paper: LibraryPaper | null; onUpdate: (patch: Parameters<ResearchDeskBridge["updateLibraryPaper"]>[1]) => Promise<void>; onRemove: () => Promise<void>; onRead: () => void; noteDrafts: LibraryNoteDrafts }) {
@@ -2544,9 +2544,11 @@ function DailyThumbnail({ paper, bridge }: { paper: DailyPaper; bridge: Research
   </div>;
 }
 
-function DailyDiscovery({ initialMode = "latest", bridge, libraries, loadingLibraries, onImported }: { initialMode?: DailyDiscoveryMode | "conference"; bridge: ResearchDeskBridge; libraries: ResearchLibrary[]; loadingLibraries: boolean; onImported: () => Promise<void> }) {
+function DailyDiscovery({ initialMode = "latest", active = true, bridge, libraries, loadingLibraries, onImported }: { initialMode?: DailyDiscoveryMode | "conference"; active?: boolean; bridge: ResearchDeskBridge; libraries: ResearchLibrary[]; loadingLibraries: boolean; onImported: () => Promise<void> }) {
   const { t } = useUISettings();
   const [mode, setMode] = useState<DailyDiscoveryMode | "conference">(initialMode);
+  const [conferenceOpened, setConferenceOpened] = useState(initialMode === "conference");
+  const feedCache = useRef(new Map<string, DailyDiscoveryResponse>());
   const [range, setRange] = useState<DailyDiscoveryRange>("7d");
   const [topic, setTopic] = useState<DailyDiscoveryTopic>("all");
   const [query, setQuery] = useState("");
@@ -2566,14 +2568,25 @@ function DailyDiscovery({ initialMode = "latest", bridge, libraries, loadingLibr
   const loadFeed = useCallback(async (forceRefresh = false) => {
     if (mode === "conference") return;
     const requestId = ++feedRequestId.current;
-    setLoading(true);
-    setError("");
+    const options = { mode, range, topic, query: submittedQuery, limit: 60 } as DailyDiscoveryOptions;
+    const key = JSON.stringify(options);
+    let previous = feedCache.current.get(key) || null;
+    responseRef.current = previous; setResponse(previous);
+    setLoading(true); setError("");
     try {
-      const nextResponse = await bridge.discoverDailyPapers({ mode, range, topic, query: submittedQuery, limit: 60, forceRefresh });
+      if (!forceRefresh && !previous && bridge.getCachedDailyPapers) {
+        try { previous = await bridge.getCachedDailyPapers(options); } catch { /* Try the live request; it will report a useful error. */ }
+        if (requestId !== feedRequestId.current) return;
+        if (previous) { responseRef.current = previous; setResponse(previous); feedCache.current.set(key, previous); if (feedCache.current.size > 12) feedCache.current.delete(feedCache.current.keys().next().value!); }
+      }
+      if (!forceRefresh && previous && !previous.stale && Date.now() - Date.parse(previous.fetched_at) < 20 * 60 * 1000) return;
+      const nextResponse = await bridge.discoverDailyPapers({ ...options, forceRefresh });
       if (requestId !== feedRequestId.current) return;
       responseRef.current = nextResponse;
+      feedCache.current.set(key, nextResponse);
+      if (feedCache.current.size > 12) feedCache.current.delete(feedCache.current.keys().next().value!);
       setResponse(nextResponse);
-      if (nextResponse.warning) setError(nextResponse.warning);
+
     } catch (discoverError) {
       if (requestId !== feedRequestId.current) return;
       const message = readableError(discoverError, "The daily paper feed could not be refreshed.");
@@ -2584,9 +2597,9 @@ function DailyDiscovery({ initialMode = "latest", bridge, libraries, loadingLibr
   }, [bridge, mode, range, submittedQuery, topic]);
 
   useEffect(() => {
-    void loadFeed(false);
+    if (active) void loadFeed(false);
     return () => { feedRequestId.current += 1; };
-  }, [loadFeed]);
+  }, [loadFeed, active]);
 
   const visiblePapers = response?.papers ?? [];
 
@@ -2601,11 +2614,18 @@ function DailyDiscovery({ initialMode = "latest", bridge, libraries, loadingLibr
   }
 
   function clearSearch() {
-    feedRequestId.current += 1;
     setQuery("");
+    if (!submittedQuery) return;
+    feedRequestId.current += 1;
     setSubmittedQuery("");
     setError("");
     setLoading(false);
+  }
+
+  function changeMode(next: DailyDiscoveryMode | "conference") {
+    clearSearch();
+    if (next === "conference") setConferenceOpened(true);
+    setMode(next);
   }
 
   function changeQuery(value: string) {
@@ -2635,25 +2655,27 @@ function DailyDiscovery({ initialMode = "latest", bridge, libraries, loadingLibr
   return <section className="library-page daily-page">
     <div className="daily-feed-toolbar daily-conference-toolbar">
       <div className="daily-live-controls">
-      <Tabs value={searchActive ? "" : mode} onChange={(value) => setMode(value as typeof mode)} label="Paper feed mode" variant="segmented" className="daily-mode-tabs">
-        <Tab value="latest" icon={<Clock3 size={12} />} disabled={searchActive} title={searchActive ? "Clear search to return to the daily feed" : "Newest arXiv submissions"}>Latest</Tab>
-        <Tab value="trending" icon={<Flame size={12} />} disabled={searchActive} title={searchActive ? "Clear search to return to the daily feed" : "Trending community papers"}>Trending</Tab>
+      <Tabs value={searchActive ? "" : mode} onChange={(value) => changeMode(value as typeof mode)} label="Paper feed mode" variant="segmented" className="daily-mode-tabs">
+        <Tab value="latest" icon={<Clock3 size={12} />} title="Newest arXiv submissions">Latest</Tab>
+        <Tab value="trending" icon={<Flame size={12} />} title="Trending community papers">Trending</Tab>
       </Tabs>
-      <div className="daily-range-control" aria-label="Publication range">{DAILY_RANGES.map((item) => <button key={item.id} disabled={mode === "conference"} className={range === item.id && mode !== "conference" ? "active" : ""} title={item.id === "all" ? "Search the whole archive, not just the last 90 days" : ""} onClick={() => setRange(item.id)}>{item.label}</button>)}</div>
+      <div className="daily-range-control" aria-label="Publication range">{DAILY_RANGES.map((item) => <button key={item.id} disabled={mode === "conference" || searchActive} className={range === item.id && mode !== "conference" && !searchActive ? "active" : ""} title={item.id === "all" ? "Search the whole archive, not just the last 90 days" : ""} onClick={() => setRange(item.id)}>{item.label}</button>)}</div>
       </div>
-      <button className={mode === "conference" ? "secondary-button conference-mode-button active" : "secondary-button conference-mode-button"} aria-pressed={mode === "conference"} disabled={searchActive} title={searchActive ? "Clear search before switching discovery modes" : "Search official conference catalogs"} onClick={() => setMode("conference")}><GraduationCap size={16} />Top conference search</button>
+      <button className={mode === "conference" ? "secondary-button conference-mode-button active" : "secondary-button conference-mode-button"} aria-pressed={mode === "conference"} title="Search official conference catalogs" onClick={() => changeMode("conference")}><GraduationCap size={16} />Top conference search</button>
       {mode !== "conference" && !searchActive && <button className="secondary-button daily-refresh" disabled={loading} onClick={() => void loadFeed(true)}>{loading ? <LoaderCircle className="spin" size={14} /> : <RefreshCw size={14} />}Refresh</button>}
       <label className="daily-save-target">Save to<select value={targetLibraryId} disabled={loadingLibraries} onChange={(event) => setTargetLibraryId(event.target.value)}>{libraries.map((library) => <option key={library.id} value={library.id}>{library.name}</option>)}</select></label>
     </div>
-    <FilterGroup label="AI research topic" className="daily-topic-filter">{DAILY_TOPICS.map((item) => <FilterButton key={item.id} active={topic === item.id} title={item.description} onClick={() => setTopic(item.id)}>{item.label}</FilterButton>)}</FilterGroup>
-    {mode === "conference" ? <ConferenceDiscovery bridge={bridge} targetLibraryId={targetLibraryId} topic={topic} onImported={onImported} /> : <>
+    <FilterGroup label="AI research topic" className="daily-topic-filter">{DAILY_TOPICS.map((item) => <FilterButton key={item.id} active={topic === item.id} title={item.description} onClick={() => { clearSearch(); setTopic(item.id); }}>{item.label}</FilterButton>)}</FilterGroup>
+    {conferenceOpened && <div hidden={mode !== "conference"}><ConferenceDiscovery bridge={bridge} active={active && mode === "conference"} targetLibraryId={targetLibraryId} topic={topic} onImported={onImported} /></div>}
+    <div hidden={mode === "conference"}>
     <div className="daily-search-panel">
-      <div className="daily-search-input-row"><input value={query} onChange={(event) => changeQuery(event.target.value)} onKeyDown={(event) => event.key === "Enter" && void submitSearch()} placeholder="Search recent papers by keyword, title, author, or topic" />
-        <button className="daily-search-send" disabled={loading || !query.trim()} onClick={() => void submitSearch()} title="Search" aria-label="Search">{loading ? <LoaderCircle className="spin" size={14} /> : <ArrowUp size={15} />}</button>
+      <div className="daily-search-input-row"><input value={query} onChange={(event) => changeQuery(event.target.value)} onKeyDown={(event) => event.key === "Enter" && void submitSearch()} placeholder={t("Search all papers by keyword, title, or author")} />
+        <button className="daily-search-send" disabled={!query.trim()} onClick={() => void submitSearch()} title="Search" aria-label="Search">{loading ? <LoaderCircle className="spin" size={14} /> : <ArrowUp size={15} />}</button>
       </div>
-      <div className="daily-search-meta"><span>{`${visiblePapers.length} papers`}{submittedQuery ? ` · “${submittedQuery}”` : ""}{response ? ` · ${response.cached ? "cached" : "live"} · updated ${formatFeedTime(response.fetched_at)}` : ""}{searchActive && response?.options?.topic === "all" && topic !== "all" ? " · title search across all topics" : ""}</span></div>
+      <div className="daily-search-meta"><span>{`${visiblePapers.length} papers`}{submittedQuery ? ` · “${submittedQuery}”` : ""}{response ? ` · ${response.cached ? "cached" : "live"} · updated ${formatFeedTime(response.fetched_at)}` : ""}{searchActive ? ` · ${response?.providers.includes("openalex") ? "OpenAlex" : t("Searching the full arXiv archive")}` : ""}{loading && response ? ` · ${t("Refreshing…")}` : ""}</span></div>
     </div>
     {error && <InlineNotice tone="danger" className="library-error">{error}</InlineNotice>}
+    {response?.warning && <InlineNotice tone="warning" className="library-error">{t(response.warning)}</InlineNotice>}
     {loading && !response ? <LoadingState /> : error && !response ? <StateView tone="error" className="daily-empty daily-feed-failed" icon={<RefreshCw size={28} />} title="Could not load the live feed" description="arXiv may be responding slowly. Your library is unaffected." action={<button className="secondary-button" onClick={() => void loadFeed(true)}><RefreshCw size={14} />Retry</button>} /> : !visiblePapers.length ? <StateView className="daily-empty" icon={<Calendar size={28} />} title="No papers found" description="Try another topic, expand the date range, or use a broader keyword." /> : <div className="daily-paper-list">{visiblePapers.map((paper) => {
       const key = paper.external_id || paper.title;
       const isAdded = added.has(key);
@@ -2679,7 +2701,7 @@ function DailyDiscovery({ initialMode = "latest", bridge, libraries, loadingLibr
       >
         <div className="daily-paper-content">
           <div className="daily-paper-title"><h2>{paper.title}</h2>{paper.url && <a href={paper.url} target="_blank" rel="noreferrer" title="Open paper"><ExternalLink size={13} /></a>}<button className={isAdded ? "secondary-button imported" : "outline-button"} disabled={isAdded || Boolean(adding) || !targetLibrary} onClick={() => void add(paper)}>{isAdded ? <Check size={14} /> : isAdding ? <LoaderCircle className="spin" size={14} /> : <Plus size={14} />}{isAdded ? "Saved" : isAdding ? "Saving" : "Save"}</button></div>
-          <p className="daily-paper-meta"><span className="daily-paper-date">{formatPaperDate(paper.published_at)}</span><span className="daily-paper-source">{paper.source === "hugging-face" ? "HF Daily" : "arXiv"}</span><span className="daily-paper-authors">{paper.authors.slice(0, 4).join(", ")}{paper.authors.length > 4 ? " et al." : ""}</span></p>
+          <p className="daily-paper-meta"><span className="daily-paper-date">{formatPaperDate(paper.published_at)}</span><span className="daily-paper-source">{paper.source === "hugging-face" ? "HF Daily" : paper.source === "openalex" ? "OpenAlex" : "arXiv"}</span><span className="daily-paper-authors">{paper.authors.slice(0, 4).join(", ")}{paper.authors.length > 4 ? " et al." : ""}</span></p>
           <small>{paper.abstract || "No abstract available."}</small>
           <div className="daily-paper-signals">{paper.categories.slice(0, 3).map((category) => <span key={category}>{category}</span>)}{paper.upvotes > 0 && <span><Flame size={11} />{paper.upvotes}</span>}{paper.github_url && <a href={paper.github_url} target="_blank" rel="noreferrer"><Code2 size={11} />{paper.github_stars > 0 ? paper.github_stars : "Code"}</a>}</div>
         </div>
@@ -2695,7 +2717,7 @@ function DailyDiscovery({ initialMode = "latest", bridge, libraries, loadingLibr
       onAdd={() => void add(previewPaper)}
       onClose={() => setPreviewPaper(null)}
     />}
-    </>}
+    </div>
   </section>;
 }
 
@@ -2718,7 +2740,7 @@ function DailyPaperPreview({ paper, bridge, canSave, isAdded, isAdding, onAdd, o
   return <Dialog open onClose={onClose} size="lg" className="daily-paper-preview-dialog" ariaLabelledBy="daily-paper-preview-title">
     <header className="daily-paper-preview-header">
       <div>
-        <span className="eyebrow">{paper.source === "hugging-face" ? "HF Daily" : "arXiv"}{paper.year ? ` · ${paper.year}` : ""}</span>
+        <span className="eyebrow">{paper.source === "hugging-face" ? "HF Daily" : paper.source === "openalex" ? "OpenAlex" : "arXiv"}{paper.year ? ` · ${paper.year}` : ""}</span>
         <h2 id="daily-paper-preview-title">{paper.title}</h2>
         <p className="daily-paper-preview-authors">{authors}</p>
       </div>
