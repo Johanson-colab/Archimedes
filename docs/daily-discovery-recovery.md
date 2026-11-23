@@ -33,9 +33,9 @@ Upstream arXiv rate limits and cold network failures remain possible. Existing c
 
 ## Automated verification
 
-- Focused discovery, conference, figure and real-component UI tests: 58 passed, followed by a fourth UI case for reselecting an already-active filter. Final full suite includes all of these.
+- Focused discovery, conference, figure, transfer and real-component UI tests: 67 passed.
 - `npm run lint`, `npm run build`, and `npm run check:theme`: passed.
-- Full suite: 1,537 tests, 1,528 passed, 5 skipped, 4 failed.
+- Full suite: 1,545 tests, 1,536 passed, 5 skipped, 4 failed.
 - All four failures were reproduced in a separate unchanged `b4a4480` checkout: experiment retry-audit temporary-path assertion on macOS, ordering in `native.ts`, locally missing LaTeX `phvr7t` font, and an outdated Library `searchKind` tab audit. No unrelated tests were weakened.
 - UI behavior tests exercise stale-first rendering, rapid query/year changes, returning to a saved search without another request, saving into the selected Library, and reselecting the active feed/topic during an initial request.
 
@@ -48,3 +48,20 @@ Electron captures: 1180 × 820 CSS pixels, Paper theme. These are controlled bri
 | Old feed cache while refresh is pending | ![](assets/daily-discovery-recovery/stale-feed-before.png) | ![](assets/daily-discovery-recovery/stale-feed-after.png) |
 | Search result with navigation controls | ![](assets/daily-discovery-recovery/search-before.png) | ![](assets/daily-discovery-recovery/search-after.png) |
 | Old official-catalog cache during refresh | ![](assets/daily-discovery-recovery/conference-before.png) | ![](assets/daily-discovery-recovery/conference-after.png) |
+
+
+## Follow-up: interrupted conference transfers
+
+The running desktop reproduced an `AbortError` whose cause was `ERR_STREAM_PREMATURE_CLOSE`. This is an interrupted response body; the generic AbortError alone did not establish a timeout. Successful isolated requests had not covered this failure mode.
+
+The official ICML endpoint supports HTTP byte ranges and a strong ETag. Virtual catalogs now download in 1 MiB segments with at most three concurrent streams; one broken segment retries once without discarding other validated segments. Content-Range, total length and version validators must match before assembly. A server ignoring Range is downloaded once normally; a ranged source without a version validator falls back to one complete response. The complete operation has a shared 60-second deadline and an 80 MB limit, and requests are aborted on failure. No partial/mixed catalog is saved as a completed result. The UI also translates connection/timeout failures instead of displaying Electron's raw RPC error.
+
+Live segmented transfer: ICML 2026 returned all 6,430 records in 9.2 seconds, then cached access took 7 ms. After restarting the development app, its actual conference page displayed the 6,430-record catalog and cached results; this verification used the desktop's normal workspace rather than only an isolated probe.
+
+Tests cover UTF-8 boundaries, concurrency limits, interrupted-segment retry, ignored ranges, changing ETags, invalid/oversized ranges, non-retryable 403/429 responses, a stalled deadline, and readable UI errors. Full suite still has the same four inherited failures documented above.
+
+Matched 1180 × 820 Paper-theme fixtures for an interrupted request (before = commit `8bcc64d`, after = this follow-up):
+
+| Before | After |
+| --- | --- |
+| ![](assets/conference-transfer-recovery/conference-error-before.png) | ![](assets/conference-transfer-recovery/conference-error-after.png) |

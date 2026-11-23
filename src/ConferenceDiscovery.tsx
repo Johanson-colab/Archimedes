@@ -15,7 +15,9 @@ const PRESENTATIONS: Array<{ id: ConferencePresentation | "all"; label: string }
 ];
 const PAGE_SIZE = 40;
 function errorMessage(error: unknown) {
-  return String(error).replace(/^Error:\s*/, "").replace(/^Error invoking remote method '[^']+':\s*Error:\s*/, "");
+  const message = String(error).replace(/^Error:\s*/, "").replace(/^Error invoking remote method '[^']+':\s*(?:Error:\s*)?/, "");
+  if (/AbortError|operation was aborted|premature close/i.test(message)) return "The connection to the official catalog was interrupted. Please retry.";
+  return message;
 }
 
 export default function ConferenceDiscovery({ bridge, targetLibraryId, topic, onImported, active = true }: {
@@ -97,7 +99,7 @@ export default function ConferenceDiscovery({ bridge, targetLibraryId, topic, on
       <div className="external-search-box"><Search size={16} /><input aria-label="Search conference papers" value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => event.key === "Enter" && search()} placeholder="Search by title, author, abstract, or keyword" /><button className="primary-button" onClick={search}><Search size={14} />Search</button></div>
       <span>{response ? `${response.total.toLocaleString()} papers` : `${selected.label} ${year}`}</span>
     </div>
-    {error && <InlineNotice tone="danger" className="library-error">{error}</InlineNotice>}
+    {error && <InlineNotice tone="danger" className="library-error">{t(error)}</InlineNotice>}
     {response && <div className="conference-catalog-status">
       <span><GraduationCap size={14} />{selected.label} {year} · {response.catalog_total.toLocaleString()} papers · {response.status === "not_held" ? "No edition" : response.status === "not_published" ? "Awaiting official publication" : response.stale ? "Cached, refresh pending" : response.cached ? "Cached" : "Official catalog"}</span>
       <details><summary>Sources and updated time</summary><time>{new Date(response.fetched_at).toLocaleString()}</time>{response.sources.map((url) => <a key={url} href={url} target="_blank" rel="noreferrer">{new URL(url).hostname}<ExternalLink size={11} /></a>)}</details>

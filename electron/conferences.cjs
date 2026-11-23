@@ -1,4 +1,5 @@
 const { JSDOM } = require("jsdom");
+const { downloadConferenceCatalog } = require("./conference-download.cjs");
 const { findRepositoryUrl } = require("./paper-repository.cjs");
 const conferences = require("../shared/conferences.json");
 const { matchesDailyTopic } = require("./literature.cjs");
@@ -165,7 +166,7 @@ function enrichSchedule(papers, html, presentation, sourceUrl, abstracts = {}) {
 async function loadVirtual(meta, context) {
   const sourceUrl = `${meta.host}/static/virtual/data/${meta.id}-${meta.year}-orals-posters.json`;
   const abstractUrl = `${meta.host}/static/virtual/data/${meta.id}-${meta.year}-abstracts.json`;
-  const [catalogText, abstractResult] = await Promise.all([get(sourceUrl, context, true), get(abstractUrl, context, true, 8000).catch(() => null)]);
+  const [catalogText, abstractResult] = await Promise.all([downloadConferenceCatalog(sourceUrl, context), get(abstractUrl, context, true, 8000).catch(() => null)]);
   if (!catalogText) return { papers: [], status: "not_published", sources: [sourceUrl] };
   let payload = JSON.parse(catalogText);
   if (!Array.isArray(payload.results)) throw new Error("The official conference catalog format has changed.");
@@ -331,13 +332,14 @@ async function searchConferencePapers(input, options = {}) {
         return result;
       })());
     }
-    try { catalog = await pending.get(lockKey); }
+    const task = pending.get(lockKey);
+    try { catalog = await task; }
     catch (error) {
       catalog = options.readCache?.(cacheKey);
       if (!catalog) throw error;
       cached = true; stale = true;
       catalog = { ...catalog, warnings: [...(catalog.warnings || []), `Refresh failed; showing cached official records. ${error.message}`] };
-    } finally { pending.delete(lockKey); }
+    } finally { if (pending.get(lockKey) === task) pending.delete(lockKey); }
   }
   const terms = query.query.match(/"[^"]+"|\S+/g)?.map((term) => term.replace(/^"|"$/g, "").toLowerCase()) || [];
   const filtered = catalog.papers.filter((paper) => {

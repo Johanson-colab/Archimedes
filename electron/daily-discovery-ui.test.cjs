@@ -97,3 +97,12 @@ test("clicking the already-selected feed and topic does not strand an initial re
   assert.match(text(), /Initial feed arrived/);
   await React.act(async () => root.unmount());
 });
+
+test("conference connection failures do not expose raw Electron RPC and AbortError text", async () => {
+  const bridge = { searchConferencePapers: async () => { throw Error("Error invoking remote method 'library:search-conferences': AbortError: The operation was aborted"); } };
+  const root = createRoot(document.getElementById("root"));
+  await React.act(async () => root.render(React.createElement(ConferenceDiscovery, { bridge, targetLibraryId: "library", topic: "all", onImported: async () => {} })));
+  assert.match(text(), /connection to the official catalog was interrupted/);
+  assert.doesNotMatch(text(), /AbortError|invoking remote method/);
+  await React.act(async () => root.unmount());
+});
