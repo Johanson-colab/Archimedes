@@ -3324,8 +3324,8 @@ function App() {
       setResearchMode("idea-spark");
       return;
     }
-    if (action === "replication") {
-      setMainSection("reproduce");
+    if (action === "writing") {
+      setMainSection("writing");
       return;
     }
     if (action === "literature") {
