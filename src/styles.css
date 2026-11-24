@@ -8261,7 +8261,6 @@ html[data-menu-style="glass"] .menu-surface {
 .paper-highlight-list article { grid-template-columns: minmax(0, 1fr) 28px 28px; }
 .paper-highlight-canvas { display: grid; width: 24px; height: 24px; place-items: center; color: var(--text-muted); background: transparent; border-radius: 4px; }
 .paper-highlight-canvas:hover { color: var(--accent); background: color-mix(in srgb, var(--accent) 9%, transparent); }
-.paper-ai-figure-canvas { display: inline-flex; height: 25px; align-items: center; gap: 4px; padding: 0 7px; color: var(--accent) !important; background: color-mix(in srgb, var(--accent) 9%, transparent) !important; border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent) !important; border-radius: 4px; font-size: 9px; font-weight: 700; white-space: nowrap; }
 .add-to-canvas-action { color: var(--text-on-accent) !important; background: var(--accent) !important; }
 .add-to-canvas-action:hover { background: var(--accent-hover) !important; }
 @media (max-width: 760px) {
@@ -8726,7 +8725,7 @@ html[data-menu-style="glass"] .menu-surface {
 }
 .paper-ai-panel > .paper-ai-context-stack .paper-ai-figure-context {
   display: grid;
-  grid-template-columns: 48px minmax(0, 1fr) 22px;
+  grid-template-columns: 88px minmax(0, 1fr) 22px;
   align-items: center;
   gap: 9px;
   padding: 7px 9px;
@@ -8735,14 +8734,14 @@ html[data-menu-style="glass"] .menu-surface {
   border-radius: 8px;
 }
 .paper-ai-panel > .paper-ai-context-stack .paper-ai-figure-context img {
-  width: 48px;
-  height: 38px;
-  object-fit: cover;
+  width: 88px;
+  height: 52px;
+  object-fit: contain;
   background: var(--mono-surface);
   border-radius: 5px;
 }
 .paper-ai-panel > .paper-ai-context-stack .paper-ai-figure-context span { color: var(--text-muted); font-size: 9px; font-weight: 650; }
-.paper-ai-panel > .paper-ai-context-stack .paper-ai-figure-context p { margin: 2px 0 4px; color: var(--text-secondary); font-size: 9px; line-height: 1.4; }
+.paper-ai-panel > .paper-ai-context-stack .paper-ai-figure-context p { margin: 2px 0 0; color: var(--text-secondary); font-size: 9px; line-height: 1.4; }
 .paper-ai-composer-wrap { padding: 8px 12px 12px; }
 .paper-ai-panel .paper-ai-composer { width: 100%; }
 .paper-ai-panel .paper-ai-composer .paper-ai-code-attachments { max-height: 92px; padding: 8px 8px 0; }

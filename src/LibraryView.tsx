@@ -651,13 +651,6 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
     setChatOpen(false);
     setHighlightListOpen(false);
   }
-  function addFigureToCanvas() {
-    if (!figureCapture?.image.image) return;
-    setCanvasInsert({ nonce: Date.now(), type: "figure", page: figureCapture.pageNumber, image: figureCapture.image.image, caption: figureCapture.nearbyText || undefined });
-    setFigureCapture(null);
-    setReaderView("canvas");
-    setChatOpen(false);
-  }
   function receiveFigureCapture(capture: PaperFigureCapture) {
     setFigureCapture(capture);
     setSideTab("chat");
@@ -1123,7 +1116,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
         <PaperChatThread messages={chatMessages} busy={chatBusy} aiMode={aiMode} streamingText={streamingChatText} onAsk={askPaperSuggestion} onOpenCodePath={openCodePath} />
         {(selection || figureCapture) && <div className="paper-ai-context-stack">
           {selection && <div className="paper-ai-context"><span>{t("p. {page} selection", { page: pageNumber })}</span><p>{selection}</p><button onClick={closeSelection}><X size={12} /></button></div>}
-          {figureCapture && <div className="paper-ai-figure-context"><img src={figureCapture.image.image?.dataUrl} alt={`Selected ${figureCapture.kind} from page ${figureCapture.pageNumber}`} /><div><span>{t("Page {page} {kind}", { page: figureCapture.pageNumber, kind: figureCapture.kind === "table" ? t("Table") : figureCapture.kind === "equation" ? t("Equation") : t("Image") })}</span><p>{t("This region will be sent to AI as a high-resolution image.")}</p><button className="paper-ai-figure-canvas" onClick={addFigureToCanvas} title={t("Send to canvas")}><Frame size={12} /><span>{t("Send to canvas")}</span></button></div><button onClick={() => setFigureCapture(null)} title={t("Remove figure attachment")}><X size={13} /></button></div>}
+          {figureCapture && <div className="paper-ai-figure-context"><img src={figureCapture.image.image?.dataUrl} alt={`Selected ${figureCapture.kind} from page ${figureCapture.pageNumber}`} /><div><span>{t("Page {page} {kind}", { page: figureCapture.pageNumber, kind: figureCapture.kind === "table" ? t("Table") : figureCapture.kind === "equation" ? t("Equation") : t("Image") })}</span><p>{t("This region will be sent to AI as a high-resolution image.")}</p></div><button type="button" onClick={() => setFigureCapture(null)} title={t("Remove figure attachment")} aria-label={t("Remove figure attachment")}><X size={13} /></button></div>}
         </div>}
         <PaperChatComposer initialDraft={composerDraftRef.current} onDraftChange={rememberComposerDraft} busy={chatBusy} cancelling={chatCancelling} canInterrupt={Boolean(chatThreadId)} attachments={codeAttachments} droppedAttachments={droppedAttachments} command={composerCommand} onAsk={submitPaperChat} onInterrupt={() => void interruptPaperChat()} onRemoveAttachment={(index) => setCodeAttachments((current) => current.filter((_, attachmentIndex) => attachmentIndex !== index))} onRemoveDropped={(id) => setDroppedAttachments((current) => current.filter((item) => item.id !== id))} onDropFiles={(files, repositoryPath) => void attachPaperChatDrop(files, repositoryPath)} />
       </>}
