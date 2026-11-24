@@ -96,6 +96,9 @@ function userPrompt(thread, turn, resume, attachments, experimentBridgeInstructi
     assertJsonSize(attachments, VISIBLE_IMPORT_LIMIT, 'The attached context exceeds the native request limit. No request was sent or replayed.');
   }
   if (attachments.length) prompt += `\n\nUser-attached context (metadata only):\n${JSON.stringify(attachments)}`;
+  // Shared by Codex, Claude Code and OpenCode; per-turn guidance also reaches
+  // resumed native sessions without importing every skill into their context.
+  if (turn.mode === "create") prompt += `\n\n${require("./creator-capabilities.cjs").creatorInstructions({ native: true })}`;
   if (["research", "experiment-setup"].includes(turn.mode)) {
     const directives = require("./experiment-directives.cjs");
     prompt += `\n\n${experimentBridgeInstructions || directives.experimentPrompt()}`;
