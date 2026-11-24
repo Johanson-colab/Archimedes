@@ -132,6 +132,8 @@ export interface ExperimentRun {
   node_id: string;
   status: ExperimentRunStatus;
   backend: string;
+  remote_connection?: "connected" | "unknown";
+  remote_reason?: string;
   command: string;
   cwd: string;
   commit_sha: string | null;
@@ -149,6 +151,7 @@ export interface ExperimentRun {
     ideas?: Array<{ nodeId: string; revisionId: string; experimentRevisionId?: string }>;
     workspace?: { id: string; root: string; branchName: string; baseCommit: string; parentRunId?: string | null } | null;
     codeSnapshot?: { kind: string; commit: string; path: string; sha256: string; sizeBytes: number; limitations: string } | null;
+    remote?: { id: string; host: string; user: string; port: number };
   } | null;
   error: string;
   started_at: string | null;

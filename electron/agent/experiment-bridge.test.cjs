@@ -17,7 +17,7 @@ async function invoke(bridge, method, args) {
   return JSON.parse(result.stdout);
 }
 
-test('SSH bridge permits only remote operations and expires with the turn', async () => {
+test('SSH bridge permits remote and managed experiment operations and expires with the turn', async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ssh-bridge-'));
   let bridge;
   try {
@@ -28,7 +28,8 @@ test('SSH bridge permits only remote operations and expires with the turn', asyn
     assert.match(bridge.instructions, /native dynamic tools.*unavailable/);
     assert.equal((await invoke(bridge, 'ssh_remote_exec', { command: 'pwd' })).output, 'fixture');
     assert.equal(calls[0].name, 'ssh_remote_exec');
-    await assert.rejects(() => invoke(bridge, 'run_experiment', { command: 'pwd' }), /not authorized/);
+    assert.equal((await invoke(bridge, 'run_experiment', { command: 'pwd' })).output, 'fixture');
+    await assert.rejects(() => invoke(bridge, 'prepare_experiment_workspace', { experiment: 'x' }), /not authorized/);
     bridge.close();
     await assert.rejects(() => invoke(bridge, 'ssh_remote_exec', { command: 'pwd' }));
   } finally { bridge?.close(); fs.rmSync(root, { recursive: true, force: true }); }

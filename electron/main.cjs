@@ -1099,7 +1099,20 @@ app.whenReady().then(async () => {
     return agent.retryGraphExtraction({ threadId: input.threadId, turnId: input.turnId, dataWorkspace, backendConfig: agentBackendConfig.get() });
   });
   ipcMain.handle("experiment-activity:list", (_event, input = {}) => store.listExperimentActivities(input));
-  ipcMain.handle("experiment-run:list", (_event, input = {}) => store.listExperimentRuns(input));
+  ipcMain.handle("experiment-run:list", async (_event, input = {}) => {
+    const lease = store.captureStore();
+    try {
+      return await lease.store.run(async () => {
+        const runs = store.listExperimentRuns(input);
+        const remote = require("./research-graph/remote-experiment-runner.cjs");
+        return Promise.all(runs.map(async (run) => {
+          if (run.backend !== "ssh" || !["starting", "running"].includes(run.status)) return run;
+          try { const result = await remote.refresh(run.id); return { ...result.run, remote_connection: result.connection, remote_reason: result.reason }; }
+          catch (error) { return { ...run, remote_connection: "unknown", remote_reason: error.message }; }
+        }));
+      });
+    } finally { lease.release(); }
+  });
   ipcMain.handle("experiment-run:start", (event, input = {}) => {
     if (typeof input.workspace !== "string" || !input.workspace.trim()) throw new Error("A workspace is required to start an experiment run.");
     const workspace = resolveWorkspace(input.workspace);
@@ -1112,8 +1125,21 @@ app.whenReady().then(async () => {
     });
     return started.run;
   });
-  ipcMain.handle("experiment-run:cancel", (_event, runId) => experimentRunner.cancelExperimentRun(runId));
-  ipcMain.handle("experiment-run:log", (_event, input = {}) => experimentRuns.readExperimentRunLog(input));
+  ipcMain.handle("experiment-run:cancel", async (_event, runId) => {
+    const lease = store.captureStore();
+    try { return await lease.store.run(async () => {
+      const run = store.getExperimentRun(runId);
+      return run?.backend === "ssh" ? require("./research-graph/remote-experiment-runner.cjs").cancel(runId) : experimentRunner.cancelExperimentRun(runId);
+    }); } finally { lease.release(); }
+  });
+  ipcMain.handle("experiment-run:log", async (_event, input = {}) => {
+    const lease = store.captureStore();
+    try { return await lease.store.run(async () => {
+      const run = store.getExperimentRun(input.runId);
+      if (run?.backend === "ssh") await require("./research-graph/remote-experiment-runner.cjs").refresh(run.id, { maxBytes: input.maxBytes });
+      return experimentRuns.readExperimentRunLog(input);
+    }); } finally { lease.release(); }
+  });
   ipcMain.handle("experiment-run:result", (_event, input = {}) => researchGraph.createResultFromRun(input));
   registerThreadCommands({ ipcMain, store, agent, modelConfig, dialog, BrowserWindow,
     dataWorkspace: (event, input) => workspaceForWindow(BrowserWindow.fromWebContents(event.sender)) || resolveWorkspace(input.workspace),

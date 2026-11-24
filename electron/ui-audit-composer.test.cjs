@@ -7,6 +7,7 @@ const root = path.resolve(__dirname, "..");
 const read = (...parts) => fs.readFileSync(path.join(root, ...parts), "utf8");
 
 const app = read("src", "App.tsx");
+const approvalActions = read("src", "ApprovalActions.tsx");
 const css = read("src", "styles.css");
 const library = read("src", "LibraryView.tsx");
 const voice = read("src", "VoiceInputButton.tsx");
@@ -93,8 +94,8 @@ test("context usage exposes a readable breakdown without runtime chrome", () => 
   assert.match(app, /t\("Instructions"\)/);
   assert.match(app, /reportedNativeUsage\?\.modelContextWindow/);
   assert.match(app, /standard: 500_000, "extra-long": 1_000_000/);
-  assert.match(app, /Auto-run in \{seconds\}s/);
-  assert.match(app, /pendingAction\.payload\.managedByAgent/);
+  assert.match(approvalActions, /Auto-run in \{seconds\}s/);
+  assert.match(approvalActions, /action\.payload\.managedByAgent/);
   assert.match(app, /const changeSetsByTurn = useMemo/);
   assert.match(app, /changeSet\.turnId === currentTurnId/);
   assert.match(app, /onClick=\{onOpenWorkspaceSettings\}/);

@@ -127,14 +127,18 @@ export default function ResearchGraphPanel({
       return;
     }
     let cancelled = false;
-    window.researchDesk.listExperimentRuns({ projectId, threadId })
-      .then((next) => {
-        if (!cancelled) setRuns(next);
-      })
-      .catch(() => {
-        if (!cancelled) setRuns([]);
-      });
-    return () => { cancelled = true; };
+    let busy = false;
+    const refresh = () => {
+      if (busy || !window.researchDesk?.listExperimentRuns) return;
+      busy = true;
+      window.researchDesk.listExperimentRuns({ projectId, threadId })
+        .then((next) => { if (!cancelled) setRuns(next); })
+        .catch(() => { /* Keep the last known runs visible during a disconnect. */ })
+        .finally(() => { busy = false; });
+    };
+    refresh();
+    const timer = window.setInterval(refresh, 8000);
+    return () => { cancelled = true; window.clearInterval(timer); };
   }, [projectId, threadId, refreshKey, version]);
 
   useEffect(() => {

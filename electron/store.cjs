@@ -1222,7 +1222,9 @@ function canonicalizeStoredWorkspacePaths(db) {
 }
 function reconcileInterruptedExperimentRuns(db) {
   try {
-    const rows = db.prepare("SELECT id, pid FROM experiment_runs WHERE status IN ('starting', 'running')").all();
+    // Remote PIDs are meaningful only on their own host. A disconnected SSH
+    // run must remain unresolved until the remote job can be inspected.
+    const rows = db.prepare("SELECT id, pid FROM experiment_runs WHERE backend = 'local' AND status IN ('starting', 'running')").all();
     if (!rows.length) return;
     const now = timestamp();
     for (const row of rows) {
@@ -3492,6 +3494,7 @@ function createExperimentRun({
   metricsJson = "{}",
   experimentWorkspaceId = null,
   codeSnapshot = null,
+  remote = null,
 } = {}) {
   if (!projectId || !threadId || !nodeId) throw new Error("A project, session, and experiment node are required to start a run.");
   if (!["starting", "running"].includes(status)) throw new Error("A new experiment run must start or run.");
@@ -3549,7 +3552,7 @@ function createExperimentRun({
     if (realCwd !== realRoot && !realCwd.startsWith(`${realRoot}${path.sep}`)) throw new Error("The run folder is outside the experiment workspace.");
     workspaceProvenance = { id: linked.id, root: linked.root, branchName: linked.branch_name, baseCommit: linked.base_commit, parentRunId: linked.parent_run_id };
   }
-  const provenance = JSON.stringify({ experimentRevisionId: node.current_revision_id, ideas, ancestry, workspace: workspaceProvenance, codeSnapshot });
+  const provenance = JSON.stringify({ experimentRevisionId: node.current_revision_id, ideas, ancestry, workspace: workspaceProvenance, codeSnapshot, ...(remote ? { remote } : {}) });
   const now = timestamp();
   db.prepare(`
     INSERT INTO experiment_runs (

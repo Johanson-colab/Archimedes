@@ -8,7 +8,7 @@ const { randomBytes, timingSafeEqual } = require("node:crypto");
 const MAX_REQUEST = 128 * 1024;
 const MAX_RESPONSE = 1024 * 1024;
 const ALLOWED = new Set(["create_experiment", "prepare_experiment_workspace", "run_experiment", "wait_experiment", "read_experiment_log", "record_experiment_activity", "record_experiment_evidence", "create_experiment_result"]);
-const SSH_ALLOWED = new Set(["ssh_remote_read", "ssh_remote_edit", "ssh_remote_exec"]);
+const SSH_ALLOWED = new Set(["ssh_remote_read", "ssh_remote_edit", "ssh_remote_exec", "create_experiment", "run_experiment", "wait_experiment", "read_experiment_log", "record_experiment_activity", "create_experiment_result"]);
 function quote(value) { return `'${String(value).replaceAll("'", "'\\''")}'`; }
 
 async function createExperimentBridge({ workspace, invoke, signal, executable = process.execPath, mode = "experiment" } = {}) {
@@ -96,7 +96,8 @@ async function createExperimentBridge({ workspace, invoke, signal, executable = 
     `Command prefix: ${command}`,
     "Invoke as: <prefix> <tool_name> '<JSON object>'. Do not reveal or copy the connection file.",
     'Read: ssh_remote_read {"path":"relative/or/absolute/path","offset":1,"limit":100}. Edit existing UTF-8 file: ssh_remote_edit {"path":"...","old_text":"exact unique text","new_text":"replacement"}. Execute remote shell: ssh_remote_exec {"command":"pwd"} (optional "cwd" must be an absolute or ~/ remote directory).',
-    "Remote commands are not managed experiment runs. Never use a local shell command as if it runs on the remote host. If a remote operation times out or disconnects, its remote process state is unknown; inspect before retrying.",
+    'For an explicitly requested experiment, use create_experiment {"idea":"...","title":"..."}, then run_experiment {"experiment":"...","command":"...","cwd":"~/remote/project"}. This launches a managed remote run and returns a run_id. Use wait_experiment and read_experiment_log with that run_id, and create_experiment_result only after inspecting the completed run. Do not use use_experiment_workspace for remote runs.',
+    "Ordinary remote commands are not managed experiment runs. Local native shell commands remain local. If a connection fails, the remote process state is unknown; inspect the recorded run before retrying and never launch it twice.",
   ].join("\n") : [
     "Live Archimedes experiment tools are available for this turn. If direct experiment tools are available, use them. Otherwise use the local CLI below. Use only when the user explicitly asks to undertake or run an experiment. Never repeat an existing run.",
     `Command prefix: ${command}`,
