@@ -5,6 +5,8 @@
 // lines instead of fighting over the end of one shared object.
 
 export const composer: Record<string, string> = {
+  "A message could not be sent. It remains in the queue.": "消息未能发送，仍保留在队列中。",
+  "A message could not be sent. Your draft was restored.": "消息未能发送，草稿已恢复。",
   "Add a research direction for Idea Spark.": "请为 Idea Spark 补充研究方向。",
   "After scan": "执行后扫描",
   "Agent activity": "Agent 活动",
@@ -18,6 +20,7 @@ export const composer: Record<string, string> = {
   "Plugins": "插件",
   "Reading research context": "正在读取研究上下文",
   "Remove Idea Spark": "移除 Idea Spark",
+  "Retry queued messages": "重试队列中的消息",
   "Run the full workflow: literature, bottleneck, candidates, audit, and idea cards.": "运行完整流程：文献、瓶颈、候选想法、审计与 idea 卡片。",
   "Show {count} more": "再显示 {count} 个",
   "Skills": "技能",

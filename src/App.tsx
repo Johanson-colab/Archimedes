@@ -2573,6 +2573,7 @@ function App() {
     if (command === "init") {
       if (!executionWorkspace) throw new Error(t("Select a workspace first."));
       if (!(await submitPrompt(INIT_PROMPT, "free-chat"))) throw new Error(t("Project initialization could not start."));
+      setContextItems((current) => current.filter((item) => !contextItems.some((submitted) => submitted.id === item.id)));
       return;
     }
     if (command === "new") { startNewTask(); return; }
@@ -2985,7 +2986,6 @@ function App() {
         const proposedAction = result.actions.find((action) => action.status === "pending");
         if (proposedAction) setPendingAction({ ...proposedAction, source: "agent", ownerThreadId: result.threadId });
       }
-      setContextItems((current) => current.filter((item) => !submittedContext.some((submitted) => submitted.id === item.id)));
       return true;
     } catch (error) {
       setMessages((current) => [...current, { id: crypto.randomUUID(), role: "assistant", text: `Archimedes could not start this task: ${String(error)}` }]);
@@ -4299,6 +4299,9 @@ function ConversationView({ messages, events, trajectoryEvents, remoteServers, r
   const [pendingResearchSkill, setPendingResearchSkill] = useState<"idea-spark" | null>(null);
   const [contextPickerRequest, setContextPickerRequest] = useState(0);
   const previousBusyRef = useRef(agentBusy);
+  const [queuePaused, setQueuePaused] = useState(false);
+  const currentDraftRef = useRef({ draftKey, prompt, contextItems });
+  currentDraftRef.current = { draftKey, prompt, contextItems };
   const contextUsageTriggerRef = useRef<HTMLButtonElement>(null);
   const sshWorkspaceTriggerRef = useRef<HTMLButtonElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
@@ -4644,27 +4647,49 @@ function ConversationView({ messages, events, trajectoryEvents, remoteServers, r
     return true;
   }
 
-  function queueCurrentPrompt() {
-    const draft = prompt;
-    if (!draft.trim() && !contextItems.some((item) => item.type === "image")) return;
-    if (queuedPrompts.length >= 5) {
-      setComposerError("Up to five follow-ups can be queued at a time.");
-      return;
-    }
-    setQueuedPrompts((current) => [...current, {
+  function takeCurrentPrompt(mode: ResearchMode): QueuedPrompt {
+    const message: QueuedPrompt = {
       id: crypto.randomUUID(),
-      draft,
-      mode: predictedMode,
+      draft: prompt,
+      mode,
       reasoningEffort,
       contextLength,
       contextItems,
       researchSkill: pendingResearchSkill ?? undefined,
-    }]);
-    rememberPrompt(draft);
+    };
+    currentDraftRef.current = { draftKey, prompt: "", contextItems: [] };
+    rememberPrompt(prompt);
     setPrompt("");
+    for (const item of contextItems) onRemoveContext(item.id);
     setPendingResearchSkill(null);
-    setHistoryIndex(-1);
     setComposerError("");
+    return message;
+  }
+
+  function queueCurrentPrompt() {
+    if (queuedPrompts.length >= 5) {
+      setComposerError("Up to five follow-ups can be queued at a time.");
+      return;
+    }
+    const message = takeCurrentPrompt(predictedMode);
+    setQueuedPrompts((current) => [...current, message]);
+  }
+
+  async function sendPrompt(message: QueuedPrompt) {
+    const sent = await onSubmit(message.draft, message.mode, message.reasoningEffort, message.contextLength, message.contextItems, message.researchSkill);
+    const currentDraft = currentDraftRef.current;
+    if (sent || !composerRef.current || currentDraft.draftKey !== draftKey) return;
+
+    setQueuePaused(true);
+    if (currentDraft.prompt.trim() || currentDraft.contextItems.length) {
+      setQueuedPrompts((current) => [message, ...current]);
+      setComposerError(t("A message could not be sent. It remains in the queue."));
+      return;
+    }
+    setPrompt(message.draft);
+    onAddContext(message.contextItems);
+    setPendingResearchSkill(message.researchSkill ?? null);
+    setComposerError(t("A message could not be sent. Your draft was restored."));
   }
 
   async function submitCurrentPrompt() {
@@ -4693,41 +4718,39 @@ function ConversationView({ messages, events, trajectoryEvents, remoteServers, r
       queueCurrentPrompt();
       return;
     }
-    const draft = prompt;
-    const submittedContext = contextItems;
     const submittedMode: ResearchMode = pendingResearchSkill
       ? "research"
       : researchMode === "experiment-setup"
         ? "experiment-setup"
         : predictedMode;
-    rememberPrompt(draft);
-    setPrompt("");
-    setComposerError("");
+    setQueuePaused(false);
     onResearchMode(submittedMode);
-    const sent = await onSubmit(draft, submittedMode, reasoningEffort, contextLength, submittedContext, pendingResearchSkill ?? undefined);
-    if (sent) setPendingResearchSkill(null);
-    if (!sent) setPrompt((current) => current.trim() ? current : draft);
+    await sendPrompt(takeCurrentPrompt(submittedMode));
     requestAnimationFrame(() => {
       const textarea = composerRef.current;
-      if (!textarea) return;
+      if (!textarea || currentDraftRef.current.draftKey !== draftKey) return;
       textarea.focus();
       const end = textarea.value.length;
       textarea.setSelectionRange(end, end);
     });
   }
 
+  function sendNextQueuedPrompt() {
+    const [next, ...rest] = queuedPrompts;
+    if (!next) return;
+    if (queuePaused) {
+      setQueuePaused(false);
+      setComposerError("");
+    }
+    setQueuedPrompts(rest);
+    void sendPrompt(next);
+  }
+
   useEffect(() => {
     const wasBusy = previousBusyRef.current;
     previousBusyRef.current = agentBusy;
-    if (!wasBusy || agentBusy || !queuedPrompts.length) return;
-    const [next, ...rest] = queuedPrompts;
-    setQueuedPrompts(rest);
-    void onSubmit(next.draft, next.mode, next.reasoningEffort, next.contextLength, next.contextItems, next.researchSkill).then((sent) => {
-      if (sent) return;
-      setComposerError("A queued follow-up could not be sent. It was restored below.");
-      setPrompt((current) => current.trim() ? current : next.draft);
-    });
-  }, [agentBusy, queuedPrompts, onSubmit]);
+    if (wasBusy && !agentBusy && !queuePaused) sendNextQueuedPrompt();
+  }, [agentBusy, queuePaused, queuedPrompts, onSubmit]);
 
   const selectWelcomeWorkflow = useCallback((action: ResearchWelcomeAction) => {
     historyHandlersRef.current.onWelcomeAction(action);
@@ -4784,6 +4807,7 @@ function ConversationView({ messages, events, trajectoryEvents, remoteServers, r
             <span>{item.draft || t("Image attachment")}</span>
             <button type="button" onClick={() => setQueuedPrompts((current) => current.filter((queued) => queued.id !== item.id))} aria-label={`${t("Remove queued message")} ${index + 1}`}><X size={12} /></button>
           </div>)}
+          {queuePaused && !agentBusy && <button type="button" className="composer-queue-clear" onClick={sendNextQueuedPrompt}>{t("Retry queued messages")}</button>}
           {queuedPrompts.length > 1 && <button type="button" className="composer-queue-clear" onClick={() => setQueuedPrompts([])}>{t("Clear queue")}</button>}
         </div>}
         {pendingResearchSkill === "idea-spark" && <div className="composer-skill">
