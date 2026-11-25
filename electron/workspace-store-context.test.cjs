@@ -324,6 +324,11 @@ test("approval and rejection IPC can resolve only the live action in the accepte
   fs.cpSync(path.join(a, ".archimedes"), path.join(b, ".archimedes"), { recursive: true });
   owner = store.createWorkspaceStore(a);
   const copy = store.createWorkspaceStore(b);
+  // Startup recovery may already have rejected the copied approval. Seed the
+  // pending collision after opening both stores so this test exercises IPC.
+  const copiedDatabase = new DatabaseSync(path.join(b, ".archimedes", "archimedes.db"));
+  copiedDatabase.prepare("UPDATE agent_actions SET status = 'pending', resolved_at = NULL WHERE id = ?").run(action.id);
+  copiedDatabase.close();
   const approvalManager = require("./agent/approval-manager.cjs");
   const scope = owner.run(() => agent.approvalScope());
   const waiting = approvalManager.waitForApproval(scope, action.id);
