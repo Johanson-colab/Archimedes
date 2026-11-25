@@ -266,7 +266,7 @@ function ManuscriptResultsDialog({ bridge, scope, selection, manifestPath, initi
           <p><b>{t("Saved analysis")}</b> {detail.result.sourceName} · <code>{detail.analysis.id}</code></p>
           <p><b>{t("Input SHA-256")}</b> <code>{detail.result.inputSha256}</code></p>
           <p><b>{t("Manuscript build")}</b> <code>{detail.manuscript.buildId}</code></p>
-          <p><b>{t("Source version")}</b> <code>{detail.manuscript.sourceVersion}</code></p>
+          <p><b>{t("Manuscript source version")}</b> <code>{detail.manuscript.sourceVersion}</code></p>
         </details>
         {detail.log !== null && <details><summary>{t("Run log")}</summary><pre>{detail.log}</pre></details>}
         {!dirty && detail.status.build === "ready" && <div className="paper-existing-projects"><button type="button" className="secondary-button" onClick={() => onOpenSource(detail.manuscript)}>{t("Show source number")}</button></div>}
