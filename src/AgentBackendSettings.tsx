@@ -181,7 +181,7 @@ export default function AgentBackendSettings({ bridge, onBackendChange, workspac
         if (item === "opencode" && opening && !catalogs.opencode?.length) void loadOpenCodeCatalog(draft);
       }}>
         <span className="provider-icon large"><img className={`provider-brand-logo${item === "claude" || item === "antigravity" ? "" : " provider-brand-mono"}`} src={item === "codex" ? openaiLogo : item === "claude" ? claudeLogo : item === "antigravity" ? antigravityLogo : opencodeLogo} alt="" /></span>
-        <span className="agent-backend-card-copy"><strong>{labels[item]}</strong><small>{item === "codex" ? t("Local CLI · uses your existing Codex login") : t("Local CLI · uses its existing login and configuration")}</small></span>
+        <span className="agent-backend-card-copy"><strong>{labels[item]}</strong></span>
         <span className="agent-backend-card-status">
           <span className={`agent-connection-status ${connections[item] || "unchecked"}`} aria-live="polite">{busy === "check" && selected === item && <LoaderCircle className="spin" size={13} />}{connectionLabel(item)}</span>
           {savedConfig?.backend === item && <span className="agent-backend-active">{t("Backend active")}</span>}

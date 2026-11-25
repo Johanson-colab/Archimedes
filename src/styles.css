@@ -4295,9 +4295,8 @@ html[data-titlebar="inset"] .right-workbench .workbench-header button { -webkit-
 .agent-backend-card-toggle > .provider-icon { flex: 0 0 auto; }
 .agent-backend-card-toggle > svg { flex: 0 0 auto; color: var(--night-muted); }
 .agent-backend-card-toggle > svg.expanded { transform: rotate(180deg); }
-.agent-backend-card-copy { display: grid; flex: 1; min-width: 0; gap: 5px; }
+.agent-backend-card-copy { display: flex; flex: 1; min-width: 0; align-items: center; }
 .agent-backend-card-copy strong { font-size: 16px; font-weight: 600; }
-.agent-backend-card-copy small { color: var(--night-muted); font-size: 12px; line-height: 1.5; }
 .agent-connection-status { display: inline-flex; flex: 0 1 auto; align-items: center; gap: 6px; color: var(--night-muted); font-size: 11px; }
 .agent-connection-status.connected { color: var(--accent); }
 .agent-connection-status.error, .agent-backend-feedback.error { color: var(--night-danger); }
