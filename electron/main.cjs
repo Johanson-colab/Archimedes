@@ -177,9 +177,9 @@ function closeWindowTerminals(senderId) {
 function stopWorkspaceWatcher(senderId) {
   const current = workspaceWatchers.get(senderId);
   if (!current) return;
+  workspaceWatchers.delete(senderId);
   if (current.timer) clearTimeout(current.timer);
   current.watcher.close();
-  workspaceWatchers.delete(senderId);
 }
 
 function setWindowWorkspace(senderId, workspace) {
@@ -256,6 +256,9 @@ function watchWorkspace(sender, workspace) {
       }, 180);
     });
     workspaceWatchers.set(sender.id, state);
+    state.watcher.on("error", () => {
+      if (workspaceWatchers.get(sender.id) === state) stopWorkspaceWatcher(sender.id);
+    });
   } catch {
     // Recursive watching is not available on every platform; manual refresh remains available.
   }
