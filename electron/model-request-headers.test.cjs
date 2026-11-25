@@ -1,3 +1,4 @@
+const fixtureSafeStorage = require("./test-support/safe-storage.cjs");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const http = require("node:http");
@@ -63,7 +64,7 @@ test("provider session errors get actionable messages", () => {
 test("saved custom header values stay in the main process and can be replaced or cleared", (t) => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-headers-"));
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
-  modelConfig.initializeModelConfig(directory);
+  modelConfig.initializeModelConfig(directory, fixtureSafeStorage);
   const input = {
     provider: "custom",
     baseUrl: "https://opencode.ai/inference/go/openai/v1",
@@ -91,7 +92,7 @@ test("saved custom header values stay in the main process and can be replaced or
 test("the dedicated Go provider recognizes existing Custom connections and uses the Go catalog", async (t) => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-opencode-go-"));
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
-  modelConfig.initializeModelConfig(directory);
+  modelConfig.initializeModelConfig(directory, fixtureSafeStorage);
   const baseUrl = "https://opencode.ai/inference/go/openai/v1";
   fs.writeFileSync(path.join(directory, "model-config.json"), JSON.stringify({
     provider: "custom",
@@ -120,7 +121,7 @@ test("the dedicated Go provider recognizes existing Custom connections and uses 
 
 test("catalog, connection test, chat and inherited Paper review use the configured HTTP headers", async (t) => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-model-provider-"));
-  modelConfig.initializeModelConfig(directory);
+  modelConfig.initializeModelConfig(directory, fixtureSafeStorage);
   const requests = [];
   const server = http.createServer(async (req, res) => {
     const body = [];

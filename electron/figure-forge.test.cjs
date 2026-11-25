@@ -1,3 +1,4 @@
+const fixtureSafeStorage = require("./test-support/safe-storage.cjs");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { mkdtempSync, rmSync } = require("node:fs");
@@ -137,7 +138,7 @@ test("Infistar Gemini images use the native image endpoint and retain reference 
 test("Gemini no-image errors with private headers never expose echoed credentials", async t => {
   const settings = mkdtempSync(path.join(os.tmpdir(), "archimedes-figure-provider-"));
   t.after(() => rmSync(settings, { recursive: true, force: true }));
-  modelConfig.initializeModelConfig(settings);
+  modelConfig.initializeModelConfig(settings, fixtureSafeStorage);
   const requests = [];
   const server = createServer((request, response) => {
     requests.push(request.headers);

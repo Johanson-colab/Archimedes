@@ -2,6 +2,7 @@
 const path = require("node:path");
 const sources = require("./news-sources.cjs");
 const newsStore = require("./news-store.cjs");
+const { settingsSecrets } = require("./security/secrets-store.cjs");
 
 const SETTINGS_FILE = "news-settings.json";
 const SETTINGS_VERSION = 1;
@@ -10,6 +11,8 @@ const SOURCE_IDS = ["hn", "github", "arxiv", "lobsters", "reddit", "rss", "x"];
 let settingsPath = "";
 let settings = null;
 let initialized = false;
+let credentials;
+let readError = null;
 const redditTokenCache = { token: "", expiresAt: 0 };
 let refreshPromise = null;
 
@@ -87,25 +90,36 @@ function normalizeSettings(input = {}) {
   return normalized;
 }
 
-function persist() {
-  if (!settingsPath) return;
-  fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
-  fs.writeFileSync(settingsPath, `${JSON.stringify(settings, null, 2)}\n`, { mode: 0o600 });
+function transformCredentials(record, change) {
+  const fields = { reddit: "clientSecret", github: "token", x: "bearerToken" };
+  const next = { ...record };
+  for (const [source, key] of Object.entries(fields)) {
+    if (Object.hasOwn(record[source] || {}, key)) next[source] = { ...record[source], [key]: change(record[source][key]) };
+  }
+  return next;
 }
 
-function initialize(userDataPath) {
+function initialize(userDataPath, safeStorage) {
   settingsPath = path.join(userDataPath, SETTINGS_FILE);
+  credentials = settingsSecrets(safeStorage, transformCredentials);
+  settings = null;
+  readError = null;
   try {
-    settings = normalizeSettings(JSON.parse(fs.readFileSync(settingsPath, "utf8")));
-  } catch {
-    settings = defaultSettings();
+    const saved = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
+    const plain = credentials.open(saved);
+    settings = normalizeSettings(plain);
+    if (credentials.available() && credentials.hasPlaintext(saved)) credentials.write(settingsPath, plain);
+  } catch (error) {
+    if (error.code !== "ENOENT") readError = error instanceof SyntaxError
+      ? new Error("News settings could not be opened. The original file was kept.") : error;
   }
   newsStore.initialize(userDataPath);
   initialized = true;
-  return publicSettings();
+  return readError ? null : publicSettings();
 }
 
 function settingsOrDefaults() {
+  if (readError) throw readError;
   if (!settings) settings = defaultSettings();
   return settings;
 }
@@ -156,8 +170,9 @@ function setSettings(patch = {}) {
     if (patch.sinceHours !== undefined) next.sinceHours = patch.sinceHours;
     if (patch.clustering !== undefined) next.clustering = patch.clustering;
   }
-  settings = normalizeSettings(next);
-  persist();
+  const candidate = normalizeSettings(next);
+  if (settingsPath) credentials.write(settingsPath, candidate);
+  settings = candidate;
   return publicSettings();
 }
 

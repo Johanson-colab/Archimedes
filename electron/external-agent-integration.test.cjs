@@ -1,3 +1,4 @@
+const fixtureSafeStorage = require("./test-support/safe-storage.cjs");
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -39,7 +40,7 @@ readline.createInterface({input:process.stdin}).on('line',line=>{
 });
 `, { mode: 0o700 });
     store.openWorkspace(root);
-    modelConfig.initializeModelConfig(root);
+    modelConfig.initializeModelConfig(root, fixtureSafeStorage);
     global.fetch = () => { throw new Error('The API backend must not be called'); };
     const events = [];
     const result = await agent.runAgent({ prompt: 'hello', workspace: root, origin: 'research', mode: 'free-chat', capabilities: { write: 'ask', command: 'ask' }, externalBackend: { backend, binary, model: '', permissionMode: 'ask' }, emit: event => events.push(event) });

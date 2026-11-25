@@ -1,3 +1,4 @@
+const fixtureSafeStorage = require("./test-support/safe-storage.cjs");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const os = require("node:os");
@@ -33,7 +34,7 @@ readline.createInterface({input:process.stdin}).on('line',line=>{
 });
 `, { mode: 0o700 });
     store.openWorkspace(directory);
-    modelConfig.initializeModelConfig(directory);
+    modelConfig.initializeModelConfig(directory, fixtureSafeStorage);
     const originalKey = process.env.ARCHIMEDES_LLM_API_KEY;
     const legacyKey = process.env.AXIOM_LLM_API_KEY;
     delete process.env.ARCHIMEDES_LLM_API_KEY;
@@ -121,7 +122,7 @@ test("external owner cancellation interrupts native runs and releases signal lis
   let started = false;
   try {
     store.openWorkspace(directory);
-    modelConfig.initializeModelConfig(directory);
+    modelConfig.initializeModelConfig(directory, fixtureSafeStorage);
     backendModule.runCodex = ({ signal }) => {
       if (signal.aborted) return Promise.reject(Object.assign(new Error("Already interrupted"), { name: "AbortError" }));
       started = true;

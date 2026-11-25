@@ -1,3 +1,4 @@
+const fixtureSafeStorage = require("./test-support/safe-storage.cjs");
 const assert = require("node:assert/strict");
 const fs = require("node:fs"), os = require("node:os"), path = require("node:path");
 const { test } = require("node:test");
@@ -132,7 +133,7 @@ test("same imported thread id in two data stores has independent running/stop/ap
   a.run(() => agent.setApprovalSurface(threadId, true));
   assert.equal(a.run(() => agent.hasApprovalSurface(threadId)), true);
   assert.equal(b.run(() => agent.hasApprovalSurface(threadId)), false);
-  model.initializeModelConfig(path.join(roots.root, "settings"));
+  model.initializeModelConfig(path.join(roots.root, "settings"), fixtureSafeStorage);
   model.saveModelConfig({ provider: "custom", baseUrl: "https://context.invalid/v1", model: "fake", apiKey: "fake-not-a-credential" });
   const arrived = deferred(), finishB = deferred();
   let calls = 0;
@@ -181,7 +182,7 @@ test("a moved database cannot start a second turn while its original owner is ru
   const workspace = owner.defaultProjectWorkspace(project.id);
   const thread = owner.createResearchThread({ projectId: project.id, workspaceId: workspace.id, workspacePath: executionA, mode: "free-chat" });
   const moved = path.join(root, "moved-data");
-  model.initializeModelConfig(path.join(root, "settings"));
+  model.initializeModelConfig(path.join(root, "settings"), fixtureSafeStorage);
   model.saveModelConfig({ provider: "custom", baseUrl: "https://context.invalid/v1", model: "fake", apiKey: "fake-not-a-credential" });
   const arrived = deferred(), finish = deferred(), previousFetch = global.fetch;
   let modelCalls = 0;

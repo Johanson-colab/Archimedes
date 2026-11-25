@@ -1,3 +1,4 @@
+const fixtureSafeStorage = require("./test-support/safe-storage.cjs");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const os = require("node:os");
@@ -34,7 +35,7 @@ function invalidJsonResponse(_url, { headers }) {
 test("malformed successful responses cannot echo private headers through their decoder errors", async t => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-model-response-"));
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
-  modelConfig.initializeModelConfig(directory);
+  modelConfig.initializeModelConfig(directory, fixtureSafeStorage);
   const fetchImpl = t.mock.method(globalThis, "fetch", async (...args) => invalidJsonResponse(...args));
 
   for (const [request, expected] of [
@@ -73,7 +74,7 @@ test("a failed agent turn persists the actionable diagnostic without including t
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-agent-invalid-json-"));
   store.openWorkspace(root);
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
-  modelConfig.initializeModelConfig(path.join(root, "settings"));
+  modelConfig.initializeModelConfig(path.join(root, "settings"), fixtureSafeStorage);
   t.mock.method(globalThis, "fetch", async (...args) => invalidJsonResponse(...args));
 
   for (const provider of ["custom", "anthropic"]) {

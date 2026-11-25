@@ -1,3 +1,4 @@
+const fixtureSafeStorage = require("./test-support/safe-storage.cjs");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const { createServer } = require("node:http");
@@ -105,7 +106,7 @@ test("successful incomplete streams never make a second POST or execute a tool",
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-model-stream-")));
   store.openWorkspace(root);
   t.after(() => { fs.rmSync(root, { recursive: true, force: true }); });
-  model.initializeModelConfig(path.join(root, "settings"));
+  model.initializeModelConfig(path.join(root, "settings"), fixtureSafeStorage);
   const registry = new ToolRegistry();
   let executions = 0;
   registry.register({ definition: { type: "function", function: { name: "spy", description: "Local fixture", parameters: { type: "object" } } },
@@ -148,7 +149,7 @@ test("provider stream errors preserve partial answers and keep header values out
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-stream-secret-"));
   store.openWorkspace(root);
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
-  model.initializeModelConfig(path.join(root, "settings"));
+  model.initializeModelConfig(path.join(root, "settings"), fixtureSafeStorage);
 
   const gatewayToken = "DUMMY_GATEWAY_TOKEN";
   const sessionToken = "DUMMY_FIXED_SESSION";
@@ -189,7 +190,7 @@ test("real agent persists incomplete text and executes none of a mixed complete/
   store.openWorkspace(root);
   const owner = store;
   t.after(() => { fs.rmSync(root, { recursive: true, force: true }); });
-  model.initializeModelConfig(path.join(root, "settings")); model.saveModelConfig(config);
+  model.initializeModelConfig(path.join(root, "settings"), fixtureSafeStorage); model.saveModelConfig(config);
   const registry = new ToolRegistry();
   let executions = 0, requests = 0;
   registry.register({ definition: { type: "function", function: { name: "spy", description: "Local fixture", parameters: { type: "object", properties: { value: { type: "string" } }, required: ["value"], additionalProperties: false } } }, source: "builtin", execute: async () => { executions++; return { content: "Executed complete fixture" }; } });
@@ -263,7 +264,7 @@ test("real Agent requests reserve tool schemas, provider structure and output to
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-request-budget-")));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   store.openWorkspace(root);
-  model.initializeModelConfig(path.join(root, "settings"));
+  model.initializeModelConfig(path.join(root, "settings"), fixtureSafeStorage);
   const fixture = JSON.stringify(Array(2000).fill("abcd"));
   fs.writeFileSync(path.join(root, "fixture.json"), fixture);
   let requests = [];
@@ -325,7 +326,7 @@ test("a fixed prompt that cannot fit emits and persists a stable context-budget 
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-fixed-context-")));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   store.openWorkspace(root);
-  model.initializeModelConfig(path.join(root, "settings"));
+  model.initializeModelConfig(path.join(root, "settings"), fixtureSafeStorage);
   model.saveModelConfig({ ...config, contextWindowTokens: 6_000, maxOutputTokens: 321 });
   let requests = 0;
   fakeFetch(t, async () => { requests++; throw new Error("No request should have been sent"); });

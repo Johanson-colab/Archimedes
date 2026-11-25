@@ -1,3 +1,4 @@
+const fixtureSafeStorage = require("./test-support/safe-storage.cjs");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const os = require("node:os");
@@ -31,7 +32,7 @@ test("extracts model identifiers from OpenAI and Model Studio catalog shapes", (
 test("accepts new providers without reusing another provider's API key", () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-model-"));
   try {
-    initializeModelConfig(directory);
+    initializeModelConfig(directory, fixtureSafeStorage);
     saveModelConfig({ provider: "openai", baseUrl: "https://api.openai.com/v1", model: "gpt-4.1-mini", apiKey: "openai-key" });
     assert.throws(() => saveModelConfig({ provider: "anthropic", baseUrl: "https://api.anthropic.com/v1", model: "claude-sonnet-4-6" }), /valid API key/);
     saveModelConfig({ provider: "anthropic", baseUrl: "https://api.anthropic.com/v1", model: "claude-sonnet-4-6", apiKey: "anthropic-key" });
@@ -45,7 +46,7 @@ test("accepts new providers without reusing another provider's API key", () => {
 test("reads the legacy flat model config as the Agent role", () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-model-legacy-"));
   try {
-    initializeModelConfig(directory);
+    initializeModelConfig(directory, fixtureSafeStorage);
     fs.writeFileSync(path.join(directory, "model-config.json"), JSON.stringify({ provider: "openai", baseUrl: "https://api.openai.com/v1", model: "gpt-4.1-mini", apiKey: "legacy-key" }));
     assert.equal(getPublicModelConfig("agent").model, "gpt-4.1-mini");
     assert.equal(getActiveModelConfig("proactive").model, "gpt-4.1-mini");
@@ -66,7 +67,7 @@ test("a valid Custom connection can replace a malformed environment endpoint", a
   const request = t.mock.method(globalThis, "fetch", async () => Response.json({ choices: [{ message: { content: "OK" } }] }));
   const replacement = { provider: "custom", baseUrl: "https://fixture.example/v1", model: "test", apiKey: "fixture-key" };
   for (const [index, oldEndpoint] of ["not a URL", "http://192.0.2.10/v1"].entries()) {
-    initializeModelConfig(path.join(directory, String(index)));
+    initializeModelConfig(path.join(directory, String(index)), fixtureSafeStorage);
     process.env.ARCHIMEDES_LLM_BASE_URL = oldEndpoint;
     assert.equal((await testModelConfig(replacement)).ok, true);
     assert.equal(saveModelConfig(replacement).baseUrl, replacement.baseUrl);
@@ -79,7 +80,7 @@ test("a valid Custom connection can replace a malformed environment endpoint", a
 
 test("environment URLs are normalized before using their configured credentials", async (t) => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-model-env-url-"));
-  initializeModelConfig(directory);
+  initializeModelConfig(directory, fixtureSafeStorage);
   const saved = { baseUrl: process.env.ARCHIMEDES_LLM_BASE_URL, apiKey: process.env.ARCHIMEDES_LLM_API_KEY };
   t.after(() => {
     if (saved.baseUrl === undefined) delete process.env.ARCHIMEDES_LLM_BASE_URL;
@@ -104,7 +105,7 @@ test("environment URLs are normalized before using their configured credentials"
 test("keeps the Agent and Proactive models separate and supports inheritance", () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-model-roles-"));
   try {
-    initializeModelConfig(directory);
+    initializeModelConfig(directory, fixtureSafeStorage);
     saveModelConfig({ provider: "openai", baseUrl: "https://api.openai.com/v1", model: "gpt-4.1-mini", apiKey: "agent-key" });
     saveModelConfig({ provider: "deepseek", baseUrl: "https://api.deepseek.com", model: "deepseek-chat", apiKey: "proactive-key" }, "proactive");
     assert.equal(getPublicModelConfig("agent").model, "gpt-4.1-mini");

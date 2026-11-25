@@ -675,7 +675,7 @@ app.whenReady().then(async () => {
   });
   loadLocalAgentEnvironment();
   dailyFigureCache = createDailyFigureCache({ directory: path.join(app.getPath("userData"), "Cache", "daily-figures"), resolveFigure: resolveArxivFigure });
-  modelConfig.initializeModelConfig(app.getPath("userData"));
+  modelConfig.initializeModelConfig(app.getPath("userData"), safeStorage);
   agentBackendConfig.initialize(app.getPath("userData"));
   environmentVault = createEnvironmentVault({ directory: app.getPath("userData"), safeStorage });
   setEnvironmentVault(environmentVault);
@@ -699,7 +699,7 @@ app.whenReady().then(async () => {
   extensionMarketplace.initialize(app.getPath("userData"), safeStorage);
   sidebarPlugins.initialize(app.getPath("userData"));
   sidebarSettings.initialize(app.getPath("userData"));
-  news.initialize(app.getPath("userData"));
+  news.initialize(app.getPath("userData"), safeStorage);
   paperReview.initialize(app.getPath("userData"));
   localIdentity.initialize(app.getPath("userData"));
   store.setLocalIdentity(localIdentity.localIdentity());

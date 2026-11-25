@@ -28,8 +28,8 @@ function environmentConfig() {
   };
 }
 
-function initializeModelConfig(userDataPath) {
-  modelRegistry.initializeModelRegistry(userDataPath);
+function initializeModelConfig(userDataPath, safeStorage) {
+  modelRegistry.initializeModelRegistry(userDataPath, safeStorage);
 }
 
 function trimBaseUrl(value) {

@@ -1,3 +1,4 @@
+const fixtureSafeStorage = require("./test-support/safe-storage.cjs");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const os = require("node:os");
@@ -16,7 +17,7 @@ test("legacy single model config migrates into the registry", () => {
   fs.writeFileSync(path.join(directory, "model-config.json"), JSON.stringify({
     agent: { provider: "custom", baseUrl: "https://example.test/v1", model: "legacy-model", apiKey: "legacy-key" },
   }));
-  modelConfig.initializeModelConfig(directory);
+  modelConfig.initializeModelConfig(directory, fixtureSafeStorage);
   const profiles = modelConfig.listModelProfiles();
   assert.equal(profiles.length, 1);
   assert.equal(profiles[0].id, "legacy-agent");
@@ -26,7 +27,7 @@ test("legacy single model config migrates into the registry", () => {
 
 test("multiple profiles coexist and role assignments are independent", () => {
   const directory = tempUser();
-  modelConfig.initializeModelConfig(directory);
+  modelConfig.initializeModelConfig(directory, fixtureSafeStorage);
   const first = modelConfig.saveModelProfile({ id: "cheap", label: "Cheap", provider: "custom", baseUrl: "https://a.test/v1", model: "cheap-model", apiKey: "k1", contextWindowTokens: 128000, maxOutputTokens: 4096 });
   const second = modelConfig.saveModelProfile({ id: "strong", label: "Strong", provider: "custom", baseUrl: "https://b.test/v1", model: "strong-model", apiKey: "k2", contextWindowTokens: 1000000, maxOutputTokens: 16384 });
   assert.equal(modelConfig.listModelProfiles().length, 2);
@@ -59,7 +60,7 @@ test("per-model metadata overrides guessed capabilities", () => {
 
 test("saving through the compatibility API writes a registry profile", () => {
   const directory = tempUser();
-  modelConfig.initializeModelConfig(directory);
+  modelConfig.initializeModelConfig(directory, fixtureSafeStorage);
   const publicConfig = modelConfig.saveModelConfig({
     provider: "custom",
     baseUrl: "https://opencode.ai/inference/go/openai/v1",
@@ -77,7 +78,7 @@ test("saving through the compatibility API writes a registry profile", () => {
 test("creating and editing profiles on the same endpoint keeps their credentials separate", (context) => {
   const directory = tempUser();
   context.after(() => fs.rmSync(directory, { recursive: true, force: true }));
-  modelConfig.initializeModelConfig(directory);
+  modelConfig.initializeModelConfig(directory, fixtureSafeStorage);
   const endpoint = { provider: "custom", baseUrl: "https://example.test/v1" };
   const original = modelConfig.saveModelConfig({ ...endpoint, model: "original", apiKey: "original-fixture-key" });
   const newProfile = { ...endpoint, id: null, model: "separate" };
@@ -89,7 +90,7 @@ test("creating and editing profiles on the same endpoint keeps their credentials
   modelConfig.saveModelConfig({ ...endpoint, id: original.modelId, model: "original-edited" });
   assert.equal(modelConfig.getActiveModelConfig().apiKey, "original-fixture-key");
   modelConfig.setRoleModel("proactive", separate.modelId);
-  modelConfig.initializeModelConfig(directory);
+  modelConfig.initializeModelConfig(directory, fixtureSafeStorage);
   assert.equal(modelConfig.getActiveModelConfig().model, "original-edited");
   assert.equal(modelConfig.getActiveModelConfig("proactive").model, "separate");
   assert.equal(modelConfig.getActiveModelConfig("proactive").apiKey, "separate-fixture-key");
@@ -101,11 +102,11 @@ test("deleting a migrated profile stays deleted after reopening the registry", (
   fs.writeFileSync(path.join(directory, "model-config.json"), JSON.stringify({
     provider: "custom", baseUrl: "https://example.test/v1", model: "legacy-model", apiKey: "legacy-key",
   }));
-  modelConfig.initializeModelConfig(directory);
+  modelConfig.initializeModelConfig(directory, fixtureSafeStorage);
   assert.equal(modelConfig.getPublicModelConfig().modelId, "legacy-agent");
   modelConfig.deleteModelProfile("legacy-agent");
   assert.equal(modelConfig.getPublicModelConfig().modelId, "");
-  modelConfig.initializeModelConfig(directory);
+  modelConfig.initializeModelConfig(directory, fixtureSafeStorage);
   assert.deepEqual(modelConfig.listModelProfiles(), []);
   assert.equal(modelConfig.getPublicModelConfig().modelId, "");
 });
@@ -113,7 +114,7 @@ test("deleting a migrated profile stays deleted after reopening the registry", (
 test("basic role edits preserve a shared profile while explicit edits update it", (context) => {
   const directory = tempUser();
   context.after(() => fs.rmSync(directory, { recursive: true, force: true }));
-  modelConfig.initializeModelConfig(directory);
+  modelConfig.initializeModelConfig(directory, fixtureSafeStorage);
   const endpoint = { provider: "custom", baseUrl: "https://example.test/v1" };
   const original = modelConfig.saveModelConfig({
     ...endpoint, model: "shared", apiKey: "fixture-key",
@@ -139,7 +140,7 @@ test("the selected API profile drives a turn without changing either role defaul
   const directory = tempUser();
   const store = require("./store.cjs").createWorkspaceStore(directory);
   t.after(() => { store.close(); fs.rmSync(directory, { recursive: true, force: true }); });
-  modelConfig.initializeModelConfig(directory);
+  modelConfig.initializeModelConfig(directory, fixtureSafeStorage);
   const first = modelConfig.saveModelConfig({ provider: "custom", baseUrl: "https://first.test/v1", model: "first-model", apiKey: "first-key" });
   const second = modelConfig.saveModelProfile({ provider: "custom", baseUrl: "https://second.test/v1", model: "second-model", apiKey: "second-key" });
   const requests = [];
@@ -164,7 +165,7 @@ test("the selected API profile drives a turn without changing either role defaul
 test("connection success does not forward an echoed credential as a model label", async (t) => {
   const directory = tempUser();
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
-  modelConfig.initializeModelConfig(directory);
+  modelConfig.initializeModelConfig(directory, fixtureSafeStorage);
   t.mock.method(globalThis, "fetch", async () => Response.json({
     model: "fixture-private-key", choices: [{ message: { content: "OK" } }],
   }));

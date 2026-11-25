@@ -1,10 +1,13 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { randomUUID } = require("node:crypto");
+const { settingsSecrets } = require("./security/secrets-store.cjs");
 
 const ROLES = new Set(["agent", "proactive"]);
 let registryPath = "";
 let cache = null;
+let registrySecrets;
+let legacySecrets;
 
 function normalizeRole(role) {
   return ROLES.has(role) ? role : "agent";
@@ -14,72 +17,85 @@ function emptyRegistry() {
   return { version: 1, models: [], roles: { agent: null, proactive: null } };
 }
 
-function initializeModelRegistry(userDataPath) {
+function connectionSecrets(model, change) {
+  if (!model || typeof model !== "object") return model;
+  const next = { ...model };
+  if (Object.hasOwn(model, "apiKey")) next.apiKey = change(model.apiKey);
+  if (model.headers && typeof model.headers === "object") {
+    next.headers = Object.fromEntries(Object.entries(model.headers).map(([name, value]) => [name, change(value)]));
+  }
+  if (model.sessionHeader && Object.hasOwn(model.sessionHeader, "value")) {
+    next.sessionHeader = { ...model.sessionHeader, value: change(model.sessionHeader.value) };
+  }
+  return next;
+}
+
+function transformLegacy(data, change) {
+  if (!Object.hasOwn(data, "agent") && !Object.hasOwn(data, "proactive")) return connectionSecrets(data, change);
+  const next = { ...data };
+  for (const role of ROLES) if (Object.hasOwn(data, role)) next[role] = connectionSecrets(data[role], change);
+  return next;
+}
+
+function initializeModelRegistry(userDataPath, safeStorage) {
   registryPath = path.join(userDataPath, "model-registry.json");
+  registrySecrets = settingsSecrets(safeStorage, (data, change) => ({
+    ...data, models: data.models.map(model => connectionSecrets(model, change)),
+  }));
+  legacySecrets = settingsSecrets(safeStorage, transformLegacy);
   cache = null;
+}
+
+function readRecord(file, legacy = false) {
+  try { return JSON.parse(fs.readFileSync(file, "utf8")); }
+  catch (error) {
+    if (error.code === "ENOENT" || (legacy && error instanceof SyntaxError)) return null;
+    throw new Error("Model settings could not be opened. The original file was kept.");
+  }
 }
 
 function readRegistry() {
   if (!registryPath) throw new Error("Model registry storage is not ready.");
   if (cache) return cache;
+  const saved = readRecord(registryPath);
+  const legacyPath = path.join(path.dirname(registryPath), "model-config.json");
+  const legacySaved = readRecord(legacyPath, Boolean(saved));
+  const migrateLegacy = legacySaved && legacySecrets.available() && legacySecrets.hasPlaintext(legacySaved);
+  const legacy = legacySaved && (!saved || migrateLegacy) ? legacySecrets.open(legacySaved) : null;
   let data = emptyRegistry();
-  const exists = fs.existsSync(registryPath);
-  try {
-    if (exists) {
-      const parsed = JSON.parse(fs.readFileSync(registryPath, "utf8"));
-      if (parsed && Array.isArray(parsed.models)) {
-        data = {
-          version: 1,
-          models: parsed.models.filter((model) => model && typeof model.id === "string" && model.id),
-          roles: {
-            agent: typeof parsed.roles?.agent === "string" ? parsed.roles.agent : null,
-            proactive: typeof parsed.roles?.proactive === "string" ? parsed.roles.proactive : null,
-          },
-        };
-      }
-    }
-  } catch {
-    data = emptyRegistry();
+  let original;
+  if (saved) {
+    if (!Array.isArray(saved.models)) throw new Error("The model registry is invalid. The original file was kept.");
+    original = registrySecrets.open(saved);
+    data = {
+      ...original,
+      models: original.models.filter(model => model && typeof model.id === "string" && model.id),
+      roles: {
+        agent: typeof original.roles?.agent === "string" ? original.roles.agent : null,
+        proactive: typeof original.roles?.proactive === "string" ? original.roles.proactive : null,
+      },
+    };
+  } else if (legacy) {
+    const roles = Object.hasOwn(legacy, "agent") || Object.hasOwn(legacy, "proactive") ? legacy : { agent: legacy };
+    migrateLegacyConfigs(data, roles);
   }
-  if (!exists) migrateLegacyConfigs(data);
+  if (registrySecrets.available() && (saved ? registrySecrets.hasPlaintext(saved) : data.models.length > 0)) {
+    registrySecrets.write(registryPath, original || data);
+  }
+  if (migrateLegacy) legacySecrets.write(legacyPath, legacy);
   cache = data;
   return cache;
 }
 
 function writeRegistry(data) {
   if (!registryPath) throw new Error("Model registry storage is not ready.");
-  fs.mkdirSync(path.dirname(registryPath), { recursive: true });
-  const temporaryPath = `${registryPath}.${randomUUID()}.tmp`;
-  try {
-    fs.writeFileSync(temporaryPath, `${JSON.stringify(data, null, 2)}\n`, { mode: 0o600 });
-    fs.renameSync(temporaryPath, registryPath);
-  } finally {
-    fs.rmSync(temporaryPath, { force: true });
-  }
+  registrySecrets.write(registryPath, data);
   cache = data;
   return data;
 }
 
-function readLegacyRoleConfigs() {
-  const legacyPath = path.join(path.dirname(registryPath), "model-config.json");
-  if (!fs.existsSync(legacyPath)) return null;
-  try {
-    const parsed = JSON.parse(fs.readFileSync(legacyPath, "utf8"));
-    if (!parsed || typeof parsed !== "object") return null;
-    if (Object.hasOwn(parsed, "agent") || Object.hasOwn(parsed, "proactive")) {
-      return { agent: parsed.agent || null, proactive: parsed.proactive || null };
-    }
-    return { agent: parsed, proactive: null };
-  } catch {
-    return null;
-  }
-}
-
-function migrateLegacyConfigs(registry) {
-  const legacy = readLegacyRoleConfigs();
-  if (!legacy) return;
-  let changed = false;
-  for (const role of ["agent", "proactive"]) {
+function migrateLegacyConfigs(registry, legacy) {
+  for (const role of ROLES) {
     const config = legacy[role];
     if (!config || !config.baseUrl || !config.model || !config.apiKey) continue;
     const id = `legacy-${role}`;
@@ -98,9 +114,7 @@ function migrateLegacyConfigs(registry) {
       capabilities: {},
     });
     registry.roles[role] = id;
-    changed = true;
   }
-  if (changed) writeRegistry(registry);
 }
 
 function publicConnectionSettings(model) {
