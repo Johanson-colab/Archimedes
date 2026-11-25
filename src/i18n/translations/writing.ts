@@ -28,6 +28,7 @@ export const writing: Record<string, string> = {
   "Compiling and preparing dependencies": "正在准备依赖并编译",
   "Compiling paper": "正在编译论文",
   "Conference": "学术会议",
+  "Could not save notes.": "无法保存笔记。",
   "Deleted": "已删除",
   "Download from source": "前往官网下载",
   "Download on first use": "首次使用时下载",
