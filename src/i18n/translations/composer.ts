@@ -22,6 +22,7 @@ export const composer: Record<string, string> = {
   "Remove Idea Spark": "移除 Idea Spark",
   "Retry queued messages": "重试队列中的消息",
   "Run the full workflow: literature, bottleneck, candidates, audit, and idea cards.": "运行完整流程：文献、瓶颈、候选想法、审计与 idea 卡片。",
+  "Send queued messages": "发送队列中的消息",
   "Show {count} more": "再显示 {count} 个",
   "Skills": "技能",
   "Stop the running turn before starting Idea Spark.": "请先停止当前回合，再启动 Idea Spark。",

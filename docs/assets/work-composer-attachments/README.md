@@ -32,3 +32,13 @@ The component regression also checks recovery when the composer is empty and can
 ```sh
 node --test electron/work-composer-attachments.test.cjs
 ```
+
+
+## Switching sessions before a failed send
+
+In Work session B, submit a purple-image message and hold the IPC request before acceptance. Queue the orange-image follow-up, then add a newer unsent draft with a green image. Switch to A, reject B's request and return to B. Both images show the same return to B with the Paper theme and a 1280 × 850 Electron content viewport.
+
+![Before, neither unsent message can be recovered in Work session B](detached-before.png)
+![After, session B keeps both unsent messages and the separate newer draft](detached-after.png)
+
+No request from B was accepted before retry. After the fix, A keeps its own text and receives no B attachment or error. Retrying B sends purple, then orange, each once to B's saved conversation. The green draft stays in B. The desktop fixture also confirmed that a follow-up queued while a first turn starts moves with its editable draft to the created thread, and that a new task rejected before acceptance requires explicit retry on return to its original workspace.

@@ -15,20 +15,22 @@ test("Work composer keeps attachment snapshots separate and recovers failed queu
   const end = source.indexOf("\nconst ConversationMessage", start);
   const { code } = await transformWithOxc(source.slice(start, end), "ConversationView.tsx", { jsx: { runtime: "classic" } });
   const none = () => null;
+  const drafts = new Map();
   const bindings = {
     React, ...React, ...require("lucide-react"),
     useUISettings: () => ({ t: value => value }),
     researchModes: [{ id: "standard" }],
     nativeUsage: none,
-    readComposerDraft: none,
+    readComposerDraft: key => drafts.get(key),
     readComposerHistory: () => [],
-    writeComposerDraft: none,
+    writeComposerDraft: (key, draft) => drafts.set(key, draft),
     writeComposerHistory: none,
     chatModeFromThread: mode => mode,
     estimateAttachmentContextCharacters: () => 0,
     CONTEXT_INSTRUCTION_OVERHEAD_CHARS: 0,
     COMPOSER_HISTORY_LIMIT: 30,
     requestAnimationFrame: none,
+    cancelAnimationFrame: none,
     shouldSubmitPaperChatKey: event => event.key === "Enter",
     workspacePathName: value => value,
     WorkspaceMarkdownProvider: ({ children }) => children,
@@ -40,26 +42,33 @@ test("Work composer keeps attachment snapshots separate and recovers failed queu
   const sent = [];
   let attach;
   let finish;
-  function Harness() {
-    const [items, setItems] = React.useState([]);
+  const emptySession = { context: [], queued: [], paused: false };
+  function Harness({ owner }) {
+    const [sessions, setSessions] = React.useState({});
     const [busy, setBusy] = React.useState(false);
-    attach = id => setItems([{ id, type: "image" }]);
+    const session = sessions[owner] ?? emptySession;
+    const updateSession = update => setSessions(current => ({ ...current, [owner]: update(current[owner] ?? emptySession) }));
+    const setItems = update => updateSession(current => ({ ...current, context: update(current.context) }));
+    attach = id => setItems(() => [{ id, type: "image" }]);
     return React.createElement(ConversationView, {
-      draftKey: "work",
+      key: owner,
+      draftKey: owner,
       researchMode: "standard",
       modelCapabilities: { contextCharacterLimits: {} },
       agentBusy: busy,
       nativeQuestions: [],
       messages: [],
       trajectoryEvents: [],
-      contextItems: items,
-      onAddContext: setItems,
+      contextItems: session.context,
+      composerSession: session,
+      onComposerSessionChange: updateSession,
+      onAddContext: items => setItems(() => items),
       onRemoveContext: id => setItems(current => current.filter(item => item.id !== id)),
       onResearchMode: none,
       onResearchGraphAvailability: none,
       onRemoteServerChange: none,
-      onSubmit: (text, _mode, _effort, _length, attachments) => {
-        sent.push([text, attachments.map(item => item.id)]);
+      onSubmit: ({ draft, contextItems }) => {
+        sent.push([draft, contextItems.map(item => item.id)]);
         setBusy(true);
         return new Promise(resolve => { finish = success => { setBusy(false); resolve(success); }; });
       },
@@ -77,9 +86,11 @@ test("Work composer keeps attachment snapshots separate and recovers failed queu
   const enter = () => React.act(async () => { field().dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Enter", bubbles: true })); });
   const paste = id => React.act(async () => attach(id));
   const settle = success => React.act(async () => finish(success));
+  const show = owner => React.act(async () => root.render(React.createElement(Harness, { owner })));
+  const button = label => [...document.querySelectorAll("button")].find(element => element.textContent === label);
 
   try {
-    await React.act(async () => root.render(React.createElement(Harness)));
+    await show("work");
     await paste("red");
     await type("Initial");
     await enter();
@@ -110,13 +121,57 @@ test("Work composer keeps attachment snapshots separate and recovers failed queu
     await settle(false);
     assert.equal(field().value, "New draft");
     assert.deepEqual(images(), ["green"]);
-    const retry = [...document.querySelectorAll("button")].find(button => button.textContent === "Retry queued messages");
+    const retry = button("Retry queued messages");
     assert.ok(retry, "a failed follow-up remains actionable beside a newer draft");
     await React.act(async () => retry.click());
     assert.equal(document.querySelector("#composer-error"), null);
     assert.deepEqual(sent.at(-1), ["Queued without image", []]);
     assert.deepEqual(images(), ["green"], "retrying the queued item preserves the new draft's image");
     await settle(true);
+
+    await paste("purple");
+    await type("Pending in Work");
+    await enter();
+    await paste("orange");
+    await type("Follow-up in Work");
+    await enter();
+    await paste("green");
+    await type("Newer draft in Work");
+    await show("other");
+    await settle(false);
+    assert.deepEqual(images(), []);
+    assert.equal(field().value, "");
+    assert.equal(Boolean(button("Retry queued messages")), false);
+    await show("work");
+    assert.equal(field().value, "Newer draft in Work");
+    assert.deepEqual(images(), ["green"]);
+    assert.equal(document.querySelectorAll(".composer-queue-item").length, 2);
+
+    await React.act(async () => button("Retry queued messages").click());
+    assert.deepEqual(sent.at(-1), ["Pending in Work", ["purple"]]);
+    await settle(true);
+    assert.deepEqual(sent.at(-1), ["Follow-up in Work", ["orange"]]);
+    await settle(true);
+    assert.equal(document.querySelectorAll(".composer-queue-item").length, 0);
+    assert.deepEqual(images(), ["green"]);
+
+    await type("Accepted while away");
+    await enter();
+    for (const text of ["Discard first", "Discard second", "Discard third"]) {
+      await type(text);
+      await enter();
+    }
+    await show("other");
+    await settle(true);
+    await show("work");
+    assert.ok(button("Send queued messages"), "a detached success leaves its follow-ups actionable");
+    await React.act(async () => document.querySelector('[aria-label="Remove queued message 1"]').click());
+    assert.equal(document.querySelectorAll(".composer-queue-item").length, 2);
+    await React.act(async () => button("Clear queue").click());
+    await show("other");
+    await show("work");
+    assert.equal(document.querySelectorAll(".composer-queue-item").length, 0);
+    assert.deepEqual(sent.at(-1), ["Accepted while away", ["green"]]);
   } finally {
     await React.act(async () => root.unmount());
     dom.window.close();
