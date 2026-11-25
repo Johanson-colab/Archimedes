@@ -4,13 +4,30 @@ const path = require("node:path");
 const test = require("node:test");
 const { JSDOM } = require("jsdom");
 
+async function loadAssistantStream(React) {
+  const source = fs.readFileSync(path.join(__dirname, "..", "src", "StreamingMessage.tsx"), "utf8");
+  const { transformWithOxc } = await import("vite");
+  const { code } = await transformWithOxc(source, "StreamingMessage.tsx");
+  const script = code.replace(/^import .*;$/m, "").replace(/^export (?:default )?/gm, "");
+  return new Function("useLayoutEffect", "useSyncExternalStore", `${script}\nreturn { createAssistantStream, StreamingMessage };`)(
+    React.useLayoutEffect, React.useSyncExternalStore);
+}
+
 test("typing leaves long history and navigation untouched while history updates remain visible", async () => {
   const dom = new JSDOM('<!doctype html><div id="root"></div>', { url: "http://localhost" });
   global.window = dom.window;
   global.document = dom.window.document;
   global.IS_REACT_ACT_ENVIRONMENT = true;
-  global.requestAnimationFrame = () => 1;
-  global.cancelAnimationFrame = () => {};
+  const frames = new Map();
+  let frameId = 0;
+  global.requestAnimationFrame = callback => { frames.set(++frameId, callback); return frameId; };
+  global.cancelAnimationFrame = id => { frames.delete(id); };
+  const paint = () => {
+    const callbacks = [...frames.values()];
+    frames.clear();
+    callbacks.forEach(callback => callback());
+  };
+  dom.window.HTMLElement.prototype.scrollTo = () => {};
 
   const React = require("react");
   const { act } = React;
@@ -25,6 +42,7 @@ test("typing leaves long history and navigation untouched while history updates 
   let historyRenders = 0;
   let railRenders = 0;
   let activityRenders = 0;
+  let parentRenders = 0;
   const ConversationMessage = ({ message }) => {
     historyRenders += 1;
     return React.createElement("article", { "data-turn-id": message.id }, message.text);
@@ -34,13 +52,17 @@ test("typing leaves long history and navigation untouched while history updates 
     return React.createElement("nav", { "data-turn-count": messages.length });
   };
   const ChatActivityTimeline = () => { activityRenders += 1; return null; };
-  const buildHistory = new Function("React", "memo", "useState", "useRef", "useMemo", "useCallback", "useEffect", "useLayoutEffect", "useUISettings", "ConversationMessage", "TurnRail", "ChatActivityTimeline", "NativeAgentPanel", "nativeTurnEvents", "INITIAL_VISIBLE_MESSAGE_COUNT", "HISTORY_MESSAGE_PAGE_SIZE", `${componentSource}\nreturn ConversationHistory;`);
-  const ConversationHistory = buildHistory(React, React.memo, React.useState, React.useRef, React.useMemo, React.useCallback, React.useEffect, React.useLayoutEffect, () => ({ t: value => value }), ConversationMessage, TurnRail, ChatActivityTimeline, () => null, () => [], 60, 40);
+  const { createAssistantStream, StreamingMessage } = await loadAssistantStream(React);
+  const assistantStream = createAssistantStream();
+  const renderAssistantDraft = ({ text }) => React.createElement("output", null, text);
+  const buildHistory = new Function("React", "memo", "useState", "useRef", "useMemo", "useCallback", "useEffect", "useLayoutEffect", "useUISettings", "ConversationMessage", "TurnRail", "ChatActivityTimeline", "NativeAgentPanel", "nativeTurnEvents", "INITIAL_VISIBLE_MESSAGE_COUNT", "HISTORY_MESSAGE_PAGE_SIZE", "StreamingMessage", "renderAssistantDraft", `${componentSource}\nreturn ConversationHistory;`);
+  const ConversationHistory = buildHistory(React, React.memo, React.useState, React.useRef, React.useMemo, React.useCallback, React.useEffect, React.useLayoutEffect, () => ({ t: value => value }), ConversationMessage, TurnRail, ChatActivityTimeline, () => null, () => [], 60, 40, StreamingMessage, renderAssistantDraft);
   const messages = Array.from({ length: 100 }, (_, index) => ({ id: String(index), role: index % 2 ? "assistant" : "user", text: `Message ${index}` }));
-  const stableProps = { messages, events: [], trajectoryEvents: [], agentBusy: false, interrupting: false, pendingAction: null, changeSets: [], welcomeVisible: false, onWelcomeAction: () => {}, onApprove: () => {}, onReject: () => {}, onOpenFile: () => {}, initialScrollTop: null, onScrollTop: () => {} };
+  const stableProps = { messages, assistantStream, events: [], trajectoryEvents: [], agentBusy: false, interrupting: false, pendingAction: null, changeSets: [], welcomeVisible: false, onWelcomeAction: () => {}, onApprove: () => {}, onReject: () => {}, onOpenFile: () => {}, initialScrollTop: null, onScrollTop: () => {} };
   let setDraft;
   let setHistory;
   function Harness() {
+    parentRenders++;
     const [draft, updateDraft] = React.useState("");
     const [currentMessages, updateMessages] = React.useState(messages);
     setDraft = updateDraft;
@@ -59,6 +81,18 @@ test("typing leaves long history and navigation untouched while history updates 
     assert.equal(document.querySelector("textarea").value, "abc");
     assert.deepEqual([historyRenders, railRenders, activityRenders], beforeTyping);
 
+    await act(async () => paint());
+    const beforeStream = [historyRenders, railRenders, activityRenders, parentRenders];
+    const expected = ["The result", " is repeatable", " across runs."];
+    for (const chunk of expected) await act(async () => {
+      for (const character of chunk) assistantStream.append("fixture", character);
+      assert.equal(frames.size, 1);
+      paint();
+    });
+    assert.equal(document.querySelector("output").textContent, expected.join(""));
+    assert.equal(document.querySelector("textarea").value, "abc");
+    assert.deepEqual([historyRenders, railRenders, activityRenders, parentRenders], beforeStream);
+
     await act(async () => setHistory((current) => [...current, { id: "100", role: "user", text: "New message" }]));
     assert.equal(document.querySelectorAll("article").length, 60);
     assert.equal(document.querySelector("nav").dataset.turnCount, "60");
@@ -66,10 +100,14 @@ test("typing leaves long history and navigation untouched while history updates 
     await act(async () => document.querySelector(".conversation-load-history").click());
     await act(async () => document.querySelector(".conversation-load-history").click());
     assert.equal(document.querySelectorAll("article").length, 101);
-    await act(async () => setHistory((current) => [...current, { id: "101", role: "assistant", text: "New answer" }]));
+    await act(async () => {
+      assistantStream.finish("fixture");
+      setHistory((current) => [...current, { id: "fixture:assistant", role: "assistant", text: expected.join("") }]);
+    });
     assert.equal(document.querySelectorAll("article").length, 102);
     assert.equal(document.querySelector("nav").dataset.turnCount, "102");
-    assert.match(document.body.textContent, /New answer/);
+    assert.equal(document.querySelector("output"), null);
+    assert.equal(document.querySelector('[data-turn-id="fixture:assistant"]').textContent, expected.join(""));
     await act(async () => root.render(React.createElement(ConversationHistory, { ...stableProps, pendingAction: { kind: 'write', payload: { path: 'paper.py', editPreview: { before: 'old text', after: 'new text' } } } })));
     assert.match(document.querySelector('.approval-edit-preview').textContent, /old text/);
     assert.match(document.querySelector('.approval-edit-preview').textContent, /new text/);
@@ -122,43 +160,30 @@ test("parent activity updates preserve history callbacks while using their lates
   }
 });
 
-test("late assistant deltas never recreate a saved turn's streaming message", async () => {
-  const source = fs.readFileSync(path.join(__dirname, "..", "src", "App.tsx"), "utf8");
-  const start = source.indexOf("  function flushAssistantDeltas()");
-  const end = source.indexOf("\n  useEffect", start);
-  assert.ok(start >= 0 && end > start);
-  const { transformWithOxc } = await import("vite");
-  const { code } = await transformWithOxc(source.slice(start, end), "assistant-deltas.ts");
-  let messages = [];
+test("finished turns and cleared drafts cannot publish delayed assistant text", async (t) => {
+  const { createAssistantStream } = await loadAssistantStream(require("react"));
   let scheduled;
-  const queue = new Function("pendingAssistantDeltasRef", "assistantDeltaFrameRef", "setMessages", "requestAnimationFrame",
-    `${code}\nreturn queueAssistantDelta;`)(
-    { current: new Map() }, { current: null }, update => { messages = update(messages); }, flush => { scheduled = flush; return 1; },
-  );
-  const delta = (turnId, text) => queue({ turnId, delta: text });
-  const answer = "Repeatable result.";
-  const saved = turnId => ({ id: turnId + ":assistant", turn_id: turnId, role: "assistant", text: answer });
+  global.requestAnimationFrame = callback => { scheduled = callback; return 1; };
+  global.cancelAnimationFrame = () => { scheduled = null; };
+  t.after(() => {
+    delete global.requestAnimationFrame;
+    delete global.cancelAnimationFrame;
+  });
+  const stream = createAssistantStream();
+  stream.append("first", "Repeatable");
+  scheduled();
+  assert.deepEqual(stream.getSnapshot(), { turnId: "first", text: "Repeatable" });
+  stream.append("first", " result.");
+  stream.finish("first");
+  assert.equal(stream.getSnapshot(), null);
+  stream.append("first", " result.");
+  assert.equal(scheduled, null);
 
-  delta("first", "Repeatable");
+  stream.append("second", "Future workspace");
+  stream.clear();
+  assert.equal(scheduled, null);
+  assert.equal(stream.getSnapshot(), null);
+  stream.append("second", "Same turn reopened");
   scheduled();
-  assert.deepEqual(messages, [{ id: "first:stream", role: "assistant", text: "Repeatable" }]);
-  delta("first", " result.");
-  scheduled();
-  assert.equal(messages[0].text, answer);
-
-  const first = saved("first");
-  const firstSnapshot = [first];
-  messages = firstSnapshot;
-  delta("first", " result.");
-  scheduled();
-  assert.equal(messages, firstSnapshot);
-
-  delta("second", answer);
-  scheduled();
-  assert.deepEqual(messages, [first, { id: "second:stream", role: "assistant", text: answer }]);
-  const secondSnapshot = [first, saved("second")];
-  messages = secondSnapshot;
-  delta("second", " result.");
-  scheduled();
-  assert.equal(messages, secondSnapshot);
+  assert.equal(stream.getSnapshot().text, "Same turn reopened");
 });

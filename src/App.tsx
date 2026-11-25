@@ -1,5 +1,6 @@
 import { Fragment, lazy, memo, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent as ReactClipboardEvent, type ReactNode } from "react";
 import { flushSync } from "react-dom";
+import StreamingMessage, { createAssistantStream, useAssistantStreamHasText, type AssistantDraft, type AssistantStream } from "./StreamingMessage";
 import { startApprovalCountdown } from "./approval-countdown.mjs";
 import ReactMarkdown from "react-markdown";
 import { WorkspaceMarkdownLink, WorkspaceMarkdownProvider, workspaceMarkdownUrlTransform } from "./WorkspaceMarkdownLink";
@@ -1526,8 +1527,8 @@ function App() {
   const fileEditorScopesRef = useRef<FileEditorScopes>({});
   const noteValuesRef = useRef<Record<string, string>>({});
   const noteKeyRef = useRef("draft");
-  const pendingAssistantDeltasRef = useRef(new Map<string, string>());
-  const assistantDeltaFrameRef = useRef<number | null>(null);
+  const [assistantStream] = useState(createAssistantStream);
+  const savedMessageIdsRef = useRef(new Set<string>());
   const mainWorkspaceRef = useRef<HTMLDivElement | null>(null);
   const conversationScrollPositionsRef = useRef(new Map<string, number>());
   const threadsRef = useRef<ResearchThread[]>([]);
@@ -2132,46 +2133,9 @@ function App() {
     }
   }
 
-  function clearPendingAssistantDeltas() {
-    pendingAssistantDeltasRef.current.clear();
-    if (assistantDeltaFrameRef.current !== null) {
-      cancelAnimationFrame(assistantDeltaFrameRef.current);
-      assistantDeltaFrameRef.current = null;
-    }
-  }
-
-  function flushAssistantDeltas() {
-    assistantDeltaFrameRef.current = null;
-    const pending = [...pendingAssistantDeltasRef.current.entries()];
-    pendingAssistantDeltasRef.current.clear();
-    if (!pending.length) return;
-    setMessages((current) => {
-      let next = current;
-      for (const [turnId, delta] of pending) {
-        // IPC delivery can leave a delta behind the saved response for this turn.
-        if (next.some((message) => message.id === `${turnId}:assistant`)) continue;
-        const streamId = `${turnId}:stream`;
-        const index = next.findIndex((message) => message.id === streamId);
-        if (index < 0) {
-          if (next === current) next = [...current];
-          next.push({ id: streamId, role: "assistant", text: delta });
-          continue;
-        }
-        if (next === current) next = [...current];
-        next[index] = { ...next[index], text: `${next[index].text}${delta}` };
-      }
-      return next;
-    });
-  }
-
-  function queueAssistantDelta(event: AgentEvent) {
-    if (!event.turnId || !event.delta) return;
-    const existing = pendingAssistantDeltasRef.current.get(event.turnId) ?? "";
-    pendingAssistantDeltasRef.current.set(event.turnId, `${existing}${event.delta}`);
-    if (assistantDeltaFrameRef.current === null) {
-      assistantDeltaFrameRef.current = requestAnimationFrame(flushAssistantDeltas);
-    }
-  }
+  useLayoutEffect(() => {
+    savedMessageIdsRef.current = new Set(messages.map(message => message.id));
+  }, [messages]);
 
   useEffect(() => {
     activeThreadIdRef.current = activeThreadId;
@@ -2191,7 +2155,7 @@ function App() {
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, []);
 
-  useEffect(() => () => clearPendingAssistantDeltas(), []);
+  useEffect(() => assistantStream.clear, [assistantStream]);
 
   useEffect(() => {
     const unsubscribe = desktopBridge.onTerminalData(({ sessionId, data }) => {
@@ -2206,6 +2170,11 @@ function App() {
   useEffect(() => {
     const unsubscribe = desktopBridge.onAgentEvent((event) => {
       if (event.clientRunId?.startsWith("side-chat:") || event.clientRunId?.startsWith("paper-chat:")) return;
+      if (event.type === "assistant_delta") {
+        if (!event.turnId || !event.delta || (event.threadId && activeThreadIdRef.current !== event.threadId)) return;
+        if (!savedMessageIdsRef.current.has(`${event.turnId}:assistant`)) assistantStream.append(event.turnId, event.delta);
+        return;
+      }
       const isGraphEvent = event.type === "graph_update" || event.type === "graph_update_pending";
       if (isGraphEvent && event.threadId && event.turnId) {
         const key = `${event.threadId}:${event.turnId}`;
@@ -2262,13 +2231,8 @@ function App() {
         else if (event.threadId) setNativeStream((current) => ({ threadId: event.threadId!, events: mergeNativeEvent(current.threadId === event.threadId ? current.events : [], event) }));
         return;
       }
-      if (event.type === "assistant_delta" && event.turnId && event.delta) {
-        if (event.threadId && activeThreadIdRef.current !== event.threadId) return;
-        queueAssistantDelta(event);
-        return;
-      }
       if (event.type === "complete" || event.type === "failed" || event.type === "incomplete" || event.type === "interrupted") {
-        flushAssistantDeltas();
+        assistantStream.flush();
         setInterrupting(false);
         setNativeQuestions((current) => current.filter((item) => Boolean(event.threadId) && item.threadId !== event.threadId));
         setPendingAction((current) => current && (!event.threadId || activeThreadIdRef.current === event.threadId) ? null : current);
@@ -2282,7 +2246,7 @@ function App() {
       setEvents((current) => [...current.filter((item) => item.title !== event.title), { title: event.title, detail: event.detail, snapshotCoverage: event.snapshotCoverage, state }]);
     });
     return unsubscribe;
-  }, []);
+  }, [assistantStream]);
 
   useEffect(() => {
     const unsubscribeFiles = desktopBridge.onWorkspaceFilesChanged(() => {
@@ -2394,7 +2358,7 @@ function App() {
       return null;
     }) : null;
     flushSync(() => {
-      clearPendingAssistantDeltas();
+      assistantStream.clear();
       setSideThread(null);
       setWorkspace(snapshot.workspace);
       setProjects(snapshot.projects ?? []);
@@ -2543,7 +2507,7 @@ function App() {
     setRemoteServerId("");
     writeComposerDraft(`new:${projectId ?? "none"}:${executionWorkspace}`, null);
     setMainSection("chat");
-    clearPendingAssistantDeltas();
+    assistantStream.clear();
     setChatViewNonce((current) => current + 1);
     if (projectId) setActiveProjectId(projectId);
     const targetWorkspace = workspaces.find((entry) => entry.id === workspaceId && entry.project_id === projectId)
@@ -2597,7 +2561,7 @@ function App() {
       if (command === "undo") {
         const result = await desktopBridge.undoResearchTurn(threadId!, workspace);
         if (activeThreadIdRef.current === threadId) {
-          clearPendingAssistantDeltas();
+          assistantStream.clear();
           setMessages(result.thread.messages.length ? result.thread.messages : initialMessages);
           setTrajectoryEvents(result.thread.events ?? []);
           setChangeSets(result.thread.changeSets);
@@ -2628,7 +2592,7 @@ function App() {
       setSideThread(null);
     }
     if (activeThreadIdRef.current !== threadSummary.id) setPendingAction(null);
-    clearPendingAssistantDeltas();
+    assistantStream.clear();
     setMainSection("chat");
     activeThreadIdRef.current = threadSummary.id;
     setActiveThreadId(threadSummary.id);
@@ -2943,7 +2907,7 @@ function App() {
 
     setResearchMode(requestedMode);
 
-    clearPendingAssistantDeltas();
+    assistantStream.clear();
     setAgentBusy(true);
     setInterrupting(false);
     setMessages((current) => [...current, { id: crypto.randomUUID(), role: "user", text: requestPrompt, attachments: submittedContext.map((item, position) => ({ type: item.type, name: item.name, path: item.path, detail: item.detail, size: item.image?.sizeBytes ?? item.size, position, imageData: item.image?.dataUrl })), created_at: new Date().toISOString() }]);
@@ -2971,9 +2935,11 @@ function App() {
       const stillViewingSubmittedThread = activeThreadIdRef.current === result.threadId
         || (submittedThreadId === null && activeThreadIdRef.current === null);
       if (stillViewingSubmittedThread) {
-        clearPendingAssistantDeltas();
         activeThreadIdRef.current = result.threadId;
-        setMessages(result.thread.messages.length ? result.thread.messages : initialMessages);
+        flushSync(() => {
+          assistantStream.finish(result.turnId);
+          setMessages(result.thread.messages.length ? result.thread.messages : initialMessages);
+        });
         setTrajectoryEvents(result.thread.events ?? []);
         setEvents([]);
         setActiveThreadId(result.threadId);
@@ -2984,11 +2950,19 @@ function App() {
         setEvents((current) => current.map((event) => event.title === "Evidence synthesis" ? { ...event, detail: "Turn saved to this research session", state: "done" } : event));
         const proposedAction = result.actions.find((action) => action.status === "pending");
         if (proposedAction) setPendingAction({ ...proposedAction, source: "agent", ownerThreadId: result.threadId });
-      }
+      } else assistantStream.finish(result.turnId);
       setContextItems((current) => current.filter((item) => !submittedContext.some((submitted) => submitted.id === item.id)));
       return true;
     } catch (error) {
-      setMessages((current) => [...current, { id: crypto.randomUUID(), role: "assistant", text: `Archimedes could not start this task: ${String(error)}` }]);
+      const draft = assistantStream.flush();
+      flushSync(() => {
+        if (draft) assistantStream.finish(draft.turnId);
+        setMessages((current) => [
+          ...current,
+          ...(draft ? [assistantDraftMessage(draft)] : []),
+          { id: crypto.randomUUID(), role: "assistant", text: `Archimedes could not start this task: ${String(error)}` },
+        ]);
+      });
       return false;
     } finally {
       setAgentBusy(false);
@@ -3659,6 +3633,7 @@ function App() {
               commentsShowResolved={sessionTools.commentsShowResolved}
               onExitComments={exitSessionComments}
               messages={messages}
+              assistantStream={assistantStream}
               events={events}
               trajectoryEvents={combinedTrajectoryEvents}
               nativeBackend={selectedNativeBackend}
@@ -4030,12 +4005,13 @@ function App() {
   );
 }
 
-const ConversationHistory = memo(function ConversationHistory({ messages, events, trajectoryEvents, agentBusy, interrupting, pendingAction, changeSets, welcomeVisible, onWelcomeAction, onApprove, onReject, onOpenFile, initialScrollTop, onScrollTop, commentScope, addingComment, commentsShowResolved, onExitComments }: {
+const ConversationHistory = memo(function ConversationHistory({ messages, assistantStream, events, trajectoryEvents, agentBusy, interrupting, pendingAction, changeSets, welcomeVisible, onWelcomeAction, onApprove, onReject, onOpenFile, initialScrollTop, onScrollTop, commentScope, addingComment, commentsShowResolved, onExitComments }: {
   commentScope: SessionCommentsScope | null;
   addingComment: boolean;
   commentsShowResolved: boolean;
   onExitComments: () => void;
   messages: Message[];
+  assistantStream: AssistantStream;
   events: TimelineEvent[];
   trajectoryEvents: ResearchEvent[];
   agentBusy: boolean;
@@ -4074,7 +4050,6 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
   }, []);
   const lastUserIndex = useMemo(() => visibleMessages.reduce((last, message, index) => message.role === "user" ? index : last, -1), [visibleMessages]);
   const nativeEvents = useMemo(() => nativeTurnEvents(trajectoryEvents), [trajectoryEvents]);
-  const hasStreamingText = messages.some((message) => message.role === "assistant" && message.id.endsWith(":stream") && Boolean(message.text.trim()));
   const lastNativeActivity = [...nativeEvents].reverse()
     .map((event) => (event.payload as { activity?: NativeAgentActivity } | null)?.activity)
     .find(Boolean);
@@ -4083,7 +4058,7 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
     return activity?.status === "running";
   });
   const hasCommentaryAtTail = lastNativeActivity?.kind === "commentary" && Boolean(lastNativeActivity.output || lastNativeActivity.detail);
-  const thinking = agentBusy && !hasStreamingText && !hasRunningNativeTool && !hasCommentaryAtTail && !pendingAction;
+  const thinking = agentBusy && !hasRunningNativeTool && !hasCommentaryAtTail && !pendingAction;
   const { nativeEventsByTurn, nativeBusyTurns } = useMemo(() => {
     const activity = new Map<string, ResearchEvent[]>();
     const busy = new Map<string, NativeSessionBackend>();
@@ -4121,6 +4096,10 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
     const container = scrollRef.current;
     if (container) container.scrollTo({ top: container.scrollHeight, behavior: "auto" });
   }, []);
+
+  const followStream = useCallback(() => {
+    if (followOutputRef.current) scrollToLatest();
+  }, [scrollToLatest]);
 
   const updateFollowState = useCallback(() => {
     const container = scrollRef.current;
@@ -4174,18 +4153,19 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
           Show {Math.min(HISTORY_MESSAGE_PAGE_SIZE, historyStart)} earlier {Math.min(HISTORY_MESSAGE_PAGE_SIZE, historyStart) === 1 ? "message" : "messages"}
         </button>}
         {visibleMessages.slice(0, lastUserIndex + 1).map((message, index) => <div key={message.id}>
-          <ConversationMessage message={message} streaming={agentBusy && message.id.endsWith(":stream")} busyBackend={message.turn_id ? nativeBusyTurns.get(message.turn_id) : undefined} />
+          <ConversationMessage message={message} busyBackend={message.turn_id ? nativeBusyTurns.get(message.turn_id) : undefined} />
           {message.role === "user" && index < lastUserIndex && message.turn_id && nativeEventsByTurn.has(message.turn_id) && <NativeAgentPanel events={nativeEventsByTurn.get(message.turn_id)!} busy={false} />}
           {message.turn_id && message.turn_id !== currentTurnId && lastTurnMessageIndex.get(message.turn_id) === index && (changeSetsByTurn.get(message.turn_id) ?? []).map((changeSet) => <WorkspaceChangesCard key={changeSet.id} changeSet={changeSet} onOpenFile={onOpenFile} />)}
         </div>)}
-        {lastUserIndex >= 0 && (nativeEvents.length ? <NativeAgentPanel events={trajectoryEvents} busy={agentBusy} thinking={thinking} /> : <ChatActivityTimeline events={events} rawEvents={trajectoryEvents} busy={agentBusy} interrupting={interrupting} />)}
+        {lastUserIndex >= 0 && (nativeEvents.length ? <ConversationNativeActivity stream={assistantStream} events={trajectoryEvents} busy={agentBusy} thinking={thinking} /> : <ChatActivityTimeline events={events} rawEvents={trajectoryEvents} busy={agentBusy} interrupting={interrupting} />)}
         {visibleMessages.slice(lastUserIndex + 1).map((message, offset) => {
           const index = lastUserIndex + 1 + offset;
           return <div key={message.id}>
-            <ConversationMessage message={message} streaming={agentBusy && message.id.endsWith(":stream")} busyBackend={message.turn_id ? nativeBusyTurns.get(message.turn_id) : undefined} />
+            <ConversationMessage message={message} busyBackend={message.turn_id ? nativeBusyTurns.get(message.turn_id) : undefined} />
             {message.turn_id && message.turn_id !== currentTurnId && lastTurnMessageIndex.get(message.turn_id) === index && (changeSetsByTurn.get(message.turn_id) ?? []).map((changeSet) => <WorkspaceChangesCard key={changeSet.id} changeSet={changeSet} onOpenFile={onOpenFile} />)}
           </div>;
         })}
+        <StreamingMessage stream={assistantStream} render={renderAssistantDraft} onUpdate={followStream} />
         {changeSets.filter((changeSet) => !changeSet.turnId || changeSet.turnId === currentTurnId).map((changeSet) => <WorkspaceChangesCard key={changeSet.id} changeSet={changeSet} onOpenFile={onOpenFile} />)}
         {pendingAction && <section className="conversation-approval">
           <div className="approval-content">
@@ -4220,12 +4200,13 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
   </div>;
 });
 
-function ConversationView({ messages, events, trajectoryEvents, remoteServers, remoteServerId, onRemoteServerChange, onRefreshRemoteServers, onOpenSshSettings, nativeBackend, harnessBound, onHarnessChange, nativeQuestions, onNativeAnswer, onNativeSteer, workspace, projectId, agentBusy, interrupting, canInterrupt, pendingAction, changeSets, researchMode, researchGraphOpen, onToggleResearchGraph, onResearchGraphAvailability, reasoningEffort, contextLength, modelCapabilities, contextItems, onOpenWorkspaceSettings, onCommand, contextSummary, compactedThroughTurnId, onSubmit, onInterrupt, onResearchMode, onAddContext, onRemoveContext, onApprove, onReject, onOpenFile, showWelcome, onWelcomeAction, composerRequest, draftKey, currentFile, currentSelection, onComposerRequestApplied, initialScrollTop, onScrollTop, commentScope, addingComment, commentsShowResolved, onExitComments }: {
+function ConversationView({ messages, assistantStream, events, trajectoryEvents, remoteServers, remoteServerId, onRemoteServerChange, onRefreshRemoteServers, onOpenSshSettings, nativeBackend, harnessBound, onHarnessChange, nativeQuestions, onNativeAnswer, onNativeSteer, workspace, projectId, agentBusy, interrupting, canInterrupt, pendingAction, changeSets, researchMode, researchGraphOpen, onToggleResearchGraph, onResearchGraphAvailability, reasoningEffort, contextLength, modelCapabilities, contextItems, onOpenWorkspaceSettings, onCommand, contextSummary, compactedThroughTurnId, onSubmit, onInterrupt, onResearchMode, onAddContext, onRemoveContext, onApprove, onReject, onOpenFile, showWelcome, onWelcomeAction, composerRequest, draftKey, currentFile, currentSelection, onComposerRequestApplied, initialScrollTop, onScrollTop, commentScope, addingComment, commentsShowResolved, onExitComments }: {
   commentScope: SessionCommentsScope | null;
   addingComment: boolean;
   commentsShowResolved: boolean;
   onExitComments: () => void;
   messages: Message[];
+  assistantStream: AssistantStream;
   events: TimelineEvent[];
   trajectoryEvents: ResearchEvent[];
   nativeBackend: AgentBackendConfig | null;
@@ -4741,7 +4722,7 @@ function ConversationView({ messages, events, trajectoryEvents, remoteServers, r
 
   return <div className={welcomeVisible ? "conversation-layout has-welcome" : "conversation-layout"}>
     <WorkspaceMarkdownProvider workspace={workspace} onOpenFile={openHistoryFile}>
-      <ConversationHistory messages={messages} events={events} trajectoryEvents={trajectoryEvents} agentBusy={agentBusy} interrupting={interrupting} pendingAction={pendingAction} changeSets={changeSets} welcomeVisible={welcomeVisible} onWelcomeAction={selectWelcomeWorkflow} onApprove={approveHistoryAction} onReject={rejectHistoryAction} onOpenFile={openHistoryFile} initialScrollTop={initialScrollTop} onScrollTop={onScrollTop} commentScope={commentScope} addingComment={addingComment} commentsShowResolved={commentsShowResolved} onExitComments={onExitComments} />
+      <ConversationHistory messages={messages} assistantStream={assistantStream} events={events} trajectoryEvents={trajectoryEvents} agentBusy={agentBusy} interrupting={interrupting} pendingAction={pendingAction} changeSets={changeSets} welcomeVisible={welcomeVisible} onWelcomeAction={selectWelcomeWorkflow} onApprove={approveHistoryAction} onReject={rejectHistoryAction} onOpenFile={openHistoryFile} initialScrollTop={initialScrollTop} onScrollTop={onScrollTop} commentScope={commentScope} addingComment={addingComment} commentsShowResolved={commentsShowResolved} onExitComments={onExitComments} />
     </WorkspaceMarkdownProvider>
 
     <div className="conversation-composer-wrap" data-ui="research-composer">
@@ -4934,7 +4915,20 @@ function ConversationView({ messages, events, trajectoryEvents, remoteServers, r
   </div>;
 }
 
-const ConversationMessage = memo(function ConversationMessage({ message, streaming, busyBackend }: { message: Message; streaming: boolean; busyBackend?: NativeSessionBackend }) {
+function assistantDraftMessage({ turnId, text }: AssistantDraft): Message {
+  return { id: `${turnId}:stream`, role: "assistant", text };
+}
+
+function renderAssistantDraft(draft: AssistantDraft) {
+  return <div><ConversationMessage message={assistantDraftMessage(draft)} streaming /></div>;
+}
+
+function ConversationNativeActivity({ stream, events, busy, thinking }: { stream: AssistantStream; events: ResearchEvent[]; busy: boolean; thinking: boolean }) {
+  const hasText = useAssistantStreamHasText(stream);
+  return <NativeAgentPanel events={events} busy={busy} thinking={thinking && !hasText} />;
+}
+
+const ConversationMessage = memo(function ConversationMessage({ message, streaming, busyBackend }: { message: Message; streaming?: boolean; busyBackend?: NativeSessionBackend }) {
   return <article className={`conversation-message ${message.role}`} data-session-message-id={message.id} data-turn-id={message.role === "user" ? message.id : undefined}>
     <div className="conversation-message-content">
     {message.role === "user" && Boolean(message.attachments?.length) && <div className="message-attachments">{message.attachments?.map((attachment) => <MessageAttachmentView key={attachment.position} attachment={attachment} turnId={message.turn_id} />)}</div>}
