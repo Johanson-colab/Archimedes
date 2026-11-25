@@ -51,6 +51,18 @@ contextBridge.exposeInMainWorld("researchDesk", {
   listInstalledExtensions: (workspace) => ipcRenderer.invoke("extensions:list-installed", { workspace }),
   readExtensionFile: (path, workspace) => ipcRenderer.invoke("extensions:read-local", { path, workspace }),
   listSidebarPlugins: () => ipcRenderer.invoke("plugins:list"),
+  listResearchApps: (workspace) => ipcRenderer.invoke("research-apps:list", { workspace }),
+  researchAppStatus: (workspace, id) => ipcRenderer.invoke("research-apps:status", { workspace, id }),
+  startResearchApp: (workspace, id) => ipcRenderer.invoke("research-apps:start", { workspace, id }),
+  stopResearchApp: (workspace, id) => ipcRenderer.invoke("research-apps:stop", { workspace, id }),
+  installResearchApp: (workspace, id) => ipcRenderer.invoke("research-apps:install", { workspace, id, pinned: true }),
+  pinResearchApp: (workspace, id, pinned) => ipcRenderer.invoke("research-apps:pin", { workspace, id, pinned }),
+  removeResearchApp: (workspace, id) => ipcRenderer.invoke("research-apps:remove", { workspace, id }),
+  onResearchAppsChanged: (callback) => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on("research-apps:changed", listener);
+    return () => ipcRenderer.removeListener("research-apps:changed", listener);
+  },
   setSidebarPluginEnabled: (id, enabled) => ipcRenderer.invoke("plugins:set-enabled", { id, enabled }),
   removeSidebarPlugin: (id) => ipcRenderer.invoke("plugins:remove", { id }),
   openWorkspace: (workspacePath) => ipcRenderer.invoke("workspace:open", workspacePath),

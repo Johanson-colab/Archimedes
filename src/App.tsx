@@ -37,7 +37,7 @@ import { useConfirm } from "./ConfirmDialog";
 import { Dialog } from "./Dialog";
 import CommandPalette, { type PaletteCommand } from "./CommandPalette";
 import { defaultDisabledResearchApps, researchAppMetadata } from "./research-apps";
-import { sidebarEntries, sidebarModule, type MainSection, type SidebarEntry, type SidebarModuleId } from "./sidebar-registry";
+import { registerGeneratedAppEntries, sidebarEntries, sidebarModule, type MainSection, type SidebarEntry, type SidebarModuleId } from "./sidebar-registry";
 import { loadSidebarPlugins, PluginModuleView } from "./plugin-runtime";
 import RightWorkbench, { clampWorkbenchWidth, defaultWorkbenchWidth } from "./RightWorkbench";
 import SessionSwitcher from "./SessionSwitcher";
@@ -58,6 +58,7 @@ import ChatActivityTimeline from "./ChatActivityTimeline";
 import NativeAgentPanel, { NativeContextUsage, NativeQuestionCard, NativeSessionBusyNotice } from "./NativeAgentPanel";
 import { mergeNativeEvent, nativeTurnEvents, nativeUsage, updateNativeQuestions, type NativeSessionBackend } from "./native-agent-state";
 import HarnessPicker from "./HarnessPicker";
+import ResearchAppsView from "./ResearchAppsView";
 import NewChatModePicker, { draftForNewChatMode, RESEARCH_EXAMPLE, type NewChatMode } from "./NewChatModePicker";
 import JourneyView from "./JourneyView";
 import { defaultJourneySettings, normalizeJourneySettings } from "./journeySettings";
@@ -1215,6 +1216,13 @@ const previewBridge = {
     return next;
   },
   setSidebarLayout: async () => readPreviewSidebarSettings(),
+  listResearchApps: async () => [],
+  researchAppStatus: async () => ({ status: "stopped", url: null, error: "", logs: "" }),
+  startResearchApp: async () => { throw new Error("Research App runtimes require the desktop app."); },
+  stopResearchApp: async () => ({ status: "stopped", url: null, error: "", logs: "" }),
+  installResearchApp: async () => [],
+  pinResearchApp: async () => [],
+  removeResearchApp: async () => [],
   listSidebarPlugins: async () => [],
   setSidebarPluginEnabled: async () => [],
   removeSidebarPlugin: async () => [],
@@ -1383,6 +1391,8 @@ function App() {
   const sidebarDragRef = useRef<{ startX: number; startWidth: number } | null>(null);
   const [mainSection, setMainSection] = useState<MainSection>("chat");
   const [pluginEntries, setPluginEntries] = useState<SidebarEntry[]>([]);
+  const [generatedApps, setGeneratedApps] = useState<GeneratedResearchApp[]>([]);
+  const generatedAppsRequest = useRef(0);
   const [reproduceId, setReproduceId] = useState<string | null>(null);
   const [extensionsTab, setExtensionsTab] = useState<ExtensionsTab>("installed");
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -2025,6 +2035,22 @@ function App() {
     window.addEventListener("keydown", handleWorkbenchShortcut);
     return () => window.removeEventListener("keydown", handleWorkbenchShortcut);
   }, [workbenchOpen]);
+
+  const refreshGeneratedApps = useCallback(() => {
+    const request = ++generatedAppsRequest.current;
+    if (!workspaceReady || typeof desktopBridge.listResearchApps !== "function") { registerGeneratedAppEntries([]); setGeneratedApps([]); return; }
+    void desktopBridge.listResearchApps(workspace).then((apps) => {
+      if (request !== generatedAppsRequest.current) return;
+      registerGeneratedAppEntries(apps); setGeneratedApps(apps);
+    }).catch(() => { if (request === generatedAppsRequest.current) { registerGeneratedAppEntries([]); setGeneratedApps([]); } });
+  }, [workspace, workspaceReady]);
+  useEffect(() => {
+    registerGeneratedAppEntries([]); setGeneratedApps([]);
+    refreshGeneratedApps();
+    const changed = desktopBridge.onResearchAppsChanged?.((event) => { if (event.workspace === workspace) refreshGeneratedApps(); });
+    const completed = desktopBridge.onAgentEvent((event) => { if (event.type === "complete") refreshGeneratedApps(); });
+    return () => { generatedAppsRequest.current++; changed?.(); completed(); };
+  }, [workspace, refreshGeneratedApps]);
 
   const refreshSidebarPlugins = useCallback(() => {
     loadSidebarPlugins(desktopBridge).then((entries) => {
@@ -3423,8 +3449,8 @@ function App() {
     : null;
   const workspaceDialogProject = projects.find((project) => project.id === workspaceDialogProjectId) ?? null;
   const activeModule = mainSection === "chat" || mainSection === "files" ? null : sidebarModule(mainSection);
-  const registeredSidebarEntries = useMemo(() => sidebarEntries().filter((entry) => !entry.disabled), [pluginEntries]);
-  const availableModuleEntries = useMemo(() => sidebarEntries().filter((entry) => !entry.disabled && !hiddenCoreModules.has(entry.id)), [hiddenCoreModules, pluginEntries]);
+  const registeredSidebarEntries = useMemo(() => sidebarEntries().filter((entry) => !entry.disabled), [pluginEntries, generatedApps]);
+  const availableModuleEntries = useMemo(() => sidebarEntries().filter((entry) => !entry.disabled && !hiddenCoreModules.has(entry.id)), [hiddenCoreModules, pluginEntries, generatedApps]);
   const flatModuleEntries = useMemo(() => orderSidebarIds(availableModuleEntries, sidebarOrder.apps), [availableModuleEntries, sidebarOrder.apps]);
   const availableSidebarWorkspaces = useMemo(() => Object.fromEntries([...projects, ...archivedProjects].map((project) => {
     const current = workspaces.filter((entry) => entry.project_id === project.id).map((entry) => entry.id);
@@ -3651,6 +3677,11 @@ function App() {
 
         <div className="main-workspace" ref={mainWorkspaceRef}>
         <div className={mainSection === "chat" ? `main-view chat-main${sideThread ? " has-side-chat" : ""}` : "main-view knowledge-main"}>
+          {(mainSection === "created-apps" || mainSection.startsWith("research-app:")) && <ResearchAppsView
+            key={`${workspace}:${mainSection}`} bridge={desktopBridge} workspace={workspace} apps={generatedApps}
+            appId={mainSection.startsWith("research-app:") ? mainSection.slice("research-app:".length) : undefined}
+            onRefresh={refreshGeneratedApps} onOpen={(id) => setMainSection(`research-app:${id}`)} onBack={() => setMainSection("created-apps")}
+          />}
           {mainSection === "chat" && (
             <ConversationView
               key={activeThreadId ?? `new:${chatViewNonce}`}
@@ -3711,6 +3742,7 @@ function App() {
               onReject={(id) => void rejectPendingAction(id)}
               onOpenFile={openChangedFile}
               showWelcome={activeThreadId === null && messages.length === 1 && messages[0]?.id === "welcome" && !agentBusy}
+              onOpenCreatedApps={() => { refreshGeneratedApps(); setMainSection("created-apps"); }}
               onWelcomeAction={openWelcomeWorkflow}
               composerRequest={composerRequest}
               draftKey={composerDraftKey}
@@ -3980,6 +4012,7 @@ function App() {
         onSignUp={signUp}
         onSignOut={signOut}
         onOpenAuth={(mode) => { setSettingsOpen(false); openAuth(mode || "choice"); }}
+        onOpenCreatedApps={() => { setSettingsOpen(false); refreshGeneratedApps(); setMainSection("created-apps"); }}
         onPluginsChanged={refreshSidebarPlugins}
         disabledCoreModules={disabledCoreModules}
         onCoreModuleEnabled={setCoreModuleEnabled}
@@ -4220,7 +4253,8 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
   </div>;
 });
 
-function ConversationView({ messages, events, trajectoryEvents, remoteServers, remoteServerId, onRemoteServerChange, onRefreshRemoteServers, onOpenSshSettings, nativeBackend, harnessBound, onHarnessChange, nativeQuestions, onNativeAnswer, onNativeSteer, workspace, projectId, agentBusy, interrupting, canInterrupt, pendingAction, changeSets, researchMode, researchGraphOpen, onToggleResearchGraph, onResearchGraphAvailability, reasoningEffort, contextLength, modelCapabilities, contextItems, onOpenWorkspaceSettings, onCommand, contextSummary, compactedThroughTurnId, onSubmit, onInterrupt, onResearchMode, onAddContext, onRemoveContext, onApprove, onReject, onOpenFile, showWelcome, onWelcomeAction, composerRequest, draftKey, currentFile, currentSelection, onComposerRequestApplied, initialScrollTop, onScrollTop, commentScope, addingComment, commentsShowResolved, onExitComments }: {
+function ConversationView({ onOpenCreatedApps, messages, events, trajectoryEvents, remoteServers, remoteServerId, onRemoteServerChange, onRefreshRemoteServers, onOpenSshSettings, nativeBackend, harnessBound, onHarnessChange, nativeQuestions, onNativeAnswer, onNativeSteer, workspace, projectId, agentBusy, interrupting, canInterrupt, pendingAction, changeSets, researchMode, researchGraphOpen, onToggleResearchGraph, onResearchGraphAvailability, reasoningEffort, contextLength, modelCapabilities, contextItems, onOpenWorkspaceSettings, onCommand, contextSummary, compactedThroughTurnId, onSubmit, onInterrupt, onResearchMode, onAddContext, onRemoveContext, onApprove, onReject, onOpenFile, showWelcome, onWelcomeAction, composerRequest, draftKey, currentFile, currentSelection, onComposerRequestApplied, initialScrollTop, onScrollTop, commentScope, addingComment, commentsShowResolved, onExitComments }: {
+  onOpenCreatedApps: () => void;
   commentScope: SessionCommentsScope | null;
   addingComment: boolean;
   commentsShowResolved: boolean;
@@ -4745,6 +4779,7 @@ function ConversationView({ messages, events, trajectoryEvents, remoteServers, r
     </WorkspaceMarkdownProvider>
 
     <div className="conversation-composer-wrap" data-ui="research-composer">
+      {(showWelcome ? newChatMode === "create" : researchMode === "create") && <button className="creator-apps-button" type="button" onClick={onOpenCreatedApps}><Puzzle size={13} />{t("Preview Research Apps")}</button>}
       {showWelcome && <NewChatModePicker value={newChatMode} onChange={(mode) => {
           if (mode !== "research" && researchGraphOpen) onToggleResearchGraph(false);
           setNewChatMode(mode);

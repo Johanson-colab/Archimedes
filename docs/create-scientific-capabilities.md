@@ -1,11 +1,11 @@
 # Create scientific capability library
 
 Tracking: [Research Apps #256](https://github.com/Johanson-colab/Archimedes/issues/256).
-Written implementation approval: the project owner's instruction in the current development conversation on 2026-11-25: “8-12个太少了，多多选一些然后开始进行开发吧”, following the agreed five-category, sidebar-App design. This increment changes no renderer surface or permission policy.
+Written implementation approval: the project owner's instruction in the current development conversation on 2026-11-25: “8-12个太少了，多多选一些然后开始进行开发吧”, following the agreed five-category, sidebar-App design. The subsequent “继续吧” approved the host runtime, embedded preview and sidebar installation increment documented below.
 
 ## Scope
 
-This increment supplies a private, versioned capability library for the existing Create conversation mode. It does not implement the complete App editor, preview sandbox, App runtime, backend binding, installation, or sidebar-pinning lifecycle. No new Node dependencies or services are introduced.
+This branch supplies a private, versioned capability library for the existing Create conversation mode, plus host-managed static/Python HTTP App runtime, isolated embedded preview and workspace-scoped sidebar installation. See [Local Research App lifecycle](research-app-runtime.md). A full live code editor/build sandbox, runtime Agent binding and automatic credential binding remain unfinished. No new Node dependencies are introduced.
 
 A skill is a professional instruction book, potentially with reusable scripts, references, templates and documented APIs. A generated Research App is a deliverable page/platform. It can implement its workflow using direct APIs, local scripts, an Agent, or a combination. The Agent building the App and an Agent called by the App are separate choices. Zero, one and multiple skills are supported.
 

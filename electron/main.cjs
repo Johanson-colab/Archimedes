@@ -1,5 +1,22 @@
 const { app, BrowserWindow, Menu, ipcMain: electronIpcMain, dialog, nativeTheme, net, protocol, clipboard, shell, session, safeStorage, systemPreferences, Notification } = require("electron");
 const { installMainWindowLinks } = require("./main-window-links.cjs");
+const { createResearchAppRuntime } = require("./research-app-runtime.cjs");
+const researchAppRuntime = createResearchAppRuntime({
+  approve: async ({ app: researchApp, operation }) => {
+    const owner = BrowserWindow.getAllWindows().find((window) => workspaceForWindow(window) === researchApp.workspace) ?? BrowserWindow.getFocusedWindow();
+    if (!owner) return false;
+    const result = await dialog.showMessageBox(owner, {
+      type: "question", title: operation === "install" ? "Install Research App" : "Run Research App",
+      message: researchApp.name,
+      detail: `${researchApp.directory}\n\n${researchApp.runtime.kind}: ${researchApp.runtime.entry}\n\nLocal App code runs with your user permissions; it is not an OS sandbox. No model/API keys are injected. The embedded page has no access to the Archimedes host bridge. Only approve code you have reviewed. Installing does not start it automatically.`,
+      buttons: ["Cancel", operation === "install" ? "Install" : "Run"], defaultId: 0, cancelId: 0,
+    });
+    return result.response === 1;
+  },
+  changed: (workspace) => {
+    for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.webContents.send("research-apps:changed", { workspace });
+  },
+});
 const { spawn } = require("node:child_process");
 const { randomUUID } = require("node:crypto");
 const os = require("node:os");
@@ -900,6 +917,14 @@ app.whenReady().then(async () => {
     uiPlugins: sidebarPlugins.listPlugins(),
   }));
   ipcMain.handle("plugins:list", () => sidebarPlugins.listPlugins());
+  const researchAppWorkspace = (event, input) => {
+    const root = workspaceForWindow(BrowserWindow.fromWebContents(event.sender));
+    if (!root || !input?.workspace || fs.realpathSync(input.workspace) !== fs.realpathSync(root)) throw new Error("Research App access requires the active workspace.");
+    return fs.realpathSync(root);
+  };
+  for (const operation of ["list", "status", "start", "stop", "install", "pin", "remove"]) {
+    ipcMain.handle(`research-apps:${operation}`, (event, input = {}) => researchAppRuntime[operation](researchAppWorkspace(event, input), input.id, input.pinned));
+  }
   ipcMain.handle("plugins:set-enabled", (_event, input = {}) => sidebarPlugins.setEnabled(String(input?.id || ""), Boolean(input?.enabled)));
   ipcMain.handle("plugins:remove", (_event, input = {}) => sidebarPlugins.removePlugin(String(input?.id || "")));
   ipcMain.handle("sidebar:get-settings", () => sidebarSettings.getSettings());
@@ -2681,7 +2706,15 @@ app.whenReady().then(async () => {
 });
 
 app.on("window-all-closed", () => {
+  void researchAppRuntime.shutdown();
   if (process.platform !== "darwin") app.quit();
+});
+
+let researchAppsStoppedForQuit = false;
+app.on("before-quit", (event) => {
+  if (researchAppsStoppedForQuit) return;
+  event.preventDefault();
+  void researchAppRuntime.shutdown().finally(() => { researchAppsStoppedForQuit = true; app.quit(); });
 });
 
 app.on("activate", () => {
