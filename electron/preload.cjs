@@ -2,6 +2,9 @@ const { contextBridge, ipcRenderer, webUtils } = require("electron");
 
 contextBridge.exposeInMainWorld("researchDesk", {
   platform: process.platform,
+  listAnalyses: (scope) => ipcRenderer.invoke("analysis:list", scope),
+  loadAnalysis: (scope, id) => ipcRenderer.invoke("analysis:load", { ...scope, id }),
+  saveAnalysis: (scope, input) => ipcRenderer.invoke("analysis:save", { ...input, ...scope }),
   getInitialWorkspace: () => ipcRenderer.invoke("window:initial-workspace"),
   getLocalIdentity: () => ipcRenderer.invoke("identity:get"),
   getAuthState: () => ipcRenderer.invoke("auth:get-state"),

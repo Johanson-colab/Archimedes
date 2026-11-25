@@ -25,6 +25,9 @@ type WorkbenchSettingsSnapshot = {
   hidden: string[];
   layout?: WorkbenchLayoutSnapshot;
 };
+type AnalysisOwner = { workspace: string; projectId: string };
+type AnalysisRecipe = { config: import("./data-analysis").PlotConfig; column: number; seedColumn: number | null; unit: string };
+type AnalysisEntry = { id: string; name: string; createdAt: string };
 interface ResearchDeskBridge {
     listResearchApps: (workspace: string) => Promise<GeneratedResearchApp[]>;
     setupResearchApp: (workspace: string, id: string) => Promise<{ installed: boolean; packages: string[] }>;
@@ -36,6 +39,12 @@ interface ResearchDeskBridge {
     pinResearchApp: (workspace: string, id: string, pinned: boolean) => Promise<GeneratedResearchApp[]>;
     removeResearchApp: (workspace: string, id: string) => Promise<GeneratedResearchApp[]>;
     onResearchAppsChanged?: (callback: (event: { workspace: string }) => void) => () => void;
+    listAnalyses?(owner: AnalysisOwner): Promise<AnalysisEntry[]>;
+    saveAnalysis?(owner: AnalysisOwner, input: { name: string; bytes: Uint8Array; recipe: AnalysisRecipe }): Promise<AnalysisEntry>;
+    loadAnalysis?(owner: AnalysisOwner, id: string): Promise<{
+      source: { name: string; state: "ready" | "missing" | "changed"; sha256: string; bytes?: Uint8Array };
+      recipe: AnalysisRecipe; summary: ReturnType<typeof import("./data-analysis").summarizeColumn>;
+    }>;
     platform?: string;
     getInitialWorkspace: () => Promise<string | null>;
     getLocalIdentity: () => Promise<LocalIdentity>;
