@@ -6,7 +6,6 @@ const agent = require("./agent.cjs");
 const model = require("./model-config.cjs");
 const { registerLibraryReads } = require("./ipc/library.cjs");
 const { DatabaseSync } = require("node:sqlite");
-const { spawn } = require("node:child_process");
 const { randomUUID } = require("node:crypto");
 const { createWorkspaceIpc, isWorkspaceDataChannel } = require("./workspace-context.cjs");
 
@@ -127,9 +126,9 @@ test("real terminal child persists in its data store after IPC returns and its e
   const end = main.indexOf('  ipcMain.handle("terminal:stop",', start);
   assert.ok(start >= 0 && end > start);
   // Register the complete production handler, including stdout/close callbacks.
-  new Function("ipcMain", "store", "resolveWorkspace", "workspaceFiles", "randomUUID", "spawn", "process", "commandSessions", main.slice(start, end))(
+  new Function("ipcMain", "store", "resolveWorkspace", "workspaceFiles", "randomUUID", "spawnCommand", "terminalSettings", "commandSessions", main.slice(start, end))(
     ipc, store, fs.realpathSync, require("./workspace-files.cjs"), randomUUID,
-    (...args) => { child = spawn(...args); return child; }, process, sessions,
+    (...args) => { child = require("./command-runner.cjs").spawnCommand(...args); return child; }, require("./terminal-settings.cjs"), sessions,
   );
   const result = handlers.get("terminal:run")({ sender: { id: 1, isDestroyed: () => false, send: (...args) => events.push(args) } }, { command: "echo terminal-owner-A", cwd: roots.executionA });
   const closed = new Promise((resolve, reject) => { child.once("close", resolve); child.once("error", reject); });

@@ -3,6 +3,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
+const { EventEmitter } = require("node:events");
 const settings = require("./terminal-settings.cjs");
 
 const userData = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-terminal-settings-"));
@@ -75,4 +76,31 @@ test("disabled external terminal does not spawn anything", async () => {
   settings.initialize(userData);
   settings.saveTerminalSettings({ externalTerminal: "none" });
   assert.deepEqual(await settings.openExternalTerminal({ cwd: userData }), { opened: false, app: "None" });
+});
+
+test("Windows auto external terminal falls back to a shell when wt is missing", async () => {
+  settings.initialize(userData);
+  settings.saveTerminalSettings({ shell: "cmd", externalTerminal: "auto" });
+  const calls = [];
+  const spawnImpl = (command, args, options) => {
+    calls.push({ command, args, options });
+    const child = new EventEmitter();
+    child.unref = () => {};
+    process.nextTick(() => {
+      if (command === "wt.exe") child.emit("error", Object.assign(new Error("missing"), { code: "ENOENT" }));
+      else child.emit("spawn");
+    });
+    return child;
+  };
+  const result = await settings.openExternalTerminal({ cwd: userData }, { spawnImpl, platform: "win32" });
+  assert.deepEqual(result, { opened: true, app: "cmd.exe" });
+  assert.equal(calls.length, 2);
+  assert.ok(calls.every((call) => call.options.cwd === userData));
+  assert.match(calls[1].command, /cmd\.exe$/i);
+  assert.deepEqual(calls[1].args, []);
+
+  // An explicitly selected terminal must report its error rather than silently switch.
+  const explicit = await settings.openExternalTerminal({ cwd: userData, externalTerminal: "windows-terminal" }, { spawnImpl, platform: "win32" });
+  assert.equal(explicit.opened, false);
+  assert.equal(calls.length, 3);
 });

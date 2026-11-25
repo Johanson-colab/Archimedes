@@ -27,6 +27,19 @@ test('command result includes actual output, exit status, duration and a bounded
   assert.equal(fs.statSync(file).mode & 0o077, 0);
 });
 
+test('approved commands use the shell selected in terminal settings', { skip: process.platform === 'win32' }, async t => {
+  const root = workspace(t);
+  const terminalSettings = require('../terminal-settings.cjs');
+  const shell = path.join(root, 'selected-shell');
+  fs.writeFileSync(shell, '#!/bin/sh\nprintf selected-shell\nexec /bin/sh "$@"\n', { mode: 0o755 });
+  terminalSettings.initialize(root);
+  terminalSettings.saveTerminalSettings({ shell: 'custom', customShell: shell });
+  t.after(() => terminalSettings.initialize(path.join(root, 'reset')));
+  const result = await runApprovedCommand({ root, cwd: root, command: 'printf command-output' });
+  assert.equal(result.status, 'completed');
+  assert.match(result.output, /selected-shellcommand-output/);
+});
+
 test('large command output is bounded for the model while the log is retained', { skip: process.platform === 'win32' }, async t => {
   const root = workspace(t);
   const result = await runApprovedCommand({ root, cwd: root, command: `"${process.execPath}" -e "process.stdout.write('x'.repeat(90000))"` });

@@ -1,5 +1,4 @@
 const { app, BrowserWindow, Menu, ipcMain: electronIpcMain, dialog, nativeTheme, net, protocol, clipboard, shell, session, safeStorage, systemPreferences, Notification } = require("electron");
-const { spawn } = require("node:child_process");
 const { randomUUID } = require("node:crypto");
 const os = require("node:os");
 const fs = require("node:fs");
@@ -38,6 +37,8 @@ const { createPresence } = require("./presence.cjs");
 const { createSupabaseServer } = require("../server/supabase-server.cjs");
 const supabaseConfig = require("../shared/supabase-config.json");
 const journeySummarizer = require("./journey-summarizer.cjs");
+const { spawnCommand } = require("./command-runner.cjs");
+const { stopProcessTree } = require("./process-tree.cjs");
 const modelConfig = require("./model-config.cjs");
 const agentBackendConfig = require("./agent-backend-config.cjs");
 const nativeAgent = require("./agent/external-backend.cjs");
@@ -152,6 +153,7 @@ function closeInteractiveTerminal(sessionId) {
   if (!session) return;
   interactiveTerminalSessions.delete(sessionId);
   try {
+    if (process.platform === "win32") stopProcessTree(session.process);
     session.process.kill();
   } catch {
     // The shell may already have exited.
@@ -160,7 +162,7 @@ function closeInteractiveTerminal(sessionId) {
 
 function closeAllTerminals() {
   for (const sessionId of interactiveTerminalSessions.keys()) closeInteractiveTerminal(sessionId);
-  for (const session of commandSessions.values()) session.process.kill("SIGTERM");
+  for (const session of commandSessions.values()) stopProcessTree(session.process);
   commandSessions.clear();
 }
 
@@ -170,7 +172,7 @@ function closeWindowTerminals(senderId) {
   }
   for (const [sessionId, session] of commandSessions) {
     if (session.senderId !== senderId) continue;
-    session.process.kill("SIGTERM");
+    stopProcessTree(session.process);
     commandSessions.delete(sessionId);
   }
 }
@@ -2417,9 +2419,10 @@ app.whenReady().then(async () => {
     const sessionId = randomUUID();
     const owner = store.currentStore();
     const commandRun = owner.startCommand({ command, cwd: workspace });
-    const shell = process.platform === "win32" ? "cmd.exe" : "/bin/zsh";
-    const args = process.platform === "win32" ? ["/d", "/s", "/c", command] : ["-lc", command];
-    const child = spawn(shell, args, { cwd: workspace, env: process.env });
+    const child = spawnCommand(command, terminalSettings.shellLaunch(), {
+      cwd: workspace,
+      env: process.env,
+    });
     const captured = owner.captureStore();
 
     commandSessions.set(sessionId, { process: child, senderId: event.sender.id });
@@ -2429,8 +2432,10 @@ app.whenReady().then(async () => {
         event.sender.send("terminal:data", { sessionId, commandRunId: commandRun.id, data });
       }
     };
-    child.stdout.on("data", (chunk) => send(chunk.toString()));
-    child.stderr.on("data", (chunk) => send(chunk.toString()));
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", send);
+    child.stderr.on("data", send);
     child.on("error", (error) => send(`\n[process error] ${error.message}\n`));
     child.on("close", (code) => {
       try {
@@ -2463,7 +2468,7 @@ app.whenReady().then(async () => {
 
   ipcMain.handle("terminal:stop", (event, sessionId) => {
     const session = commandSessions.get(sessionId);
-    if (session?.senderId === event.sender.id) session.process.kill("SIGTERM");
+    if (session?.senderId === event.sender.id) stopProcessTree(session.process);
   });
 
   ipcMain.handle("journey:get-settings", () => journeySettings.journeySettings());
@@ -2604,6 +2609,8 @@ app.whenReady().then(async () => {
     const { shell, args } = terminalSettings.shellLaunch();
     const sessionId = randomUUID();
     const terminalProcess = pty.spawn(shell, args, {
+      // The bundled ConPTY avoids the legacy AttachConsole helper's close race.
+      ...(process.platform === "win32" ? { useConptyDll: true } : {}),
       name: "xterm-256color",
       cols,
       rows,
