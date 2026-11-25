@@ -1,4 +1,4 @@
-import { matchBibliographyPaper, type MetadataPatch } from "./bibliography";
+import { citationKeyIdentity, matchBibliographyPaper, type MetadataPatch } from "./bibliography";
 import seedData from "../shared/library-seeds.json";
 
 const now = new Date().toISOString();
@@ -43,6 +43,30 @@ function refreshCount(libraryId: string) {
     library.paper_count = previewLinks.get(libraryId)?.size ?? 0;
     library.updated_at = new Date().toISOString();
   }
+}
+
+function assertCitationKeyAvailable(links: Set<string>, paperId: string, key: string) {
+  const identity = citationKeyIdentity(key);
+  if (!identity) return;
+  for (const id of links) {
+    if (id !== paperId && citationKeyIdentity(previewPapers.get(id)?.citekey || "") === identity) {
+      throw new Error("Citation key conflict: edit the source before importing");
+    }
+  }
+}
+
+function prepareBibliography(paperId: string, input: { citekey?: string; entryType?: string }) {
+  const paper = previewPapers.get(paperId);
+  const citekey = input.citekey?.trim() ?? paper?.citekey ?? "";
+  const entryType = input.entryType?.trim().toLowerCase() ?? paper?.entry_type ?? "article";
+  if (citekey.length > 200 || /[\s,{}\\#%"]/.test(citekey)) throw new Error("Use a citation key without spaces or BibTeX delimiters.");
+  if (!/^[a-z][a-z0-9_-]{0,79}$/.test(entryType)) throw new Error("Choose a valid bibliography entry type.");
+  if (citationKeyIdentity(citekey) !== citationKeyIdentity(paper?.citekey || "")) {
+    for (const links of previewLinks.values()) {
+      if (links.has(paperId)) assertCitationKeyAvailable(links, paperId, citekey);
+    }
+  }
+  return { citekey, entry_type: entryType };
 }
 
 export const previewLibraryBridge = {
@@ -140,12 +164,24 @@ export const previewLibraryBridge = {
       fetched_at: new Date().toISOString(),
     };
   },
-  addLibraryPaper: async (libraryId: string, paper: AcademicSearchResult) => {
+  addLibraryPaper: async (libraryId: string, paper: AcademicSearchResult & Partial<Pick<LibraryPaper, "id" | "citekey" | "entry_type">>) => {
+    const links = previewLinks.get(libraryId);
+    if (!links) throw new Error("Library not found.");
     const existing = matchBibliographyPaper(paper, [...previewPapers.values()]);
     const id = existing?.id ?? crypto.randomUUID();
+    let bibliography: ReturnType<typeof prepareBibliography> | undefined;
+    if (paper.source === "bibtex" && typeof paper.citekey === "string" && typeof paper.entry_type === "string") {
+      if (paper.id && paper.id !== id) throw new Error("Paper not found.");
+      const retainedKey = !paper.id && existing?.citekey;
+      assertCitationKeyAvailable(links, id, retainedKey || paper.citekey);
+      if (!retainedKey) bibliography = prepareBibliography(id, { citekey: paper.citekey, entryType: paper.entry_type });
+    }
+
+    // Apply the key and link only after every collection has accepted the key.
     if (!existing) {
       previewPapers.set(id, {
         ...paper,
+        ...bibliography,
         id,
         canonical_key: paper.arxiv_id ? `arxiv:${paper.arxiv_id}` : `title:${paper.title.toLowerCase()}`,
         reading_status: "unread",
@@ -157,9 +193,9 @@ export const previewLibraryBridge = {
         created_at: now,
         updated_at: now,
       });
+    } else if (bibliography) {
+      Object.assign(existing, bibliography, { updated_at: new Date().toISOString() });
     }
-    const links = previewLinks.get(libraryId);
-    if (!links) throw new Error("Library not found.");
     links.add(id);
     refreshCount(libraryId);
     return { ...(previewPapers.get(id) as LibraryPaper) };
@@ -169,11 +205,12 @@ export const previewLibraryBridge = {
     if (!paper) throw new Error("Paper not found.");
     return { paper_id: paperId, citekey: paper.citekey || "", entryType: paper.entry_type || "article", updated_at: paper.updated_at };
   },
-  setPaperBibliography: async (paperId: string, input: { citekey: string; entryType: string }) => {
+  setPaperBibliography: async (paperId: string, input: { citekey?: string; entryType?: string }) => {
     const paper = previewPapers.get(paperId);
     if (!paper) throw new Error("Paper not found.");
-    Object.assign(paper, { citekey: input.citekey, entry_type: input.entryType, updated_at: new Date().toISOString() });
-    return { paper_id: paperId, ...input, updated_at: paper.updated_at };
+    const bibliography = prepareBibliography(paperId, input);
+    Object.assign(paper, bibliography, { updated_at: new Date().toISOString() });
+    return { paper_id: paperId, citekey: bibliography.citekey, entryType: bibliography.entry_type, updated_at: paper.updated_at };
   },
   repairLibraryPaperMetadata: async (paperId: string, patch: MetadataPatch) => {
     const paper = previewPapers.get(paperId);

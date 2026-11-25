@@ -1,4 +1,4 @@
-import { type FormEventHandler, type ReactNode, type Ref } from "react";
+import { useLayoutEffect, useRef, type FormEventHandler, type ReactNode, type Ref } from "react";
 import DialogPortal from "./DialogPortal";
 import { useDialogFocus } from "./useDialogFocus";
 
@@ -7,6 +7,7 @@ export type DialogSize = "compact" | "sm" | "md" | "lg" | "gallery" | "preview" 
 export function Dialog({
   open,
   onClose,
+  blocking = false,
   children,
   role = "dialog",
   ariaLabel,
@@ -19,7 +20,8 @@ export function Dialog({
   onSubmit,
 }: {
   open: boolean;
-  onClose: () => void;
+  onClose?: () => void;
+  blocking?: boolean;
   children: ReactNode;
   role?: "dialog" | "alertdialog";
   ariaLabel?: string;
@@ -31,7 +33,14 @@ export function Dialog({
   as?: "section" | "form";
   onSubmit?: FormEventHandler<HTMLFormElement>;
 }) {
-  const dialogRef = useDialogFocus<HTMLElement>(open, onClose);
+  const dialogRef = useDialogFocus<HTMLElement>(open && !blocking, () => onClose?.());
+  const nativeRef = useRef<HTMLDialogElement>(null);
+  useLayoutEffect(() => {
+    if (!open || !blocking) return;
+    const dialog = nativeRef.current;
+    dialog?.showModal();
+    return () => dialog?.close();
+  }, [open, blocking]);
   if (!open) return null;
 
   const dialogClassName = ["app-dialog", size ? `app-dialog-${size}` : "", className].filter(Boolean).join(" ");
@@ -46,11 +55,17 @@ export function Dialog({
     "aria-describedby": ariaDescribedBy,
   };
 
+  if (blocking) return <DialogPortal>
+    <dialog {...shared} ref={nativeRef} onCancel={(event) => event.preventDefault()} onKeyDown={(event) => event.stopPropagation()}>
+      {children}
+    </dialog>
+  </DialogPortal>;
+
   return <DialogPortal>
     <div
       className={overlayClassName}
       role="presentation"
-      onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}
+      onMouseDown={(event) => { if (event.target === event.currentTarget) onClose?.(); }}
     >
       {as === "form"
         ? <form {...shared} ref={dialogRef as unknown as Ref<HTMLFormElement>} onSubmit={onSubmit}>{children}</form>

@@ -1,0 +1,13 @@
+✔ cancel stops a run's descendant process (285.696435ms)
+✔ cancel escalates when a descendant ignores SIGTERM and holds log pipes (2233.555036ms)
+✔ cancel kills a stubborn descendant after the shell and log pipes close (2247.985632ms)
+✔ shutdown immediately kills a stubborn descendant (246.660083ms)
+✔ shutdown flushes pending cleanup after a cancelled shell closes (191.514799ms)
+ℹ tests 5
+ℹ suites 0
+ℹ pass 5
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 5367.373454

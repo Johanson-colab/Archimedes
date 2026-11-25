@@ -69,6 +69,27 @@ test("invalid and oversized protocol input fails closed", async () => {
   const other = new CodexClient();
   other.read("x".repeat(8_000_001));
   assert.equal(other.closed, true);
+  assert.equal(other.buffer, "");
+});
+
+test("inbound limits apply to each UTF-8 frame, not a batch of valid messages", () => {
+  const client = new CodexClient();
+  let seen = 0;
+  client.on('message', () => { seen++; });
+  const line = JSON.stringify({ method: 'fixture', params: { text: 'x'.repeat(4_100_000) } }) + '\n';
+  client.read(line + line);
+  assert.equal(client.closed, false);
+  assert.equal(seen, 2);
+  assert.equal(client.bufferBytes, 0);
+  client.read('{"method":"split",');
+  client.read('"params":{}}\n');
+  assert.equal(seen, 3);
+  client.close();
+  const unicode = new CodexClient();
+  unicode.read('中'.repeat(2_700_000));
+  assert.equal(unicode.closed, true);
+  assert.equal(unicode.buffer, '');
+  assert.equal(unicode.bufferBytes, 0);
 });
 
 test("only identical successful local history can resume; forks, undo and dirty delivery cannot", () => {

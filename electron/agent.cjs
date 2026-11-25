@@ -1,13 +1,13 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { randomUUID } = require("node:crypto");
-const store = require("./store.cjs");
+const defaultStore = require("./store.cjs");
 const { getActiveModelConfig } = require("./model-config.cjs");
 const { searchAcademicPapers } = require("./literature.cjs");
 const { searchWeb } = require("./web-search.cjs");
 const { prepareConversation } = require("./agent/context.cjs");
 const { workspaceInstructions } = require("./thread-commands.cjs");
-const { hasApprovalSurface, resolveApproval, setApprovalSurface, waitForApproval } = require("./agent/approval-manager.cjs");
+const { hasApprovalSurface: hasClaimedSurface, resolveApproval, setApprovalSurface: claimApprovalSurface, waitForApproval } = require("./agent/approval-manager.cjs");
 const { StreamContentGuard, normalizeAssistantMessage } = require("./agent/model-response.cjs");
 const { ModelIncompleteError, assertModelCompletion } = require("./agent/model-completion.cjs");
 const { completeAnthropic } = require("./agent/anthropic.cjs");
@@ -19,6 +19,7 @@ const { contextCharacterLimit, normalizeContextLength, normalizeReasoningEffort:
 const { snapshotWorkspace, compareWorkspaceSnapshots, workspacePath: existingWorkspacePath } = require("./workspace-files.cjs");
 const { artifactKind } = require("./artifacts.cjs");
 const { runNative } = require("./agent/external-backend.cjs");
+const { NativeSessionBusyError } = require("./agent/native-session-busy.cjs");
 const { runApprovedCommand } = require("./agent/command-runner.cjs");
 const { readLines, searchWorkspace, prepareWrite, prepareEdit, readCommandLog, visibleExisting } = require("./agent/workspace-tools.cjs");
 const { ToolRegistry } = require("./agent/tool-registry.cjs");
@@ -38,7 +39,7 @@ const { checkoutBranchOf, listRepositoryCheckoutDirectory, readRepositoryCheckou
 const MAX_FILE_BYTES = 64_000;
 const HIDDEN_PATHS = new Set([".archimedes", [".ax", "iom"].join(""), ".git", "node_modules", "dist"]);
 const activeRuns = new Map();
-let shuttingDown = false;
+let stoppingAgentRuns = false;
 
 const tools = [
   {
@@ -709,9 +710,10 @@ function parseArguments(serialized) {
   catch { throw new Error("The model returned invalid tool arguments."); }
 }
 
-function sessionExperiment({ threadId, experiment }) {  if (!threadId) throw new Error("Experiments require an active Research session.");
-  const thread = store.getResearchThread(threadId);
-  const listed = store.listResearchGraph({ projectId: thread.project_id, threadId });
+function sessionExperiment({ threadId, experiment }) {
+  if (!threadId) throw new Error("Experiments require an active Research session.");
+  const thread = defaultStore.getResearchThread(threadId);
+  const listed = defaultStore.listResearchGraph({ projectId: thread.project_id, threadId });
   const key = String(experiment || "").trim();
   if (!key) throw new Error("An experiment id or title is required.");
   const node = listed.nodes.find((item) => item.id === key)
@@ -724,8 +726,8 @@ function sessionExperiment({ threadId, experiment }) {  if (!threadId) throw new
 
 function sessionIdea({ threadId, idea }) {
   if (!threadId) throw new Error("Experiments require an active Research session.");
-  const thread = store.getResearchThread(threadId);
-  const listed = store.listResearchGraph({ projectId: thread.project_id, threadId });
+  const thread = defaultStore.getResearchThread(threadId);
+  const listed = defaultStore.listResearchGraph({ projectId: thread.project_id, threadId });
   const key = String(idea || "").trim();
   if (!key) throw new Error("An idea id or title is required.");
   const node = listed.nodes.find((item) => item.id === key)
@@ -737,7 +739,7 @@ function sessionIdea({ threadId, idea }) {
 }
 
 function sessionExperimentRun({ threadId, runId }) {
-  const run = store.getExperimentRun(String(runId || "").trim());
+  const run = defaultStore.getExperimentRun(String(runId || "").trim());
   if (!run) throw new Error("Experiment run not found.");
   if (run.thread_id !== threadId) throw new Error("The experiment run does not belong to this session.");
   return run;
@@ -763,18 +765,19 @@ function graphUpdateEvent({ thread, turnId, nodeIds = [], edgeIds = [], nodeCoun
 async function waitForExperimentRun(runId, timeoutSeconds = 20) {
   const seconds = Math.max(1, Math.min(30, Number(timeoutSeconds) || 20));
   const deadline = Date.now() + seconds * 1000;
-  let run = store.getExperimentRun(runId);
+  let run = defaultStore.getExperimentRun(runId);
   if (!run) throw new Error("Experiment run not found.");
   while (!["succeeded", "failed", "cancelled"].includes(run.status) && Date.now() < deadline) {
     await new Promise((resolve) => setTimeout(resolve, 500));
-    run = store.getExperimentRun(runId);
+    run = defaultStore.getExperimentRun(runId);
     if (!run) throw new Error("Experiment run not found.");
   }
   const log = experimentRuns.readExperimentRunLog({ runId, maxBytes: 4_000 });
   return { ...run, log_tail: log.text };
 }
 
-async function executeBuiltInTool({ root, taskId, threadId, turnId, call, emit, contextItems, foundPapers, pdfCache, signal, capabilities = DEFAULT_CAPABILITIES, browser, config, recordEvent = () => {}, registry = defaultToolRegistry, researchRun, reasoningEffort, isRequestActive = () => true }, args) {
+async function executeBuiltInTool({ root, taskId, threadId, turnId, call, emit, contextItems, foundPapers, pdfCache, signal, capabilities = DEFAULT_CAPABILITIES, browser, config, recordEvent = () => {}, registry = defaultToolRegistry, researchRun, reasoningEffort, isRequestActive = () => true, dataStore = defaultStore.currentStore() }, args) {
+  const store = dataStore;
   const name = call.function.name;
 
   if (name === "list_skills") return { content: JSON.stringify({ skills: discoverSkills(root) }) };
@@ -820,7 +823,7 @@ async function executeBuiltInTool({ root, taskId, threadId, turnId, call, emit, 
         if (!message.tool_calls.length) { response = message.content || ""; break; }
         for (const child of message.tool_calls) {
           try {
-            const result = await executeTool({ root, taskId, threadId, turnId, call: child, emit, contextItems, foundPapers, pdfCache, signal, capabilities, browser, config, recordEvent: workerRecord, registry, researchRun, preflight: (toolName, toolArgs) => {
+            const result = await executeTool({ root, taskId, threadId, turnId, call: child, emit, contextItems, foundPapers, pdfCache, signal, capabilities, browser, config, recordEvent: workerRecord, registry, researchRun, dataStore, preflight: (toolName, toolArgs) => {
               if (!allowed.has(toolName)) throw new Error("Tool unavailable in isolated phase.");
               if ((toolName === "write_artifact" || toolName === "edit_workspace_file") && !outputs.includes(String(toolArgs.path || "").replaceAll("\\", "/"))) throw new Error("The file was not declared as a phase output.");
             } });
@@ -1015,7 +1018,7 @@ async function executeBuiltInTool({ root, taskId, threadId, turnId, call, emit, 
     const proposal = name === "edit_workspace_file" ? prepareEdit(root, args.path, args.old_text, args.new_text, args.replace_all === true) : prepareWrite(root, args.path, args.content);
     const relative = proposal.path;
     const action = store.createAction({ taskId, kind: "write", payload: proposal });
-    const waiting = waitForApproval(action.id, signal, threadId);
+    const waiting = waitForApproval(action.id, signal, store.runtimeThreadId(threadId));
     emit({ type: "approval", title: "Approval required", detail: `Write ${relative}`, action });
     let decision;
     try { decision = await waiting; }
@@ -1032,7 +1035,7 @@ async function executeBuiltInTool({ root, taskId, threadId, turnId, call, emit, 
     const workingDirectory = existingWorkspacePath(root, args.cwd || "");
     if (!fs.statSync(workingDirectory).isDirectory()) throw new Error("The command working directory is not a directory.");
     const action = store.createAction({ taskId, kind: "command", payload: { command: args.command.trim(), cwd: workingDirectory, managedByAgent: true } });
-    const waiting = waitForApproval(action.id, signal, threadId);
+    const waiting = waitForApproval(action.id, signal, store.runtimeThreadId(threadId));
     emit({ type: "approval", title: "Approval required", detail: args.command.trim(), action });
     let decision;
     try { decision = await waiting; }
@@ -1051,7 +1054,14 @@ async function executeBuiltInTool({ root, taskId, threadId, turnId, call, emit, 
       throw error;
     } finally {
       try {
-        const changes = compareWorkspaceSnapshots(before, snapshotWorkspace(root));
+        const after = snapshotWorkspace(root);
+        const changes = compareWorkspaceSnapshots(before, after);
+        const snapshotCoverage = { before: before.coverage, after: after.coverage };
+        store.updateActionPayload(action.id, { snapshotCoverage });
+        if ([before.coverage, after.coverage].some((scan) => scan.entryLimitReached || scan.byteBudgetReached)) {
+          recordEvent({ type: "workspace_snapshot_coverage", payload: snapshotCoverage });
+          emit({ type: "tool", title: "Workspace change scan is limited", detail: "", snapshotCoverage });
+        }
         if (changes.length) {
           const updated = store.updateActionPayload(action.id, { changes });
           emit({ type: "workspace_change", title: "Workspace changed", detail: `${changes.length} files`, changeSet: { id: updated.id, actionId: updated.id, taskId, threadId, turnId, kind: updated.kind, changes, createdAt: updated.created_at } });
@@ -1156,7 +1166,7 @@ async function executeBuiltInTool({ root, taskId, threadId, turnId, call, emit, 
       command: `Create an isolated Git worktree from ${baseDescription}`,
       cwd: root, experimentId: experiment.id, experimentTitle: experiment.title, managedByAgent: true,
     } });
-    const waiting = waitForApproval(action.id, signal, threadId);
+    const waiting = waitForApproval(action.id, signal, store.runtimeThreadId(threadId));
     emit({ type: "approval", title: "Approval required", detail: "Create an experiment worktree from committed code; uncommitted files are not copied.", action });
     let decision;
     try { decision = await waiting; } catch (error) {
@@ -1197,7 +1207,7 @@ async function executeBuiltInTool({ root, taskId, threadId, turnId, call, emit, 
       kind: "command",
       payload: { command, cwd: workingDirectory, experimentId: experiment.id, experimentTitle: experiment.title, managedByAgent: true },
     });
-    const waiting = waitForApproval(action.id, signal, threadId);
+    const waiting = waitForApproval(action.id, signal, store.runtimeThreadId(threadId));
     emit({ type: "approval", title: "Approval required", detail: command, action });
     let decision;
     try {
@@ -1444,8 +1454,15 @@ async function translatePaperSelection({ text, targetLanguage = "Simplified Chin
   return { translation };
 }
 
-async function runAgent({ prompt, workspace, threadId, projectId, workspaceId, visibility = "project", mode = "standard", researchSkill, mineruToken, reasoningEffort = "medium", contextLength = "standard", contextItems = [], capabilities, origin, title, emit = () => {}, browser, transient = false, externalBackend = null, externalSignal, toolRegistry = defaultToolRegistry, autoBuildGraph = true }) {
-  if (shuttingDown) throw new Error("Archimedes is closing. Wait for shutdown to finish before starting another turn.");
+async function runAgent(options) {
+  if (stoppingAgentRuns) throw new Error("Archimedes is quitting.");
+  const captured = (options.dataStore || defaultStore).captureStore();
+  try { return await captured.store.run(() => runAgentInStore({ ...options, dataStore: captured.store })); }
+  finally { captured.release(); }
+}
+
+async function runAgentInStore({ prompt, workspace, threadId, projectId, workspaceId, visibility = "project", mode = "standard", researchSkill, mineruToken, reasoningEffort = "medium", contextLength = "standard", contextItems = [], capabilities, origin, title, emit = () => {}, browser, transient = false, externalBackend = null, externalSignal, toolRegistry = defaultToolRegistry, autoBuildGraph = true, remoteServer = null, dataStore }) {
+  const store = dataStore;
   if (externalBackend && (transient || origin !== "research" || capabilities?.write !== "ask" || capabilities?.command !== "ask")) throw new Error("The native backend is available only for main Work conversations with an approval surface.");
   const transientThread = {
     id: randomUUID(), project_id: null, title: "Internal review run", mode, status: "running", context_summary: "",
@@ -1453,7 +1470,8 @@ async function runAgent({ prompt, workspace, threadId, projectId, workspaceId, v
   };
   const thread = transient ? transientThread : threadId ? store.getResearchThread(threadId) : store.createResearchThread({ prompt, mode, projectId, workspacePath: workspace, workspaceId, visibility, kind: origin === "paper" ? "paper" : "research", title });
   if (!transient && origin !== "paper") store.bindResearchThreadHarness(thread.id, externalBackend?.backend || "api");
-  if (activeRuns.has(thread.id)) throw new Error("This research thread already has a running turn.");
+  const runtimeId = store.runtimeThreadId(thread.id);
+  if (activeRuns.has(runtimeId)) throw new Error("This research thread already has a running turn.");
   const task = transient ? { id: randomUUID(), prompt, response: "", status: "running" } : store.startTask({ prompt });
   const turn = transient
     ? { id: randomUUID(), thread_id: thread.id, task_id: task.id, mode, user_message: prompt, assistant_message: "", status: "running", created_at: new Date().toISOString(), completed_at: null }
@@ -1469,7 +1487,9 @@ async function runAgent({ prompt, workspace, threadId, projectId, workspaceId, v
   const actions = [];
   let experimentBridge = null;
   let experimentToolsUsed = false;
-  activeRuns.set(thread.id, controller);
+  let finished;
+  const completion = new Promise(resolve => { finished = resolve; });
+  activeRuns.set(runtimeId, { controller, completion });
 
   const emitTurn = (payload) => emit({ ...payload, threadId: thread.id, turnId: turn.id });
   const recordEvent = (event) => {
@@ -1495,6 +1515,7 @@ async function runAgent({ prompt, workspace, threadId, projectId, workspaceId, v
   };
   const scheduleGraphAutoBuild = (response) => {
     if (!autoBuildGraph || transient || origin !== "research" || !["research", "experiment-setup"].includes(mode) || !thread.project_id) return;
+    const graphOwner = store.captureStore();
     void graphAutoBuild.maybeAutoBuild({
       projectId: thread.project_id,
       threadId: thread.id,
@@ -1511,7 +1532,7 @@ async function runAgent({ prompt, workspace, threadId, projectId, workspaceId, v
       recordEvent,
       complete,
       runNative,
-    }).catch((error) => console.warn("[research-graph] auto-build failed:", error?.message || String(error)));
+    }).catch((error) => console.warn("[research-graph] auto-build failed:", error?.message || String(error))).finally(graphOwner.release);
   };
 
   try {
@@ -1523,12 +1544,12 @@ async function runAgent({ prompt, workspace, threadId, projectId, workspaceId, v
     }
     if (externalBackend) {
       const approveNative = async (payload) => {
-        if (controller.signal.aborted || !hasApprovalSurface(thread.id)) return false;
+        if (controller.signal.aborted || !hasClaimedSurface(runtimeId)) return false;
         const { signal: approvalSignal, ...actionPayload } = payload;
         const action = store.createAction({ taskId: task.id, kind: "command", payload: { ...actionPayload, externalAgent: externalBackend.backend } });
         actions.push(action);
         // Register before exposing the card, so an immediate click cannot be lost.
-        const waiting = waitForApproval(action.id, approvalSignal || controller.signal, thread.id);
+        const waiting = waitForApproval(action.id, approvalSignal || controller.signal, runtimeId);
         emitTurn({ type: "approval", title: "Native approval required", detail: payload.command, action });
         try { return (await waiting).approved; }
         finally {
@@ -1537,31 +1558,56 @@ async function runAgent({ prompt, workspace, threadId, projectId, workspaceId, v
           emitTurn({ type: "native_approval_resolved", title: "Native approval resolved", detail: "The native request is no longer pending", action: { ...action } });
         }
       };
-      const liveExperimentAllowed = ["research", "experiment-setup"].includes(mode)
+      const liveNativeAllowed = ["research", "experiment-setup"].includes(mode)
         && externalBackend.permissionMode !== "read-only" && externalBackend.permissionMode !== "plan";
+      const liveExperimentAllowed = liveNativeAllowed && !remoteServer;
       const experimentToolNames = new Set(["create_experiment", "prepare_experiment_workspace", "run_experiment", "wait_experiment", "read_experiment_log", "record_experiment_activity", "record_experiment_evidence", "create_experiment_result"]);
       const invokeExperimentTool = async (name, args, requestSignal, isRequestActive = () => true) => {
+        const sshWorkspace = require("./agent/ssh-workspace.cjs");
+        if (name === "ssh_remote_exec" || sshWorkspace.FILE_TOOL_NAMES.has(name)) {
+          if (!remoteServer || externalBackend.backend !== "codex" || !liveNativeAllowed) throw new Error("No remote SSH workspace is selected for this Research turn.");
+          if (!isRequestActive() || requestSignal?.aborted) throw new Error("This remote operation has ended.");
+          const location = `${remoteServer.user}@${remoteServer.host}:${remoteServer.port}`;
+          const label = name === "ssh_remote_read" ? "Remote file read" : name === "ssh_remote_edit" ? "Remote file edit" : "Remote command";
+          emitTurn({ type: "status", title: label, detail: `${location} · awaiting approval` });
+          try {
+            const result = name === "ssh_remote_exec"
+              ? await sshWorkspace.runSshWorkspace({ server: remoteServer, command: args.command, cwd: args.cwd, signal: requestSignal, approve: approveNative })
+              : await sshWorkspace.runRemoteFileOperation({ name, args, server: remoteServer, signal: requestSignal, approve: approveNative });
+            recordEvent({ type: "remote_workspace_operation", payload: { operation: name, location, cwd: result.cwd, exitCode: result.exitCode, truncated: result.truncated } });
+            emitTurn({ type: "status", title: label, detail: `${location} · exit ${result.exitCode ?? "unknown"}` });
+            return result;
+          } catch (error) {
+            emitTurn({ type: "status", title: label, detail: `${location} · not completed` });
+            throw error;
+          }
+        }
         if (!liveExperimentAllowed || !experimentToolNames.has(name)) throw new Error("This experiment tool is unavailable in this session.");
         experimentToolsUsed = true;
         const call = { id: randomUUID(), function: { name, arguments: JSON.stringify(args) } };
         const result = await executeTool({ root: workspace, taskId: task.id, threadId: thread.id, turnId: turn.id, call,
-          emit: emitTurn, recordEvent, signal: requestSignal, isRequestActive, preflight: () => { if (!isRequestActive()) throw new Error("The experiment request has ended."); }, capabilities: { write: "ask", command: "ask" }, registry: toolRegistry });
+          emit: emitTurn, recordEvent, signal: requestSignal, isRequestActive, dataStore, preflight: () => { if (!isRequestActive()) throw new Error("The experiment request has ended."); }, capabilities: { write: "ask", command: "ask" }, registry: toolRegistry });
         if (result.action) actions.push(result.action);
         return JSON.parse(result.content);
       };
-      if (liveExperimentAllowed) {
+      if (liveExperimentAllowed || (liveNativeAllowed && remoteServer && externalBackend.backend === "codex")) {
         try {
-          experimentBridge = await createExperimentBridge({ workspace, signal: controller.signal, invoke: invokeExperimentTool });
+          experimentBridge = await createExperimentBridge({ workspace, signal: controller.signal, invoke: invokeExperimentTool, mode: remoteServer ? "ssh" : "experiment" });
         } catch (error) {
           if (controller.signal.aborted) throw error;
+          if (remoteServer) throw new Error(`SSH workspace bridge unavailable: ${error.message}. The existing Codex session was preserved; no remote request was sent.`);
           emitTurn({ type: "status", title: "Experiment bridge unavailable", detail: "Live CLI access is unavailable; direct Codex tools or the existing directive fallback may still be available." });
         }
       }
-      const experimentDynamicTools = liveExperimentAllowed && externalBackend.backend === "codex"
+      // Codex retains the tool set from thread/start, so register both sets
+      // at creation and enforce the selected location again on every call.
+      const experimentDynamicTools = liveNativeAllowed && externalBackend.backend === "codex"
         ? toolRegistry.definitions().filter((item) => experimentToolNames.has(item.function.name)).map((item) => ({
           type: "function", name: item.function.name, description: item.function.description, inputSchema: item.function.parameters,
         })) : [];
+      if (liveNativeAllowed && externalBackend.backend === "codex") experimentDynamicTools.push({ type: "function", name: "ssh_remote_exec", description: "Execute one explicitly approved shell command on the selected SSH server. This is remote shell execution, not a managed Research Graph experiment run. Output is bounded; a timeout or cancellation does not confirm remote process termination.", inputSchema: { type: "object", properties: { command: { type: "string", description: "Exact remote shell command." }, cwd: { type: "string", description: "Optional absolute remote working directory or ~/ path." } }, required: ["command"], additionalProperties: false } }, ...require("./agent/ssh-workspace.cjs").fileToolDefinitions);
       let experimentBridgeInstructions = experimentBridge?.instructions || (liveExperimentAllowed ? "" : "Experiment tools are unavailable in the current read-only or plan permission mode. Do not emit experiment directives or start runs.");
+      if (remoteServer) experimentBridgeInstructions += `\n\nRemote SSH workspace selected: ${remoteServer.user}@${remoteServer.host}:${remoteServer.port}, default directory ${remoteServer.workspace}. Use ssh_remote_read, ssh_remote_edit and ssh_remote_exec for remote work; if these native dynamic tools are not listed, use the CLI bridge above through your local shell. All remote operations require approval. Managed experiment tools are local-only and unavailable here; do not emit experiment directives or claim a remote command is a managed Run. Ordinary Codex shell and file tools remain LOCAL; the bridge is the only local command that routes these operations remotely. On timeout, cancellation, or disconnect the remote process status is unknown; inspect before retrying.`;
       if (liveExperimentAllowed && experimentDynamicTools.length && !experimentBridgeInstructions) {
         experimentBridgeInstructions = "If direct experiment tools are available, use them only for an explicitly requested experiment. Never repeat a completed run. If unavailable, use the following legacy fallback:\n" + experimentDirectives.experimentPrompt();
       }
@@ -1574,11 +1620,14 @@ async function runAgent({ prompt, workspace, threadId, projectId, workspaceId, v
         } catch { /* Do not block a native conversation if its graph is unavailable. */ }
       }
       const nativeResponse = await runNative({
-        config: externalBackend, workspace, thread: store.getResearchThread(thread.id), turn, contextItems, researchSkill, mineruToken,
-        experimentBridgeInstructions, experimentDynamicTools, invokeExperimentTool: liveExperimentAllowed ? invokeExperimentTool : null,
+        config: externalBackend, workspace, thread: store.getResearchThread(thread.id), turn, contextItems, researchSkill, mineruToken, runtimeId,
+        experimentBridgeInstructions, experimentDynamicTools, invokeExperimentTool: liveNativeAllowed ? invokeExperimentTool : null,
         signal: controller.signal, emit: emitTurn, recordEvent, bindings: store.nativeAgentBindings(thread.id),
         approve: approveNative,
       });
+      // Newly created threads are summaries with turn_count, while reopened
+      // threads include turns; both describe the state before this turn.
+      if (externalBackend.backend === "codex" && liveNativeAllowed && (thread.turn_count ?? thread.turns?.length ?? 0) === 0) recordEvent({ type: "remote_tools_available", payload: { version: require("./agent/ssh-workspace.cjs").FILE_TOOLS_VERSION } });
       let response = nativeResponse;
       if (["research", "experiment-setup"].includes(mode)) {
         const extracted = experimentDirectives.extractExperimentDirectives(nativeResponse);
@@ -1596,7 +1645,7 @@ async function runAgent({ prompt, workspace, threadId, projectId, workspaceId, v
           });
           if (notes.length) response = [response, ...notes].filter(Boolean).join("\n\n");
         } else if (extracted.directives.length) {
-          response = [response, liveExperimentAllowed ? "Additional experiment directives were not executed because live experiment tools were already used; check the recorded activity before retrying." : "Experiment directives were not executed in the current read-only or plan permission mode."].filter(Boolean).join("\n\n");
+          response = [response, liveExperimentAllowed ? "Additional experiment directives were not executed because live experiment tools were already used; check the recorded activity before retrying." : remoteServer ? "Local experiment directives were not executed while an SSH workspace was selected." : "Experiment directives were not executed in the current read-only or plan permission mode."].filter(Boolean).join("\n\n");
         }
       }
       recordEvent({ type: "assistant_step", payload: { content: response, backend: externalBackend.backend } });
@@ -1667,7 +1716,7 @@ async function runAgent({ prompt, workspace, threadId, projectId, workspaceId, v
 
       for (const call of message.tool_calls) {
         try {
-          const result = await executeTool({ root: workspace, taskId: task.id, threadId: thread.id, turnId: turn.id, call, emit: emitTurn, contextItems, foundPapers, pdfCache, signal: controller.signal, capabilities: turnCapabilities, browser, config, recordEvent, registry: toolRegistry, researchRun, reasoningEffort: resolvedReasoningEffort, preflight: (name, args) => {
+          const result = await executeTool({ root: workspace, taskId: task.id, threadId: thread.id, turnId: turn.id, call, emit: emitTurn, contextItems, foundPapers, pdfCache, signal: controller.signal, capabilities: turnCapabilities, browser, config, recordEvent, registry: toolRegistry, researchRun, dataStore, reasoningEffort: resolvedReasoningEffort, preflight: (name, args) => {
             if (name === "search_academic_papers") {
               if (academicSearches >= policy.maxAcademicSearches) throw new Error("The academic search budget is exhausted. Synthesize the findings already collected.");
               academicSearches += 1;
@@ -1720,6 +1769,9 @@ async function runAgent({ prompt, workspace, threadId, projectId, workspaceId, v
       emitTurn({ type: "incomplete", title: "Response incomplete", detail: "Partial text was kept. Continue in this chat to retry; no tool from the unfinished response was executed.", error: failure });
       return { ...finish(`${error.partialResponse ? `${error.partialResponse}\n\n` : ""}This model response is incomplete: ${error.message} Continue in this chat to retry.`, "incomplete"), error: failure };
     }
+    if (error instanceof NativeSessionBusyError) {
+      recordEvent({ type: "native_session_busy", payload: { backend: error.backend } });
+    }
     const response = `${error.partialResponse ? `${error.partialResponse}\n\n` : ""}Archimedes could not complete this task: ${error.message || String(error)}`;
     emitTurn({ type: "failed", title: "Research turn failed", detail: "The turn record was saved for inspection" });
     return finish(response, "failed");
@@ -1727,26 +1779,39 @@ async function runAgent({ prompt, workspace, threadId, projectId, workspaceId, v
     externalSignal?.removeEventListener("abort", onExternalAbort);
     controller.abort();
     experimentBridge?.close();
-    activeRuns.delete(thread.id);
+    activeRuns.delete(runtimeId);
+    finished();
   }
 }
 
-async function shutdownAgents({ timeoutMs = 2000 } = {}) {
-  shuttingDown = true;
-  for (const controller of activeRuns.values()) controller.abort();
-  const deadline = Date.now() + Math.max(0, timeoutMs);
-  while (activeRuns.size && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 10));
-  return { pending: activeRuns.size };
-}
-
-function interruptAgent(threadId) {
-  const controller = activeRuns.get(threadId);
-  if (!controller) return false;
-  controller.abort();
+function interruptAgent(threadId, workspace) {
+  const run = activeRuns.get(defaultStore.runtimeThreadId(threadId, workspace));
+  if (!run) return false;
+  run.controller.abort();
   return true;
 }
 
+function hasActiveAgentRuns() {
+  return activeRuns.size > 0;
+}
+
+function shutdownAgentRuns() {
+  stoppingAgentRuns = true;
+  const runs = [...activeRuns.values()];
+  for (const run of runs) run.controller.abort();
+  return Promise.allSettled(runs.map(run => run.completion));
+}
+
+function hasApprovalSurface(threadId) {
+  return hasClaimedSurface(defaultStore.runtimeThreadId(threadId));
+}
+
+function setApprovalSurface(threadId, active, workspace) {
+  return claimApprovalSurface(defaultStore.runtimeThreadId(threadId, workspace), active);
+}
+
 async function retryGraphExtraction({ threadId, turnId, dataWorkspace, backendConfig }) {
+  const store = defaultStore.currentStore();
   const thread = store.getResearchThread(threadId);
   if (!thread.project_id || !store.canAccessProject(thread.project_id, "editor")) throw new Error("You do not have permission to update this research graph.");
   const turn = thread.turns.find((item) => item.id === turnId);
@@ -1764,4 +1829,4 @@ async function retryGraphExtraction({ threadId, turnId, dataWorkspace, backendCo
   return { ok: Boolean(result) };
 }
 
-module.exports = { complete, createToolRegistry, executeTool, hasApprovalSurface, interruptAgent, isPrivateAddress, paperPdfUrl, resolveApproval, retryGraphExtraction, runAgent, setApprovalSurface, shutdownAgents, translatePaperSelection };
+module.exports = { complete, createToolRegistry, executeTool, hasActiveAgentRuns, hasApprovalSurface, interruptAgent, isPrivateAddress, paperPdfUrl, resolveApproval, retryGraphExtraction, runAgent, setApprovalSurface, shutdownAgentRuns, translatePaperSelection };

@@ -17,6 +17,7 @@ type Props = {
   mode: string;
   workspace?: string;
   extractionPending?: boolean;
+  turnRunning?: boolean;
   version?: number;
   update?: ResearchGraphUpdate | null;
   pinned?: boolean;
@@ -34,6 +35,7 @@ export default function ResearchGraphPanel({
   hasThread,
   workspace,
   extractionPending = false,
+  turnRunning = false,
   version = 0,
   update = null,
   pinned = false,
@@ -58,13 +60,14 @@ export default function ResearchGraphPanel({
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const [failedTurns, setFailedTurns] = useState<string[]>([]);
   const [extractionChecked, setExtractionChecked] = useState(false);
+  const [latestTurnId, setLatestTurnId] = useState<string | null>(null);
   const [retrying, setRetrying] = useState(false);
   const [retryError, setRetryError] = useState("");
 
   useEffect(() => { setGraph(null); setRuns([]); setActivities([]); setSelectedId(null); setFocusedId(null); setInspectorOpen(false); }, [projectId, threadId]);
 
   useEffect(() => {
-    setFailedTurns([]); setExtractionChecked(false); setRetryError("");
+    setFailedTurns([]); setExtractionChecked(false); setLatestTurnId(null); setRetryError("");
     if (!threadId || !window.researchDesk?.getResearchThread) return;
     let cancelled = false;
     window.researchDesk.getResearchThread(threadId, workspace).then((thread) => {
@@ -72,10 +75,12 @@ export default function ResearchGraphPanel({
       const latest = new Map<string, string>();
       for (const event of thread.events || []) if (["graph_failed", "graph_checked", "graph_applied"].includes(event.type)) latest.set(event.turn_id, event.type);
       setFailedTurns([...latest.entries()].filter(([, type]) => type === "graph_failed").map(([id]) => id).reverse());
-      setExtractionChecked([...latest.values()].at(-1) === "graph_checked");
+      const currentTurn = thread.turns?.at(-1)?.id;
+      setLatestTurnId(currentTurn ?? null);
+      setExtractionChecked(Boolean(currentTurn && latest.get(currentTurn) === "graph_checked"));
     }).catch(() => { if (!cancelled) setRetryError(t("Could not load graph extraction status.")); });
     return () => { cancelled = true; };
-  }, [threadId, workspace, version, refreshKey, t]);
+  }, [threadId, workspace, version, refreshKey, turnRunning, t]);
 
   useEffect(() => {
     if (!projectId || !threadId) {
@@ -299,8 +304,8 @@ export default function ResearchGraphPanel({
   </>;
 
   const content = <div className={expanded ? "research-graph-content expanded" : "research-graph-content"}>
-    {(extractionPending || retrying || failedTurns.length > 0 || retryError || extractionChecked) && <div className="research-graph-extraction" role="status" aria-live="polite">
-      <span>{retrying || extractionPending ? t("Updating research graph…") : retryError || (failedTurns.length ? t("Graph extraction failed. Try again.") : t("Graph checked; no new nodes."))}{!retrying && !extractionPending && failedTurns.length > 1 ? ` · ${failedTurns.length}` : ""}</span>
+    {(extractionPending || retrying || failedTurns.length > 0 || retryError || (extractionChecked && !turnRunning)) && <div className="research-graph-extraction" role="status" aria-live="polite">
+      <span>{retrying || extractionPending ? t("Updating research graph…") : retryError || (failedTurns.length ? t(failedTurns[0] === latestTurnId ? "Graph extraction failed. Try again." : "An earlier graph extraction failed. Try again.") : t("Graph checked; no new nodes."))}{!retrying && !extractionPending && failedTurns.length > 1 ? ` · ${failedTurns.length}` : ""}</span>
       {!retrying && !extractionPending && failedTurns.length > 0 && <button type="button" onClick={() => void retryExtraction()}>{t("Retry extraction")}</button>}
     </div>}
     {update && update.projectId === projectId && update.threadId === threadId && update.nodeCount + update.edgeCount + (update.superseded?.length ?? 0) > 0 && dismissedUpdate !== update.turnId && (

@@ -6,6 +6,7 @@ const { spawnSync } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
 const { DatabaseSync } = require("node:sqlite");
+const { AsyncLocalStorage } = require("node:async_hooks");
 const bibliographyRecords = require("./bibliography-records.cjs");
 const librarySeeds = require("../shared/library-seeds.json");
 const { presentStoredAssistantMessage } = require("./agent/model-response.cjs");
@@ -18,10 +19,85 @@ const GIT_STATES = new Set(["none", "empty", "ready", "nested", "suspicious"]);
 const WORKSPACE_KINDS = new Set(["shared", "worktree", "sandbox"]);
 /** Sandboxes are an isolated copy; never copy caches, VCS data, or the app DB. */
 const SANDBOX_SKIP = new Set([".git", ".archimedes", "node_modules", "dist", "build", ".next"]);
-let database;
-let activeWorkspace;
 const recoveredDatabases = new Map();
 const RECOVERED_TURN_NOTICE = "The app closed while this turn was running. You can continue in this chat. Check any partial changes before continuing.";
+// SQL functions stay shared; each bound facade selects its own state. A run
+// captures the facade/lease, so opening another window cannot redirect it.
+const workspaceContext = new AsyncLocalStorage();
+const workspaceStates = new Map();
+let defaultState = { workspace: null, database: null, leases: 0, managed: false, closing: false };
+
+function currentState() { return workspaceContext.getStore() || defaultState; }
+function activeWorkspace() { return currentState().workspace; }
+
+function closeState(state) {
+  state.closing = true;
+  if (state.leases) return;
+  state.database?.close();
+  state.database = null;
+  if (workspaceStates.get(state.workspace) === state) workspaceStates.delete(state.workspace);
+}
+
+function currentStore() {
+  const state = currentState();
+  if (state.facade) return state.facade;
+  const facade = {};
+  for (const [name, method] of Object.entries(module.exports)) {
+    if (typeof method === "function") facade[name] = (...args) => workspaceContext.run(state, () => method(...args));
+  }
+  facade.run = (callback) => workspaceContext.run(state, callback);
+  facade.close = () => closeState(state);
+  Object.defineProperty(facade, "workspace", { get: () => state.workspace });
+  state.facade = facade;
+  return facade;
+}
+
+function captureStore() {
+  const state = currentState();
+  const store = currentStore();
+  state.leases += 1;
+  let released = false;
+  return { store, release() {
+    if (released) return;
+    released = true;
+    state.leases -= 1;
+    if (state.closing) closeState(state);
+  } };
+}
+
+function sameDatabaseFile(file, other) {
+  return file?.dev === other.dev && file.ino === other.ino;
+}
+
+function createWorkspaceStore(workspace, { allowReplacement = true } = {}) {
+  const root = normalizeWorkspacePath(workspace);
+  if (!root) throw new Error("A data workspace is required.");
+  let state = workspaceStates.get(root);
+  if (state?.database) {
+    const file = fs.statSync(state.databaseFile.path, { bigint: true, throwIfNoEntry: false });
+    if (!sameDatabaseFile(file, state.databaseFile)) {
+      if (!allowReplacement) throw new Error("The workspace database was replaced. Reopen the folder to load the new data.");
+      if (state.leases) throw new Error("The workspace database was replaced while work was still running. Reopen the folder after that work finishes.");
+      closeState(state);
+      state = null;
+    }
+  }
+  if (!state) state = { workspace: root, database: null, leases: 0, managed: true, closing: false };
+  state.managed = true;
+  return workspaceContext.run(state, () => {
+    if (!state.database) openWorkspace(root);
+    state.closing = false;
+    return currentStore();
+  });
+}
+
+function closeAllWorkspaces() {
+  for (const state of workspaceStates.values()) closeState(state);
+}
+
+function runtimeThreadId(threadId, workspace = activeWorkspace()) {
+  return JSON.stringify([workspace || "", threadId]);
+}
 let localIdentity = {
   userId: "local-user",
   displayName: "Local user",
@@ -908,7 +984,6 @@ function setLocalIdentity(identity) {
     deviceId: String(identity.deviceId || ""),
     deviceName: String(identity.deviceName || ""),
   };
-  if (database) ensureLocalUser(database);
   return localIdentity;
 }
 
@@ -988,13 +1063,20 @@ function ensureDefaultProject(db) {
   db.prepare(`
     INSERT INTO research_projects (id, owner_id, name, description, workspace_path, created_at, updated_at)
     VALUES (?, ?, 'General', 'Default research project', ?, ?, ?)
-  `).run(id, localIdentity.userId, activeWorkspace ?? null, now, now);
+  `).run(id, localIdentity.userId, activeWorkspace() ?? null, now, now);
   ensureProjectMember(db, id, localIdentity.userId, "owner");
   return id;
 }
 
+
 function requireDatabase() {
+  const state = currentState();
+  const database = state.database;
   if (!database) throw new Error("Open a workspace before accessing its research data.");
+  if (state.localIdentity !== localIdentity) {
+    ensureLocalUser(database);
+    state.localIdentity = localIdentity;
+  }
   return database;
 }
 
@@ -1004,7 +1086,7 @@ function normalizeWorkspacePath(value) {
   if (!fs.existsSync(resolved) || !fs.statSync(resolved).isDirectory()) {
     throw new Error("The project folder does not exist or is not a directory.");
   }
-  return resolved;
+  return fs.realpathSync(resolved);
 }
 
 /**
@@ -1172,6 +1254,16 @@ function reconcileInterruptedResearch(db) {
   }
 }
 
+function canonicalizeStoredWorkspacePaths(db) {
+  for (const [table, column] of [["research_projects", "workspace_path"], ["research_threads", "workspace_path"], ["project_workspaces", "root"]]) {
+    const rows = db.prepare(`SELECT id, ${column} AS root FROM ${table} WHERE ${column} IS NOT NULL AND ${column} <> ''`).all();
+    const update = db.prepare(`UPDATE ${table} SET ${column} = ? WHERE id = ?`);
+    for (const row of rows) {
+      try { const root = normalizeWorkspacePath(row.root); if (root !== row.root) update.run(root, row.id); }
+      catch { /* Keep missing historical locations visible; never move their files. */ }
+    }
+  }
+}
 function reconcileInterruptedExperimentRuns(db) {
   try {
     const rows = db.prepare("SELECT id, pid FROM experiment_runs WHERE status IN ('starting', 'running')").all();
@@ -1197,17 +1289,49 @@ function reconcileInterruptedExperimentRuns(db) {
   }
 }
 
-function openWorkspace(workspacePath) {
-  if (activeWorkspace === workspacePath && database) return getSnapshot();
 
-  database?.close();
+function openWorkspace(workspacePath) {
+  workspacePath = normalizeWorkspacePath(workspacePath);
+  if (!workspacePath) throw new Error("A data workspace is required.");
+  let state = currentState();
+  if (state.database && state.workspace === workspacePath) {
+    if (!workspaceContext.getStore()) state.closing = false;
+    return getSnapshot();
+  }
+  if (workspaceContext.getStore()) {
+    if (state.workspace && state.workspace !== workspacePath) throw new Error("This operation belongs to a different data workspace.");
+  } else {
+    if (!state.managed) closeState(state);
+    state = workspaceStates.get(workspacePath) || { workspace: workspacePath, database: null, leases: 0, managed: false, closing: false };
+    defaultState = state;
+    if (state.database) { state.closing = false; return getSnapshot(); }
+  }
+  return workspaceContext.run(state, () => {
+    try { return initializeWorkspace(state, workspacePath); }
+    catch (error) { closeState(state); throw error; }
+  });
+}
+
+function initializeWorkspace(state, workspacePath) {
   const dataDir = path.join(workspacePath, ".archimedes");
   const databasePath = path.join(dataDir, "archimedes.db");
   const legacyName = ["ax", "iom"].join("");
   const legacyDir = path.join(workspacePath, `.${legacyName}`);
   const legacyDatabasePath = path.join(legacyDir, `${legacyName}.db`);
+  const databaseFile = fs.statSync(databasePath, { bigint: true, throwIfNoEntry: false });
+  const legacyFile = !databaseFile && fs.statSync(legacyDatabasePath, { bigint: true, throwIfNoEntry: false });
+  const opened = [...workspaceStates.values()].find(other => sameDatabaseFile(databaseFile || legacyFile, other.databaseFile));
+  if (opened && opened !== state) {
+    // SQLite's WAL and shared-memory sidecars are path-based even when the DB file is linked.
+    const original = fs.statSync(opened.databaseFile.path, { bigint: true, throwIfNoEntry: false });
+    if (sameDatabaseFile(original, opened.databaseFile) && fs.realpathSync(opened.workspace) !== workspacePath) {
+      throw new Error("This research database is already open from another workspace folder.");
+    }
+    if (opened.leases) throw new Error("The workspace data folder moved while work was still running. Let it finish or stop it in the original window, then reopen the moved folder.");
+    closeState(opened);
+  }
   fs.mkdirSync(dataDir, { recursive: true });
-  if (!fs.existsSync(databasePath) && fs.existsSync(legacyDatabasePath)) {
+  if (legacyFile) {
     fs.renameSync(legacyDatabasePath, databasePath);
     for (const suffix of ["-wal", "-shm"]) {
       const legacySidecar = `${legacyDatabasePath}${suffix}`;
@@ -1215,9 +1339,16 @@ function openWorkspace(workspacePath) {
     }
     try { fs.rmdirSync(legacyDir); } catch { /* Preserve non-database legacy files. */ }
   }
-  database = new DatabaseSync(databasePath);
-  activeWorkspace = workspacePath;
+  const database = new DatabaseSync(databasePath);
+  state.database = database;
+  const { ino, dev } = fs.statSync(databasePath, { bigint: true });
+  state.databaseFile = { path: databasePath, ino, dev };
+  state.workspace = workspacePath;
+  state.closing = false;
+  workspaceStates.set(workspacePath, state);
   schema(database);
+  state.localIdentity = localIdentity;
+  canonicalizeStoredWorkspacePaths(database);
   reconcileInterruptedExperimentRuns(database);
   backfillPaperRepositories(database);
   // Window switches reopen the same file while its turns are still running.
@@ -1252,7 +1383,7 @@ function openWorkspace(workspacePath) {
 function getSnapshot() {
   const db = requireDatabase();
   return {
-    workspace: activeWorkspace,
+    workspace: activeWorkspace(),
     tasks: db.prepare("SELECT id, prompt, response, status, created_at FROM task_runs ORDER BY created_at DESC LIMIT 24").all(),
     projects: listResearchProjects(),
     archivedProjects: listResearchProjects({ archived: true }),
@@ -1961,6 +2092,10 @@ function setPaperChatThread(paperId, threadId, projectId = null) {
 }
 
 function addPaper(libraryId, paper) {
+  return addPaperWithOutcome(libraryId, paper).paper;
+}
+
+function addPaperWithOutcome(libraryId, paper, { initializeUserState = true, cloudPaperId } = {}) {
   const db = requireDatabase();
   const library = db.prepare("SELECT id, project_id FROM libraries WHERE id = ?").get(libraryId);
   if (!library) throw new Error("Choose a valid library before importing a paper.");
@@ -1969,7 +2104,7 @@ function addPaper(libraryId, paper) {
   if (conferenceJson && conferenceJson.length > 10000) throw new Error("Conference metadata is too large.");
   const now = timestamp();
   const key = String(paper.canonical_key || "").trim() || canonicalPaperKey(paper);
-  const existing = bibliographyRecords.findImportMatch(db, paper, key, { libraryId: library.id, projectId: library.project_id });
+  const existing = bibliographyRecords.findImportMatch(db, paper, key, { libraryId: library.id, projectId: library.project_id, cloudPaperId });
   const paperId = existing?.id || randomUUID();
 
   if (!existing) {
@@ -1992,10 +2127,12 @@ function addPaper(libraryId, paper) {
       year = COALESCE(year, ?), updated_at = ? WHERE id = ?`)
       .run(...fields.map(field => paper[field] || ""), JSON.stringify(paper.authors || []), paper.year || null, now, paperId);
   }
-  db.prepare(`
-    INSERT OR IGNORE INTO paper_user_state (paper_id, user_id, reading_status, starred, notes, tags_json, created_at, updated_at)
-    VALUES (?, ?, 'unread', 0, '', '[]', ?, ?)
-  `).run(paperId, localIdentity.userId, now, now);
+  if (initializeUserState) {
+    db.prepare(`
+      INSERT OR IGNORE INTO paper_user_state (paper_id, user_id, reading_status, starred, notes, tags_json, created_at, updated_at)
+      VALUES (?, ?, 'unread', 0, '', '[]', ?, ?)
+    `).run(paperId, localIdentity.userId, now, now);
+  }
   if (paper.github_url) {
     db.prepare("UPDATE papers SET github_url = CASE WHEN github_url = '' THEN ? ELSE github_url END, github_stars = MAX(github_stars, ?), updated_at = ? WHERE id = ?")
       .run(paper.github_url, Number(paper.github_stars) || 0, now, paperId);
@@ -2007,7 +2144,7 @@ function addPaper(libraryId, paper) {
   }
   db.prepare("INSERT OR IGNORE INTO library_papers (library_id, paper_id, added_at) VALUES (?, ?, ?)").run(libraryId, paperId, now);
   db.prepare("UPDATE libraries SET updated_at = ? WHERE id = ?").run(now, libraryId);
-  return hydratePaper(db.prepare("SELECT * FROM papers WHERE id = ?").get(paperId));
+  return { paper: getPaper(paperId), created: !existing };
 }
 
 function getPaperBibliography(paperId) {
@@ -2018,6 +2155,32 @@ function setPaperBibliography(paperId, patch = {}) { return bibliographyRecords.
 function repairLibraryPaperMetadata(paperId, patch = {}) {
   const db = requireDatabase(); bibliographyRecords.repairMetadata(db, paperId, patch, canAccessProject);
   return hydratePaper(db.prepare("SELECT * FROM papers WHERE id = ?").get(paperId));
+}
+
+function addLibraryPaper(libraryId, paper) {
+  if (paper.source !== "bibtex" || typeof paper.citekey !== "string" || typeof paper.entry_type !== "string") {
+    return addPaper(libraryId, paper);
+  }
+
+  const db = requireDatabase();
+  db.exec("BEGIN");
+  try {
+    const saved = addPaper(libraryId, paper);
+    // BibTeX imports name a local paper ID only for an explicitly selected replacement.
+    if (paper.id && paper.id !== saved.id) throw new Error("Paper not found.");
+    const keepExistingKey = saved.citekey && !paper.id;
+    const key = keepExistingKey ? saved.citekey : paper.citekey;
+    bibliographyRecords.assertCitationKeyAvailable(db, saved.id, key, libraryId);
+    if (!keepExistingKey) {
+      bibliographyRecords.setBibliography(db, saved.id, { citekey: key, entryType: paper.entry_type }, canAccessProject);
+    }
+    const result = keepExistingKey ? saved : getPaper(saved.id);
+    db.exec("COMMIT");
+    return result;
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
 }
 
 function linkLibraryToCloud(libraryId, cloudLibraryId) {
@@ -2062,20 +2225,24 @@ function syncPaperFromCloud(libraryId, cloudPaper) {
     ? db.prepare("SELECT * FROM papers WHERE cloud_paper_id = ?").get(cloudPaperId)
     : null;
   if (!existing) existing = db.prepare("SELECT * FROM papers WHERE canonical_key = ?").get(canonicalKey);
-  if (!existing) {
-    const local = addPaper(libraryId, {
+  let local;
+  if (existing) {
+    if (cloudPaperId) db.prepare("UPDATE papers SET cloud_paper_id = COALESCE(cloud_paper_id, ?) WHERE id = ?").run(cloudPaperId, existing.id);
+    db.prepare("INSERT OR IGNORE INTO library_papers (library_id, paper_id, added_at) VALUES (?, ?, ?)").run(libraryId, existing.id, timestamp());
+    db.prepare("UPDATE libraries SET updated_at = ? WHERE id = ?").run(timestamp(), libraryId);
+    local = getPaper(existing.id);
+  } else {
+    const { paper, created } = addPaperWithOutcome(libraryId, {
       ...cloudPaper,
       canonical_key: canonicalKey,
       authors: Array.isArray(cloudPaper.authors) ? cloudPaper.authors : [],
       conference: cloudPaper.conference || undefined,
-    });
-    const linked = linkPaperToCloud(local.id, cloudPaperId || local.id);
-    return applyCloudPaperState(local.id, cloudPaper) || linked;
+    }, { initializeUserState: false, cloudPaperId });
+    local = created || (cloudPaperId && !paper.cloud_paper_id)
+      ? linkPaperToCloud(paper.id, cloudPaperId || paper.id)
+      : paper;
   }
-  if (cloudPaperId) db.prepare("UPDATE papers SET cloud_paper_id = COALESCE(cloud_paper_id, ?) WHERE id = ?").run(cloudPaperId, existing.id);
-  db.prepare("INSERT OR IGNORE INTO library_papers (library_id, paper_id, added_at) VALUES (?, ?, ?)").run(libraryId, existing.id, timestamp());
-  db.prepare("UPDATE libraries SET updated_at = ? WHERE id = ?").run(timestamp(), libraryId);
-  return getPaper(existing.id);
+  return local.state_updated_at === null ? applyCloudPaperState(local.id, cloudPaper) : local;
 }
 
 function applyCloudPaperState(paperId, state) {
@@ -2167,7 +2334,7 @@ function normalizeGitState(value) {
 function resolveProjectRoot(project) {
   const candidate = String(project?.workspace_path || "").trim();
   if (candidate) return path.resolve(candidate);
-  return activeWorkspace ? path.resolve(activeWorkspace) : "";
+  return activeWorkspace() ? path.resolve(activeWorkspace()) : "";
 }
 
 function refreshProjectGitState(db, projectId) {
@@ -2587,7 +2754,7 @@ function createResearchProject({ name, description = "", workspacePath = "" }) {
   const normalizedName = String(name || "").replace(/\s+/g, " ").trim();
   if (!normalizedName || normalizedName.length > 100) throw new Error("A project name of at most 100 characters is required.");
   const now = timestamp();
-  const resolvedWorkspace = normalizeWorkspacePath(workspacePath) || activeWorkspace;
+  const resolvedWorkspace = normalizeWorkspacePath(workspacePath) || activeWorkspace();
   const project = {
     id: randomUUID(),
     owner_id: localIdentity.userId,
@@ -2816,7 +2983,7 @@ function createResearchThread({
   const resolvedWorkspace = normalizeWorkspacePath(workspacePath)
     || workspace?.root
     || projectWorkspace
-    || activeWorkspace;
+    || activeWorkspace();
   const now = timestamp();
   const thread = {
     id: randomUUID(),
@@ -3567,6 +3734,7 @@ function bindResearchThreadHarness(id, harness) {
   return harness;
 }
 
+
 function setResearchThreadVisibility(id, visibility) {
   const db = requireDatabase();
   const thread = db.prepare("SELECT id, project_id, owner_id, visibility FROM research_threads WHERE id = ?").get(id);
@@ -4202,7 +4370,7 @@ function approveAction(id) {
   if (action.status !== "pending") throw new Error("Only pending Agent actions can be approved.");
 
   if (action.kind === "write") {
-    applyApprovedWrite(action.payload, activeWorkspace);
+    applyApprovedWrite(action.payload, activeWorkspace());
   }
   return resolveAction(id, "approved");
 }
@@ -4579,6 +4747,11 @@ function listReproductionAttempts(runId) {
 }
 
 module.exports = {
+  createWorkspaceStore,
+  currentStore,
+  captureStore,
+  closeAllWorkspaces,
+  runtimeThreadId,
   withResearchGraphTransaction,
   getPaperBibliography,
   setPaperBibliography,
@@ -4610,7 +4783,7 @@ module.exports = {
   compactResearchThread,
   forkResearchThread,
   undoResearchTurn,
-  addPaper,
+  addPaper: addLibraryPaper,
   createComment,
   deleteComment,
   listComments,

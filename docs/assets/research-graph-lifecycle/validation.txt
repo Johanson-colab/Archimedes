@@ -1,0 +1,43 @@
+Research Graph experiment lifecycle validation — 2026-11-21
+Base: f3de22fa91855a228ea56cb87ceed916ceef594c
+Environment: Linux, Node v24.22.3; disposable local SQLite/Git fixtures.
+Dependencies: npm ci --ignore-scripts --no-audit --no-fund (lockfile unchanged).
+
+Before fix:
+node --test electron/experiment-run-cancellation.test.cjs
+3 tests; 0 passed; 3 failed. Each failed because the worker was still alive
+after cancellation/shutdown. The original three-case output is retained in
+cancellation-before.txt. The final suite adds separate immediate-shutdown and
+pending-cleanup shutdown coverage (five cases total).
+
+After fix:
+node --test electron/experiment-run-cancellation.test.cjs
+5 tests; 5 passed; 0 failed. See cancellation-after.txt.
+
+Focused command:
+node --test electron/experiment-run-cancellation.test.cjs electron/agent/experiment-retry-audit.test.cjs electron/experiment-runs.test.cjs electron/experiment-workspace.test.cjs electron/experiment-evidence.test.cjs electron/experiment-activity.test.cjs electron/research-graph-auto-build.test.cjs electron/agent/experiment-bridge.test.cjs electron/agent/experiment-bridge-integration.test.cjs
+47 tests; 47 passed; 0 failed; 0 skipped.
+The numerical mailbox fixture executes real local child processes, but calls
+no model and does not validate real Codex/Claude Code/OpenCode adapters.
+
+npm run lint: PASS
+npm run check:theme: PASS (existing below-baseline theme count advisory)
+npm run build: PASS (existing large-chunk advisory)
+git diff --check: PASS
+
+npm test: unable to start desktop suite (no DISPLAY/WAYLAND_DISPLAY; xvfb-run unavailable).
+npm run test:core: 1448 tests; 1441 passed; 2 failed; 5 skipped.
+
+Both failures reproduced on a separate unmodified f3de22f worktree using:
+node --test --test-name-pattern='built-in templates compile|all true tab groups' electron/latex-workspace.test.cjs electron/ui-audit-tabs.test.cjs
+Result: 2 tests, 0 passed, 2 failed with the same reasons:
+- built-in templates compile before and after adding a citation:
+  pdflatex cannot find pdflatex.fmt in this environment.
+- all true tab groups use the primitive:
+  existing source assertion: src/LibraryView.tsx should use Tabs.
+No unrelated implementation or test was changed to suppress these failures.
+
+Not covered: real provider/model calls, semantic automatic extraction accuracy,
+Windows process-tree execution, complete desktop graphics, active-run recovery
+after an actual app crash, data/environment restoration, large or long research
+experiments, and comparison with the unavailable local OpenResearch checkout.
