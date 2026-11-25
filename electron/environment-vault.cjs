@@ -46,6 +46,12 @@ function createEnvironmentVault({ directory, safeStorage }) {
     try { return safeStorage.decryptString(Buffer.from(entry.encrypted, "base64")); }
     catch { throw new Error(`Could not decrypt environment variable ${name}.`); }
   }
+  function getForService(name) {
+    if (!['OPENALEX_API_KEY', 'SEMANTIC_SCHOLAR_API_KEY'].includes(name)) throw new Error('Unsupported environment service key.');
+    const entry = read()[name]; if (!entry?.encrypted) return '';
+    try { return safeStorage.decryptString(Buffer.from(entry.encrypted, 'base64')); }
+    catch { throw new Error('Could not decrypt the literature source key.'); }
+  }
   function shared() {
     const result = Object.create(null);
     for (const [name, entry] of Object.entries(read())) {
@@ -55,6 +61,6 @@ function createEnvironmentVault({ directory, safeStorage }) {
     }
     return result;
   }
-  return { list, save, remove, shared, get };
+  return { list, save, remove, shared, get, getForService };
 }
 module.exports = { createEnvironmentVault, setEnvironmentVault, getSharedEnvironment };

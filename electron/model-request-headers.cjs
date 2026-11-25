@@ -107,6 +107,7 @@ module.exports = {
   formatModelRequestError,
   hasPrivateHeaderValues,
   modelProviderErrorDetail,
+  requiresSessionHeader,
   sanitizeHeaders,
   sanitizeSessionHeader,
 };

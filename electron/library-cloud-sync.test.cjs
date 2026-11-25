@@ -82,6 +82,34 @@ test("cloud paper import keeps canonical identity and applies remote user state"
   }
 });
 
+test("cloud imports matched by DOI leave existing paper state for timestamp reconciliation", () => {
+  const root = workspace();
+  try {
+    const project = store.createResearchProject({ name: "Paper sync by DOI" });
+    const localLibrary = store.createLibrary({ projectId: project.id, name: "Local" });
+    const cloudLibrary = store.createLibrary({ projectId: project.id, name: "Cloud" });
+    const existing = store.addPaper(localLibrary.id, { canonical_key: "local:paper", doi: "10.5555/same", title: "Shared paper" });
+    const local = store.updatePaper(existing.id, {
+      notes: "Newer local notes", starred: true, reading_status: "read", tags: ["important"],
+    });
+
+    const imported = store.syncPaperFromCloud(cloudLibrary.id, {
+      id: "cloud-paper", canonical_key: "cloud:paper", doi: existing.doi, title: existing.title,
+      notes: "", starred: false, reading_status: "unread", tags: [], state_updated_at: "2025-01-01T00:00:00.000Z",
+    });
+    assert.equal(imported.id, local.id);
+    assert.equal(imported.cloud_paper_id, "cloud-paper");
+    assert.equal(imported.state_updated_at, local.state_updated_at);
+    assert.equal(imported.notes, local.notes);
+    assert.equal(imported.starred, true);
+    assert.equal(imported.reading_status, "read");
+    assert.deepEqual(imported.tags, ["important"]);
+    assert.deepEqual(store.listPapers(cloudLibrary.id).map(paper => paper.id), [local.id]);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("paper sync requires editor access to the library project", () => {
   const root = workspace();
   try {

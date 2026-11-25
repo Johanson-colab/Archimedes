@@ -51,12 +51,36 @@ test('failed extraction remains visible after reload and retries the original tu
   const { bridge } = fixture();
   const events = [{ turn_id: 'turn-1', type: 'graph_failed' }];
   let requested;
-  window.researchDesk = { ...bridge, getResearchThread: async () => ({ events }), retryResearchGraphExtraction: async input => { requested = input; events.push({ turn_id: 'turn-1', type: 'graph_checked' }); return { ok: true }; } };
+  window.researchDesk = { ...bridge, getResearchThread: async () => ({ events, turns: [{ id: "turn-1" }] }), retryResearchGraphExtraction: async input => { requested = input; events.push({ turn_id: 'turn-1', type: 'graph_checked' }); return { ok: true }; } };
   await mounted(Panel, props, async () => {
     assert.match(document.querySelector('.research-graph-extraction').textContent, /Graph extraction failed/);
     await click(byText('Retry extraction'));
     assert.deepEqual(requested, { threadId: 't', turnId: 'turn-1' });
     assert.match(document.querySelector('.research-graph-extraction').textContent, /Graph checked; no new nodes/);
+  });
+});
+
+test('checked status belongs to the latest turn and never leaks across retries', async () => {
+  const { bridge } = fixture();
+  const turns = [{ id: 'first' }];
+  const events = [{ turn_id: 'first', type: 'graph_checked' }];
+  window.researchDesk = { ...bridge, getResearchThread: async () => ({ turns: [...turns], events: [...events] }), retryResearchGraphExtraction: async () => { events.push({ turn_id: 'first', type: 'graph_checked' }); return { ok: true }; } };
+  await mounted(Panel, props, async ({ render }) => {
+    assert.match(document.querySelector('.research-graph-extraction').textContent, /Graph checked/);
+    turns.push({ id: 'second' });
+    await render({ ...props, turnRunning: true });
+    assert.equal(document.querySelector('.research-graph-extraction'), null);
+    await render({ ...props, turnRunning: false });
+    assert.equal(document.querySelector('.research-graph-extraction'), null);
+    events.push({ turn_id: 'second', type: 'graph_checked' });
+    await render({ ...props, version: 1 });
+    assert.match(document.querySelector('.research-graph-extraction').textContent, /Graph checked/);
+    events.push({ turn_id: 'first', type: 'graph_failed' });
+    turns.push({ id: 'third' });
+    await render({ ...props, version: 2 });
+    assert.match(document.querySelector('.research-graph-extraction').textContent, /An earlier graph extraction failed/);
+    await click(byText('Retry extraction'));
+    assert.equal(document.querySelector('.research-graph-extraction'), null);
   });
 });
 

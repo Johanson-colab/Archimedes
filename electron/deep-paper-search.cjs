@@ -287,5 +287,6 @@ module.exports = {
   lexicalScore,
   normalizeDeepSearchInput,
   parseJsonObject,
+  requestModelJson,
   sanitizeSearchPlan,
 };

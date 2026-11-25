@@ -3,6 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { randomUUID } = require('node:crypto');
 const { CodexClient } = require('./codex-client.cjs');
+const { NativeSessionBusyError } = require('./native-session-busy.cjs');
 const { createNativeEvents } = require('./codex-events.cjs');
 const { validateNativeChoice } = require('./codex-models.cjs');
 const { assertJsonSize, VISIBLE_IMPORT_LIMIT } = require('./codex-limits.cjs');
@@ -136,7 +137,7 @@ async function answerNativeQuestion(localThreadId, questionId, answers) {
   return { answered: true };
 }
 
-async function nativeSession({ config, workspace, thread, turn, contextItems = [], researchSkill, nativeSkill, mineruToken, experimentBridgeInstructions = "", experimentDynamicTools = [], invokeExperimentTool = null, signal = new AbortController().signal, emit = () => {}, recordEvent = () => {}, approve = async () => false, bindings, Client = CodexClient, timeoutMs, compaction = false, ephemeral = false }) {
+async function nativeSession({ config, workspace, thread, turn, contextItems = [], researchSkill, nativeSkill, mineruToken, experimentBridgeInstructions = "", experimentDynamicTools = [], invokeExperimentTool = null, signal = new AbortController().signal, emit = () => {}, recordEvent = () => {}, approve = async () => false, bindings, Client = CodexClient, timeoutMs, compaction = false, ephemeral = false, runtimeId = thread.id }) {
   const root = fs.realpathSync(workspace);
   const policy = nativePolicy(config, root);
   const attachments = nativeContext(contextItems);
@@ -144,8 +145,20 @@ async function nativeSession({ config, workspace, thread, turn, contextItems = [
   const binding = bindings.get();
   const resume = canResume(binding, { workspace: root, model: config.model, previousTurnId });
   if (ephemeral && (resume || compaction)) throw new Error('Temporary Codex tasks cannot resume or compact a saved session.');
-  if (compaction && !resume) throw new Error('Native compaction requires an identical completed Codex binding. Continue this chat successfully before compacting.');
-  if (thread.id && activeNativeRuns.has(thread.id)) throw new Error('This chat already has an active native Codex operation.');
+  if (compaction && !resume) {
+    let reason;
+    if (!binding?.native_thread_id) reason = 'This chat has no native Codex session yet. Forked or side chats acquire their own session after a successful turn.';
+    else if (binding.backend && binding.backend !== 'codex') reason = 'This chat is bound to a different native backend.';
+    else if (!binding.last_turn_id) reason = 'The previous native operation did not confirm completion. Resolve its uncertain state before compacting.';
+    else if (binding.workspace !== root) reason = 'The working directory differs from the one used by this Codex session.';
+    else if (binding.model !== (config.model || '')) reason = `The selected model (${config.model || 'native default'}) differs from this session's saved model (${binding.model || 'native default'}). Restore the saved model before compacting.`;
+    else reason = 'The local conversation has changed since the last completed native turn. Continue this chat successfully before compacting.';
+    throw new Error(`Codex could not compact this chat: ${reason}`);
+  }
+  if (runtimeId && activeNativeRuns.has(runtimeId)) throw new Error('This chat already has an active native Codex operation.');
+  if (resume && Array.from(activeNativeRuns.values()).some(run => run.bindingId === binding.native_thread_id)) {
+    throw new NativeSessionBusyError('codex');
+  }
   const prompt = compaction ? null : userPrompt(thread, turn, resume, attachments, experimentBridgeInstructions);
   if (signal.aborted) throw new Error('Codex turn interrupted before skill setup.');
   if (nativeSkill && (nativeSkill !== 'paper-deep-reading' || researchSkill)) throw new Error('Unsupported native skill.');
@@ -161,8 +174,8 @@ async function nativeSession({ config, workspace, thread, turn, contextItems = [
     finally { client.close(); }
   } });
   const items = new Map();
-  const active = { client, emit, recordEvent, questions: new Map(), approvals: new Map(), resolvedRequests: new Set(), settled: false, compaction, nativeThreadId: null, nativeTurnId: null };
-  if (thread.id) activeNativeRuns.set(thread.id, active);
+  const active = { client, emit, recordEvent, questions: new Map(), approvals: new Map(), resolvedRequests: new Set(), settled: false, compaction, bindingId: resume ? binding.native_thread_id : null, nativeThreadId: null, nativeTurnId: null };
+  if (runtimeId) activeNativeRuns.set(runtimeId, active);
   let accepted = false, compacted = false, serverQueue = Promise.resolve(), resultStatus = 'failed';
   let resolveDone, rejectDone;
   const done = new Promise((resolve, reject) => { resolveDone = resolve; rejectDone = reject; });
@@ -290,11 +303,14 @@ async function nativeSession({ config, workspace, thread, turn, contextItems = [
     const account = await client.request('account/read', { refreshToken: false });
     if (!account?.account) throw new Error('Codex is not signed in. Run codex login, then retry.');
     await validateNativeChoice(client, config, root);
-    const result = await client.request(resume ? 'thread/resume' : 'thread/start', { ...policy.setup, ...(ephemeral ? { ephemeral: true } : {}), ...(developerInstructions ? { developerInstructions } : {}), ...(resume ? { threadId: binding.native_thread_id } : experimentDynamicTools.length ? { dynamicTools: experimentDynamicTools } : {}) });
+    // Native history stays in Codex. Hydrating every historical tool output
+    // here can overflow the protocol frame before compaction even starts.
+    const result = await client.request(resume ? 'thread/resume' : 'thread/start', { ...policy.setup, ...(ephemeral ? { ephemeral: true } : {}), ...(developerInstructions ? { developerInstructions } : {}), ...(resume ? { threadId: binding.native_thread_id, excludeTurns: true } : experimentDynamicTools.length ? { dynamicTools: experimentDynamicTools } : {}) });
     if (ephemeral && result?.thread?.ephemeral !== true) throw new Error('This Codex version did not confirm a temporary session. Update Codex and retry; no graph extraction prompt was sent.');
     active.nativeThreadId = result?.thread?.id;
     if (!active.nativeThreadId) throw new Error('Codex did not return a thread ID.');
     if (resume && active.nativeThreadId !== binding.native_thread_id) throw new Error('Codex returned a different native thread while resuming. No request was replayed.');
+    active.bindingId = active.nativeThreadId;
     if (active.settled || signal.aborted) throw new Error('Codex operation ended before it could start.');
     if (!resume) {
       const reset = { type: 'native_usage', title: 'Codex context', detail: 'Starting a new native context', usage: null };
@@ -345,7 +361,7 @@ async function nativeSession({ config, workspace, thread, turn, contextItems = [
       active.approvals.clear();
       active.resolvedRequests.clear();
       events.dispose();
-      if (thread.id && activeNativeRuns.get(thread.id) === active) activeNativeRuns.delete(thread.id);
+      if (runtimeId && activeNativeRuns.get(runtimeId) === active) activeNativeRuns.delete(runtimeId);
       client.close();
     }
   }
