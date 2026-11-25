@@ -719,27 +719,47 @@ test("URL fields retain literal URI characters instead of text-mode TeX commands
   assert.equal(scope.parseBibliography(exported).entries[0].paper.url, url);
 });
 
-test("a repeat import finds a previously stored TeX-accented title and offers to repair it", async () => {
-  const data = database("Legacy accents"); let unmount;
-  try {
-    const library = data.db.createLibrary({ projectId: data.project.id, name: "References" });
-    const source = String.raw`@article{legacy,title={Garc\'ia}}`;
-    const { paper } = scope.parseBibliography(source).entries[0];
-    const old = data.db.addPaper(library.id, { ...paper, title: String.raw`Garc\'ia` });
-    data.db.setPaperBibliography(old.id, { citekey: "legacy", entryType: "article" });
-    const stored = data.db.listPapers(library.id);
-    const otherKey = scope.parseBibliography(source.replace("{legacy,", "{different,")).entries[0].paper;
-    assert.equal(scope.matchBibliographyPaper(otherKey, stored), undefined);
-    unmount = await mount(scope.BibliographyDialog, { bridge: data.bridge, library, onClose() {}, onChanged: async () => {} });
-    await input(document.querySelector('[aria-label="BibTeX source"]'), source);
-    const repair = [...document.querySelectorAll("label")].find(label => label.textContent.includes("title"));
-    assert.ok(repair, document.body.textContent);
-    await React.act(async () => { repair.querySelector("input").click(); await tick(); });
-    await click("Import selected references");
-    assert.deepEqual(data.db.listPapers(library.id).map(row => [row.id, row.title, row.citekey]), [[old.id, "García", "legacy"]]);
-  } finally {
-    if (unmount) await unmount();
-    data.close();
+test("a repeat import can repair exact legacy TeX spellings while guarding the author and year", async () => {
+  // These old spellings are the values emitted by the upstream parser before TeX decoding.
+  const legacyAuthor = String.raw`Jos\'e Garc\'ia`;
+  const accented = [String.raw`Garc{\'i}a~on scaling`, String.raw`Garc\'ia~on scaling`, "García\u00a0on scaling"];
+  const simple = ["Experiments on scaling", "Experiments on scaling", "Experiments on scaling"];
+  for (const [titleFixture, oldAuthor, oldYear] of [[accented, legacyAuthor, 2024], [simple, legacyAuthor, 2024], [accented, "Another Researcher", 2024], [accented, legacyAuthor, 2026]]) {
+    const [sourceTitle, oldTitle, repairedTitle] = titleFixture;
+    const data = database("Legacy accents"); let unmount;
+    try {
+      const library = data.db.createLibrary({ projectId: data.project.id, name: "References" });
+      const source = String.raw`@article{legacy,title={${sourceTitle}},author={Jos{\'e} Garc{\'i}a},year=2024}`;
+      const { paper } = scope.parseBibliography(source).entries[0];
+      const legacyKey = oldTitle.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+      const old = data.db.addPaper(library.id, { ...paper, title: oldTitle, authors: [oldAuthor], year: oldYear, canonical_key: `title:${legacyKey}` });
+      data.db.setPaperBibliography(old.id, { citekey: "legacy", entryType: "article" });
+      data.db.updatePaper(old.id, { notes: "Keep the research note" });
+      const otherKey = scope.parseBibliography(source.replace("{legacy,", "{different,")).entries[0].paper;
+      assert.equal(scope.matchBibliographyPaper(otherKey, data.db.listPapers(library.id)), undefined);
+      unmount = await mount(scope.BibliographyDialog, { bridge: data.bridge, library, onClose() {}, onChanged: async () => {} });
+      await input(document.querySelector('[aria-label="BibTeX source"]'), source);
+      const row = document.querySelector("article.external-paper");
+      if (oldAuthor !== legacyAuthor || oldYear !== 2024) {
+        assert.match(row.querySelector("small").textContent, /Citation key conflict/);
+        assert.equal(row.querySelector("input").disabled, true);
+        continue;
+      }
+      assert.match(row.querySelector("small").textContent, /Existing paper with metadata differences/);
+      for (const field of oldTitle === repairedTitle ? ["authors"] : ["title", "authors"]) {
+        const repair = [...row.querySelectorAll("label")].find(label => label.textContent.startsWith(`Repair selected metadata: ${field}:`));
+        assert.ok(repair, row.textContent);
+        await React.act(async () => { repair.querySelector("input").click(); await tick(); });
+      }
+      await click("Import selected references");
+      data.db.closeAllWorkspaces();
+      data.db.openWorkspace(data.root);
+      const saved = data.db.listPapers(library.id).map(({ id, title, authors, citekey, notes }) => [id, title, authors, citekey, notes]);
+      assert.deepEqual(saved, [[old.id, repairedTitle, ["José García"], "legacy", "Keep the research note"]]);
+    } finally {
+      if (unmount) await unmount();
+      data.close();
+    }
   }
 });
 

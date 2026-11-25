@@ -13,7 +13,7 @@ export type BibliographyBridge = ResearchDeskBridge & {
 
 const fields = ["title", "authors", "year", "venue", "doi", "arxiv_id", "url", "pdf_url"] as const;
 const opaqueFields = new Set(["url", "doi", "eprint"]);
-const legacyTitleSpellings = new WeakMap<AcademicSearchResult, { title: string; citekey: string }>();
+const legacySpellings = new WeakMap<AcademicSearchResult, { title: string; authors: string[]; citekey: string }>();
 const accentMarks: Record<string, string> = {
   "'": "\u0301", "\x60": "\u0300", '"': "\u0308", "^": "\u0302", "~": "\u0303",
   "=": "\u0304", ".": "\u0307", b: "\u0331", c: "\u0327", d: "\u0323",
@@ -82,13 +82,13 @@ function compatibleTitleMetadata(first: AcademicSearchResult, second: AcademicSe
     || (secondAuthors.endsWith("\nothers") && firstAuthors.startsWith(secondAuthors.slice(0, -"others".length)));
 }
 
-function splitAuthors(value: string) {
+function splitAuthors(value: string, latexText = true) {
   const authors: string[] = [];
   const literalAuthors: string[] = [];
   let depth = 0, start = 0, firstGroupEnd = -1;
   const readAuthor = (end: number) => {
     const source = value.slice(start, end).trimEnd();
-    const author = plain(source);
+    const author = plain(source, latexText);
     const wholeNameIsGrouped = source.trimStart().startsWith("{") && firstGroupEnd === start + source.length - 1;
     // Export already groups a name containing "and" to keep it as one author.
     if (author && wholeNameIsGrouped && !/\s+and\s+/i.test(author)) literalAuthors.push(author);
@@ -227,7 +227,8 @@ export function parseBibliography(input: string, t = formatWarning): { entries: 
       const normalizedArxiv = eprintIsArxiv ? arxiv(record.eprint) : arxivUrl(record.url || "") && arxivId(record.url) ? arxiv(record.url) : "";
       const externalId = normalizedDoi ? `doi:${normalizedDoi}` : normalizedArxiv ? `arxiv:${normalizedArxiv}` : `bibtex:${key[0]}`;
       const entryType = kind[0].toLowerCase();
-      const { authors, literalAuthors } = splitAuthors(record.author || "");
+      const rawAuthors = record.author || "";
+      const { authors, literalAuthors } = splitAuthors(rawAuthors);
       const locatorFields = ["volume", "number", "pages"].filter(field => record[field]);
       const exportLoss = locatorFields.length || literalAuthors.length ? { locatorFields, literalAuthors } : undefined;
       const paper: AcademicSearchResult = {
@@ -237,9 +238,10 @@ export function parseBibliography(input: string, t = formatWarning): { entries: 
         abstract: record.abstract || "", url: record.url || (normalizedDoi ? `https://doi.org/${normalizedDoi}` : normalizedArxiv ? `https://arxiv.org/abs/${normalizedArxiv}` : ""),
         pdf_url: "", citation_count: 0, source: "bibtex",
       };
-      if (record.title.includes("\\")) {
-        const legacyTitle = plain(record.title, false);
-        if (legacyTitle !== decodedTitle) legacyTitleSpellings.set(paper, { title: legacyTitle, citekey: key[0] });
+      const legacyTitle = /[\\~]/.test(record.title) ? plain(record.title, false) : decodedTitle;
+      const legacyAuthors = /[\\~]/.test(rawAuthors) ? splitAuthors(rawAuthors, false).authors : authors;
+      if (legacyTitle !== decodedTitle || legacyAuthors.join("\n") !== authors.join("\n")) {
+        legacySpellings.set(paper, { title: legacyTitle, authors: legacyAuthors, citekey: key[0] });
       }
       entries.push({ citekey: key[0], entryType, ...(exportLoss ? { exportLoss } : {}), paper });
     } catch (cause) {
@@ -281,9 +283,11 @@ export function matchBibliographyPaper<T extends AcademicSearchResult>(incoming:
     && (titleAlreadyMatched || normalizedTitle && normalizedTitle === title(paper.title)));
   if (matched) return matched;
   // Recover the exact spelling saved by the old parser for this citation.
-  const legacy = legacyTitleSpellings.get(incoming);
+  const legacy = legacySpellings.get(incoming);
   return legacy && papers.find(paper => "citekey" in paper && paper.citekey === legacy.citekey
-    && paper.title === legacy.title && compatible(paper) && compatibleTitleMetadata(incoming, paper));
+    && paper.title === legacy.title && compatible(paper) && (
+      compatibleTitleMetadata(incoming, paper) || compatibleTitleMetadata({ ...incoming, authors: legacy.authors }, paper)
+    ));
 }
 
 // Complete a compatible record's identity without replacing saved identifiers.
@@ -382,8 +386,8 @@ export function indexBibliographyBatch(entries: BibliographyEntry[]) {
       return;
     }
     representative = { ...paper };
-    const legacy = legacyTitleSpellings.get(paper);
-    if (legacy) legacyTitleSpellings.set(representative, legacy);
+    const legacy = legacySpellings.get(paper);
+    if (legacy) legacySpellings.set(representative, legacy);
     representatives.set(index, representative);
     for (const identity of identities) addIdentity(identity, representative);
     if (titleKey) addIdentity(titleKey, representative);
