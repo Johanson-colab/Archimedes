@@ -43,6 +43,7 @@ const agentBackendConfig = require("./agent-backend-config.cjs");
 const nativeAgent = require("./agent/external-backend.cjs");
 const { registerNativeAgentCommands } = require("./native-agent-commands.cjs");
 const { runWindowAgent } = require("./window-agent-run.cjs");
+const { findActiveRun, hasActiveRun, installQuitGuard, listActiveRuns, registerActiveRun } = require("./runtime/active-runs.cjs");
 const { closeAllNativeClients } = require("./agent/external-backend.cjs");
 const { planReproduction } = require("./reproduction/planner.cjs");
 const { normalizeContract } = require("./reproduction/contract.cjs");
@@ -56,6 +57,7 @@ const { completeJson } = require("./paper-review-model.cjs");
 const { createDockerBackend } = require("./reproduction/docker.cjs");
 const { createSshBackend } = require("./reproduction/remote.cjs");
 const reproductionEnv = require("./reproduction/env-store.cjs");
+const REMOTE_STOP_UNCONFIRMED = "Stop requested. Check the SSH host to confirm the remote process has exited.";
 const { testHuggingFaceToken } = require("./reproduction/env-test.cjs");
 const proactiveAgent = require("./proactive-agent.cjs");
 const figureForge = require("./figure-forge.cjs");
@@ -650,6 +652,7 @@ let collaborationServer = null;
 let presence = null;
 let authFlow = null;
 let dailyFigureCache = null;
+let stoppingResearch = false;
 
 const singleInstanceLock = app.requestSingleInstanceLock();
 if (!singleInstanceLock) {
@@ -1101,6 +1104,7 @@ app.whenReady().then(async () => {
   ipcMain.handle("experiment-activity:list", (_event, input = {}) => store.listExperimentActivities(input));
   ipcMain.handle("experiment-run:list", (_event, input = {}) => store.listExperimentRuns(input));
   ipcMain.handle("experiment-run:start", (event, input = {}) => {
+    if (stoppingResearch) throw new Error("Archimedes is quitting.");
     if (typeof input.workspace !== "string" || !input.workspace.trim()) throw new Error("A workspace is required to start an experiment run.");
     const workspace = resolveWorkspace(input.workspace);
     const started = experimentRunner.startExperimentRun({
@@ -1425,7 +1429,7 @@ app.whenReady().then(async () => {
     });
   });
 
-  const activeReproductionRuns = new Map();
+  const reproductionScope = (id) => ({ workspace: store.currentStore().workspace, ownerId: localIdentity.localIdentity().userId, domain: "reproduction", id });
 
   const notifyRunFinished = (record, summary) => {
     // The user is told when they are not looking; a run that finishes while the
@@ -1439,12 +1443,13 @@ app.whenReady().then(async () => {
     }
   };
 
-  const stopSession = async (reproductionId) => {
-    const session = activeReproductionRuns.get(reproductionId);
-    if (!session) return null;
-    activeReproductionRuns.delete(reproductionId);
-    if (session.backend) await session.backend.dispose().catch(() => {});
-    return session;
+  const stoppedSummary = (session) => session.remote && session.backend ? REMOTE_STOP_UNCONFIRMED : "Stopped by the user.";
+
+  const disposeSession = async (session) => {
+    if (session.backend) {
+      session.disposal ??= Promise.resolve().then(() => session.backend.dispose()).catch(() => {});
+      await session.disposal;
+    }
   };
 
   /**
@@ -1467,7 +1472,7 @@ app.whenReady().then(async () => {
   const executeRun = async (session) => {
     const { record, send, run } = session;
     if (!session.backend) throw new Error("The environment is no longer running.");
-    session.controller = new AbortController();
+    session.controller.signal.throwIfAborted();
     send({ type: "attempt", attempt: 1 });
     send({ type: "started", detail: session.backend.describe?.() || "" });
 
@@ -1519,7 +1524,8 @@ app.whenReady().then(async () => {
       outcome = { ...outcome, status: "failed", summary: error instanceof Error ? error.message : "The run failed." };
     }
 
-    const runStatus = outcome.status || "failed";
+    const runStatus = session.controller.signal.aborted && outcome.status !== "verified" ? "stopped" : outcome.status || "failed";
+    const stopped = runStatus === "stopped" ? stoppedSummary(session) : "";
     const contract = {
       ...session.contract,
       steps: outcome.runbook?.length ? outcome.runbook : session.contract.steps,
@@ -1530,22 +1536,22 @@ app.whenReady().then(async () => {
       status: runStatus,
       steps: outcome.steps || [],
       log: outcome.log || "",
-      error: runStatus === "verified" ? "" : (outcome.summary || ""),
+      error: runStatus === "verified" ? "" : (stopped || outcome.summary || ""),
       finishedAt: new Date().toISOString(),
     });
 
     if (runStatus === "verified") {
-      await stopSession(record.id);
+      await disposeSession(session);
       store.updateReproduction(record.id, { contract, status: "checks-passed", error: "" });
       send({ type: "finished", status: runStatus, summary: outcome.summary || "" });
       notifyRunFinished(record, outcome.summary || "Every runbook step passed.");
       return;
     }
 
-    await stopSession(record.id);
+    await disposeSession(session);
     if (runStatus === "stopped") {
-      store.updateReproduction(record.id, { contract, status: "cancelled", error: "Stopped by the user." });
-      send({ type: "finished", status: runStatus, summary: "Stopped by the user." });
+      store.updateReproduction(record.id, { contract, status: "cancelled", error: stopped });
+      send({ type: "finished", status: runStatus, summary: stopped });
       return;
     }
 
@@ -1563,13 +1569,15 @@ app.whenReady().then(async () => {
   };
 
   ipcMain.handle("reproduction:run", async (event, { id, workspace, backend: backendKind = "docker", serverId = "" } = {}) => {
+    if (stoppingResearch) throw new Error("Archimedes is quitting.");
     const record = presentReproduction(store.getReproduction(id));
     if (!record) throw new Error("That reproduction does not exist.");
     if (!record.contract) throw new Error("Generate a plan before running it.");
     // Fail before cloning or starting a container: an executor with no model
     // cannot decide anything, and provisioning costs minutes.
     reproductionModel();
-    if (activeReproductionRuns.has(record.id)) throw new Error("This reproduction is already running.");
+    const scope = reproductionScope(record.id);
+    if (hasActiveRun(scope)) throw new Error("This reproduction is already running.");
     const repoUrl = record.contract.repo?.url || record.repo_url;
     if (!repoUrl) throw new Error("This reproduction has no repository to run against.");
 
@@ -1581,6 +1589,7 @@ app.whenReady().then(async () => {
     if (wantsSsh && !server) throw new Error("Choose an SSH server before running this reproduction.");
     const secrets = reproductionEnv.values(record.id);
     const run = store.createReproductionRun({ reproductionId: record.id, backend: wantsSsh ? "ssh" : "docker" });
+    const controller = new AbortController();
     const session = {
       reproductionId: record.id,
       record,
@@ -1589,19 +1598,22 @@ app.whenReady().then(async () => {
       workspace: dataWorkspace,
       repoName: repoNameFromUrl(repoUrl),
       backend: null,
-      controller: null,
+      controller,
+      remote: wantsSsh,
+      cancel: () => controller.abort(),
       send: (payload) => {
         if (!event.sender.isDestroyed()) event.sender.send("reproduction:run-event", { reproductionId: record.id, runId: run.id, ...payload });
       },
     };
-    activeReproductionRuns.set(record.id, session);
     store.updateReproduction(record.id, { status: "provisioning", error: "" });
 
     // Detached on purpose: the renderer gets progress events, the main process
     // owns the run, and closing the reproduction view does not stop it.
     const lease = store.captureStore();
-    void (async () => {
+    const releaseRun = registerActiveRun(scope, session);
+    session.completion = lease.store.run(async () => {
       try {
+        const ensureActive = () => controller.signal.throwIfAborted();
         const branch = session.contract.repo?.branch || "";
         if (server) {
           // The server clones for itself when it can reach GitHub. The local
@@ -1612,11 +1624,13 @@ app.whenReady().then(async () => {
           if (local) {
             copyFrom = (await resolveAuditPath(dataWorkspace, repoUrl, "", branch).catch(() => ({ root: "" }))).root;
           }
+          ensureActive();
           const backend = createSshBackend({ server, repoUrl, branch, copyFrom, emit: session.send, secrets });
           session.backend = backend;
           store.updateReproductionRun(run.id, { backend: backend.describe(), image: "" });
           session.send({ type: "preparing", detail: `Checking ${server.host}…` });
           const probe = await backend.probe();
+          ensureActive();
           session.send({
             type: "preparing",
             detail: [probe.os || server.host, `${probe.diskFreeGb} GB free`, probe.docker ? "docker" : "", probe.gpu].filter(Boolean).join(" · "),
@@ -1625,6 +1639,7 @@ app.whenReady().then(async () => {
             throw new Error(`${server.host} has only ${probe.diskFreeGb} GB free. Free some space before running.`);
           }
           await backend.prepare();
+          ensureActive();
           store.updateReproduction(record.id, { status: "running" });
           await executeRun(session);
           return;
@@ -1633,41 +1648,54 @@ app.whenReady().then(async () => {
         session.send({ type: "preparing", detail: "Getting the repository checkout…" });
         const checkoutOptions = { branch };
         const existing = await getRepositoryCheckout(dataWorkspace, repoUrl, checkoutOptions).catch(() => null);
+        ensureActive();
         if (!existing) {
           session.send({ type: "preparing", detail: branch ? `Cloning ${branch}…` : "Cloning the repository…" });
           await cloneRepositoryCheckout(dataWorkspace, repoUrl, checkoutOptions);
+          ensureActive();
         }
         const { root } = await resolveAuditPath(dataWorkspace, repoUrl, "", branch);
+        ensureActive();
         const backend = createDockerBackend({ checkoutDir: root, environment: session.contract.environment, secrets });
         session.backend = backend;
         store.updateReproductionRun(run.id, { image: backend.image, backend: backend.describe() });
         session.send({ type: "preparing", detail: `Starting ${backend.image}…` });
         await backend.prepare();
+        ensureActive();
         store.updateReproduction(record.id, { status: "running" });
         session.send({ type: "started", detail: backend.describe() });
         await executeRun(session);
       } catch (error) {
+        await disposeSession(session);
+        if (controller.signal.aborted) {
+          const summary = stoppedSummary(session);
+          store.updateReproductionRun(run.id, { status: "stopped", error: summary, finishedAt: new Date().toISOString() });
+          store.updateReproduction(record.id, { status: "cancelled", error: summary });
+          session.send({ type: "finished", status: "stopped", summary });
+          return;
+        }
         const message = error instanceof Error ? error.message : "The run could not start.";
-        await stopSession(record.id);
         store.updateReproductionRun(run.id, { status: "failed", error: message, finishedAt: new Date().toISOString() });
         store.updateReproduction(record.id, { status: "blocked", error: message });
         session.send({ type: "error", detail: message });
         session.send({ type: "finished", status: "failed", summary: message });
         notifyRunFinished(record, message);
       } finally {
+        releaseRun();
         lease.release();
       }
-    })();
+    });
+    void session.completion.catch(error => console.warn("Could not record reproduction completion:", error.message));
 
     return { ...presentReproduction(store.getReproduction(record.id)), run };
   });
 
   ipcMain.handle("reproduction:stop", async (_event, { id } = {}) => {
-    const session = activeReproductionRuns.get(String(id || ""));
+    const session = findActiveRun(reproductionScope(String(id || "")));
     // Stopping something that already finished is not an error: the button and
     // the run can disagree for a moment, and shouting at the user helps nobody.
     if (!session) return false;
-    session.controller?.abort();
+    session.cancel();
     return true;
   });
 
@@ -2681,6 +2709,20 @@ app.on("window-all-closed", () => {
 
 app.on("activate", () => {
   if (BrowserWindow.getAllWindows().length === 0) createWindow(startupWorkspace());
+});
+
+installQuitGuard({ app, dialog,
+  hasWork: () => listActiveRuns().length > 0 || agent.hasActiveAgentRuns(),
+  stopWork: async () => {
+    stoppingResearch = true;
+    const reproductions = listActiveRuns("reproduction");
+    for (const run of reproductions) run.cancel();
+    await Promise.allSettled([
+      ...reproductions.map(run => run.completion),
+      experimentRunner.shutdownExperimentRuns(),
+      agent.shutdownAgentRuns(),
+    ]);
+  },
 });
 
 app.on("will-quit", () => {

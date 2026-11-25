@@ -4,11 +4,16 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { randomUUID } = require("node:crypto");
 const store = require("../store.cjs");
+const { localIdentity } = require("../local-identity.cjs");
+const { findActiveRun, listActiveRuns, registerActiveRun } = require("../runtime/active-runs.cjs");
 const { inspectCodeState, createCodeSnapshot } = require("./code-snapshot.cjs");
 
-const activeRuns = new Map();
 const pendingCleanup = new Set();
 const TERMINAL = new Set(["succeeded", "failed", "cancelled"]);
+
+function runScope(id) {
+  return { workspace: store.currentStore().workspace, ownerId: localIdentity().userId, domain: "graph", id };
+}
 
 function shellFor(command) {
   if (process.platform === "win32") {
@@ -126,6 +131,7 @@ function startInWorkspace({
   const stream = fs.createWriteStream(logPath, { flags: "a" });
   let settled = false;
   let cancelled = false;
+  let releaseRun;
   let finish;
   const completion = new Promise((resolve) => { finish = resolve; });
 
@@ -144,7 +150,7 @@ function startInWorkspace({
       } catch (cause) {
         console.warn("[experiment-run] could not record final status:", cause?.message || String(cause));
       }
-      activeRuns.delete(runId);
+      releaseRun?.();
       onUpdate(final);
       finish(final);
     });
@@ -186,8 +192,8 @@ function startInWorkspace({
     return { run, completion };
   }
 
-  activeRuns.set(runId, {
-    child,
+  releaseRun = registerActiveRun(runScope(runId), {
+    completion,
     cancel: (force = false) => {
       if ((cancelled || settled) && !force) return;
       cancelled = true;
@@ -226,18 +232,15 @@ function startInWorkspace({
 
 function cancelExperimentRun(runId) {
   if (!runId) throw new Error("An experiment run id is required.");
-  const active = activeRuns.get(runId);
-  if (active) {
-    active.cancel();
-    return store.getExperimentRun(runId);
-  }
   const run = store.getExperimentRun(runId);
   if (!run) throw new Error("Experiment run not found.");
+  if (store.canAccessProject(run.project_id, "editor")) findActiveRun(runScope(runId))?.cancel();
   return run;
 }
 
 function shutdownExperimentRuns() {
-  for (const active of activeRuns.values()) {
+  const activeRuns = listActiveRuns("graph");
+  for (const active of activeRuns) {
     try {
       // The app may exit immediately; a delayed escalation would never fire.
       active.cancel(true);
@@ -245,9 +248,9 @@ function shutdownExperimentRuns() {
       // The process may already be gone during app shutdown.
     }
   }
-  activeRuns.clear();
   // A cancelled shell may already have closed while a worker awaits escalation.
   for (const cleanup of pendingCleanup) cleanup();
+  return Promise.allSettled(activeRuns.map(run => run.completion));
 }
 
 module.exports = {

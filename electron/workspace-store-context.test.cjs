@@ -8,6 +8,7 @@ const { DatabaseSync } = require("node:sqlite");
 const { spawn } = require("node:child_process");
 const { randomUUID } = require("node:crypto");
 const { createWorkspaceIpc, isWorkspaceDataChannel } = require("./workspace-context.cjs");
+const runRegistry = require("./runtime/active-runs.cjs");
 
 function fixture(t) {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-store-owner-")));
@@ -16,6 +17,26 @@ function fixture(t) {
   return { root, a, b, executionA };
 }
 function deferred() { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; }
+
+function reproductionHandlers(workspaceForEvent, operations) {
+  const handlers = new Map();
+  const ipcMain = createWorkspaceIpc({ ipcMain: { handle: (name, callback) => handlers.set(name, callback) }, store, workspaceForEvent });
+  const main = fs.readFileSync(path.join(__dirname, "main.cjs"), "utf8");
+  const from = main.indexOf("  const reproductionScope ="), to = main.indexOf('  ipcMain.handle("reproduction:plan",', from);
+  new Function("scope", `with(scope) { ${main.slice(from, to)} }`)({
+    ...runRegistry, ipcMain, store, stoppingResearch: false, presentReproduction: value => value,
+    localIdentity: { localIdentity: () => ({ userId: "local-user" }) },
+    resolveWorkspace: fs.realpathSync, windowWorkspaces: new Map(),
+    workspaceForWindow: () => undefined, BrowserWindow: { fromWebContents: () => ({}) },
+    reproductionEnv: { values: () => ({}) }, repoNameFromUrl: () => "research",
+    getActiveModelConfig: () => ({ provider: "openrouter" }),
+    modelConfig: { getActiveModelConfig: () => ({ provider: "openrouter" }) },
+    REMOTE_STOP_UNCONFIRMED: "Stop requested. Check the SSH host to confirm the remote process has exited.",
+    Notification: { isSupported: () => false },
+    ...operations,
+  });
+  return handlers;
+}
 
 test("an in-flight window request retains its database through another selection and its window close", async t => {
   const f = fixture(t), handlers = new Map(), gate = deferred();
@@ -230,20 +251,14 @@ test("a detached experiment persists its outcome to the original database after 
   const record = original.createReproduction({ title: "Offline test", repoUrl: "https://example.com/research" });
   original.updateReproduction(record.id, { contract: { repo: { url: record.repo_url } } });
   store.createWorkspaceStore(b).close();
-  const handlers = new Map(), gate = deferred(), finished = deferred();
-  const ipcMain = createWorkspaceIpc({ ipcMain: { handle: (name, fn) => handlers.set(name, fn) }, store, workspaceForEvent: () => a });
-  const main = fs.readFileSync(path.join(__dirname, "main.cjs"), "utf8");
-  const from = main.indexOf('  ipcMain.handle("reproduction:run",'), to = main.indexOf('  ipcMain.handle("reproduction:stop",', from);
-  new Function("scope", `with(scope) { ${main.slice(from, to)} }`)({
-    ipcMain, store, presentReproduction: value => value, reproductionModel() {},
-    activeReproductionRuns: new Map(), resolveWorkspace: fs.realpathSync,
-    workspaceForWindow: () => a, BrowserWindow: { fromWebContents: () => ({}) },
-    reproductionEnv: { values: () => ({}) }, repoNameFromUrl: () => "research",
+  const gate = deferred(), finished = deferred();
+  const handlers = reproductionHandlers(() => a, {
     getRepositoryCheckout: async () => { await gate.promise; return true; },
     resolveAuditPath: async () => { throw new Error("Offline fixture finished provisioning"); },
-    stopSession: async () => {}, notifyRunFinished: () => finished.resolve(),
   });
-  const result = await handlers.get("reproduction:run")({ sender: { id: 1, isDestroyed: () => true } }, { id: record.id, workspace: a });
+  const result = await handlers.get("reproduction:run")({ sender: {
+    id: 1, isDestroyed: () => false, send: (_channel, event) => { if (event.type === "finished") finished.resolve(); },
+  } }, { id: record.id, workspace: a });
   const old = path.join(root, "before-restore");
   fs.renameSync(a, old);
   fs.renameSync(b, a);
@@ -254,4 +269,44 @@ test("a detached experiment persists its outcome to the original database after 
   const saved = store.createWorkspaceStore(old).getReproductionRun(result.run.id);
   assert.equal(saved.status, "failed");
   assert.equal(saved.error, "Offline fixture finished provisioning");
+});
+
+test("a queued stop stays in the original workspace and prevents a prepared SSH run from executing", async t => {
+  const { a, b } = fixture(t);
+  const original = store.createWorkspaceStore(a);
+  const record = original.createReproduction({ title: "Prepare fixture", repoUrl: "https://example.invalid/research" });
+  original.updateReproduction(record.id, { contract: { repo: { url: record.repo_url } } });
+  original.close();
+  fs.cpSync(path.join(a, ".archimedes"), path.join(b, ".archimedes"), { recursive: true });
+  const prepared = deferred(), continuePreparation = deferred(), finished = deferred();
+  let actor = "local-user", disposals = 0, executions = 0;
+  const handlers = reproductionHandlers(event => event.dataRoot, {
+    localIdentity: { localIdentity: () => ({ userId: actor }) },
+    sshServers: { listServers: () => [{ id: "fixture", host: "fixture.invalid" }] },
+    getRepositoryCheckout: async () => null,
+    createSshBackend: () => ({
+      describe: () => "SSH fixture",
+      probe: async () => ({}),
+      prepare: async () => { prepared.resolve(); await continuePreparation.promise; },
+      dispose: async () => { disposals++; },
+    }),
+    runPilot: async () => { executions++; return { status: "failed", summary: "Unexpected execution" }; },
+  });
+  const sender = { id: 1, isDestroyed: () => false, send: (_channel, event) => { if (event.type === "finished") finished.resolve(event); } };
+  const result = await handlers.get("reproduction:run")({ dataRoot: a, sender }, { id: record.id, workspace: a, backend: "ssh", serverId: "fixture" });
+  await prepared.promise;
+  assert.equal(await handlers.get("reproduction:stop")({ dataRoot: b, sender: { id: 2 } }, { id: record.id }), false);
+  actor = "viewer";
+  assert.equal(await handlers.get("reproduction:stop")({ dataRoot: a, sender }, { id: record.id }), false);
+  actor = "local-user";
+  assert.equal(await handlers.get("reproduction:stop")({ dataRoot: a, sender }, { id: record.id }), true);
+  continuePreparation.resolve();
+  const event = await finished.promise;
+  assert.equal(executions, 0);
+  assert.equal(disposals, 1);
+  assert.equal(event.status, "stopped");
+  const saved = store.createWorkspaceStore(a).getReproductionRun(result.run.id);
+  assert.equal(saved.status, "stopped");
+  assert.match(saved.error, /confirm the remote process has exited/);
+  assert.equal(store.createWorkspaceStore(b).getReproduction(record.id).status, record.status);
 });
