@@ -36,7 +36,7 @@ function initRepo(folder) {
   runGit(folder, "commit", "-m", "Initial commit");
 }
 
-test("opening an existing database attaches projects and sessions to a shared workspace", () => {
+test("opening an existing database attaches projects and sessions to a shared workspace", async () => {
   const { root, primary, projectFolder } = makeRoots("migrate");
   try {
     store.openWorkspace(primary);
@@ -74,20 +74,20 @@ test("opening an existing database attaches projects and sessions to a shared wo
   }
 });
 
-test("sessions are filtered by workspace and can be pinned and marked viewed", () => {
+test("sessions are filtered by workspace and can be pinned and marked viewed", async () => {
   const { root, primary, projectFolder } = makeRoots("filter");
   try {
     store.openWorkspace(primary);
     const project = store.createResearchProject({ name: "Workspace filter", workspacePath: projectFolder });
     const shared = store.defaultProjectWorkspace(project.id);
     assert.ok(nameLibrary.some((entry) => entry.name === shared.name));
-    const sandbox = store.createProjectWorkspace({ projectId: project.id, kind: "sandbox" });
+    const sandbox = await store.createProjectWorkspace({ projectId: project.id, kind: "sandbox" });
     assert.ok(nameLibrary.some((entry) => entry.name === sandbox.name));
     assert.notEqual(sandbox.name, shared.name);
-    const secondSandbox = store.createProjectWorkspace({ projectId: project.id, kind: "sandbox" });
+    const secondSandbox = await store.createProjectWorkspace({ projectId: project.id, kind: "sandbox" });
     assert.ok(nameLibrary.some((entry) => entry.name === secondSandbox.name));
     assert.notEqual(secondSandbox.name, sandbox.name);
-    store.deleteProjectWorkspace(secondSandbox.id);
+    await store.deleteProjectWorkspace(secondSandbox.id);
     const sharedThread = store.createResearchThread({ prompt: "Shared work", mode: "free-chat", projectId: project.id });
     const sandboxThread = store.createResearchThread({
       prompt: "Sandbox work",
@@ -119,7 +119,7 @@ test("sessions are filtered by workspace and can be pinned and marked viewed", (
   }
 });
 
-test("sandboxes copy project files without caches or app data", () => {
+test("sandboxes copy project files without caches or app data", async () => {
   const { root, primary, projectFolder } = makeRoots("sandbox");
   try {
     fs.writeFileSync(path.join(projectFolder, "notes.md"), "# Notes\n");
@@ -129,7 +129,7 @@ test("sandboxes copy project files without caches or app data", () => {
     fs.writeFileSync(path.join(projectFolder, ".archimedes", "archimedes.db"), "db");
     store.openWorkspace(primary);
     const project = store.createResearchProject({ name: "Sandbox project", workspacePath: projectFolder });
-    const sandbox = store.createProjectWorkspace({ projectId: project.id, kind: "sandbox" });
+    const sandbox = await store.createProjectWorkspace({ projectId: project.id, kind: "sandbox" });
     assert.equal(sandbox.kind, "sandbox");
     assert.equal(fs.existsSync(path.join(sandbox.root, "notes.md")), true);
     assert.equal(fs.existsSync(path.join(sandbox.root, "node_modules")), false);
@@ -142,7 +142,7 @@ test("sandboxes copy project files without caches or app data", () => {
       workspaceId: sandbox.id,
     });
     assert.equal(thread.workspace_path, sandbox.root);
-    const deleted = store.deleteProjectWorkspace(sandbox.id);
+    const deleted = await store.deleteProjectWorkspace(sandbox.id);
     assert.equal(deleted.deleted, true);
     assert.equal(fs.existsSync(sandbox.root), false);
     assert.equal(store.getResearchThread(thread.id).workspace_id, store.defaultProjectWorkspace(project.id).id);
@@ -152,18 +152,18 @@ test("sandboxes copy project files without caches or app data", () => {
   }
 });
 
-test("workspaces accept a user name and can be renamed later", () => {
+test("workspaces accept a user name and can be renamed later", async () => {
   const { root, primary, projectFolder } = makeRoots("rename");
   try {
     store.openWorkspace(primary);
     const project = store.createResearchProject({ name: "Named project", workspacePath: projectFolder });
-    const named = store.createProjectWorkspace({ projectId: project.id, kind: "sandbox", name: "Quiet Room" });
+    const named = await store.createProjectWorkspace({ projectId: project.id, kind: "sandbox", name: "Quiet Room" });
     assert.equal(named.name, "Quiet Room");
-    assert.throws(
+    await assert.rejects(
       () => store.createProjectWorkspace({ projectId: project.id, kind: "sandbox", name: "quiet room" }),
       /already exists/i,
     );
-    const other = store.createProjectWorkspace({ projectId: project.id, kind: "sandbox", name: "Other Room" });
+    const other = await store.createProjectWorkspace({ projectId: project.id, kind: "sandbox", name: "Other Room" });
     const renamed = store.renameProjectWorkspace(named.id, "Reading Room");
     assert.equal(renamed.name, "Reading Room");
     assert.equal(store.renameProjectWorkspace(named.id, "Reading Room").name, "Reading Room");
@@ -175,15 +175,15 @@ test("workspaces accept a user name and can be renamed later", () => {
   }
 });
 
-test("git projects can open and remove a worktree workspace", () => {
+test("git projects can open and remove a worktree workspace", async () => {
   const { root, primary, projectFolder } = makeRoots("worktree");
   try {
     initRepo(projectFolder);
     store.openWorkspace(primary);
     const project = store.createResearchProject({ name: "Git project", workspacePath: projectFolder });
-    assert.equal(store.getResearchProject(project.id).git_state, "ready");
+    assert.equal((await store.refreshProjectGitState(project.id)).git_state, "ready");
     const suggested = store.suggestProjectWorkspaceName();
-    const worktree = store.createProjectWorkspace({ projectId: project.id, kind: "worktree" });
+    const worktree = await store.createProjectWorkspace({ projectId: project.id, kind: "worktree" });
     assert.equal(worktree.kind, "worktree");
     assert.equal(worktree.name, suggested);
     assert.equal(fs.existsSync(path.join(worktree.root, "README.md")), true);
@@ -197,7 +197,7 @@ test("git projects can open and remove a worktree workspace", () => {
     });
     assert.equal(thread.workspace_path, worktree.root);
 
-    store.deleteProjectWorkspace(worktree.id);
+    await store.deleteProjectWorkspace(worktree.id);
     assert.equal(fs.existsSync(worktree.root), false);
     assert.equal(store.getResearchThread(thread.id).workspace_id, store.defaultProjectWorkspace(project.id).id);
   } finally {
@@ -206,13 +206,13 @@ test("git projects can open and remove a worktree workspace", () => {
   }
 });
 
-test("projects without git cannot create a worktree", () => {
+test("projects without git cannot create a worktree", async () => {
   const { root, primary, projectFolder } = makeRoots("no-git");
   try {
     store.openWorkspace(primary);
     const project = store.createResearchProject({ name: "No git", workspacePath: projectFolder });
     assert.equal(store.getResearchProject(project.id).git_state, "none");
-    assert.throws(() => store.createProjectWorkspace({ projectId: project.id, kind: "worktree" }), /commit/i);
+    await assert.rejects(() => store.createProjectWorkspace({ projectId: project.id, kind: "worktree" }), /commit/i);
   } finally {
     closeStore();
     fs.rmSync(root, { recursive: true, force: true });

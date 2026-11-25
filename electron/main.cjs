@@ -700,6 +700,7 @@ app.whenReady().then(async () => {
   configureAppIcon(app);
   if (!singleInstanceLock) return;
   const ipcMain = createWorkspaceIpc({ ipcMain: electronIpcMain, store,
+    prepareOpen: () => store.refreshWorkspaceGitStates(),
     workspaceForEvent: (event, channel, args) => channel === "workspace:open"
       ? resolveWorkspace(args[0]) : isWorkspaceDataChannel(channel) ? windowWorkspaces.get(event.sender.id) : null,
   });
@@ -1171,10 +1172,10 @@ app.whenReady().then(async () => {
   });
   ipcMain.handle("experiment-activity:list", (_event, input = {}) => store.listExperimentActivities(input));
   ipcMain.handle("experiment-run:list", (_event, input = {}) => store.listExperimentRuns(input));
-  ipcMain.handle("experiment-run:start", (event, input = {}) => {
+  ipcMain.handle("experiment-run:start", async (event, input = {}) => {
     if (typeof input.workspace !== "string" || !input.workspace.trim()) throw new Error("A workspace is required to start an experiment run.");
     const workspace = resolveWorkspace(input.workspace);
-    const started = experimentRunner.startExperimentRun({
+    const started = await experimentRunner.startExperimentRun({
       ...input,
       workspace,
       onUpdate: (run) => {
@@ -1197,8 +1198,11 @@ app.whenReady().then(async () => {
     dataWorkspace: (event, input) => workspaceForWindow(BrowserWindow.fromWebContents(event.sender)) || resolveWorkspace(input.workspace),
   });
 
-  ipcMain.handle("research-project:create", (_event, input = {}) => {
-    return store.createResearchProject(input);
+  ipcMain.handle("research-project:create", async (_event, input = {}) => {
+    const project = store.createResearchProject(input);
+    const refreshed = await store.refreshProjectGitState(project.id);
+    if (!refreshed) throw new Error("Research project not found.");
+    return { ...project, ...refreshed };
   });
 
   ipcMain.handle("research-project:rename", (_event, input = {}) => {
@@ -1206,9 +1210,12 @@ app.whenReady().then(async () => {
     return store.renameResearchProject(input.id, input.name);
   });
 
-  ipcMain.handle("research-project:set-workspace", (_event, input = {}) => {
+  ipcMain.handle("research-project:set-workspace", async (_event, input = {}) => {
     if (typeof input.id !== "string") throw new Error("A research project ID is required.");
-    return store.setResearchProjectWorkspace(input.id, input.workspacePath);
+    const project = store.setResearchProjectWorkspace(input.id, input.workspacePath);
+    const refreshed = await store.refreshProjectGitState(input.id);
+    if (!refreshed) throw new Error("Research project not found.");
+    return { ...project, ...refreshed };
   });
 
   ipcMain.handle("research-workspace:list", (_event, input = {}) => {
@@ -2284,6 +2291,7 @@ app.whenReady().then(async () => {
       name: cloudProject.name,
       description: cloudProject.description,
     });
+    await store.refreshProjectGitState(project.id);
     return syncCloudProject(project.id);
   });
 

@@ -1,12 +1,14 @@
 const { getSharedEnvironment } = require("../environment-vault.cjs");
-const { spawn, execFileSync } = require("node:child_process");
+const { spawn } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
 const { randomUUID } = require("node:crypto");
 const store = require("../store.cjs");
-const { inspectCodeState, createCodeSnapshot } = require("./code-snapshot.cjs");
+const { gitOutput } = require("../git-state.cjs");
+const { createCodeSnapshot } = require("./code-snapshot.cjs");
 
 const activeRuns = new Map();
+const preparingRuns = new WeakMap();
 const pendingCleanup = new Set();
 const TERMINAL = new Set(["succeeded", "failed", "cancelled"]);
 
@@ -15,18 +17,6 @@ function shellFor(command) {
     return { shell: "cmd.exe", args: ["/d", "/s", "/c", command] };
   }
   return { shell: process.env.SHELL || (process.platform === "darwin" ? "/bin/zsh" : "/bin/sh"), args: ["-lc", command] };
-}
-
-function readCommit(cwd) {
-  try {
-    const value = execFileSync("git", ["-C", cwd, "rev-parse", "HEAD"], {
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"],
-    }).trim();
-    return value || null;
-  } catch {
-    return null;
-  }
 }
 
 function runDirectory(workspace, runId) {
@@ -41,18 +31,30 @@ function runDirectory(workspace, runId) {
  * failed-only experiment stays provisional and may be repaired with a new
  * command.
  */
-function startExperimentRun(options) {
+async function startExperimentRun(options = {}) {
   const owner = store.captureStore();
+  let preparing = preparingRuns.get(owner.store);
+  if (!preparing) {
+    preparing = new Set();
+    preparingRuns.set(owner.store, preparing);
+  }
+  if (preparing.has(options.nodeId)) {
+    owner.release();
+    throw new Error("This experiment already has a run in progress.");
+  }
+  preparing.add(options.nodeId);
   try {
-    const started = owner.store.run(() => startInWorkspace(options));
+    const started = await owner.store.run(() => startInWorkspace(options));
     return { ...started, completion: started.completion.finally(owner.release) };
   } catch (error) {
     owner.release();
     throw error;
+  } finally {
+    preparing.delete(options.nodeId);
   }
 }
 
-function startInWorkspace({
+async function startInWorkspace({
   projectId,
   threadId,
   nodeId,
@@ -60,6 +62,7 @@ function startInWorkspace({
   cwd,
   workspace,
   experimentWorkspaceId = null,
+  verifyStart,
   onUpdate = () => {},
 } = {}) {
   const text = String(command || "").trim();
@@ -92,8 +95,6 @@ function startInWorkspace({
     throw new Error("The run command is fixed after a successful run. Create a next round to change it.");
   }
 
-  if (experimentWorkspaceId) inspectCodeState(runWorkspace);
-
   const runId = randomUUID();
   const directory = runDirectory(runWorkspace, runId);
   fs.mkdirSync(directory, { recursive: true });
@@ -102,8 +103,9 @@ function startInWorkspace({
 
   let run;
   try {
-    const codeSnapshot = experimentWorkspaceId ? createCodeSnapshot(runWorkspace, directory) : null;
-    run = store.createExperimentRun({
+    const codeSnapshot = experimentWorkspaceId ? await createCodeSnapshot(runWorkspace, directory) : null;
+    const commitSha = codeSnapshot?.commit || await gitOutput(runCwd, ["rev-parse", "HEAD"]);
+    run = await store.createExperimentRun({
       id: runId,
       projectId,
       threadId,
@@ -112,10 +114,11 @@ function startInWorkspace({
       backend: "local",
       command: text,
       cwd: runCwd,
-      commitSha: codeSnapshot?.commit || readCommit(runCwd),
+      commitSha: commitSha || null,
       experimentWorkspaceId,
       codeSnapshot,
       logPath,
+      verifyStart,
     });
   } catch (error) {
     fs.rmSync(directory, { recursive: true, force: true });

@@ -1,21 +1,22 @@
 const fs = require("node:fs");
 const path = require("node:path");
-const { spawnSync } = require("node:child_process");
+const { execFile } = require("node:child_process");
 
 const GIT_TIMEOUT_MS = 5_000;
 
-function runGit(root, args) {
-  return spawnSync("git", ["-C", root, ...args], {
-    encoding: "utf8",
-    timeout: GIT_TIMEOUT_MS,
-    windowsHide: true,
+function runGit(root, args, options) {
+  return new Promise(resolve => {
+    execFile("git", ["-C", root, ...args], {
+      encoding: "utf8", timeout: GIT_TIMEOUT_MS, windowsHide: true, ...options,
+    }, (error, stdout, stderr) => {
+      resolve({ status: error ? error.code : 0, error, stdout, stderr });
+    });
   });
 }
 
-function gitOutput(root, args) {
-  const result = runGit(root, args);
-  if (result.error || result.status !== 0) return null;
-  return String(result.stdout || "").trim();
+async function gitOutput(root, args) {
+  const result = await runGit(root, args);
+  return result.status === 0 ? result.stdout.trim() : null;
 }
 
 /**
@@ -28,7 +29,7 @@ function gitOutput(root, args) {
  * - nested: `.git` is a pointer (linked worktree or submodule)
  * - suspicious: `.git` exists but Git cannot use the folder as a work tree
  */
-function detectGitState(root) {
+async function detectGitState(root) {
   if (typeof root !== "string" || !root.trim()) return "none";
   let resolved;
   let stat;
@@ -58,11 +59,11 @@ function detectGitState(root) {
   }
   if (!gitStat.isDirectory()) return "suspicious";
 
-  const inside = gitOutput(resolved, ["rev-parse", "--is-inside-work-tree"]);
+  const inside = await gitOutput(resolved, ["rev-parse", "--is-inside-work-tree"]);
   if (inside !== "true") return "suspicious";
   // A malformed `.git` can fall through to a repository in a parent folder.
   // The project root must be the actual top-level work tree.
-  const topLevel = gitOutput(resolved, ["rev-parse", "--show-toplevel"]);
+  const topLevel = await gitOutput(resolved, ["rev-parse", "--show-toplevel"]);
   if (!topLevel) return "suspicious";
   // Both paths resolve to the actual directory, including symlinked workspaces.
   try {
@@ -70,17 +71,17 @@ function detectGitState(root) {
   } catch {
     return "suspicious";
   }
-  const head = runGit(resolved, ["rev-parse", "--verify", "--quiet", "HEAD"]);
-  if (head.error || head.status !== 0) {
-    const hasRefs = gitOutput(resolved, ["for-each-ref", "--count=1", "--format=%(refname)"]);
+  const head = await gitOutput(resolved, ["rev-parse", "--verify", "--quiet", "HEAD"]);
+  if (head === null) {
+    const hasRefs = await gitOutput(resolved, ["for-each-ref", "--count=1", "--format=%(refname)"]);
     return hasRefs === null ? "suspicious" : "empty";
   }
   return "ready";
 }
 
-function gitBranch(root) {
-  if (detectGitState(root) !== "ready") return null;
-  return gitOutput(root, ["rev-parse", "--abbrev-ref", "HEAD"]) || null;
+async function gitBranch(root, state) {
+  if ((state ?? await detectGitState(root)) !== "ready") return null;
+  return (await gitOutput(root, ["rev-parse", "--abbrev-ref", "HEAD"])) || null;
 }
 
-module.exports = { detectGitState, gitBranch };
+module.exports = { detectGitState, gitBranch, gitOutput, runGit };

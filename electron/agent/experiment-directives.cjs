@@ -115,7 +115,7 @@ function recentExperimentRuns(threadId, limit = 3) {
   }
 }
 
-async function executeExperimentDirectives({ directives = [], threadId, workspace, mode = null, turnId = null, emit = () => {}, recordEvent = () => {}, approve = null } = {}) {
+async function executeExperimentDirectives({ directives = [], threadId, workspace, mode = null, turnId = null, emit = () => {}, recordEvent = () => {}, approve = null, signal } = {}) {
   if (!directives.length) return [];
   const thread = store.getResearchThread(threadId);
   if (!["research", "experiment-setup"].includes(mode || thread.mode)) throw new Error("Experiment directives are only allowed in Research or Experiment setup mode.");
@@ -179,7 +179,8 @@ async function executeExperimentDirectives({ directives = [], threadId, workspac
           nativeMethod: "archimedes/experiment",
         });
         if (!allowed) { notes.push(`Experiment workspace rejected: ${experiment.title}.`); continue; }
-        const result = store.createExperimentWorkspace(experiment.id, { parentRunId: base.parentRunId });
+        signal?.throwIfAborted();
+        const result = await store.createExperimentWorkspace(experiment.id, { parentRunId: base.parentRunId });
         notes.push(`Experiment workspace: ${result.workspace.root} (branch ${result.workspace.branch_name}, base ${result.workspace.base_commit}). Only committed code was copied; uncommitted and untracked files remain in the original workspace.`);
         continue;
       }
@@ -197,7 +198,7 @@ async function executeExperimentDirectives({ directives = [], threadId, workspac
           if (!isolatedRoot.startsWith(`${activeRoot}${path.sep}`)) throw new Error("The experiment workspace is outside the active workspace.");
         }
         const runRoot = isolated ? isolated.root : workspace;
-        if (isolated) require("../research-graph/code-snapshot.cjs").inspectCodeState(runRoot);
+        if (isolated) await require("../research-graph/code-snapshot.cjs").inspectCodeState(runRoot);
         const cwd = directive.cwd ? path.resolve(runRoot, String(directive.cwd)) : runRoot;
         if (cwd !== runRoot && !cwd.startsWith(`${runRoot}${path.sep}`)) throw new Error("The run folder is outside the workspace.");
         if (!fs.existsSync(cwd) || !fs.statSync(cwd).isDirectory()) throw new Error("The run folder is no longer available.");
@@ -216,7 +217,7 @@ async function executeExperimentDirectives({ directives = [], threadId, workspac
             continue;
           }
         }
-        const started = runner.startExperimentRun({
+        const started = await runner.startExperimentRun({
           projectId: thread.project_id,
           threadId: thread.id,
           nodeId: experiment.id,
@@ -224,6 +225,7 @@ async function executeExperimentDirectives({ directives = [], threadId, workspac
           cwd,
           workspace: runRoot,
           experimentWorkspaceId: isolated?.id || null,
+          verifyStart: () => signal?.throwIfAborted(),
           onUpdate: (run) => {
             emit({ type: "tool", title: "Experiment run", detail: `${run.status} · ${experiment.title}`, experimentRun: run });
             recordEvent({ type: "experiment_run", payload: { run } });

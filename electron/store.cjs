@@ -1,8 +1,7 @@
 const { createHash, randomUUID } = require("node:crypto");
 const { findRepositoryUrl } = require("./paper-repository.cjs");
-const { detectGitState, gitBranch } = require("./git-state.cjs");
+const { detectGitState, gitBranch, gitOutput, runGit } = require("./git-state.cjs");
 const { normalizeWorkspaceName, suggestWorkspaceName, suggestRandomWorkspaceName, workspaceNameAvailable } = require("./workspace-names.cjs");
-const { spawnSync } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
 const { DatabaseSync } = require("node:sqlite");
@@ -2285,22 +2284,28 @@ function resolveProjectRoot(project) {
   return activeWorkspace() ? path.resolve(activeWorkspace()) : "";
 }
 
-function refreshProjectGitState(db, projectId) {
+async function refreshProjectGitState(projectId) {
+  const db = requireDatabase();
   const project = db.prepare("SELECT * FROM research_projects WHERE id = ?").get(projectId);
   if (!project) return null;
   const root = resolveProjectRoot(project);
   let state = "none";
   let branch = null;
   try {
-    state = normalizeGitState(detectGitState(root));
-    branch = state === "ready" ? gitBranch(root) : null;
+    state = normalizeGitState(await detectGitState(root));
+    branch = await gitBranch(root, state);
   } catch {
     state = "none";
     branch = null;
   }
-  db.prepare("UPDATE research_projects SET git_state = ?, git_branch = ? WHERE id = ?")
-    .run(state, branch, projectId);
+  db.prepare("UPDATE research_projects SET git_state = ?, git_branch = ? WHERE id = ? AND workspace_path IS ?")
+    .run(state, branch, projectId, project.workspace_path);
   return db.prepare("SELECT * FROM research_projects WHERE id = ?").get(projectId);
+}
+
+async function refreshWorkspaceGitStates() {
+  const projects = requireDatabase().prepare("SELECT id FROM research_projects").all();
+  for (const project of projects) await refreshProjectGitState(project.id);
 }
 
 /**
@@ -2441,7 +2446,6 @@ function migrateProjectWorkspaces(db) {
         AND (workspace_id IS NULL OR workspace_id = ''
           OR workspace_id NOT IN (SELECT id FROM project_workspaces WHERE project_id = ?))
     `).run(workspace.id, project.id, project.id);
-    refreshProjectGitState(db, project.id);
   }
   assignMissingWorkspaceNames(db);
   db.prepare(`
@@ -2470,7 +2474,7 @@ function createSandboxCopy(source, destination) {
   copyDirectory(source, destination);
 }
 
-function createProjectWorkspace({ projectId, kind = "shared", name = "", baseCommit = null } = {}) {
+async function createProjectWorkspace({ projectId, kind = "shared", name = "", baseCommit = null } = {}, experiment = null) {
   const db = requireDatabase();
   if (typeof projectId !== "string" || !projectId) throw new Error("A project is required.");
   if (!WORKSPACE_KINDS.has(kind)) throw new Error("Unknown workspace kind.");
@@ -2491,9 +2495,12 @@ function createProjectWorkspace({ projectId, kind = "shared", name = "", baseCom
   const now = timestamp();
   let workspaceRoot;
   let baseRef = null;
+  let branch = null;
+  let commit = null;
 
   if (kind === "worktree") {
-    const refreshed = refreshProjectGitState(db, projectId);
+    const refreshed = await refreshProjectGitState(projectId);
+    if (!refreshed || resolveProjectRoot(refreshed) !== root) throw new Error("The project folder changed. Try again.");
     if (refreshed?.git_state !== "ready") {
       throw new Error("Create a commit in the project repository before opening a worktree.");
     }
@@ -2501,14 +2508,10 @@ function createProjectWorkspace({ projectId, kind = "shared", name = "", baseCom
     baseRef = baseCommit || refreshed.git_branch || "HEAD";
     workspaceRoot = path.join(root, ".archimedes", "worktrees", shortId);
     fs.mkdirSync(path.dirname(workspaceRoot), { recursive: true });
-    const branch = `archimedes/${shortId}`;
-    const result = spawnSync("git", ["-C", root, "worktree", "add", "-b", branch, workspaceRoot, baseRef], {
-      encoding: "utf8",
-      timeout: 120_000,
-      windowsHide: true,
-    });
-    if (result.error || result.status !== 0) {
-      fs.rmSync(workspaceRoot, { recursive: true, force: true });
+    branch = `archimedes/${shortId}`;
+    const result = await runGit(root, ["worktree", "add", "-b", branch, workspaceRoot, baseRef], { timeout: 120_000 });
+    if (result.status !== 0) {
+      await fs.promises.rm(workspaceRoot, { recursive: true, force: true });
       const detail = String(result.stderr || result.stdout || result.error?.message || "").trim();
       throw new Error(`Could not create the worktree${detail ? `: ${detail}` : "."}`);
     }
@@ -2517,18 +2520,52 @@ function createProjectWorkspace({ projectId, kind = "shared", name = "", baseCom
     createSandboxCopy(root, workspaceRoot);
   }
 
-  const resolvedName = requestedName || suggestWorkspaceName(db);
-  db.prepare(`
-    INSERT INTO project_workspaces (id, project_id, kind, name, root, base_ref, last_session_id, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?)
-  `).run(id, projectId, kind, resolvedName, workspaceRoot, baseRef, now, now);
-  recordAuditEvent(db, {
-    projectId,
-    action: "workspace.created",
-    targetType: "workspace",
-    targetId: id,
-    metadata: { kind, name: resolvedName, root: workspaceRoot, baseRef },
-  });
+  try {
+    if (experiment) {
+      commit = await gitOutput(workspaceRoot, ["rev-parse", "--verify", "HEAD"]);
+      if (!commit) throw new Error("Could not read the experiment workspace base commit.");
+      if (experimentWorkspaceBase(experiment.nodeId, experiment.parentRunId).baseCommit !== baseCommit) {
+        throw new Error("The experiment worktree base changed. Try again.");
+      }
+    }
+    if (branch) {
+      const current = getResearchProject(projectId);
+      if (!current || current.archived_at || resolveProjectRoot(current) !== root) throw new Error("The project folder changed. Try again.");
+      if (!canAccessProject(projectId, "editor")) throw new Error("You do not have permission to change this project.");
+      if (requestedName && !workspaceNameAvailable(db, projectId, requestedName)) {
+        throw new Error("A workspace with this name already exists in this project.");
+      }
+    }
+    const resolvedName = requestedName || suggestWorkspaceName(db);
+    db.exec("BEGIN");
+    try {
+      db.prepare(`
+        INSERT INTO project_workspaces (id, project_id, kind, name, root, base_ref, last_session_id, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?)
+      `).run(id, projectId, kind, resolvedName, workspaceRoot, baseRef, now, now);
+      if (experiment) {
+        db.prepare("INSERT INTO experiment_workspaces (node_id, workspace_id, base_commit, branch_name, created_at, parent_run_id) VALUES (?, ?, ?, ?, ?, ?)")
+          .run(experiment.nodeId, id, commit, branch, now, experiment.parentRunId);
+      }
+      recordAuditEvent(db, {
+        projectId,
+        action: "workspace.created",
+        targetType: "workspace",
+        targetId: id,
+        metadata: { kind, name: resolvedName, root: workspaceRoot, baseRef },
+      });
+      db.exec("COMMIT");
+    } catch (error) {
+      db.exec("ROLLBACK");
+      throw error;
+    }
+  } catch (error) {
+    if (branch) {
+      await removeGitWorktree(root, workspaceRoot);
+      await runGit(root, ["branch", "-D", branch]);
+    }
+    throw error;
+  }
   return getProjectWorkspace(id);
 }
 
@@ -2575,7 +2612,7 @@ function experimentWorkspaceBase(nodeId, parentRunId = null) {
   return { parentRunId: run.id, baseCommit: run.commit_sha };
 }
 
-function createExperimentWorkspace(nodeId, { parentRunId = null } = {}) {
+async function createExperimentWorkspace(nodeId, { parentRunId = null } = {}) {
   const base = experimentWorkspaceBase(nodeId, parentRunId);
   const node = getResearchNode(nodeId);
   const existing = getExperimentWorkspace(nodeId);
@@ -2583,19 +2620,7 @@ function createExperimentWorkspace(nodeId, { parentRunId = null } = {}) {
     if (existing.parent_run_id !== base.parentRunId) throw new Error("This experiment workspace is already tied to a different base.");
     return { workspace: existing, existing: true };
   }
-  const workspace = createProjectWorkspace({ projectId: node.project_id, kind: "worktree", baseCommit: base.baseCommit });
-  const commit = spawnSync("git", ["-C", workspace.root, "rev-parse", "--verify", "HEAD"], { encoding: "utf8", timeout: 5000, windowsHide: true });
-  if (commit.error || commit.status !== 0 || !String(commit.stdout || "").trim()) {
-    deleteProjectWorkspace(workspace.id);
-    throw new Error("Could not read the experiment workspace base commit.");
-  }
-  try {
-    requireDatabase().prepare("INSERT INTO experiment_workspaces (node_id, workspace_id, base_commit, branch_name, created_at, parent_run_id) VALUES (?, ?, ?, ?, ?, ?)")
-      .run(nodeId, workspace.id, String(commit.stdout).trim(), `archimedes/${workspace.id.slice(0, 8)}`, timestamp(), base.parentRunId);
-  } catch (error) {
-    deleteProjectWorkspace(workspace.id);
-    throw error;
-  }
+  await createProjectWorkspace({ projectId: node.project_id, kind: "worktree", baseCommit: base.baseCommit }, { nodeId, parentRunId: base.parentRunId });
   return { workspace: getExperimentWorkspace(nodeId), existing: false };
 }
 
@@ -2626,7 +2651,13 @@ function renameProjectWorkspace(id, name) {
   return getProjectWorkspace(id);
 }
 
-function deleteProjectWorkspace(id) {
+async function removeGitWorktree(root, workspaceRoot) {
+  const result = await runGit(root, ["worktree", "remove", "--force", workspaceRoot], { timeout: 60_000 });
+  if (result.status !== 0) await fs.promises.rm(workspaceRoot, { recursive: true, force: true });
+  await runGit(root, ["worktree", "prune"], { timeout: 30_000 });
+}
+
+async function deleteProjectWorkspace(id) {
   const db = requireDatabase();
   const workspace = db.prepare("SELECT * FROM project_workspaces WHERE id = ?").get(id);
   if (!workspace) throw new Error("Workspace not found.");
@@ -2638,17 +2669,8 @@ function deleteProjectWorkspace(id) {
   const project = db.prepare("SELECT * FROM research_projects WHERE id = ?").get(workspace.project_id);
   const fallback = ensureProjectSharedWorkspace(db, project);
   if (workspace.kind === "worktree") {
-    const result = spawnSync("git", ["-C", resolveProjectRoot(project), "worktree", "remove", "--force", workspace.root], {
-      encoding: "utf8",
-      timeout: 60_000,
-      windowsHide: true,
-    });
-    if (result.error || result.status !== 0) fs.rmSync(workspace.root, { recursive: true, force: true });
-    spawnSync("git", ["-C", resolveProjectRoot(project), "worktree", "prune"], {
-      encoding: "utf8",
-      timeout: 30_000,
-      windowsHide: true,
-    });
+    await removeGitWorktree(resolveProjectRoot(project), workspace.root);
+    if (!getProjectWorkspace(id)) return { deleted: true };
   } else {
     fs.rmSync(workspace.root, { recursive: true, force: true });
   }
@@ -2723,13 +2745,13 @@ function createResearchProject({ name, description = "", workspacePath = "" }) {
   ensureProjectMember(db, project.id, project.owner_id, "owner");
   ensureProjectEnvironment(db, project);
   ensureProjectSharedWorkspace(db, project);
-  const refreshed = refreshProjectGitState(db, project.id);
+  const stored = getResearchProject(project.id);
   ensureProjectLibraries(db);
   return {
     ...project,
-    environment_id: refreshed?.environment_id ?? null,
-    git_state: refreshed?.git_state ?? "none",
-    git_branch: refreshed?.git_branch ?? null,
+    environment_id: stored.environment_id,
+    git_state: stored.git_state,
+    git_branch: stored.git_branch,
   };
 }
 
@@ -2808,12 +2830,11 @@ function setResearchProjectWorkspace(id, workspacePath) {
   const resolvedWorkspace = normalizeWorkspacePath(workspacePath);
   if (!resolvedWorkspace) throw new Error("A project folder is required.");
   const now = timestamp();
-  const result = db.prepare("UPDATE research_projects SET workspace_path = ?, updated_at = ? WHERE id = ?")
+  const result = db.prepare("UPDATE research_projects SET workspace_path = ?, updated_at = ?, git_state = 'none', git_branch = NULL WHERE id = ?")
     .run(resolvedWorkspace, now, id);
   if (!result.changes) throw new Error("Research project not found.");
   const project = db.prepare("SELECT * FROM research_projects WHERE id = ?").get(id);
   ensureProjectSharedWorkspace(db, project);
-  refreshProjectGitState(db, id);
   return listResearchProjects().find((item) => item.id === id)
     || listResearchProjects({ archived: true }).find((item) => item.id === id);
 }
@@ -3478,7 +3499,7 @@ function listExperimentRuns({ projectId = null, threadId = null, nodeId = null }
     .map(hydrateExperimentRun);
 }
 
-function createExperimentRun({
+async function createExperimentRun({
   id = randomUUID(),
   projectId,
   threadId,
@@ -3492,6 +3513,7 @@ function createExperimentRun({
   metricsJson = "{}",
   experimentWorkspaceId = null,
   codeSnapshot = null,
+  verifyStart,
 } = {}) {
   if (!projectId || !threadId || !nodeId) throw new Error("A project, session, and experiment node are required to start a run.");
   if (!["starting", "running"].includes(status)) throw new Error("A new experiment run must start or run.");
@@ -3499,6 +3521,19 @@ function createExperimentRun({
   if (!text) throw new Error("An experiment run requires a command.");
   const runCwd = String(cwd || "").trim();
   if (!runCwd) throw new Error("An experiment run requires a working folder.");
+  let workspaceProvenance = null;
+  if (experimentWorkspaceId) {
+    if (!canAccessProject(projectId, "editor")) throw new Error("You do not have permission to start this experiment.");
+    const linked = getExperimentWorkspace(nodeId);
+    if (!linked || linked.id !== experimentWorkspaceId || linked.project_id !== projectId) throw new Error("The experiment workspace does not match this run.");
+    const branch = await gitOutput(linked.root, ["symbolic-ref", "--quiet", "--short", "HEAD"]);
+    if (branch !== linked.branch_name) throw new Error("The experiment worktree is no longer on its recorded branch.");
+    const realRoot = fs.realpathSync(linked.root);
+    const realCwd = fs.realpathSync(runCwd);
+    if (realCwd !== realRoot && !realCwd.startsWith(`${realRoot}${path.sep}`)) throw new Error("The run folder is outside the experiment workspace.");
+    workspaceProvenance = { id: linked.id, root: linked.root, branchName: linked.branch_name, baseCommit: linked.base_commit, parentRunId: linked.parent_run_id };
+  }
+  verifyStart?.();
   const node = getResearchNode(nodeId);
   if (!node) throw new Error("Research node not found.");
   if (node.kind !== "experiment") throw new Error("Only an experiment node can start a run.");
@@ -3535,19 +3570,6 @@ function createExperimentRun({
         childNodeId: current.nodeId, childRevisionId: current.revisionId, relationship: edge.kind });
       pending.push({ nodeId: parent.id, revisionId: edge.from_revision });
     }
-  }
-  let workspaceProvenance = null;
-  if (experimentWorkspaceId) {
-    const linked = getExperimentWorkspace(nodeId);
-    if (!linked || linked.id !== experimentWorkspaceId) throw new Error("The experiment workspace does not match this run.");
-    const branch = spawnSync("git", ["-C", linked.root, "symbolic-ref", "--quiet", "--short", "HEAD"], { encoding: "utf8", timeout: 5000, windowsHide: true });
-    if (branch.error || branch.status !== 0 || String(branch.stdout || "").trim() !== linked.branch_name) {
-      throw new Error("The experiment worktree is no longer on its recorded branch.");
-    }
-    const realRoot = fs.realpathSync(linked.root);
-    const realCwd = fs.realpathSync(runCwd);
-    if (realCwd !== realRoot && !realCwd.startsWith(`${realRoot}${path.sep}`)) throw new Error("The run folder is outside the experiment workspace.");
-    workspaceProvenance = { id: linked.id, root: linked.root, branchName: linked.branch_name, baseCommit: linked.base_commit, parentRunId: linked.parent_run_id };
   }
   const provenance = JSON.stringify({ experimentRevisionId: node.current_revision_id, ideas, ancestry, workspace: workspaceProvenance, codeSnapshot });
   const now = timestamp();
@@ -4790,6 +4812,8 @@ module.exports = {
   createLibrary,
   createAction,
   createResearchProject,
+  refreshProjectGitState,
+  refreshWorkspaceGitStates,
   createProjectWorkspace,
   defaultProjectWorkspace,
   deleteProjectWorkspace,

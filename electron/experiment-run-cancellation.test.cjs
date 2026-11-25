@@ -55,7 +55,7 @@ for (const { name, ignoreTerm, stdio, shutdown, stopThenShutdown } of [
         'setInterval(() => {}, 1000);',
       ].join("\n"));
       fs.writeFileSync(path.join(root, "train.cjs"), `require("node:child_process").spawn(process.execPath, ["worker.cjs"], { stdio: ${JSON.stringify(stdio)} });\n`);
-      started = runner.startExperimentRun({ projectId: project.id, threadId: thread.id, nodeId: experiment.id, workspace: root, cwd: root,
+      started = await runner.startExperimentRun({ projectId: project.id, threadId: thread.id, nodeId: experiment.id, workspace: root, cwd: root,
         command: `'${process.execPath.replaceAll("'", "'\\''")}' train.cjs` });
       started.completion.then((run) => { final = run; });
       await eventually(() => fs.existsSync(path.join(root, "worker.pid")), "worker never started");

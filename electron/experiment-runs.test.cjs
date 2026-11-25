@@ -9,17 +9,6 @@ const graph = require("./research-graph/service.cjs");
 const runner = require("./research-graph/experiment-runner.cjs");
 const agent = require("./agent.cjs");
 
-function withWorkspace(run) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-experiment-runs-"));
-  try {
-    store.openWorkspace(root);
-    const project = store.createResearchProject({ name: "Experiment runs" });
-    return run({ root, project });
-  } finally {
-    fs.rmSync(root, { recursive: true, force: true });
-  }
-}
-
 async function withWorkspaceAsync(run) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-experiment-runs-"));
   try {
@@ -74,11 +63,11 @@ function createRun({ root, project, thread, experiment, command = "true" }) {
   });
 }
 
-test("experiment runs move through a one-way terminal lifecycle", () => {
-  withWorkspace(({ root, project }) => {
+test("experiment runs move through a one-way terminal lifecycle", async () => {
+  await withWorkspaceAsync(async ({ root, project }) => {
     const thread = threadFor(project.id);
     const { experiment } = experimentFor(project.id, thread.id);
-    const run = createRun({ root, project, thread, experiment });
+    const run = await createRun({ root, project, thread, experiment });
     assert.equal(run.status, "starting");
     assert.equal(run.exit_code, null);
 
@@ -98,14 +87,14 @@ test("experiment runs move through a one-way terminal lifecycle", () => {
   });
 });
 
-test("runs retain the experiment and source idea revisions after later edits", () => {
-  withWorkspace(({ root, project }) => {
+test("runs retain the experiment and source idea revisions after later edits", async () => {
+  await withWorkspaceAsync(async ({ root, project }) => {
     const thread = threadFor(project.id);
     const { question, idea, experiment } = experimentFor(project.id, thread.id);
     const originalIdeaRevision = idea.current_revision_id;
     const originalExperimentRevision = experiment.current_revision_id;
     graph.reviseNode({ nodeId: idea.id, content: { hypothesis: "Later idea" } });
-    const first = createRun({ root, project, thread, experiment });
+    const first = await createRun({ root, project, thread, experiment });
     assert.equal(first.provenance.experimentRevisionId, originalExperimentRevision);
     assert.deepEqual(first.provenance.ideas, [{
       nodeId: idea.id, revisionId: originalIdeaRevision, experimentRevisionId: originalExperimentRevision,
@@ -113,36 +102,36 @@ test("runs retain the experiment and source idea revisions after later edits", (
     assert.ok(first.provenance.ancestry.some((item) => item.nodeId === question.id && item.revisionId === question.current_revision_id));
     store.updateExperimentRun({ runId: first.id, status: "failed", exitCode: 1 });
     const revised = graph.reviseNode({ nodeId: experiment.id, content: { hypothesis: "Repaired plan" } });
-    const second = createRun({ root, project, thread, experiment });
+    const second = await createRun({ root, project, thread, experiment });
     assert.equal(second.provenance.experimentRevisionId, revised.current_revision_id);
     assert.equal(second.provenance.ideas[0].revisionId, originalIdeaRevision);
     assert.equal(store.getExperimentRun(first.id).provenance.experimentRevisionId, originalExperimentRevision);
   });
 });
 
-test("an experiment cannot have two active runs", () => {
-  withWorkspace(({ root, project }) => {
+test("an experiment cannot have two active runs", async () => {
+  await withWorkspaceAsync(async ({ root, project }) => {
     const thread = threadFor(project.id);
     const { experiment } = experimentFor(project.id, thread.id);
-    createRun({ root, project, thread, experiment });
-    assert.throws(
+    await createRun({ root, project, thread, experiment });
+    await assert.rejects(
       () => createRun({ root, project, thread, experiment, command: "true" }),
       /already has a run in progress/,
     );
   });
 });
 
-test("only a successful run can produce an evidence-backed result", () => {
-  withWorkspace(({ root, project }) => {
+test("only a successful run can produce an evidence-backed result", async () => {
+  await withWorkspaceAsync(async ({ root, project }) => {
     const thread = threadFor(project.id);
     const { experiment } = experimentFor(project.id, thread.id);
-    const failed = createRun({ root, project, thread, experiment, command: "false" });
+    const failed = await createRun({ root, project, thread, experiment, command: "false" });
     store.updateExperimentRun({ runId: failed.id, status: "failed", exitCode: 1 });
     assert.throws(() => graph.createResultFromRun({ runId: failed.id }), /Only a successful run/);
 
     const logPath = path.join(root, "succeeded.log");
     fs.writeFileSync(logPath, "loss=0.25\naccuracy=0.91\n");
-    const succeeded = store.createExperimentRun({
+    const succeeded = await store.createExperimentRun({
       projectId: project.id,
       threadId: thread.id,
       nodeId: experiment.id,
@@ -173,7 +162,7 @@ test("the local runner executes a command and records its log and exit code", as
   await withWorkspaceAsync(async ({ root, project }) => {
     const thread = threadFor(project.id);
     const { experiment } = experimentFor(project.id, thread.id);
-    const started = runner.startExperimentRun({
+    const started = await runner.startExperimentRun({
       projectId: project.id,
       threadId: thread.id,
       nodeId: experiment.id,
@@ -193,7 +182,7 @@ test("the local runner marks a non-zero exit as failed", async () => {
   await withWorkspaceAsync(async ({ root, project }) => {
     const thread = threadFor(project.id);
     const { experiment } = experimentFor(project.id, thread.id);
-    const started = runner.startExperimentRun({
+    const started = await runner.startExperimentRun({
       projectId: project.id,
       threadId: thread.id,
       nodeId: experiment.id,
@@ -212,7 +201,7 @@ test("a successful run freezes the experiment plan and its command", async () =>
     const thread = threadFor(project.id);
     const { experiment } = experimentFor(project.id, thread.id);
     const command = `${JSON.stringify(process.execPath)} -e "console.log('first')"`;
-    const started = runner.startExperimentRun({
+    const started = await runner.startExperimentRun({
       projectId: project.id,
       threadId: thread.id,
       nodeId: experiment.id,
@@ -225,7 +214,7 @@ test("a successful run freezes the experiment plan and its command", async () =>
       () => graph.reviseNode({ nodeId: experiment.id, content: { hypothesis: "changed after seeing the result" } }),
       /successful run/,
     );
-    assert.throws(
+    await assert.rejects(
       () => runner.startExperimentRun({
         projectId: project.id,
         threadId: thread.id,
@@ -243,7 +232,7 @@ test("a failed-only experiment can still be repaired", async () => {
   await withWorkspaceAsync(async ({ root, project }) => {
     const thread = threadFor(project.id);
     const { experiment } = experimentFor(project.id, thread.id);
-    const started = runner.startExperimentRun({
+    const started = await runner.startExperimentRun({
       projectId: project.id,
       threadId: thread.id,
       nodeId: experiment.id,
@@ -261,7 +250,7 @@ test("the local runner can cancel an active run", async () => {
   await withWorkspaceAsync(async ({ root, project }) => {
     const thread = threadFor(project.id);
     const { experiment } = experimentFor(project.id, thread.id);
-    const started = runner.startExperimentRun({
+    const started = await runner.startExperimentRun({
       projectId: project.id,
       threadId: thread.id,
       nodeId: experiment.id,
@@ -448,7 +437,7 @@ test('managed experiment receives explicitly shared environment variables', asyn
   await withWorkspaceAsync(async ({ root, project }) => {
     const thread = threadFor(project.id); const { experiment } = experimentFor(project.id, thread.id);
     const command = `${JSON.stringify(process.execPath)} -e "process.exit(process.env.HF_TOKEN?.length === 20 ? 0 : 1)"`;
-    const started = runner.startExperimentRun({ projectId: project.id, threadId: thread.id, nodeId: experiment.id, command, cwd: root, workspace: root });
+    const started = await runner.startExperimentRun({ projectId: project.id, threadId: thread.id, nodeId: experiment.id, command, cwd: root, workspace: root });
     const final = await started.completion;
     assert.equal(final.status, 'succeeded');
     assert.doesNotMatch(fs.readFileSync(final.log_path, 'utf8'), /synthetic-test-token/);

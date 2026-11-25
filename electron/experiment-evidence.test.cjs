@@ -20,7 +20,7 @@ test("finished runs retain append-only reported metrics and file fingerprints", 
     const question = graph.createNode({ projectId: project.id, threadId: thread.id, kind: "question", title: "Question", content: {} });
     const idea = graph.createNode({ projectId: project.id, threadId: thread.id, kind: "idea", title: "Idea", content: {}, parents: [{ nodeId: question.id }] });
     const experiment = graph.createNode({ projectId: project.id, threadId: thread.id, kind: "experiment", title: "Experiment", content: {}, parents: [{ nodeId: idea.id }] });
-    const run = store.createExperimentRun({ projectId: project.id, threadId: thread.id, nodeId: experiment.id, cwd: root, command: "test" });
+    const run = await store.createExperimentRun({ projectId: project.id, threadId: thread.id, nodeId: experiment.id, cwd: root, command: "test" });
     const input = { runId: run.id, threadId: thread.id, workspace: root };
     await assert.rejects(() => evidence.recordExperimentEvidence({ ...input, metrics: { accuracy: 0.91 } }), /finish/);
     store.updateExperimentRun({ runId: run.id, status: "succeeded", exitCode: 0 });

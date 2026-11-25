@@ -1183,7 +1183,7 @@ async function executeBuiltInTool({ root, taskId, threadId, turnId, call, emit, 
       if (store.getAction(action.id).status === "pending") store.resolveAction(action.id, "rejected");
       throw new Error("The experiment request ended before creating the worktree.");
     }
-    const result = store.createExperimentWorkspace(experiment.id, { parentRunId: base.parentRunId });
+    const result = await store.createExperimentWorkspace(experiment.id, { parentRunId: base.parentRunId });
     return { content: JSON.stringify({ approved: true, ...result, relative_path: relativePath(root, result.workspace.root), notice: "Only committed code is present; uncommitted and untracked files were not copied." }) };
   }
 
@@ -1201,7 +1201,7 @@ async function executeBuiltInTool({ root, taskId, threadId, turnId, call, emit, 
       if (!preparedRoot.startsWith(`${activeRoot}${path.sep}`)) throw new Error("The experiment workspace is outside the active workspace.");
     }
     const runRoot = prepared ? prepared.root : root;
-    if (prepared) require("./research-graph/code-snapshot.cjs").inspectCodeState(runRoot);
+    if (prepared) await require("./research-graph/code-snapshot.cjs").inspectCodeState(runRoot);
     const workingDirectory = existingWorkspacePath(runRoot, args.cwd || "");
     if (!fs.statSync(workingDirectory).isDirectory()) throw new Error("The run working directory is not a directory.");
     const action = store.createAction({
@@ -1226,7 +1226,7 @@ async function executeBuiltInTool({ root, taskId, threadId, turnId, call, emit, 
       if (store.getAction(action.id).status === "pending") store.resolveAction(action.id, "rejected");
       throw new Error("The experiment request ended before the experiment started.");
     }
-    const started = experimentRunner.startExperimentRun({
+    const started = await experimentRunner.startExperimentRun({
       projectId: thread.project_id,
       threadId,
       nodeId: experiment.id,
@@ -1234,6 +1234,9 @@ async function executeBuiltInTool({ root, taskId, threadId, turnId, call, emit, 
       cwd: workingDirectory,
       workspace: runRoot,
       experimentWorkspaceId: prepared?.id || null,
+      verifyStart: () => {
+        if (signal?.aborted || !isRequestActive()) throw new Error("The experiment request ended before the experiment started.");
+      },
       onUpdate: (run) => {
         emit({ type: "tool", title: "Experiment run", detail: `${run.status} · ${experiment.title}`, experimentRun: run });
         recordEvent({ type: "experiment_run", payload: { run } });
@@ -1642,6 +1645,7 @@ async function runAgentInStore({ prompt, workspace, threadId, projectId, workspa
             emit: emitTurn,
             recordEvent,
             approve: approveNative,
+            signal: controller.signal,
           });
           if (notes.length) response = [response, ...notes].filter(Boolean).join("\n\n");
         } else if (extracted.directives.length) {
