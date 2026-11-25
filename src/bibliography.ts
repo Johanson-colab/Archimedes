@@ -186,6 +186,12 @@ export function hasConflictingBibliographyIdentifiers(first: AcademicSearchResul
   });
 }
 
+export function hasConflictingSavedBibliographyIdentifiers(candidate: AcademicSearchResult, papers: BibliographyPaper[], existing?: BibliographyPaper) {
+  return papers.some(paper => paper.id !== existing?.id
+    && identifierFields.some(([field, normalize]) => candidate[field] && paper[field] && normalize(candidate[field]) === normalize(paper[field]))
+    && (hasConflictingBibliographyIdentifiers(candidate, paper) || existing && hasConflictingBibliographyIdentifiers(existing, paper)));
+}
+
 export function matchBibliographyPaper<T extends AcademicSearchResult>(incoming: AcademicSearchResult, papers: T[], { strongOnly = false, titleAlreadyMatched = false, originalKey = "" }: { strongOnly?: boolean; titleAlreadyMatched?: boolean; originalKey?: string } = {}) {
   const compatible = (paper: AcademicSearchResult) => !hasConflictingBibliographyIdentifiers(incoming, paper);
   for (const [field, normalize] of identifierFields) {
