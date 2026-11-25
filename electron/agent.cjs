@@ -7,7 +7,8 @@ const { searchAcademicPapers } = require("./literature.cjs");
 const { searchWeb } = require("./web-search.cjs");
 const { prepareConversation } = require("./agent/context.cjs");
 const { workspaceInstructions } = require("./thread-commands.cjs");
-const { hasApprovalSurface: hasClaimedSurface, resolveApproval, setApprovalSurface: claimApprovalSurface, waitForApproval } = require("./agent/approval-manager.cjs");
+const approvals = require("./agent/approval-manager.cjs");
+const { localIdentity } = require("./local-identity.cjs");
 const { StreamContentGuard, normalizeAssistantMessage } = require("./agent/model-response.cjs");
 const { ModelIncompleteError, assertModelCompletion } = require("./agent/model-completion.cjs");
 const { completeAnthropic } = require("./agent/anthropic.cjs");
@@ -1018,7 +1019,7 @@ async function executeBuiltInTool({ root, taskId, threadId, turnId, call, emit, 
     const proposal = name === "edit_workspace_file" ? prepareEdit(root, args.path, args.old_text, args.new_text, args.replace_all === true) : prepareWrite(root, args.path, args.content);
     const relative = proposal.path;
     const action = store.createAction({ taskId, kind: "write", payload: proposal });
-    const waiting = waitForApproval(action.id, signal, store.runtimeThreadId(threadId));
+    const waiting = approvals.waitForApproval(approvalScope(store), action.id, signal, threadId);
     emit({ type: "approval", title: "Approval required", detail: `Write ${relative}`, action });
     let decision;
     try { decision = await waiting; }
@@ -1035,7 +1036,7 @@ async function executeBuiltInTool({ root, taskId, threadId, turnId, call, emit, 
     const workingDirectory = existingWorkspacePath(root, args.cwd || "");
     if (!fs.statSync(workingDirectory).isDirectory()) throw new Error("The command working directory is not a directory.");
     const action = store.createAction({ taskId, kind: "command", payload: { command: args.command.trim(), cwd: workingDirectory, managedByAgent: true } });
-    const waiting = waitForApproval(action.id, signal, store.runtimeThreadId(threadId));
+    const waiting = approvals.waitForApproval(approvalScope(store), action.id, signal, threadId);
     emit({ type: "approval", title: "Approval required", detail: args.command.trim(), action });
     let decision;
     try { decision = await waiting; }
@@ -1166,7 +1167,7 @@ async function executeBuiltInTool({ root, taskId, threadId, turnId, call, emit, 
       command: `Create an isolated Git worktree from ${baseDescription}`,
       cwd: root, experimentId: experiment.id, experimentTitle: experiment.title, managedByAgent: true,
     } });
-    const waiting = waitForApproval(action.id, signal, store.runtimeThreadId(threadId));
+    const waiting = approvals.waitForApproval(approvalScope(store), action.id, signal, threadId);
     emit({ type: "approval", title: "Approval required", detail: "Create an experiment worktree from committed code; uncommitted files are not copied.", action });
     let decision;
     try { decision = await waiting; } catch (error) {
@@ -1207,7 +1208,7 @@ async function executeBuiltInTool({ root, taskId, threadId, turnId, call, emit, 
       kind: "command",
       payload: { command, cwd: workingDirectory, experimentId: experiment.id, experimentTitle: experiment.title, managedByAgent: true },
     });
-    const waiting = waitForApproval(action.id, signal, store.runtimeThreadId(threadId));
+    const waiting = approvals.waitForApproval(approvalScope(store), action.id, signal, threadId);
     emit({ type: "approval", title: "Approval required", detail: command, action });
     let decision;
     try {
@@ -1463,6 +1464,7 @@ async function runAgent(options) {
 
 async function runAgentInStore({ prompt, workspace, threadId, projectId, workspaceId, visibility = "project", mode = "standard", researchSkill, mineruToken, reasoningEffort = "medium", contextLength = "standard", contextItems = [], capabilities, origin, title, emit = () => {}, browser, transient = false, externalBackend = null, externalSignal, toolRegistry = defaultToolRegistry, autoBuildGraph = true, remoteServer = null, dataStore }) {
   const store = dataStore;
+  const scopedApproval = approvalScope(store);
   if (externalBackend && (transient || origin !== "research" || capabilities?.write !== "ask" || capabilities?.command !== "ask")) throw new Error("The native backend is available only for main Work conversations with an approval surface.");
   const transientThread = {
     id: randomUUID(), project_id: null, title: "Internal review run", mode, status: "running", context_summary: "",
@@ -1500,7 +1502,7 @@ async function runAgentInStore({ prompt, workspace, threadId, projectId, workspa
       for (const action of actions) {
         if (store.getAction(action.id).status === "pending") {
           store.resolveAction(action.id, "rejected");
-          resolveApproval(action.id, false);
+          approvals.resolveApproval(scopedApproval, action.id, false);
           Object.assign(action, store.getAction(action.id));
           emitTurn({ type: "native_approval_resolved", title: "Native approval resolved", detail: "The native request is no longer pending", action: { ...action } });
         }
@@ -1544,12 +1546,12 @@ async function runAgentInStore({ prompt, workspace, threadId, projectId, workspa
     }
     if (externalBackend) {
       const approveNative = async (payload) => {
-        if (controller.signal.aborted || !hasClaimedSurface(runtimeId)) return false;
+        if (controller.signal.aborted || !approvals.hasApprovalSurface(scopedApproval, thread.id)) return false;
         const { signal: approvalSignal, ...actionPayload } = payload;
         const action = store.createAction({ taskId: task.id, kind: "command", payload: { ...actionPayload, externalAgent: externalBackend.backend } });
         actions.push(action);
         // Register before exposing the card, so an immediate click cannot be lost.
-        const waiting = waitForApproval(action.id, approvalSignal || controller.signal, runtimeId);
+        const waiting = approvals.waitForApproval(scopedApproval, action.id, approvalSignal || controller.signal, thread.id);
         emitTurn({ type: "approval", title: "Native approval required", detail: payload.command, action });
         try { return (await waiting).approved; }
         finally {
@@ -1802,12 +1804,28 @@ function shutdownAgentRuns() {
   return Promise.allSettled(runs.map(run => run.completion));
 }
 
-function hasApprovalSurface(threadId) {
-  return hasClaimedSurface(defaultStore.runtimeThreadId(threadId));
+function approvalScope(store = defaultStore.currentStore()) {
+  return { store, ownerId: localIdentity().userId };
 }
 
-function setApprovalSurface(threadId, active, workspace) {
-  return claimApprovalSurface(defaultStore.runtimeThreadId(threadId, workspace), active);
+function approvalScopeForWorkspace(workspace) {
+  return approvalScope(defaultStore.createWorkspaceStore(workspace, { allowReplacement: false }));
+}
+
+function hasPendingApproval(actionId, scope = approvalScope()) {
+  return approvals.hasPendingApproval(scope, actionId);
+}
+
+function resolveApproval(actionId, approved, reason, scope = approvalScope()) {
+  return approvals.resolveApproval(scope, actionId, approved, reason);
+}
+
+function hasApprovalSurface(threadId) {
+  return approvals.hasApprovalSurface(approvalScope(), threadId);
+}
+
+function setApprovalSurface(threadId, active, scope = approvalScope()) {
+  return approvals.setApprovalSurface(scope, threadId, active);
 }
 
 async function retryGraphExtraction({ threadId, turnId, dataWorkspace, backendConfig }) {
@@ -1829,4 +1847,4 @@ async function retryGraphExtraction({ threadId, turnId, dataWorkspace, backendCo
   return { ok: Boolean(result) };
 }
 
-module.exports = { complete, createToolRegistry, executeTool, hasActiveAgentRuns, hasApprovalSurface, interruptAgent, isPrivateAddress, paperPdfUrl, resolveApproval, retryGraphExtraction, runAgent, setApprovalSurface, shutdownAgentRuns, translatePaperSelection };
+module.exports = { approvalScope, approvalScopeForWorkspace, complete, createToolRegistry, executeTool, hasActiveAgentRuns, hasApprovalSurface, hasPendingApproval, interruptAgent, isPrivateAddress, paperPdfUrl, resolveApproval, retryGraphExtraction, runAgent, setApprovalSurface, shutdownAgentRuns, translatePaperSelection };

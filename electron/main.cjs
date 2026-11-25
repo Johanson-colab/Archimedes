@@ -194,8 +194,8 @@ function releaseWindowApprovalClaim(senderId) {
   const claim = windowApprovalClaims.get(senderId);
   if (!claim) return;
   windowApprovalClaims.delete(senderId);
-  if (![...windowApprovalClaims.values()].some(({ workspace, threadId }) => workspace === claim.workspace && threadId === claim.threadId)) {
-    agent.setApprovalSurface(claim.threadId, false, claim.workspace);
+  if (![...windowApprovalClaims.values()].some(({ scope, threadId }) => scope.store === claim.scope.store && scope.ownerId === claim.scope.ownerId && threadId === claim.threadId)) {
+    agent.setApprovalSurface(claim.threadId, false, claim.scope);
   }
 }
 
@@ -1355,10 +1355,11 @@ app.whenReady().then(async () => {
    * Requirements come from the plan; values come from the encrypted store. The
    * renderer only ever sees whether a name is set, never what it is set to.
    */
-  const reproductionEnvItems = (id) => {
+  const reproductionScope = (id) => ({ workspace: store.currentStore().workspace, ownerId: localIdentity.localIdentity().userId, domain: "reproduction", id });
+  const reproductionEnvItems = (id, scope = reproductionScope(id)) => {
     const record = presentReproduction(store.getReproduction(id));
     if (!record) throw new Error("That reproduction does not exist.");
-    const stored = reproductionEnv.list(record.id);
+    const stored = reproductionEnv.list(scope);
     const has = new Map(stored.map((entry) => [entry.name, entry.hasValue]));
     const items = [];
     const seen = new Set();
@@ -1387,23 +1388,24 @@ app.whenReady().then(async () => {
   ipcMain.handle("reproduction:env-set", (_event, { id, name, value } = {}) => {
     if (typeof id !== "string" || !id) throw new Error("A reproduction id is required.");
     reproductionEnvItems(id);
-    reproductionEnv.setValue(id, name, value);
+    reproductionEnv.setValue(reproductionScope(id), name, value);
     return reproductionEnvItems(id);
   });
 
   ipcMain.handle("reproduction:env-remove", (_event, { id, name } = {}) => {
     if (typeof id !== "string" || !id) throw new Error("A reproduction id is required.");
     reproductionEnvItems(id);
-    reproductionEnv.removeValue(id, name);
+    reproductionEnv.removeValue(reproductionScope(id), name);
     return reproductionEnvItems(id);
   });
 
   ipcMain.handle("reproduction:env-test", async (_event, { id, name } = {}) => {
     if (typeof id !== "string" || !id) throw new Error("A reproduction id is required.");
+    if (!store.getReproduction(id)) throw new Error("That reproduction does not exist.");
     const key = reproductionEnv.normalizeName(name);
     // The value is read here, in the main process, and never sent to the
     // renderer. Only the identity of the token comes back.
-    const value = reproductionEnv.values(id)[key];
+    const value = reproductionEnv.values(reproductionScope(id))[key];
     if (!value) throw new Error(`${key} has no saved value.`);
     if (key !== "HF_TOKEN") return { ok: false, detail: "No test is available for this variable yet." };
     const controller = new AbortController();
@@ -1428,8 +1430,6 @@ app.whenReady().then(async () => {
       steps: record.contract.steps,
     });
   });
-
-  const reproductionScope = (id) => ({ workspace: store.currentStore().workspace, ownerId: localIdentity.localIdentity().userId, domain: "reproduction", id });
 
   const notifyRunFinished = (record, summary) => {
     // The user is told when they are not looking; a run that finishes while the
@@ -1499,7 +1499,7 @@ app.whenReady().then(async () => {
           })(),
         },
         repoName: session.repoName,
-        env: reproductionEnvItems(record.id).map(({ name, required, reason, hasValue }) => ({ name, required, reason, hasValue })),
+        env: reproductionEnvItems(record.id, session.scope).map(({ name, required, reason, hasValue }) => ({ name, required, reason, hasValue })),
         backend: session.backend,
         target: session.backend.describe?.() || "",
         complete: ({ system, prompt, signal }) => completeJson(reproductionModel(), {
@@ -1587,7 +1587,7 @@ app.whenReady().then(async () => {
     const wantsSsh = backendKind === "ssh";
     const server = wantsSsh ? sshServers.listServers().find((entry) => entry.id === serverId) : null;
     if (wantsSsh && !server) throw new Error("Choose an SSH server before running this reproduction.");
-    const secrets = reproductionEnv.values(record.id);
+    const secrets = reproductionEnv.values(scope);
     const run = store.createReproductionRun({ reproductionId: record.id, backend: wantsSsh ? "ssh" : "docker" });
     const controller = new AbortController();
     const session = {
@@ -1599,6 +1599,7 @@ app.whenReady().then(async () => {
       repoName: repoNameFromUrl(repoUrl),
       backend: null,
       controller,
+      scope,
       remote: wantsSsh,
       cancel: () => controller.abort(),
       send: (payload) => {
@@ -2389,18 +2390,28 @@ app.whenReady().then(async () => {
 
   ipcMain.handle("model-config:capabilities", (_event, role) => getModelCapabilities(modelConfig.getActiveModelConfig(role)));
 
-  ipcMain.handle("agent:approve-action", (event, actionId) => {
+  const requireOwnedPendingApproval = (actionId) => {
     if (typeof actionId !== "string") throw new Error("An Agent action ID is required.");
+    const scope = agent.approvalScope();
+    if (!scope.store.workspace || !agent.hasPendingApproval(actionId, scope)) throw new Error("This approval is no longer pending in this data workspace.");
+    const action = store.getAction(actionId);
+    const thread = store.getResearchThread(store.getResearchThreadIdForTask(action.task_id));
+    if (!thread?.project_id || !store.canAccessProject(thread.project_id, "editor")) throw new Error("You do not have permission to resolve this approval.");
+    return scope;
+  };
+
+  ipcMain.handle("agent:approve-action", (event, actionId) => {
+    const scope = requireOwnedPendingApproval(actionId);
     let action;
     try { action = store.approveAction(actionId); }
     catch (error) {
       if (error.code === "WORKSPACE_CONFLICT") {
         store.resolveAction(actionId, "rejected");
-        agent.resolveApproval(actionId, false, "file_changed_while_awaiting_approval");
+        agent.resolveApproval(actionId, false, "file_changed_while_awaiting_approval", scope);
       }
       throw error;
     }
-    agent.resolveApproval(actionId, true);
+    agent.resolveApproval(actionId, true, undefined, scope);
     if (action.kind === "write" && action.payload.change && !event.sender.isDestroyed()) {
       event.sender.send("workspace:change-set", {
         id: action.id,
@@ -2416,9 +2427,9 @@ app.whenReady().then(async () => {
   });
 
   ipcMain.handle("agent:reject-action", (_event, actionId) => {
-    if (typeof actionId !== "string") throw new Error("An Agent action ID is required.");
+    const scope = requireOwnedPendingApproval(actionId);
     const action = store.resolveAction(actionId, "rejected");
-    agent.resolveApproval(actionId, false);
+    agent.resolveApproval(actionId, false, undefined, scope);
     return action;
   });
 
@@ -2427,15 +2438,16 @@ app.whenReady().then(async () => {
     const senderId = event.sender.id;
     const workspace = windowWorkspaces.get(senderId);
     if (!workspace || (requestedWorkspace && requestedWorkspace !== workspace)) return { claimed: false };
+    const scope = agent.approvalScopeForWorkspace(workspace);
     const existing = windowApprovalClaims.get(senderId);
-    if (existing?.threadId === threadId) {
+    if (existing?.threadId === threadId && existing.scope.store === scope.store && existing.scope.ownerId === scope.ownerId) {
       if (!claimed) releaseWindowApprovalClaim(senderId);
       return { claimed: Boolean(claimed) };
     }
     if (!claimed) return { claimed: false };
     releaseWindowApprovalClaim(senderId);
-    windowApprovalClaims.set(senderId, { workspace, threadId });
-    return { claimed: agent.setApprovalSurface(threadId, true, workspace) };
+    windowApprovalClaims.set(senderId, { scope, threadId });
+    return { claimed: agent.setApprovalSurface(threadId, true, scope) };
   });
 
   ipcMain.handle("agent:interrupt", (event, threadId) => {

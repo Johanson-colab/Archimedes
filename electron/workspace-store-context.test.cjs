@@ -310,3 +310,40 @@ test("a queued stop stays in the original workspace and prevents a prepared SSH 
   assert.match(saved.error, /confirm the remote process has exited/);
   assert.equal(store.createWorkspaceStore(b).getReproduction(record.id).status, record.status);
 });
+
+test("approval and rejection IPC can resolve only the live action in the accepted data folder", async t => {
+  const { a, b } = fixture(t);
+  let owner = store.createWorkspaceStore(a);
+  const project = owner.listResearchProjects()[0];
+  const thread = owner.createResearchThread({ projectId: project.id, prompt: "Review the proposal", mode: "free-chat" });
+  const task = owner.startTask({ prompt: "Review the proposal" });
+  owner.startResearchTurn({ threadId: thread.id, taskId: task.id, prompt: "Review the proposal", mode: "free-chat" });
+  const action = owner.createAction({ taskId: task.id, kind: "command", payload: { command: "pwd", managedByAgent: true } });
+  owner.addProjectMember({ projectId: project.id, userId: "viewer", role: "viewer" });
+  owner.close();
+  fs.cpSync(path.join(a, ".archimedes"), path.join(b, ".archimedes"), { recursive: true });
+  owner = store.createWorkspaceStore(a);
+  const copy = store.createWorkspaceStore(b);
+  const approvalManager = require("./agent/approval-manager.cjs");
+  const scope = owner.run(() => agent.approvalScope());
+  const waiting = approvalManager.waitForApproval(scope, action.id);
+  t.after(() => approvalManager.resolveApproval(scope, action.id, false));
+  const handlers = new Map();
+  const ipcMain = createWorkspaceIpc({ ipcMain: { handle: (name, callback) => handlers.set(name, callback) }, store, workspaceForEvent: event => event.dataRoot });
+  const main = fs.readFileSync(path.join(__dirname, "main.cjs"), "utf8");
+  const from = main.indexOf("  const requireOwnedPendingApproval"), to = main.indexOf('  ipcMain.handle("agent:claim-approvals",', from);
+  new Function("scope", `with(scope) { ${main.slice(from, to)} }`)({ ipcMain, store, agent });
+  const approve = handlers.get("agent:approve-action"), reject = handlers.get("agent:reject-action");
+  const sender = { id: 1 };
+  assert.throws(() => approve({ dataRoot: b, sender }, action.id), /no longer pending in this data workspace/);
+  assert.throws(() => reject({ dataRoot: b, sender }, action.id), /no longer pending in this data workspace/);
+  const identity = { userId: "local-user", displayName: "Local user" };
+  store.setLocalIdentity({ userId: "viewer", displayName: "Viewer" });
+  try { assert.throws(() => approve({ dataRoot: a, sender }, action.id), /permission to resolve/); }
+  finally { store.setLocalIdentity(identity); }
+  assert.equal(owner.getAction(action.id).status, "pending");
+  assert.equal(copy.getAction(action.id).status, "pending");
+  assert.equal(approve({ dataRoot: a, sender }, action.id).status, "approved");
+  assert.deepEqual(await waiting, { approved: true, reason: "approved" });
+  assert.equal(copy.getAction(action.id).status, "pending");
+});
