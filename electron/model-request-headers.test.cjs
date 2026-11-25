@@ -210,11 +210,12 @@ test("the reproduction executor includes its run ID on every model request", asy
     store: { updateReproduction() {}, updateReproductionRun() {} },
     reproductionEnvItems: () => [],
     stopSession: async () => {},
+    disposeSession: async () => {},
     notifyRunFinished() {},
   };
   const executeRun = new Function(...Object.keys(runtime), `${main.slice(start, end)}\nreturn executeRun;`)(...Object.values(runtime));
   for (const id of ["run-first", "run-second"]) {
-    await executeRun({ record: { id: "reproduction" }, run: { id }, contract: {}, backend: {}, send() {} });
+    await executeRun({ record: { id: "reproduction" }, run: { id }, contract: {}, backend: {}, controller: new AbortController(), send() {} });
   }
   assert.deepEqual(requests, ["run-first", "run-first", "run-second", "run-second"]);
 });
