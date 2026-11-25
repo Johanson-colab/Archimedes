@@ -77,7 +77,7 @@ test('window close releases its preview tokens and accepted quit stops backgroun
     deepReadingRuns: new Map([['reading', { controller: reading }]]), activeLiteratureSearches: new Map([['search', literature]]),
     closeWindowTerminals: noop, releaseWindowApprovalClaim: noop, presence: null, windowStartupWorkspaces: new Map(),
     windowWorkspaces: new Map(), closeAllNativeClients: noop, closeAllTerminals: noop, collaborationServer: null,
-    experimentRunner: { shutdownExperimentRuns: noop }, store: { closeAllWorkspaces: noop },
+    latexCompiles: new Map(), experimentRunner: { shutdownExperimentRuns: noop }, store: { closeAllWorkspaces: noop },
   };
   new Function('scope', `with (scope) {
     ${section('function stopWorkspaceWatcher(', 'function setWindowWorkspace(')}
