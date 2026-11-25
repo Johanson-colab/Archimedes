@@ -33,3 +33,23 @@ test("filenames preserve readable Unicode while removing unsafe filename charact
   assert.equal(snapshotFileStem('论文/实验: "A"'), "论文-实验- -A--snapshot");
   assert.equal(snapshotFileStem(""), "session-snapshot");
 });
+
+test("clipboard preserves the full JSON of a large session snapshot on read and write", () => {
+  const exported = selectSnapshot(snapshot, "Study", ["a", "b"], true, false);
+  exported.turns[0].assistant_message = "实验 📈\n".repeat(20_000) + "End of experiment";
+  const json = JSON.stringify(exported, null, 2);
+
+  const main = fs.readFileSync(path.join(__dirname, "main.cjs"), "utf8");
+  const start = main.indexOf('  ipcMain.handle("clipboard:read-text",');
+  const end = main.indexOf('  ipcMain.handle("clipboard:read-image",', start);
+  const handlers = new Map();
+  let written;
+  new Function("ipcMain", "clipboard", main.slice(start, end))(
+    { handle: (channel, handler) => handlers.set(channel, handler) },
+    { readText: () => json, writeText: (text) => { written = text; } },
+  );
+
+  const read = handlers.get("clipboard:read-text")();
+  handlers.get("clipboard:write-text")({}, { text: json });
+  assert.deepEqual({ read: read === json, write: written === json }, { read: true, write: true });
+});
