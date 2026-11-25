@@ -228,7 +228,7 @@ function ManuscriptResultsDialog({ bridge, scope, selection, manifestPath, initi
 
   const display = (value: number | null, unit = "") => value === null ? "—" : resultValue(value, t(unit));
   const detail = details?.id === recordId ? details : null;
-  return <Dialog open onClose={onClose} size="lg" ariaLabelledBy={titleId}>
+  return <Dialog open onClose={onClose} size="lg" className="paper-project-dialog" ariaLabelledBy={titleId}>
     <header className="app-dialog-header">
       <h2 id={titleId}>{t("Manuscript results")}</h2>
       <button type="button" className="app-dialog-close" onClick={onClose} aria-label={t("Close manuscript results")}><X size={16} /></button>
@@ -236,7 +236,7 @@ function ManuscriptResultsDialog({ bridge, scope, selection, manifestPath, initi
     <div className="app-dialog-body paper-project-body">
       {error && <p role="alert">{t(error)}</p>}
       {entries === null && !error && <p role="status">{t("Loading manuscript results…")}</p>}
-      {entries?.length ? <div className="settings-group" aria-label={t("Linked results")}>{entries.map(entry =>
+      {entries?.length ? <div className="paper-existing-projects" aria-label={t("Linked results")}>{entries.map(entry =>
         <button key={entry.id} type="button" className="secondary-button" aria-pressed={recordId === entry.id} onClick={() => { setError(""); setRecordId(entry.id); }}>
           {entry.manuscript.sourcePath}:{entry.manuscript.line}:{entry.manuscript.column} · {display(entry.value, entry.unit)}
         </button>
@@ -269,7 +269,7 @@ function ManuscriptResultsDialog({ bridge, scope, selection, manifestPath, initi
           <p><b>{t("Source version")}</b> <code>{detail.manuscript.sourceVersion}</code></p>
         </details>
         {detail.log !== null && <details><summary>{t("Run log")}</summary><pre>{detail.log}</pre></details>}
-        {!dirty && detail.status.build === "ready" && <button type="button" className="secondary-button" onClick={() => onOpenSource(detail.manuscript)}>{t("Show source number")}</button>}
+        {!dirty && detail.status.build === "ready" && <div className="paper-existing-projects"><button type="button" className="secondary-button" onClick={() => onOpenSource(detail.manuscript)}>{t("Show source number")}</button></div>}
       </section>}
       <details open={Boolean(selection && !detail)} key={recordId}>
         <summary>{t("Link selected number")}</summary>
