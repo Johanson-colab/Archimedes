@@ -211,6 +211,11 @@ function createPreviewToken(senderId, workspace) {
   return token;
 }
 
+function releaseWindowPreviewTokens(senderId) {
+  for (const token of windowPreviewTokens.get(senderId)?.values() ?? []) previewTokenWorkspaces.delete(token);
+  windowPreviewTokens.delete(senderId);
+}
+
 function workspaceStatePath() {
   return path.join(app.getPath("userData"), WORKSPACE_STATE_FILE);
 }
@@ -350,8 +355,7 @@ function createWindow(workspace) {
     closeWindowTerminals(senderId);
     stopWorkspaceWatcher(senderId);
     void presence?.leave(String(senderId));
-    for (const token of windowPreviewTokens.get(senderId)?.values() ?? []) previewTokenWorkspaces.delete(token);
-    windowPreviewTokens.delete(senderId);
+    releaseWindowPreviewTokens(senderId);
     windowStartupWorkspaces.delete(senderId);
     windowWorkspaces.delete(senderId);
   });
@@ -2727,6 +2731,12 @@ installQuitGuard({ app, dialog,
 
 app.on("will-quit", (event) => {
   if (event?.defaultPrevented) return;
+  for (const { controller } of deepReadingRuns.values()) {
+    controller.abort(new Error("Archimedes is quitting. Saved reading progress can be resumed."));
+  }
+  for (const controller of activeLiteratureSearches.values()) controller.abort();
+  for (const senderId of workspaceWatchers.keys()) stopWorkspaceWatcher(senderId);
+  for (const senderId of windowPreviewTokens.keys()) releaseWindowPreviewTokens(senderId);
   closeAllNativeClients();
   closeAllTerminals();
   experimentRunner.shutdownExperimentRuns();
