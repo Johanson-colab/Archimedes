@@ -10,6 +10,7 @@ const { AsyncLocalStorage } = require("node:async_hooks");
 const bibliographyRecords = require("./bibliography-records.cjs");
 const librarySeeds = require("../shared/library-seeds.json");
 const { presentStoredAssistantMessage } = require("./agent/model-response.cjs");
+const { readThreadEvents, readThreadTurns } = require("./storage/threads.cjs");
 const { hasRole, isProjectRole, normalizeRole } = require("./collaboration/roles.cjs");
 const { applyApprovedWrite } = require("./agent/workspace-tools.cjs");
 const researchGraphConstants = require("./research-graph/constants.cjs");
@@ -3669,11 +3670,11 @@ function updateExperimentRun({
 function bindResearchThreadHarness(id, harness) {
   if (!["api", "codex", "claude", "opencode"].includes(harness)) throw new Error("Unknown Agent backend.");
   const db = requireDatabase();
-  const thread = getResearchThread(id);
+  const thread = requireReadableResearchThread(db.prepare("SELECT project_id, owner_id, visibility, harness FROM research_threads WHERE id = ?").get(id));
   if (!canAccessProject(thread.project_id, "editor")) throw new Error("You do not have permission to edit this conversation.");
   let bound = thread.harness;
   // Imported or legacy histories may arrive after startup migration.
-  if (!bound && thread.turns.length) {
+  if (!bound && db.prepare("SELECT 1 FROM research_turns WHERE thread_id = ? LIMIT 1").get(id)) {
     bound = nativeAgentBindings(id).get()?.backend || "api";
     db.prepare("UPDATE research_threads SET harness = ? WHERE id = ? AND harness IS NULL").run(bound, id);
   }
@@ -3929,19 +3930,17 @@ function applyCloudComment(projectId, comment, { currentCloudUserId = "", localU
   return db.prepare("SELECT * FROM comments WHERE id = ?").get(comment.id);
 }
 
-function getResearchThread(id) {
-  const db = requireDatabase();
-  const thread = db.prepare("SELECT * FROM research_threads WHERE id = ?").get(id);
+function requireReadableResearchThread(thread) {
   if (!thread) throw new Error("Research thread not found.");
   if (thread.project_id && !canAccessProject(thread.project_id, "viewer")) throw new Error("You do not have access to this research thread.");
   if (thread.visibility === "private" && thread.owner_id !== localIdentity.userId) throw new Error("This research thread is a private draft.");
-  const turns = db.prepare(`
-    SELECT id, thread_id, task_id, mode, user_message, assistant_message, status, created_at, completed_at
-    FROM research_turns WHERE thread_id = ? ORDER BY created_at ASC, rowid ASC
-  `).all(id).map((turn) => ({
-    ...turn,
-    assistant_message: presentStoredAssistantMessage(turn.assistant_message),
-  }));
+  return thread;
+}
+
+function getResearchThread(id) {
+  const db = requireDatabase();
+  const thread = requireReadableResearchThread(db.prepare("SELECT * FROM research_threads WHERE id = ?").get(id));
+  const turns = readThreadTurns(db, id);
   const attachmentsByTurn = new Map();
   const attachmentRows = db.prepare(`SELECT a.turn_id, a.position, a.metadata_json FROM research_turn_attachments a
     JOIN research_turns t ON t.id = a.turn_id WHERE t.thread_id = ? ORDER BY a.position`).all(id);
@@ -3992,24 +3991,7 @@ function getResearchThread(id) {
       }
     } catch { /* Tool errors and older event formats do not contain source records. */ }
   }
-  const events = db.prepare(`
-    SELECT e.id, e.turn_id, e.sequence, e.type, e.payload_json, e.created_at
-    FROM research_events e
-    JOIN research_turns t ON t.id = e.turn_id
-    WHERE e.thread_id = ?
-    ORDER BY t.created_at ASC, t.rowid ASC, e.sequence ASC
-  `).all(id).map((event, index) => {
-    let payload;
-    try {
-      payload = JSON.parse(event.payload_json);
-    } catch {
-      payload = event.payload_json;
-    }
-    // `sequence` is scoped to a turn (every turn starts at 1). Journey,
-    // Trajectory focus, summary coverage, and seen markers need one stable
-    // order across the whole thread, so expose a thread-wide ordinal.
-    return { id: event.id, turn_id: event.turn_id, sequence: event.sequence, ordinal: index + 1, type: event.type, payload, created_at: event.created_at };
-  });
+  const events = readThreadEvents(db, id);
   const changeSets = db.prepare(`
     SELECT agent_actions.id, agent_actions.task_id, agent_actions.kind, agent_actions.payload_json,
       agent_actions.status, agent_actions.created_at, agent_actions.resolved_at, research_turns.id AS turn_id
@@ -4078,15 +4060,21 @@ function getResearchThreadIdForTask(taskId) {
 }
 
 function getResearchThreadContext(id) {
-  const thread = getResearchThread(id);
-  const checkpoint = thread.turns.findIndex((turn) => turn.id === thread.context_summary_through_turn_id);
+  const db = requireDatabase();
+  const thread = requireReadableResearchThread(db.prepare(`
+    SELECT id, title, mode, project_id, owner_id, visibility, context_summary, context_summary_through_turn_id
+    FROM research_threads WHERE id = ?
+  `).get(id));
+  const checkpoint = thread.context_summary_through_turn_id
+    ? db.prepare("SELECT created_at, rowid FROM research_turns WHERE thread_id = ? AND id = ?").get(id, thread.context_summary_through_turn_id)
+    : undefined;
   return {
     id: thread.id,
     title: thread.title,
     mode: thread.mode,
     context_summary: thread.context_summary,
-    events: thread.events,
-    turns: checkpoint >= 0 ? thread.turns.slice(checkpoint + 1) : thread.turns,
+    events: readThreadEvents(db, id, checkpoint),
+    turns: readThreadTurns(db, id, checkpoint),
   };
 }
 

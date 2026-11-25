@@ -77,6 +77,9 @@ test('legacy histories identify their native binding or API harness', () => {
       store.finishResearchTurn(turn.id, { response: 'done' });
     }
     store.nativeAgentBindings(native.id).save({ native_thread_id: 'private', workspace: root, model: '', last_turn_id: null, backend: 'claude' });
+    assert.throws(() => store.bindResearchThreadHarness(native.id, 'api'), /Start a new chat/);
+    assert.equal(store.bindResearchThreadHarness(native.id, 'claude'), 'claude');
+    assert.throws(() => store.bindResearchThreadHarness(api.id, 'claude'), /Start a new chat/);
     store.openWorkspace(other);
     store.openWorkspace(root);
     assert.equal(store.getResearchThread(native.id).harness, 'claude');
@@ -86,4 +89,22 @@ test('legacy histories identify their native binding or API harness', () => {
     fs.rmSync(root, { recursive: true, force: true });
     fs.rmSync(other, { recursive: true, force: true });
   }
+});
+
+test('harness binding and model context both enforce project role and private ownership', t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'harness-thread-acl-'));
+  t.after(() => {
+    store.closeAllWorkspaces();
+    store.setLocalIdentity({ userId: 'local-user' });
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+  store.openWorkspace(root);
+  const publicThread = store.createResearchThread({ prompt: 'Shared research', mode: 'free-chat' });
+  const privateThread = store.createResearchThread({ projectId: publicThread.project_id, visibility: 'private', prompt: 'Private research', mode: 'free-chat' });
+  store.addProjectMember({ projectId: publicThread.project_id, userId: 'read-only-fixture', role: 'viewer' });
+  store.setLocalIdentity({ userId: 'read-only-fixture' });
+  assert.equal(store.getResearchThreadContext(publicThread.id).id, publicThread.id);
+  assert.throws(() => store.bindResearchThreadHarness(publicThread.id, 'api'), /permission to edit/);
+  assert.throws(() => store.getResearchThreadContext(privateThread.id), /private draft/);
+  assert.throws(() => store.bindResearchThreadHarness(privateThread.id, 'api'), /private draft/);
 });
