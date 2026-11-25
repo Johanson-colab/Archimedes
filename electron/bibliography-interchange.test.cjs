@@ -377,3 +377,35 @@ test("browser BibTeX import leaves collection links and the old key intact on a 
     await bridge.deleteLibrary(target.id);
   }
 });
+
+test("BibTeX preview and import keep distinct same-title works and match author name order", async () => {
+  const data = database("Same-title citations"); let unmount;
+  try {
+    const library = data.db.listLibraries(data.project.id)[0];
+    const original = scope.parseBibliography("@article{chen2022,title={A Shared Title},author={Fei Chen},year=2022}").entries[0];
+    const known = data.db.addPaper(library.id, original.paper);
+    data.db.setPaperBibliography(known.id, { citekey: original.citekey, entryType: original.entryType });
+
+    unmount = await mount(scope.BibliographyDialog, { bridge: data.bridge, library, onClose() {}, onChanged: async () => {} });
+    const source = [
+      "@article{martin2022,title={A Shared Title},author={Maya Martin},year=2022,doi={10.5555/martin-editorial}}",
+      "@article{chen2024,title={A Shared Title},author={Fei Chen},year=2024}",
+      "@article{chen2022,title={A Shared Title},author={Chen, Fei},year=2022}",
+    ].join("\n");
+    await input(document.querySelector('[aria-label="BibTeX source"]'), source);
+    const rows = [...document.querySelectorAll("article.external-paper small")].map(node => node.textContent);
+    assert.equal(rows.filter(text => text === "New paper").length, 2);
+    assert.match(rows[2], /Existing paper/);
+    await click("Import selected references");
+
+    const saved = data.db.listPapers(library.id).filter(paper => paper.title === original.paper.title);
+    assert.equal(saved.length, 3);
+    assert.equal(new Set(saved.map(paper => paper.canonical_key)).size, 3);
+    assert.equal(saved.find(paper => paper.citekey === "chen2022").id, known.id);
+    assert.equal(data.db.getPaper(known.id).doi, "");
+    assert.equal(saved.find(paper => paper.citekey === "martin2022").doi, "10.5555/martin-editorial");
+    for (const entry of scope.parseBibliography(source).entries) {
+      assert.equal(data.db.addPaper(library.id, entry.paper).id, saved.find(paper => paper.citekey === entry.citekey).id, "repeat imports retain the correct paper");
+    }
+  } finally { if (unmount) await unmount(); data.close(); }
+});

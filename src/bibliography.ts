@@ -26,6 +26,16 @@ const arxivUrl = (value: string) => /^https?:\/\/(?:www\.)?arxiv\.org\/(?:abs|pd
 const arxivId = (value: string) => /^(?:\d{4}\.\d{4,5}|[a-z-]+(?:\.[a-z]{2})?\/\d{7})$/.test(arxiv(value));
 const title = (value: string) => value.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 
+function authorIdentity(authors: string[] = []) {
+  return authors.map(author => title(author).split(" ").sort().join(" ")).filter(Boolean).join("\n");
+}
+
+function compatibleTitleMetadata(first: AcademicSearchResult, second: AcademicSearchResult) {
+  if (first.year && second.year && first.year !== second.year) return false;
+  const firstAuthors = authorIdentity(first.authors), secondAuthors = authorIdentity(second.authors);
+  return !firstAuthors || !secondAuthors || firstAuthors === secondAuthors;
+}
+
 function splitAuthors(value: string) {
   const authors: string[] = [];
   let depth = 0, start = 0;
@@ -163,7 +173,9 @@ export function matchBibliographyPaper(incoming: AcademicSearchResult, papers: B
     if (matched) return matched;
   }
   if (strongOnly) return undefined;
-  return papers.find(paper => compatible(paper) && title(incoming.title) && title(incoming.title) === title(paper.title));
+  const normalizedTitle = title(incoming.title);
+  return papers.find(paper => normalizedTitle && normalizedTitle === title(paper.title)
+    && compatible(paper) && compatibleTitleMetadata(incoming, paper));
 }
 
 export function metadataDifferences(entry: AcademicSearchResult, current: AcademicSearchResult): MetadataPatch {
