@@ -9,6 +9,7 @@ const { Readable } = require("node:stream");
 
 const paperReview = require("./paper-review.cjs");
 const paperReviewStore = require("./paper-review-store.cjs");
+const modelConfig = require("./model-config.cjs");
 
 function tempDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-paper-review-app-"));
@@ -76,6 +77,7 @@ test("arXiv references accept IDs, abs URLs and pdf URLs", () => {
 function arxivFixture(t, missingPath) {
   const dir = tempDir();
   t.after(() => { paperReviewStore.close(); cleanup(dir); });
+  modelConfig.initializeModelConfig(dir);
   paperReview.initialize(dir);
   paperReview.saveSettings({ model: { mode: "custom", provider: "openai", model: "fixture", apiKey: "synthetic" } });
   const lines = Array(24).fill("(A paper about research methods.) Tj");
