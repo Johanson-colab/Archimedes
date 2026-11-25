@@ -22,10 +22,11 @@ export default function ResearchAppsView({ bridge, workspace, apps, appId, onRef
   const [logsOpen, setLogsOpen] = useState(false);
   const [frameVersion, setFrameVersion] = useState(0);
   const alive = useRef(true);
+  const frame = useRef<HTMLIFrameElement>(null);
   const attempted = useRef("");
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
   useEffect(() => { setRuntime(app ?? null); }, [app?.id, app?.status, app?.url, app?.error]);
-  const action = useCallback(async (operation: "start" | "stop" | "install" | "pin" | "remove") => {
+  const action = useCallback(async (operation: "start" | "stop" | "setup" | "install" | "pin" | "remove") => {
     if (!app) return;
     setBusy(true); setError("");
     try {
@@ -33,7 +34,8 @@ export default function ResearchAppsView({ bridge, workspace, apps, appId, onRef
         if (operation === "start") setRuntime({ status: "starting", url: null, logs: "", error: "" });
         const result = await (operation === "start" ? bridge.startResearchApp(workspace, app.id) : bridge.stopResearchApp(workspace, app.id));
         if (alive.current) setRuntime(result);
-      } else if (operation === "install") await bridge.installResearchApp(workspace, app.id);
+      } else if (operation === "setup") await bridge.setupResearchApp(workspace, app.id);
+      else if (operation === "install") await bridge.installResearchApp(workspace, app.id);
       else if (operation === "pin") await bridge.pinResearchApp(workspace, app.id, !app.pinned);
       else await bridge.removeResearchApp(workspace, app.id);
       onRefresh();
@@ -55,6 +57,23 @@ export default function ResearchAppsView({ bridge, workspace, apps, appId, onRef
     return () => { active = false; window.clearInterval(timer); };
   }, [logsOpen, appId, bridge, workspace]);
   const state = runtime ?? app;
+  const agentsKey = app?.agents?.join(",") || "";
+  useEffect(() => {
+    if (!state?.url || state.status !== "running" || !appId || !app?.agents?.length) return;
+    const origin = new URL(state.url).origin;
+    let current = true;
+    const receive = (event: MessageEvent) => {
+      const data = event.data;
+      if (event.origin !== origin || event.source !== frame.current?.contentWindow || !data || data.type !== "archimedes:agent-request" || typeof data.requestId !== "string" || !/^[A-Za-z0-9_-]{1,80}$/.test(data.requestId) || typeof data.backend !== "string" || !app.agents?.includes(data.backend) || typeof data.prompt !== "string" || !data.prompt.trim() || data.prompt.length > 12000) return;
+      const target = frame.current?.contentWindow;
+      void bridge.runResearchAppAgent(workspace, appId, { backend: data.backend, prompt: data.prompt }).then(
+        (result) => { if (current && target === frame.current?.contentWindow) target?.postMessage({ type: "archimedes:agent-result", requestId: data.requestId, result }, origin); },
+        (reason) => { if (current && target === frame.current?.contentWindow) target?.postMessage({ type: "archimedes:agent-result", requestId: data.requestId, error: String(reason).slice(0, 2000) }, origin); },
+      );
+    };
+    window.addEventListener("message", receive);
+    return () => { current = false; window.removeEventListener("message", receive); };
+  }, [state?.url, state?.status, appId, agentsKey, bridge, workspace]);
   if (!appId) return <section className="created-apps-view">
     <header className="created-apps-heading"><div><p>{t("CREATE / YOUR WORKSPACE")}</p><h1>{t("Created Research Apps")}</h1><span>{t("Preview an app, then choose whether to install and pin it.")}</span></div><button className="created-apps-action" onClick={onRefresh}><RefreshCw size={14} />{t("Refresh")}</button></header>
     {!apps.length ? <StateView icon={<FileCode size={24} />} title={t("No Research Apps yet")} description={t("Ask Create to save an app with research-app.json inside research-apps/<app-id>. Refresh here when it is ready.")} /> : <div className="created-apps-list">{apps.map((item) => <button key={item.id} className="created-app-card" onClick={() => onOpen(item.id)}>
@@ -68,6 +87,7 @@ export default function ResearchAppsView({ bridge, workspace, apps, appId, onRef
       <button className="created-apps-action" onClick={onBack} aria-label={t("Back to created apps")}><ArrowLeft size={15} /></button>
       <div className="research-app-title"><h1>{app?.name || appId}</h1><span>{t(state?.status === "running" ? "Running" : state?.status === "starting" ? "Starting…" : state?.status === "failed" ? "Failed" : "Stopped")}</span></div>
       <div className="research-app-controls">
+        {app?.needsSetup && state?.status !== "running" && state?.status !== "starting" && <button className="created-apps-action" disabled={busy} onClick={() => void action("setup")}>{t("Set up dependencies")}</button>}
         <button className="created-apps-action" onClick={() => setLogsOpen((value) => !value)} aria-pressed={logsOpen}><Terminal size={14} />{t("Logs")}</button>
         {state?.status === "running" && <button className="created-apps-action" onClick={() => setFrameVersion((value) => value + 1)}><RefreshCw size={14} />{t("Reload preview")}</button>}
         {state?.status === "running" || state?.status === "starting" ? <button className="created-apps-action" onClick={() => void action("stop")}><Square size={13} />{t("Stop app")}</button> : <button className="created-apps-action" disabled={busy || !app || app.status === "invalid"} onClick={() => void action("start")}><Play size={13} />{t("Start preview")}</button>}
@@ -77,11 +97,11 @@ export default function ResearchAppsView({ bridge, workspace, apps, appId, onRef
     {(error || state?.error) && <p className="research-app-error" role="alert">{error || state?.error}</p>}
     {logsOpen && <pre className="research-app-logs" aria-label={t("App runtime logs")}>{state?.logs || t("No runtime logs yet.")}</pre>}
     <div className="research-app-preview">
-      {state?.status === "running" && state.url ? <iframe key={`${state.url}:${frameVersion}`} src={state.url} title={app?.name || appId} sandbox="allow-scripts allow-same-origin allow-forms allow-downloads" allow="camera 'none'; microphone 'none'; geolocation 'none'; clipboard-read 'none'; clipboard-write 'none'" referrerPolicy="no-referrer" /> : <StateView
+      {state?.status === "running" && state.url ? <iframe ref={frame} key={`${state.url}:${frameVersion}`} src={state.url} title={app?.name || appId} sandbox="allow-scripts allow-same-origin allow-forms allow-downloads" allow="camera 'none'; microphone 'none'; geolocation 'none'; clipboard-read 'none'; clipboard-write 'none'" referrerPolicy="no-referrer" /> : <StateView
         tone={state?.status === "starting" ? "loading" : state?.status === "failed" || state?.status === "invalid" ? "error" : "empty"}
         icon={state?.status === "starting" ? <LoaderCircle size={23} className="spin" /> : <FileCode size={23} />}
         title={t(state?.status === "starting" ? "Starting app…" : state?.status === "failed" ? "App could not start" : state?.status === "invalid" ? "App manifest is invalid" : "Ready to preview")}
-        description={t("Archimedes manages this app's process. Local code runs with your user permissions; the preview cannot access the host bridge.")}
+        description={t("Archimedes manages this app's process. Local code runs with your user permissions; Agent requests require approval.")}
       />}
     </div>
   </section>;

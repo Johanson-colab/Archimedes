@@ -52,6 +52,8 @@ contextBridge.exposeInMainWorld("researchDesk", {
   readExtensionFile: (path, workspace) => ipcRenderer.invoke("extensions:read-local", { path, workspace }),
   listSidebarPlugins: () => ipcRenderer.invoke("plugins:list"),
   listResearchApps: (workspace) => ipcRenderer.invoke("research-apps:list", { workspace }),
+  setupResearchApp: (workspace, id) => ipcRenderer.invoke("research-apps:setup", { workspace, id }),
+  runResearchAppAgent: (workspace, id, input) => ipcRenderer.invoke("research-apps:agent", { backend: input?.backend, prompt: input?.prompt, workspace, id }),
   researchAppStatus: (workspace, id) => ipcRenderer.invoke("research-apps:status", { workspace, id }),
   startResearchApp: (workspace, id) => ipcRenderer.invoke("research-apps:start", { workspace, id }),
   stopResearchApp: (workspace, id) => ipcRenderer.invoke("research-apps:stop", { workspace, id }),

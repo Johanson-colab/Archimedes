@@ -4,7 +4,7 @@ Tracks #256 and PR #428. Implementation approved by the project owner's instruct
 
 ## Supported Apps
 
-This increment supports static pages and local Python HTTP applications. Their creator may be the API harness, Codex, Claude Code or OpenCode; the runtime does not depend on the conversation that generated the files. Arbitrary shell launch commands, Node package installation, runtime Agent binding and automatic Environment credential binding are not supported yet.
+This increment supports static pages and local Python HTTP applications. Their creator may be the API harness, Codex, Claude Code or OpenCode; the runtime does not depend on the conversation that generated the files. Apps can optionally declare Agent backends, skill instructions and Environment key names. Python dependencies can be set up after approval. Arbitrary shell launch commands and Node package installation are not supported.
 
 An App lives in the active workspace:
 
@@ -65,7 +65,7 @@ Each workspace stores its own installation records in `.archimedes/research-apps
 
 - Electron owns local service processes independently of native Agent sessions. Runtime URLs are only exposed after bounded readiness checks. Start errors and premature exits return a failed state with logs, not a purported working URL.
 - Health checks run only for active Apps, with one bounded log buffer per App and at most four simultaneous runtimes. Start/stop are serialized per App. Host exit and last-window closure clean up owned processes and timers.
-- Python receives a small OS/runtime environment allowlist, the selected port and the ephemeral readiness identity. Model provider keys and the Environment vault are not injected.
+- Python receives a small OS/runtime environment allowlist, the selected port and the ephemeral readiness identity. Only manifest-declared Environment keys are read from the vault and injected after the App code and key names are approved. Other vault entries are not injected. Logs are suppressed for Apps receiving keys to avoid leaking secret values.
 - Pages run in an iframe on a different loopback origin from the host, with scripts, same-origin API calls, forms and downloads enabled; top-level navigation, popups, camera, microphone and geolocation are excluded. They do not execute as trusted same-context sidebar plugins.
 - This is page isolation, **not an OS sandbox for Python**. Local App code runs with the user's filesystem/network permissions. Installation/start approval states this explicitly; source review and dependency provenance remain important.
 - Unchanged installed source retains approval. Dependency environments are intentionally excluded from the source fingerprint, so this is not a complete software supply-chain attestation. Updating installed packages requires its own existing approval workflow.
@@ -76,4 +76,12 @@ Runtime behavior tests cover static preview, installation/pinning persistence, r
 
 ## Remaining work
 
-Runtime Agent/Skill binding for App-initiated Codex/Claude/OpenCode tasks; selected Environment/service credential binding; richer dependency setup; editing/version migration; a dedicated live code editor and isolated build/repair sandbox. The current Creator can generate files through its normal tools, but those larger workflows must not be presented as already implemented.
+Streaming and resumable App Agent sessions; package update/repair, Node and non-Python dependency setup; editing/version migration; a dedicated live code editor and isolated build/repair sandbox. The current Creator can generate files through its normal tools, but those larger workflows must not be presented as already implemented.
+
+## Optional App capabilities
+
+Add only what the App needs to its manifest: `"environment": ["OPENALEX_API_KEY"]`, `"agents": ["codex", "claude"]`, and `"skills": ["paper-lookup"]`. Skills must be present at `.capabilities/<id>/SKILL.md`; export them during creation. Static pages cannot receive Environment keys. The native start/install dialog displays requested key names; the values stay out of renderer IPC and are passed to the approved Python process at start. App code has the user's permissions and can use or transmit keys, so approval must be limited to reviewed code. Key values are not included in the source fingerprint; updating a value does not require reapproval.
+
+For Python dependencies, provide `requirements.txt` with one exact `package==version` per line. **Set up dependencies** asks the user before creating `.venv` and installing from PyPI. It does not replace an existing environment. If setup fails, the incomplete environment remains for review and must be removed before retrying. Only direct packages are pinned; transitive dependencies are not locked. Python itself must already be available on PATH.
+
+An embedded page can request a declared Agent using `parent.postMessage({type: "archimedes:agent-request", requestId: "unique-id", backend: "codex", prompt: "..."}, "*")`. Listen for `archimedes:agent-result` from `parent` and match `requestId`; the message contains `result` or `error`. Requests from other windows or origins are ignored. The native host displays the full prompt for approval and asks separately for each tool operation. Codex runs in a temporary session and read-only mode; Claude Code and OpenCode use one-shot native sessions with their normal approval adapters. All declared skill files are identified in the prompt. Responses are final text only; no streaming, resumable session or native question card is provided. Shared Environment-vault entries are not injected into these Agent processes by this App integration, although native CLIs still inherit the host's normal process environment and native configuration. Stopping the App cancels its active Agent request.

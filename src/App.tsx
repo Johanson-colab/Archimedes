@@ -1217,6 +1217,8 @@ const previewBridge = {
   },
   setSidebarLayout: async () => readPreviewSidebarSettings(),
   listResearchApps: async () => [],
+  setupResearchApp: async () => { throw new Error("Research App setup requires the desktop app."); },
+  runResearchAppAgent: async () => { throw new Error("Research App Agents require the desktop app."); },
   researchAppStatus: async () => ({ status: "stopped", url: null, error: "", logs: "" }),
   startResearchApp: async () => { throw new Error("Research App runtimes require the desktop app."); },
   stopResearchApp: async () => ({ status: "stopped", url: null, error: "", logs: "" }),

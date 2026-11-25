@@ -5,7 +5,7 @@ Written implementation approval: the project owner's instruction in the current 
 
 ## Scope
 
-This branch supplies a private, versioned capability library for the existing Create conversation mode, plus host-managed static/Python HTTP App runtime, isolated embedded preview and workspace-scoped sidebar installation. See [Local Research App lifecycle](research-app-runtime.md). A full live code editor/build sandbox, runtime Agent binding and automatic credential binding remain unfinished. No new Node dependencies are introduced.
+This branch supplies a private, versioned capability library for the existing Create conversation mode, plus host-managed static/Python HTTP App runtime, isolated embedded preview and workspace-scoped sidebar installation. See [Local Research App lifecycle](research-app-runtime.md). Optional one-shot App Agent requests, declared Environment keys and approved Python dependency setup are supported; a full live code editor/build sandbox remains unfinished. No new Node dependencies are introduced.
 
 A skill is a professional instruction book, potentially with reusable scripts, references, templates and documented APIs. A generated Research App is a deliverable page/platform. It can implement its workflow using direct APIs, local scripts, an Agent, or a combination. The Agent building the App and an Agent called by the App are separate choices. Zero, one and multiple skills are supported.
 
@@ -63,7 +63,7 @@ research-apps/literature-tracker/
 
 The export is staged, verifies resource hashes, refuses path traversal/symlink destinations, and refuses replacing an existing `.capabilities` directory. It preserves user code in the App directory. `lock.json` paths are relative to the App root. Exporting an empty selection is valid. Updating or removing dependencies remains a separate, explicit version-management step.
 
-The App can use scripts and API documentation directly. An App that calls Codex/Claude/OpenCode must explicitly provide its selected skill paths through the future App runner/backend adapter; this resource export does not implement that binding or automatically make the Agent discover the skills. Deliver the `.capabilities` folder with the App so another machine does not need preinstalled global skills. No credentials are copied. Package/environment installation is separate and must follow the declared Python/system/service requirements in per-App environments.
+The App can use scripts and API documentation directly. An App that calls Codex/Claude/OpenCode can declare selected exported skill IDs in its manifest; the App runner asks the chosen Agent to read their App-local instruction files. Resource export by itself does not bind a skill. Deliver the `.capabilities` folder with the App so another machine does not need preinstalled global skills. No credentials are copied. Package/environment installation is separate and must follow the declared Python/system/service requirements in per-App environments.
 
 ## Validation boundaries
 

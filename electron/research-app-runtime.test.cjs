@@ -142,3 +142,22 @@ test("Python service belongs to the host, uses assigned port/readiness identity 
   await f.runtime.stop(f.workspace, "sample-app");
   await assert.rejects(fetch(running.url));
 });
+
+test("declared keys require approval and reach only the App process; logs do not expose them", { skip: python.status !== 0 || process.platform === "win32" }, async (t) => {
+  const source = `import os\nfrom http.server import BaseHTTPRequestHandler, HTTPServer\nclass H(BaseHTTPRequestHandler):\n def do_GET(self):\n  self.send_response(200); self.send_header('X-Archimedes-App-Token',os.environ['ARCHIMEDES_APP_TOKEN']); self.end_headers(); self.wfile.write(str('EXAMPLE_API_KEY' in os.environ).encode())\n def log_message(self,*args): pass\nprint(os.environ['EXAMPLE_API_KEY'],flush=True)\nHTTPServer(('127.0.0.1',int(os.environ['PORT'])),H).serve_forever()\n`;
+  let approvals = 0;
+  const f = fixture(t, { kind: 'python-http', source, readSecret: name => name === 'EXAMPLE_API_KEY' ? 'secret-value-for-test' : '', approve: async ({ app }) => { approvals++; assert.deepEqual(app.environment, ['EXAMPLE_API_KEY']); return true; } });
+  fs.writeFileSync(path.join(f.directory, 'research-app.json'), JSON.stringify({ ...f.manifest, environment: ['EXAMPLE_API_KEY'] }));
+  fs.mkdirSync(path.join(f.directory, '.venv/bin'), { recursive: true }); fs.symlinkSync(python.stdout.trim(), path.join(f.directory, '.venv/bin/python'));
+  const run = await f.runtime.start(f.workspace, 'sample-app');
+  assert.equal(run.status, 'running', run.error); assert.equal(await (await fetch(run.url)).text(), 'True');
+  assert.doesNotMatch(f.runtime.status(f.workspace, 'sample-app').logs, /secret-value-for-test/); assert.equal(approvals, 1);
+});
+
+test('missing declared key reports its name without starting Python', { skip: python.status !== 0 || process.platform === 'win32' }, async t => {
+  const f = fixture(t, { kind: 'python-http', source: 'raise SystemExit("must not run")', readSecret: () => '' });
+  fs.writeFileSync(path.join(f.directory, 'research-app.json'), JSON.stringify({ ...f.manifest, environment: ['EXAMPLE_API_KEY'] }));
+  fs.mkdirSync(path.join(f.directory, '.venv/bin'), { recursive: true }); fs.symlinkSync(python.stdout.trim(), path.join(f.directory, '.venv/bin/python'));
+  const result = await f.runtime.start(f.workspace, 'sample-app');
+  assert.equal(result.status, 'failed'); assert.match(result.error, /EXAMPLE_API_KEY/); assert.doesNotMatch(result.logs, /must not run/);
+});

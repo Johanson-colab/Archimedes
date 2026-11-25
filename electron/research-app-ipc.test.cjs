@@ -13,11 +13,12 @@ test("App IPC resolves only the sender window's active workspace", async (t) => 
   const end = source.indexOf('  ipcMain.handle("plugins:set-enabled"', start);
   const handlers = new Map(), calls = [];
   const runtime = Object.fromEntries(["list", "status", "start", "stop", "install", "pin", "remove"].map((method) => [method, (...args) => { calls.push({ method, args }); return method; }]));
-  new Function("fs", "BrowserWindow", "workspaceForWindow", "ipcMain", "researchAppRuntime", source.slice(start, end))(
+  new Function("fs", "BrowserWindow", "workspaceForWindow", "ipcMain", "researchAppRuntime", "createResearchAppSetup", "createAppAgent", "agentBackendConfig", "nativeAgent", source.slice(start, end))(
     fs, { fromWebContents: (sender) => sender }, (owner) => owner?.workspace,
-    { handle: (name, handler) => handlers.set(name, handler) }, runtime,
+    { handle: (name, handler) => handlers.set(name, handler) }, runtime, () => ({ setup: (...args) => { calls.push({ method: 'setup', args }); return 'setup'; } }),
+    () => ({ run: (...args) => { calls.push({ method: 'agent', args }); return 'agent'; } }), {}, {},
   );
-  assert.equal(handlers.size, 7);
+  assert.equal(handlers.size, 9);
   for (const [name, handler] of handlers) {
     assert.throws(() => handler({ sender: { workspace: root } }, { workspace: other, id: "test" }), /active workspace/);
     assert.throws(() => handler({ sender: {} }, { workspace: root, id: "test" }), /active workspace/);

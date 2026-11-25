@@ -27,6 +27,8 @@ type WorkbenchSettingsSnapshot = {
 };
 interface ResearchDeskBridge {
     listResearchApps: (workspace: string) => Promise<GeneratedResearchApp[]>;
+    setupResearchApp: (workspace: string, id: string) => Promise<{ installed: boolean; packages: string[] }>;
+    runResearchAppAgent: (workspace: string, id: string, input: { backend: string; prompt: string }) => Promise<string>;
     researchAppStatus: (workspace: string, id: string) => Promise<ResearchAppRuntimeStatus>;
     startResearchApp: (workspace: string, id: string) => Promise<ResearchAppRuntimeStatus>;
     stopResearchApp: (workspace: string, id: string) => Promise<ResearchAppRuntimeStatus>;
@@ -461,6 +463,10 @@ interface GeneratedResearchApp extends ResearchAppRuntimeStatus {
   version?: string;
   category: import("./research-apps").ResearchAppCategory;
   runtime?: { kind: "static" | "python-http"; entry: string };
+  environment?: string[];
+  agents?: string[];
+  skills?: string[];
+  needsSetup?: boolean;
   workspace: string;
   directory: string;
   installed: boolean;

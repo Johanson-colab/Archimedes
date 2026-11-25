@@ -86,3 +86,21 @@ test("installing and pinning a draft updates controls without starting it until 
   assert.ok(document.querySelector("iframe"));
   await React.act(async () => root.unmount());
 });
+
+test("only the active App frame and origin can request a declared Agent", async () => {
+  const root = createRoot(document.getElementById("root")); let calls = 0;
+  const item = { ...draft, installed: true, pinned: true, status: 'running', url: 'http://127.0.0.1:34567/', agents: ['codex'] };
+  const bridge = { runResearchAppAgent: async () => { calls++; return 'ok'; } };
+  await React.act(async () => root.render(React.createElement(View, { workspace: '/project', appId: 'sample', apps: [item], bridge, onOpen: () => {}, onRefresh: () => {}, onBack: () => {} })));
+  const frame = document.querySelector('iframe').contentWindow;
+  const data = { type: 'archimedes:agent-request', requestId: 'test-1', backend: 'codex', prompt: 'Explain the chart' };
+  await React.act(async () => {
+    window.dispatchEvent(new window.MessageEvent('message', { data, origin: 'http://127.0.0.1:12345', source: frame }));
+    window.dispatchEvent(new window.MessageEvent('message', { data, origin: 'http://127.0.0.1:34567', source: window }));
+    window.dispatchEvent(new window.MessageEvent('message', { data: { ...data, backend: 'claude' }, origin: 'http://127.0.0.1:34567', source: frame }));
+  });
+  assert.equal(calls, 0);
+  await React.act(async () => window.dispatchEvent(new window.MessageEvent('message', { data, origin: 'http://127.0.0.1:34567', source: frame })));
+  assert.equal(calls, 1);
+  await React.act(async () => root.unmount());
+});
