@@ -115,6 +115,10 @@ test("parseRssFeed handles RSS items, images and entity decoding", () => {
     "https://cdn.example.com/photo.jpg",
   ]);
   assert.deepEqual(items[0].tags, ["The Register"]);
+  const escaped = xml.replace(/<!\[CDATA\[[\s\S]*?\]\]>/, '&lt;img src=&quot;https://cdn.example.com/photo.jpg&quot;&gt;Publisher summary.');
+  const [escapedItem] = parseRssFeed(escaped);
+  assert.equal(escapedItem.summary, "Publisher summary.");
+  assert.equal(escapedItem.media.at(-1).url, "https://cdn.example.com/photo.jpg");
 });
 
 test("parseRssFeed handles Atom entries", () => {

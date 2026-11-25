@@ -1,4 +1,5 @@
 ﻿const { createHash } = require("node:crypto");
+const { searchWeb } = require("./web-search.cjs");
 
 /**
  * News source adapters.
@@ -16,6 +17,7 @@ const SOURCE_LABELS = {
   reddit: "Reddit",
   rss: "RSS",
   x: "X",
+  "x-tavily": "X via Tavily",
 };
 
 const TRACKING_PARAMS = new Set([
@@ -243,6 +245,8 @@ function parseRssFeed(xml, { feedLabel = "" } = {}) {
         : firstMatch(block, /<link>\s*([^<]+?)\s*<\/link>/i);
       if (!title || !link) return null;
       const rawDescription = firstMatch(block, /<content:encoded[^>]*>([\s\S]*?)<\/content:encoded>/i) || firstMatch(block, /<description[^>]*>([\s\S]*?)<\/description>/i) || firstMatch(block, /<summary[^>]*>([\s\S]*?)<\/summary>/i);
+      // RSS descriptions can contain escaped HTML or an unescaped CDATA fragment.
+      const summary = rawDescription.trimStart().startsWith("<![CDATA[") ? rawDescription : decodeEntities(rawDescription);
       const media = [];
       for (const match of block.matchAll(/<enclosure[^>]*\burl="([^"]+)"[^>]*>/gi)) {
         const tag = match[0];
@@ -252,7 +256,7 @@ function parseRssFeed(xml, { feedLabel = "" } = {}) {
       for (const match of block.matchAll(/<media:(?:content|thumbnail)[^>]*\burl="([^"]+)"[^>]*>/gi)) {
         media.push({ url: decodeEntities(match[1]) });
       }
-      const inlineImage = block.match(/<img[^>]+src="([^"]+)"/i);
+      const inlineImage = `${block} ${summary}`.match(/<img[^>]+src="([^"]+)"/i);
       if (inlineImage) media.push({ url: decodeEntities(inlineImage[1]) });
       const published = firstMatch(block, /<pubDate[^>]*>([\s\S]*?)<\/pubDate>/i) || firstMatch(block, /<published[^>]*>([\s\S]*?)<\/published>/i) || firstMatch(block, /<updated[^>]*>([\s\S]*?)<\/updated>/i);
       const author = firstMatch(block, /<dc:creator[^>]*>([\s\S]*?)<\/dc:creator>/i) || firstMatch(block, /<author[\s\S]*?<name>([\s\S]*?)<\/name>/i);
@@ -261,7 +265,7 @@ function parseRssFeed(xml, { feedLabel = "" } = {}) {
         url: decodeEntities(link),
         author: stripHtml(author),
         publishedAt: published ? new Date(published).toISOString() : "",
-        summary: rawDescription,
+        summary,
         tags: feedLabel ? [feedLabel] : [],
         media,
         native: { feedLabel: feedLabel || feedTitle || "" },
@@ -463,10 +467,46 @@ async function fetchX({ fetchImpl = fetch, state = {}, bearerToken, query } = {}
   return result.notModified ? result : { ...result, items: parseX(result.json) };
 }
 
+async function fetchXWithTavily({ query, fetchImpl }) {
+  const domains = ["x.com", "twitter.com"];
+  const { results } = await searchWeb({ query, domains, includePublishedDate: true }, { provider: "tavily", fetchImpl });
+  const items = new Map();
+  for (const result of results) {
+    const link = new URL(result.url);
+    const host = link.hostname.replace(/^www\./, "");
+    if (link.protocol !== "https:" || !domains.includes(host)) continue;
+    const post = link.pathname.match(/^\/(?:i\/(?:web\/)?status|([a-z0-9_]{1,15})\/status)\/(\d{1,20})(?:\/(?:photo|video)\/\d+)?\/?$/i);
+    if (!post) continue;
+    const [, username, postId] = post;
+    const handle = username?.toLowerCase();
+    const published = Date.parse(result.published_at);
+    const item = makeItem("x-tavily", {
+      title: result.title,
+      author: handle ? `@${handle}` : "",
+      url: `https://x.com/${handle || "i/web"}/status/${postId}`,
+      summary: result.snippet,
+      publishedAt: Number.isFinite(published) ? new Date(published).toISOString() : "",
+    });
+    const previous = items.get(postId);
+    if (previous) {
+      if (!previous.publishedAt) previous.publishedAt = item.publishedAt;
+      if (!previous.author && item.author) {
+        previous.author = item.author;
+        previous.url = item.url;
+      }
+    } else {
+      items.set(postId, { ...item, id: `x-tavily:${postId}` });
+    }
+  }
+  return { items: [...items.values()] };
+}
+
 async function fetchRss({ fetchImpl = fetch, state = {}, feed }) {
   if (!feed?.url) throw new Error("RSS feed has no URL.");
   const result = await fetchText(fetchImpl, feed.url, { headers: { Accept: "application/rss+xml, application/atom+xml, application/xml, text/xml, */*" } }, state);
-  return result.notModified ? result : { ...result, items: parseRssFeed(result.text, { feedLabel: feed.label || "" }) };
+  if (result.notModified) return result;
+  if (!/<(?:rss|feed|rdf:rdf)[\s>]/i.test(result.text)) throw new Error("The URL did not return an RSS or Atom feed.");
+  return { ...result, items: parseRssFeed(result.text, { feedLabel: feed.label || "" }) };
 }
 
 module.exports = {
@@ -488,6 +528,7 @@ module.exports = {
   fetchReddit,
   fetchRss,
   fetchX,
+  fetchXWithTavily,
   truncate,
   stripHtml,
   decodeEntities,

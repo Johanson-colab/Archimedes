@@ -222,9 +222,10 @@ function RssCard({ item, t }: { item: NewsItem; t: TFunction }) {
   </div>;
 }
 
-function GenericCard({ item }: { item: NewsItem }) {
+function GenericCard({ item, t }: { item: NewsItem; t: TFunction }) {
   return <div className="news-generic">
     <h3 className="news-generic-title">{item.title}</h3>
+    {item.source === "x-tavily" && <div className="news-rss-meta">{[item.author, item.publishedAt && relativeTime(item.publishedAt, t)].filter(Boolean).join(" · ")}</div>}
     {item.summary ? <p className="news-generic-summary">{item.summary}</p> : null}
     <MediaGallery media={item.media} />
   </div>;
@@ -239,7 +240,7 @@ function nativeCard(item: NewsItem, t: TFunction) {
     case "arxiv": return <ArxivCard item={item} t={t} />;
     case "lobsters": return <LobstersCard item={item} t={t} />;
     case "rss": return <RssCard item={item} t={t} />;
-    default: return <GenericCard item={item} />;
+    default: return <GenericCard item={item} t={t} />;
   }
 }
 
@@ -268,6 +269,7 @@ export default function NewsView({ bridge, projectId, active, onSendToChat }: {
   const [muteText, setMuteText] = useState("");
   const [rssText, setRssText] = useState("");
   const [subredditText, setSubredditText] = useState("");
+  const [tavilyConfigured, setTavilyConfigured] = useState<boolean | null>(null);
   const requestRef = useRef(0);
 
   const load = useCallback(async () => {
@@ -320,8 +322,8 @@ export default function NewsView({ bridge, projectId, active, onSendToChat }: {
     try {
       const result = await bridge.refreshNews({ force });
       await load();
-      const failed = result?.results?.filter((entry) => entry.status === "error") || [];
-      if (failed.length) setNotice(t("Some sources are offline: {sources}", { sources: failed.map((entry) => SOURCE_LABELS[entry.source] || entry.source).join(", ") }));
+      const search = result.results.find((entry) => entry.source === "x-tavily");
+      if (search?.status === "ok") setNotice(t("Found {count} public X posts.", { count: search.updated }));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
@@ -410,6 +412,10 @@ export default function NewsView({ bridge, projectId, active, onSendToChat }: {
     setRssText(settings.rssFeeds.map((feedEntry) => feedEntry.label ? `${feedEntry.label} | ${feedEntry.url}` : feedEntry.url).join("\n"));
     setSubredditText(settings.reddit.subreddits.join(", "));
     setSettingsOpen(true);
+    void bridge.getWebSearchConfig().then(
+      (config) => setTavilyConfigured(config.configuredProviders.includes("tavily")),
+      () => setTavilyConfigured(null),
+    );
   }
 
   async function saveSettings() {
@@ -433,6 +439,10 @@ export default function NewsView({ bridge, projectId, active, onSendToChat }: {
 
   const items = feed?.items ?? [];
   const sources = feed?.sources ?? [];
+  const rssSubscriptions = sources.find((source) => source.id === "rss")?.subscriptions ?? [];
+  const failedSources = sources.flatMap((source) => source.subscriptions
+    ? source.subscriptions.filter((subscription) => subscription.status === "error").map((subscription) => subscription.label || subscription.url)
+    : source.status === "error" ? [t(source.label)] : []);
   const watch = settings?.watch ?? [];
   const clusterCounts = useMemo(() => {
     const counts = new Map<string, number>();
@@ -445,13 +455,15 @@ export default function NewsView({ bridge, projectId, active, onSendToChat }: {
     return watch.some((keyword) => haystack.includes(keyword.toLowerCase()));
   }, [watch]);
 
+  const searchesX = settings?.sources["x-tavily"] && settings.tavilyQuery;
+  const manualRefreshLabel = searchesX ? t("Refresh and search X via Tavily") : t("Refresh now");
   const updatedLabel = feed?.updatedAt
     ? t("Updated {time}", { time: relativeTime(feed.updatedAt, (key, values) => t(key, values)) })
     : t("Not synced yet");
 
   const renderCard = (item: NewsItem) => {
     const native = nativeOf(item);
-    const provenance = item.source === "rss" && asText(native.feedLabel) ? asText(native.feedLabel) : item.sourceLabel;
+    const provenance = item.source === "rss" && asText(native.feedLabel) ? asText(native.feedLabel) : t(item.sourceLabel);
     return <article
       key={item.id}
       className={`news-card${watchedItem(item) ? " watched" : ""}${item.read ? " read" : ""}`}
@@ -483,9 +495,11 @@ export default function NewsView({ bridge, projectId, active, onSendToChat }: {
       </Tabs>
       <span className="news-updated">{updatedLabel}</span>
       <span className="news-head-spacer" />
-      <button className="quiet-icon-button" onClick={() => void refresh()} title={t("Refresh")} aria-label={t("Refresh")} disabled={refreshing}>
+      {searchesX ? <button className="secondary-button" onClick={() => void refresh()} disabled={refreshing}>
+        {refreshing ? <LoaderCircle className="spin" size={15} /> : <RefreshCw size={15} />}{manualRefreshLabel}
+      </button> : <button className="quiet-icon-button" onClick={() => void refresh()} title={t("Refresh")} aria-label={t("Refresh")} disabled={refreshing}>
         {refreshing ? <LoaderCircle className="spin" size={15} /> : <RefreshCw size={15} />}
-      </button>
+      </button>}
       <button className="quiet-icon-button" onClick={openSettings} title={t("News settings")} aria-label={t("News settings")}>
         <Settings2 size={15} />
       </button>
@@ -512,7 +526,7 @@ export default function NewsView({ bridge, projectId, active, onSendToChat }: {
       <FilterButton active={sourceFilter === "all"} onClick={() => setSourceFilter("all")}>{t("All sources")} <span className="news-chip-count">{items.length}</span></FilterButton>
       {sources.map((source) => <FilterButton key={source.id} active={sourceFilter === source.id} onClick={() => setSourceFilter(source.id)}>
         <span className={`news-src-dot ${source.id}`} />
-        {source.label}
+        {t(source.label)}
         {source.unread > 0 ? <span className="news-chip-unread">{source.unread}</span> : null}
         {source.status === "error" ? <span className="news-src-offline" title={source.message || t("Source offline")}>!</span> : null}
       </FilterButton>)}
@@ -522,6 +536,7 @@ export default function NewsView({ bridge, projectId, active, onSendToChat }: {
     </div>
 
     {error ? <div className="news-notice error">{error}</div> : null}
+    {failedSources.length > 0 && <div className="news-notice" role="status">{t("Some sources are offline: {sources}", { sources: failedSources.join(", ") })}</div>}
     {notice ? <div className="news-notice">{notice}</div> : null}
 
     {loading && !feed
@@ -532,7 +547,7 @@ export default function NewsView({ bridge, projectId, active, onSendToChat }: {
           icon={<Rss size={18} />}
           title={t("No news yet")}
           description={t("Enable sources or add a feed to start collecting stories.")}
-          action={<button type="button" className="secondary-button" onClick={() => void refresh()}>{t("Refresh now")}</button>}
+          action={<button type="button" className="secondary-button" onClick={() => void refresh()} disabled={refreshing}>{manualRefreshLabel}</button>}
         />
         : view === "board"
           ? <div className="news-board">{items.map(renderCard)}</div>
@@ -579,6 +594,15 @@ export default function NewsView({ bridge, projectId, active, onSendToChat }: {
           </SettingsRow>
         </SettingsSection>
 
+        <SettingsSection title={t("X via Tavily")}>
+          <SettingsRow title={t("Search public X posts")} description={t("Manual refresh sends the saved query to api.tavily.com and can use a Tavily credit.")}>
+            <SettingsSwitch checked={Boolean(draft.sources["x-tavily"])} onChange={(checked) => setDraft({ ...draft, sources: { ...draft.sources, "x-tavily": checked } })} label={t("Search public X posts")} />
+          </SettingsRow>
+          <SettingsRow title={t("Search query")} description={tavilyConfigured === false ? t("Add a Tavily key in Web search settings.") : undefined} stacked>
+            <input className="settings-text-input" value={draft.tavilyQuery} maxLength={400} aria-label={t("X search query")} onChange={(event) => setDraft({ ...draft, tavilyQuery: event.target.value })} placeholder="AI agents, evaluation benchmarks" />
+          </SettingsRow>
+        </SettingsSection>
+
         <SettingsSection title={t("X (optional)")}>
           <SettingsRow title={t("Bearer token")} description={draft.x.configured && !draft.x.bearerToken ? t("Configured — leave blank to keep the saved token.") : undefined} stacked>
             <input className="settings-text-input" type="password" value={draft.x.bearerToken} onChange={(event) => setDraft({ ...draft, x: { ...draft.x, bearerToken: event.target.value } })} />
@@ -589,8 +613,14 @@ export default function NewsView({ bridge, projectId, active, onSendToChat }: {
         </SettingsSection>
 
         <SettingsSection title={t("RSS feeds")}>
+          {rssSubscriptions.map((subscription) => <SettingsRow key={subscription.url} title={subscription.label || subscription.url}
+            description={subscription.status === "error" ? subscription.message : undefined}>
+            <span>{subscription.status === "error" ? t("Source offline") : subscription.lastSuccessAt
+              ? t("Updated {time}", { time: relativeTime(subscription.lastSuccessAt, t) }) : t("Not synced yet")}</span>
+          </SettingsRow>)}
           <SettingsRow title={t("Feeds")} description={t("One per line: Label | URL")} stacked>
             <textarea className="news-settings-textarea" value={rssText} onChange={(event) => setRssText(event.target.value)} rows={4} placeholder={"The Register | https://www.theregister.com/headlines.atom"} />
+            {!parseFeeds(rssText).some((entry) => entry.url === draft.recommendedRssFeed.url) && <button type="button" className="secondary-button" onClick={() => setRssText((current) => `${current.trimEnd()}${current.trim() ? "\n" : ""}${draft.recommendedRssFeed.label} | ${draft.recommendedRssFeed.url}`)}>{t("Add Google DeepMind")}</button>}
           </SettingsRow>
         </SettingsSection>
 

@@ -5,26 +5,31 @@ const newsStore = require("./news-store.cjs");
 
 const SETTINGS_FILE = "news-settings.json";
 const SETTINGS_VERSION = 1;
-const SOURCE_IDS = ["hn", "github", "arxiv", "lobsters", "reddit", "rss", "x"];
+const SOURCE_IDS = ["hn", "github", "arxiv", "lobsters", "reddit", "rss", "x", "x-tavily"];
+const RESEARCH_FEED_URL = "https://blog.google/innovation-and-ai/models-and-research/google-deepmind/rss/";
+const RESEARCH_FEED = { id: RESEARCH_FEED_URL, label: "Google DeepMind", url: RESEARCH_FEED_URL };
 
 let settingsPath = "";
 let settings = null;
 let initialized = false;
 const redditTokenCache = { token: "", expiresAt: 0 };
 let refreshPromise = null;
+let tavilyRefreshPromise = null;
 
 function defaultSettings() {
   return {
     version: SETTINGS_VERSION,
     view: "feed",
-    sources: { hn: true, github: true, arxiv: true, lobsters: true, reddit: false, rss: true, x: false },
+    sources: { hn: true, github: true, arxiv: true, lobsters: true, reddit: false, rss: true, x: false, "x-tavily": false },
     rssFeeds: [
       { id: "https://www.theverge.com/rss/index.xml", label: "The Verge", url: "https://www.theverge.com/rss/index.xml" },
       { id: "https://arstechnica.com/feed/", label: "Ars Technica", url: "https://arstechnica.com/feed/" },
+      RESEARCH_FEED,
     ],
     reddit: { subreddits: ["LocalLLaMA"], clientId: "", clientSecret: "" },
     github: { token: "" },
     x: { bearerToken: "", query: "" },
+    tavilyQuery: "",
     watch: ["agents", "RAG", "inference"],
     mute: [],
     cadenceMinutes: 10,
@@ -65,7 +70,7 @@ function normalizeSettings(input = {}) {
     ...base,
     view: source.view === "board" ? "board" : "feed",
     sources: Object.fromEntries(SOURCE_IDS.map((id) => [id, enabled[id] === undefined ? base.sources[id] : Boolean(enabled[id])])),
-    rssFeeds: cleanRssFeeds(source.rssFeeds),
+    rssFeeds: cleanRssFeeds(source.rssFeeds ?? base.rssFeeds),
     reddit: {
       subreddits: cleanSubreddits(source.reddit?.subreddits ?? base.reddit.subreddits),
       clientId: String(source.reddit?.clientId ?? base.reddit.clientId).trim().slice(0, 200),
@@ -78,6 +83,7 @@ function normalizeSettings(input = {}) {
       bearerToken: String(source.x?.bearerToken ?? base.x.bearerToken).trim().slice(0, 2000),
       query: String(source.x?.query ?? base.x.query).trim().slice(0, 400),
     },
+    tavilyQuery: String(source.tavilyQuery ?? base.tavilyQuery).trim().slice(0, 400),
     watch: cleanKeywords(source.watch ?? base.watch),
     mute: cleanKeywords(source.mute ?? base.mute),
     cadenceMinutes: Math.min(60, Math.max(5, Number(source.cadenceMinutes) || base.cadenceMinutes)),
@@ -114,6 +120,7 @@ function publicSettings() {
   const current = settingsOrDefaults();
   return {
     ...structuredClone(current),
+    recommendedRssFeed: { ...RESEARCH_FEED },
     reddit: { ...current.reddit, clientSecret: "", configured: Boolean(current.reddit.clientId && current.reddit.clientSecret) },
     github: { ...current.github, token: "", configured: Boolean(current.github.token) },
     x: { ...current.x, bearerToken: "", configured: Boolean(current.x.bearerToken) },
@@ -150,6 +157,7 @@ function setSettings(patch = {}) {
       const incoming = patch.github || {};
       next.github = { token: incoming.token ? incoming.token : current.github.token };
     }
+    if (patch.tavilyQuery !== undefined) next.tavilyQuery = patch.tavilyQuery;
     if (patch.watch !== undefined) next.watch = patch.watch;
     if (patch.mute !== undefined) next.mute = patch.mute;
     if (patch.cadenceMinutes !== undefined) next.cadenceMinutes = patch.cadenceMinutes;
@@ -216,14 +224,18 @@ function computeClusters() {
   return assignments;
 }
 
+function rssSourceId(feed) {
+  return `rss:${feed.url}`;
+}
+
 function shouldRefresh(force) {
   if (force) return true;
   const current = settingsOrDefaults();
-  const states = SOURCE_IDS.filter((id) => current.sources[id]).map((id) => newsStore.getSourceState(id));
-  if (!states.length) return false;
+  const ids = SOURCE_IDS.filter((id) => id !== "rss" && id !== "x-tavily" && current.sources[id]);
+  if (current.sources.rss) ids.push(...current.rssFeeds.map(rssSourceId));
   const cutoff = Date.now() - current.cadenceMinutes * 60000;
-  return states.some((state) => {
-    const attempted = Date.parse(state.last_attempt_at || "");
+  return ids.some((id) => {
+    const attempted = Date.parse(newsStore.getSourceState(id).last_attempt_at);
     return !Number.isFinite(attempted) || attempted < cutoff;
   });
 }
@@ -265,7 +277,7 @@ async function runSource(source, task) {
   }
 }
 
-async function refresh({ force = false, fetchImpl } = {}) {
+async function refreshFeeds({ force, fetchImpl }) {
   if (!shouldRefresh(force)) return { skipped: true, results: [] };
   if (refreshPromise) return refreshPromise;
   const current = settingsOrDefaults();
@@ -291,9 +303,7 @@ async function refresh({ force = false, fetchImpl } = {}) {
   }
   if (current.sources.rss) {
     for (const feed of current.rssFeeds) {
-      // Several feeds share the "rss" source id, so conditional headers are
-      // per-request only; the SQLite cache still keeps offline reads working.
-      jobs.push(() => runSource("rss", () => sources.fetchRss({ fetchImpl, feed, state: {} })));
+      jobs.push(() => runSource(rssSourceId(feed), (state) => sources.fetchRss({ fetchImpl, feed, state })));
     }
   }
   refreshPromise = (async () => {
@@ -309,20 +319,43 @@ async function refresh({ force = false, fetchImpl } = {}) {
   }
 }
 
-function sourceList() {
+async function refresh({ force = false, fetchImpl } = {}) {
   const current = settingsOrDefaults();
+  const feeds = refreshFeeds({ force, fetchImpl });
+  if (!force || !current.sources["x-tavily"] || !current.tavilyQuery) return feeds;
+
+  // A click during an automatic RSS refresh must still search X. Repeated
+  // clicks while that same search is running join its existing request.
+  tavilyRefreshPromise ??= runSource("x-tavily", () => sources.fetchXWithTavily({ query: current.tavilyQuery, fetchImpl }))
+    .finally(() => { tavilyRefreshPromise = null; });
+  const [feedResult, searchResult] = await Promise.all([feeds, tavilyRefreshPromise]);
+  return { skipped: false, results: [...feedResult.results, searchResult] };
+}
+
+function sourceState(id) {
+  const state = newsStore.getSourceState(id);
+  return { status: state.status, message: state.message, lastSuccessAt: state.last_success_at };
+}
+
+function latestSuccess(entries) {
+  return entries.reduce((latest, entry) => (entry.lastSuccessAt > latest ? entry.lastSuccessAt : latest), "");
+}
+
+function sourceList(current) {
   const counts = new Map(newsStore.sourceSummary(current.sinceHours).map((entry) => [entry.source, entry]));
   return SOURCE_IDS.filter((id) => current.sources[id]).map((id) => {
     const count = counts.get(id);
-    const state = newsStore.getSourceState(id);
+    const summary = { id, label: sources.SOURCE_LABELS[id], total: count?.total || 0, unread: count?.unread || 0 };
+    if (id !== "rss") return { ...summary, ...sourceState(id) };
+    const subscriptions = current.rssFeeds.map((feed) => ({ ...feed, ...sourceState(rssSourceId(feed)) }));
+    const failed = subscriptions.filter((feed) => feed.status === "error");
+    const lastSuccessAt = latestSuccess(subscriptions);
     return {
-      id,
-      label: sources.SOURCE_LABELS[id] || id,
-      total: count?.total || 0,
-      unread: count?.unread || 0,
-      status: state.status || "idle",
-      message: state.message || "",
-      lastSuccessAt: state.last_success_at || "",
+      ...summary,
+      status: failed.length ? "error" : lastSuccessAt ? "ok" : "idle",
+      message: failed.map((feed) => feed.label || feed.url).join(", "),
+      lastSuccessAt,
+      subscriptions,
     };
   });
 }
@@ -330,11 +363,11 @@ function sourceList() {
 function list(filters = {}) {
   const current = settingsOrDefaults();
   const sinceHours = Number(filters.sinceHours) || current.sinceHours;
-  const items = newsStore.listItems({ ...filters, sinceHours });
+  const listedSources = sourceList(current);
   return {
-    items,
-    sources: sourceList(),
-    updatedAt: sourceList().reduce((latest, entry) => (entry.lastSuccessAt > latest ? entry.lastSuccessAt : latest), ""),
+    items: newsStore.listItems({ ...filters, sinceHours }),
+    sources: listedSources,
+    updatedAt: latestSuccess(listedSources),
     settings: publicSettings(),
   };
 }
