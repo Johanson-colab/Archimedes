@@ -1356,6 +1356,9 @@ async function complete(config, messages, { signal, onTextDelta = () => {}, allo
     response = await requestCompletion(request);
     if (response.ok) break;
     detail = (await response.text()).slice(0, 500);
+    const rejectsStreaming = /\b(?:streaming|stream(?:["']?\s*[:=]\s*true)?(?:\s+parameter)?)["']?\s+(?:is\s+)?(?:not supported|unsupported|disabled)\b/i.test(detail) ||
+      /\b(?:does not support|doesn't support|unsupported\s+(?:parameter|value)\s*:?)\s*["']?(?:streaming|stream)\b/i.test(detail);
+    if ([400, 422].includes(response.status) && rejectsStreaming) return completeWithoutStream();
     const canUseCompletionTokens = tokenLimit && Object.hasOwn(request, "max_tokens") &&
       /(?:unsupported parameter|not supported)[^\n]{0,180}max_tokens|max_tokens[^\n]{0,180}(?:unsupported|not supported)/i.test(detail) &&
       /max_completion_tokens/i.test(detail);
@@ -1381,7 +1384,7 @@ async function complete(config, messages, { signal, onTextDelta = () => {}, allo
   }
 
   const contentType = response.headers.get("content-type") || "";
-  if (!contentType.includes("text/event-stream") || !response.body) {
+  if (!contentType.includes("text/event-stream")) {
     const body = await response.json();
     const message = body?.choices?.[0]?.message;
     if (!message) throw new Error("The model response did not contain a message.");
@@ -1391,6 +1394,7 @@ async function complete(config, messages, { signal, onTextDelta = () => {}, allo
     return normalized;
   }
 
+  if (!response.body) throw new ModelIncompleteError({ provider: "openai", reason: "missing_terminal" });
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   const message = { content: "", tool_calls: [] };
@@ -1423,12 +1427,9 @@ async function complete(config, messages, { signal, onTextDelta = () => {}, allo
     if (error.code === "MODEL_RESPONSE_INCOMPLETE") { error.partialResponse = partialResponse; throw error; }
     throw new ModelIncompleteError({ provider: "openai", reason: "stream_error", partialResponse, detail: error.message });
   } finally { reader.releaseLock(); }
-  if (!message.content && !message.tool_calls.length) {
-    if (finishReason) assertModelCompletion({ provider: "openai", finishReason, partialResponse: "" });
-    return completeWithoutStream();
-  }
   const normalized = normalizeAssistantMessage(message);
   assertModelCompletion({ provider: "openai", finishReason, terminalSeen: Boolean(finishReason), partialResponse: normalized.content, toolCalls: normalized.tool_calls });
+  if (!message.content && !message.tool_calls.length) throw new ModelIncompleteError({ provider: "openai", reason: "empty_stream", finishReason });
   contentGuard.finish(normalized);
   return normalized;
 }
