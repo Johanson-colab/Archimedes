@@ -18,8 +18,15 @@ function canResumeExternal(binding, { backend, workspace, model, previousTurnId 
 function assertPolicy(config) {
   if (!['claude', 'opencode', 'antigravity'].includes(config.backend)) throw new Error('Unsupported native backend.');
   const mode = config.permissionMode || 'ask';
-  const allowed = config.backend === 'claude' ? ['ask', 'accept-edits', 'plan', 'auto', 'full-access'] : ['ask'];
+  const allowed = config.backend === 'claude' ? ['ask', 'accept-edits', 'plan', 'auto', 'full-access'] : config.backend === 'antigravity' ? ['ask', 'accept-edits', 'plan', 'auto'] : ['ask'];
   if (!allowed.includes(mode)) throw new Error(`${config.backend} does not support the requested permission mode. Use native approvals; this adapter does not provide a filesystem sandbox.`);
+}
+async function configureAntigravityPermissions(client, config, created, sessionId) {
+  const value = config.permissionMode === 'ask' || !config.permissionMode ? 'default' : config.permissionMode;
+  const option = created.configOptions?.find(option => option.id === 'mode');
+  if (!option?.options?.some(item => item.value === value)) throw new Error('Antigravity did not advertise the selected permission mode.');
+  const changed = await client.request('session/set_config_option', { sessionId, configId: 'mode', value });
+  if (!changed?.configOptions?.some(option => option.id === 'mode' && option.currentValue === value)) throw new Error('Antigravity did not confirm the selected permission mode.');
 }
 function boundedText(value, max) {
   if (typeof value === 'string') return value.slice(-max);
@@ -153,6 +160,7 @@ async function runExternal(options) {
       if (resume && created?.sessionId && created.sessionId !== binding.native_thread_id) throw new Error(`${title} returned a different native session.`);
       if (!session.sessionId) throw new Error(`${title} did not provide a native session.`);
       await configureOpenCode(client, config, created, session.sessionId, title);
+      if (backend === 'antigravity') await configureAntigravityPermissions(client, config, created, session.sessionId);
     }
     if (!session.sessionId || settled || signal.aborted) throw new Error(`${title} ended before starting. No request was sent.`);
     session.bindingId = session.sessionId;
@@ -208,6 +216,7 @@ async function checkNative(config, { Client = NativeProcess } = {}) {
     if (config.backend === 'antigravity') {
       const created = await client.request('session/new', { cwd: os.tmpdir(), mcpServers: [] });
       if (!created?.sessionId) throw new Error('Antigravity did not create a session. Sign in with agy, then retry.');
+      await configureAntigravityPermissions(client, config, created, created.sessionId);
       return { ready: true, models: openCodeModels(created), message: 'Antigravity ACP is ready. Native permissions and account settings apply; no inference was requested.' };
     }
     return { ready: true, models: config.backend === 'claude' ? initialized.models : [], message: config.backend === 'claude' ? 'Claude control protocol is ready. Uses native login and configuration; no inference was requested.' : 'OpenCode ACP is ready. Uses native login and configuration. Models and effort are validated when a native session starts; no inference was requested.' };

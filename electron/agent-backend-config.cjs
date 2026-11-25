@@ -6,7 +6,7 @@ const { nativeExecutable } = require("./agent/native-process.cjs");
 const { listNativeModels, resolveNativeModel } = require("./agent/codex-models.cjs");
 let configPath;
 
-function initialize(userData) { configPath = path.join(userData, "agent-backend.json"); }
+function initialize(userData) { configPath = path.join(userData, "agent-backend.json"); require('./agent/managed-clis.cjs').initialize(userData); }
 const nativeIds = ["codex", "claude", "opencode", "antigravity"];
 function profile(input = {}, backend = "codex") {
   const defaultBinary = backend === "antigravity" ? "agy" : backend;
@@ -18,7 +18,7 @@ function profile(input = {}, backend = "codex") {
     ? ["ask", "auto-review", "full-access", "read-only", "workspace-write"]
     : backend === "claude"
       ? ["ask", "accept-edits", "plan", "auto", "full-access"]
-      : ["ask"];
+      : backend === "antigravity" ? ["ask", "accept-edits", "auto", "plan"] : ["ask"];
   if (!permissionModes.includes(permissionMode)) throw new Error("Unsupported native permission mode.");
   if (binary !== defaultBinary && !path.isAbsolute(binary)) throw new Error("Native executable path must be absolute.");
   if (binary.length > 2000 || model.length > 160 || effort.length > 100 || /[\r\n\0]/.test(binary + model + effort)) throw new Error("Invalid native configuration.");

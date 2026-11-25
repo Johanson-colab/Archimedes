@@ -284,6 +284,11 @@ interface ResearchDeskBridge {
     saveTask: (task: { prompt: string; response: string; status?: string }) => Promise<SavedTask>;
     runAgent: (input: { prompt: string; workspace: string; paperId?: string; threadId?: string; projectId?: string; workspaceId?: string; visibility?: "project" | "private"; mode: ResearchMode; researchSkill?: "idea-spark" | "paper-to-slides"; mineruToken?: string; reasoningEffort?: ReasoningEffort; contextLength?: ContextLength; contextItems?: ContextAttachment[]; capabilities?: { write: "ask" | "deny"; command: "ask" | "deny" }; origin?: "research" | "paper"; backend?: AgentBackendConfig["backend"]; remoteServerId?: string; title?: string; clientRunId?: string }) => Promise<AgentRunResult>;
     getAgentBackendConfig: () => Promise<AgentBackendConfig>;
+    detectHarnessCli: (input: { backend: string; binary?: string }) => Promise<HarnessCliInstallation>;
+    installHarnessCli: (backend: string) => Promise<HarnessCliInstallation>;
+    getHarnessInstallStatus: (backend: string) => Promise<{ phase: string }>;
+    cancelHarnessInstall: (backend: string) => Promise<void>;
+    loginHarnessCli: (input: { backend: string; binary?: string }) => Promise<{ opened: boolean }>;
     saveAgentBackendConfig: (input: AgentBackendConfig) => Promise<AgentBackendConfig>;
     listCodexModelCatalog: (input: AgentBackendConfig) => Promise<{ models: NativeAgentModel[]; effectiveModelId?: string }>;
     listOpenCodeModelCatalog: (input: AgentBackendConfig & { workspace?: string }) => Promise<{ models: NativeAgentModel[] }>;
@@ -1946,6 +1951,8 @@ interface AgentBackendProfile {
   effort?: string;
   permissionMode?: "read-only" | "workspace-write" | "ask" | "auto-review" | "full-access" | "accept-edits" | "plan" | "auto";
 }
+
+interface HarnessCliInstallation { installed: boolean; backend: string; binary?: string; version?: string; docsUrl: string; phase: string }
 interface AgentBackendConfig extends AgentBackendProfile {
   backend: "api" | "codex" | "claude" | "opencode" | "antigravity";
   profiles?: Partial<Record<"codex" | "claude" | "opencode" | "antigravity", AgentBackendProfile>>;

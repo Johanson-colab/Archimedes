@@ -12,8 +12,9 @@ function nativeExecutable(backend, binary = backend) {
     if (!path.isAbsolute(binary) || !fs.statSync(binary, { throwIfNoEntry: false })?.isFile()) throw new Error(`Choose an existing absolute ${backend} executable path.`);
     return binary;
   }
-  const dirs = [...String(process.env.PATH || '').split(path.delimiter), '/opt/homebrew/bin', '/usr/local/bin', path.join(os.homedir(), '.local/bin'), path.join(os.homedir(), '.opencode/bin')];
-  const file = dirs.filter(path.isAbsolute).map(dir => path.join(dir, process.platform === 'win32' ? `${executable}.exe` : executable)).find(file => fs.statSync(file, { throwIfNoEntry: false })?.isFile());
+  const dirs = [...String(process.env.PATH || '').split(path.delimiter), '/opt/homebrew/bin', '/usr/local/bin', path.join(os.homedir(), '.local/bin'), path.join(os.homedir(), '.npm-global/bin'), path.join(os.homedir(), '.opencode/bin')];
+  if (process.platform === 'win32' && process.env.LOCALAPPDATA) dirs.push(path.join(process.env.LOCALAPPDATA, 'agy', 'bin'));
+  const file = [...dirs.filter(path.isAbsolute).map(dir => path.join(dir, process.platform === 'win32' ? `${executable}.exe` : executable)), require('./managed-clis.cjs').binaryPath(backend)].filter(Boolean).find(file => fs.statSync(file, { throwIfNoEntry: false })?.isFile());
   if (!file) throw new Error(`${executable} CLI was not found. Install it and sign in through its native CLI.`);
   return file;
 }

@@ -61,6 +61,7 @@ const supabaseConfig = require("../shared/supabase-config.json");
 const journeySummarizer = require("./journey-summarizer.cjs");
 const modelConfig = require("./model-config.cjs");
 const agentBackendConfig = require("./agent-backend-config.cjs");
+const harnessSetup = require("./harness-setup.cjs");
 const nativeAgent = require("./agent/external-backend.cjs");
 const { registerNativeAgentCommands } = require("./native-agent-commands.cjs");
 const { runWindowAgent } = require("./window-agent-run.cjs");
@@ -1272,6 +1273,19 @@ app.whenReady().then(async () => {
   ipcMain.handle("agent-backend:get", () => agentBackendConfig.get());
   ipcMain.handle("agent-backend:save", (_event, input) => agentBackendConfig.save(input));
   ipcMain.handle("agent-backend:check", (_event, input) => agentBackendConfig.check(input));
+  const setupOwner = (event) => { if (!BrowserWindow.fromWebContents(event.sender)) throw new Error("CLI setup requires an application window."); return event.sender.id; };
+  ipcMain.handle("agent-backend:detect", (event, input) => { setupOwner(event); return harnessSetup.detect(input); });
+  ipcMain.handle("agent-backend:install-status", (event, backend) => { setupOwner(event); return harnessSetup.status(backend); });
+  ipcMain.handle("agent-backend:install-cancel", (event, backend) => harnessSetup.cancel(backend, setupOwner(event)));
+  ipcMain.handle("agent-backend:install", async (event, backend) => {
+    const owner = setupOwner(event);
+    const cancel = () => harnessSetup.cancel(backend, owner);
+    event.sender.once("destroyed", cancel);
+    event.sender.once("render-process-gone", cancel);
+    try { return await harnessSetup.install(backend, owner); }
+    finally { event.sender.removeListener("destroyed", cancel); event.sender.removeListener("render-process-gone", cancel); }
+  });
+  ipcMain.handle("agent-backend:login", (event, input) => { setupOwner(event); return harnessSetup.login(input); });
   ipcMain.handle("agent-backend:codex-models", (_event, input) => agentBackendConfig.listCodexModelCatalog(input));
   ipcMain.handle("agent-backend:opencode-models", (_event, input = {}) => agentBackendConfig.listOpenCodeModelCatalog(input, resolveWorkspace(input.workspace)));
 
@@ -2752,6 +2766,7 @@ app.on("activate", () => {
 });
 
 app.on("will-quit", () => {
+  harnessSetup.shutdown();
   closeAllNativeClients();
   closeAllTerminals();
   experimentRunner.shutdownExperimentRuns();

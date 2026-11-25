@@ -47,7 +47,7 @@ class ACPFixture extends Fixture {
     if(method==='initialize')return Promise.resolve({protocolVersion:1,agentCapabilities:{loadSession:true,promptCapabilities:{image:true}}});
     if(method==='session/new'||method==='session/load') {
       queueMicrotask(()=>this.emit('message',{method:'session/update',params:{sessionId:'native-acp',update:{sessionUpdate:'agent_message_chunk',content:{type:'text',text:'OLD REPLAY'}}}}));
-      return Promise.resolve({sessionId:'native-acp',configOptions:[{id:'model',options:[{value:'p/model'}]}]});
+      return Promise.resolve({sessionId:'native-acp',configOptions:[{id:'model',options:[{value:'p/model'}]},{id:'mode',currentValue:'default',options:['default','accept-edits','auto','plan'].map(value=>({value}))}]});
     }
     if(method==='session/set_config_option')return Promise.resolve({configOptions:[{id:params.configId,currentValue:params.value,options:[{value:params.value}]}]});
     if(method==='session/prompt'){
@@ -289,4 +289,38 @@ test('native adapters reserve a shared saved session before connecting a copied 
     await first;
     assert.equal(await runNative(copy), backend === 'claude' ? 'Hello' : 'ACP answer');
   }
+});
+
+test('Antigravity applies each advertised native permission mode before delivering the prompt', async () => {
+ for (const mode of ['ask', 'accept-edits', 'auto', 'plan']) {
+  class PermissionFixture extends ACPFixture {
+   request(method, params) {
+    if (method !== 'session/prompt') return super.request(method, params);
+    this.sent.push({method, params});
+    this.emit('message',{method:'session/update',params:{sessionId:'native-acp',update:{sessionUpdate:'agent_message_chunk',content:{type:'text',text:'Ready'}}}});
+    return Promise.resolve({stopReason:'end_turn'});
+   }
+  }
+  const o=options('antigravity');o.Client=PermissionFixture;o.config.permissionMode=mode;
+  assert.equal(await runNative(o),'Ready');
+  const messages=Fixture.last.sent;
+  const setting=messages.findIndex(m=>m.method==='session/set_config_option'&&m.params.configId==='mode');
+  assert.ok(setting>=0&&setting<messages.findIndex(m=>m.method==='session/prompt'));
+  assert.equal(messages[setting].params.value,mode==='ask'?'default':mode);
+ }
+});
+test('Antigravity never starts inference when its CLI cannot apply the chosen permissions', async () => {
+ for (const advertised of [false,true]) {
+  class UnsupportedMode extends ACPFixture {
+   async request(method, params) {
+    const result=await super.request(method,params);
+    if ((method==='session/new'&&!advertised)||method==='session/set_config_option') return {...result,configOptions:[]};
+    return result;
+   }
+  }
+  const o=options('antigravity');o.Client=UnsupportedMode;o.config.permissionMode='plan';
+  await assert.rejects(runNative(o),/permission mode/);
+  assert.equal(Fixture.last.sent.some(m=>m.method==='session/prompt'),false);
+  assert.equal(o.saves.length,0);
+ }
 });

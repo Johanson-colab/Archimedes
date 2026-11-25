@@ -7,6 +7,7 @@ import antigravityLogo from "@lobehub/icons-static-svg/icons/antigravity-color.s
 import { SettingsGroup, SettingsRow, SettingsSection } from "./SettingsPrimitives";
 import { useUISettings } from "./i18n";
 import { MenuItem, MenuSurface } from "./Menu";
+import HarnessSetupPanel from "./HarnessSetupPanel";
 
 const CLAUDE_EFFORTS = ["low", "medium", "high", "xhigh", "max"] as const;
 
@@ -38,12 +39,15 @@ export default function AgentBackendSettings({ bridge, onBackendChange, workspac
   const [feedback, setFeedback] = useState<{ error: boolean; text: string } | null>(null);
   const [catalogs, setCatalogs] = useState<Partial<Record<"codex" | "claude" | "opencode" | "antigravity", NativeAgentModel[]>>>({});
   const [selected, setSelected] = useState<"codex" | "claude" | "opencode" | "antigravity">("codex");
+  const selectedRef = useRef(selected); selectedRef.current = selected;
+  const [setupBusy, setSetupBusy] = useState<Record<string, boolean>>({});
   const [drafts, setDrafts] = useState<AgentBackendConfig["profiles"]>({});
   const labels = { codex: "Codex", claude: "Claude Code", opencode: "OpenCode", antigravity: "Antigravity", api: "Archimedes" };
   const name = labels[selected];
   const models = catalogs[selected] || [];
   const openCodeFiltered = models.filter((model) => `${model.id} ${model.label}`.toLowerCase().includes(opencodeSearch.toLowerCase()));
   const openCodeMatches = openCodeFiltered.slice(0, 80);
+  if (selected === "codex") codexDraft.current = config;
   if (selected === "opencode") opencodeDraft.current = { binary: config.binary, workspace };
   const nativeModel = models.find((model) => model.id === (config.model || effectiveModelId));
   const effortLabel = (effort: string) => ({ low: "Low", medium: "Medium", high: "High", xhigh: "XHigh", max: "Max", ultra: "Ultra", minimal: "Minimal", none: "None" }[effort] || effort);
@@ -153,13 +157,14 @@ export default function AgentBackendSettings({ bridge, onBackendChange, workspac
   }
 
   const disabled = !savedConfig || busy !== null;
+  const fieldsDisabled = disabled || Boolean(setupBusy[selected]);
   const connectionLabel = (item: typeof selected) => busy === "check" && selected === item ? t("Checking connection") : connections[item] === "connected" ? t("Connected") : connections[item] === "error" ? t("Connection failed") : t("Connection not checked");
   return <div className="agent-backend-settings">
     <p className="model-connection-description">{t("Use an installed agent with its own login, model configuration and native tools.")}</p>
     <SettingsSection>
       <SettingsGroup>
         <SettingsRow title={<>{t("Main Work runtime")} · {savedConfig ? labels[savedConfig.backend] : t("Loading configuration")}</>} description={t("Paper chat, internal research workers and Proactive keep using API models.")}>
-          {savedConfig?.backend === "api" ? <span className="agent-runtime-status agent-backend-active"><Check size={14} />{t("API harness active")}</span> : <button type="button" className="secondary-button" disabled={disabled} onClick={() => void apply("api")}>{t("Use API harness")}</button>}
+          {savedConfig?.backend === "api" ? <span className="agent-runtime-status agent-backend-active"><Check size={14} />{t("API harness active")}</span> : <button type="button" className="secondary-button" disabled={fieldsDisabled} onClick={() => void apply("api")}>{t("Use API harness")}</button>}
         </SettingsRow>
       </SettingsGroup>
     </SettingsSection>
@@ -184,20 +189,27 @@ export default function AgentBackendSettings({ bridge, onBackendChange, workspac
         <ChevronDown className={expanded && selected === item ? "expanded" : ""} size={17} />
       </button>
       <div className="agent-backend-panel" id={`${id}-${item}-config`} hidden={!expanded || selected !== item}>
+      <HarnessSetupPanel bridge={bridge} backend={item} binary={selected === item ? config.binary : drafts?.[item]?.binary || (item === "antigravity" ? "agy" : item)} active={expanded && selected === item} disabled={disabled} onBusy={value => setSetupBusy(current => ({ ...current, [item]: value }))} onInstalled={result => {
+        if (!result.binary) return;
+        setCatalogs(current => ({ ...current, [item]: [] }));
+        if (selectedRef.current === item) setEffectiveModelId(undefined);
+        setDrafts(current => ({ ...current, [item]: { model: "", ...current?.[item], binary: result.binary! } }));
+        if (selectedRef.current === item) { setConfig(current => ({ ...current, binary: result.binary! })); setConnections(current => ({ ...current, [item]: "unchecked" })); }
+      }} />
       {selected === item && <>
         <div className="agent-backend-fields">
-          <SettingsRow stacked title={<label htmlFor={`${id}-binary`}>{t(`${name} executable`)}</label>} description={selected === "codex" ? t("Use codex from PATH or an absolute executable path. Run codex login in a terminal first.") : t("Use the CLI name or an absolute executable path. Sign in through its terminal command first.")}>
-            <input id={`${id}-binary`} className="settings-text-input settings-text-input-wide" disabled={disabled} value={config.binary} spellCheck={false} onChange={(event) => edit("binary", event.target.value)} onBlur={() => { if (selected === "codex" && !models.length) void loadCodexCatalog(config); }} />
+          <SettingsRow stacked title={<label htmlFor={`${id}-binary`}>{t(`${name} executable`)}</label>} description={t("Use the detected CLI, or enter an absolute path to another installation.")}>
+            <input id={`${id}-binary`} className="settings-text-input settings-text-input-wide" disabled={fieldsDisabled} value={config.binary} spellCheck={false} onChange={(event) => edit("binary", event.target.value)} onBlur={() => { if (selected === "codex" && !models.length) void loadCodexCatalog(config); }} />
           </SettingsRow>
           <SettingsRow stacked controlClassName="agent-opencode-model-control" title={<label htmlFor={`${id}-model`}>{t(`${name} model`)}</label>} description={selected === "codex" ? t("Leave empty to use your Codex configuration. API model settings do not select the Codex model.") : selected === "claude" ? t("Leave empty to use your Claude Code configuration.") : selected === "antigravity" ? t("Leave empty to use your Antigravity configuration. Check the connection to discover models.") : t("Leave empty to use native configuration. OpenCode model IDs use provider/model.")}>
             <>
               <div className="agent-opencode-model-anchor" ref={opencodeAnchor}>
-                <input id={`${id}-model`} className="settings-text-input settings-text-input-wide" disabled={disabled} value={config.model} spellCheck={false} role="combobox" aria-autocomplete="list" aria-expanded={opencodeOpen} aria-controls={`${id}-opencode-models`} onClick={() => { setOpenCodeOpen(true); setOpenCodeSearch(""); setOpenCodeIndex(0); }} onFocus={() => { setOpenCodeOpen(true); setOpenCodeSearch(""); setOpenCodeIndex(0); if (selected === "opencode" && !catalogs.opencode?.length) void loadOpenCodeCatalog(config); if (selected === "codex" && !catalogs.codex?.length) void loadCodexCatalog(config); }} onChange={(event) => { edit("model", event.target.value); setOpenCodeSearch(event.target.value); setOpenCodeOpen(true); setOpenCodeIndex(0); }} onKeyDown={(event) => {
+                <input id={`${id}-model`} className="settings-text-input settings-text-input-wide" disabled={fieldsDisabled} value={config.model} spellCheck={false} role="combobox" aria-autocomplete="list" aria-expanded={opencodeOpen} aria-controls={`${id}-opencode-models`} onClick={() => { setOpenCodeOpen(true); setOpenCodeSearch(""); setOpenCodeIndex(0); }} onFocus={() => { setOpenCodeOpen(true); setOpenCodeSearch(""); setOpenCodeIndex(0); if (selected === "opencode" && !catalogs.opencode?.length) void loadOpenCodeCatalog(config); if (selected === "codex" && !catalogs.codex?.length) void loadCodexCatalog(config); }} onChange={(event) => { edit("model", event.target.value); setOpenCodeSearch(event.target.value); setOpenCodeOpen(true); setOpenCodeIndex(0); }} onKeyDown={(event) => {
                   if (event.key === "ArrowDown" || event.key === "ArrowUp") { event.preventDefault(); setOpenCodeOpen(true); setOpenCodeIndex((current) => Math.max(0, Math.min(openCodeMatches.length - 1, current + (event.key === "ArrowDown" ? 1 : -1)))); }
                   if (event.key === "Enter" && opencodeOpen && openCodeMatches[opencodeIndex]) { event.preventDefault(); edit("model", openCodeMatches[opencodeIndex].id); setOpenCodeOpen(false); }
                   if (event.key === "Escape") setOpenCodeOpen(false);
                 }} />
-                {selected === "opencode" && <button type="button" className="agent-opencode-refresh" disabled={disabled || opencodeLoading} onClick={() => void loadOpenCodeCatalog(config)} aria-label={t("Refresh OpenCode models")} title={t("Refresh OpenCode models")}>{opencodeLoading ? <LoaderCircle size={14} className="spin" /> : <RefreshCw size={14} />}</button>}
+                {selected === "opencode" && <button type="button" className="agent-opencode-refresh" disabled={fieldsDisabled || opencodeLoading} onClick={() => void loadOpenCodeCatalog(config)} aria-label={t("Refresh OpenCode models")} title={t("Refresh OpenCode models")}>{opencodeLoading ? <LoaderCircle size={14} className="spin" /> : <RefreshCw size={14} />}</button>}
               </div>
               <MenuSurface open={opencodeOpen} onClose={() => setOpenCodeOpen(false)} anchorRef={opencodeAnchor} placement="bottom-start" width={360} minWidth={0} maxWidth="calc(100vw - 16px)" maxHeight={280} id={`${id}-opencode-models`} className="agent-opencode-model-menu" ariaLabel={t(`${name} model`)} focus="none" role="listbox">
                 {!opencodeSearch && <MenuItem role="option" aria-selected={!config.model} onMouseDown={(event) => event.preventDefault()} onClick={() => { edit("model", ""); setOpenCodeOpen(false); }}>{t(selected === "codex" ? "Codex default" : selected === "claude" ? "Claude default" : selected === "antigravity" ? "Antigravity default" : "Use OpenCode default")}</MenuItem>}
@@ -211,13 +223,13 @@ export default function AgentBackendSettings({ bridge, onBackendChange, workspac
             </>
           </SettingsRow>
           {selected === "claude" && <SettingsRow stacked title={<label htmlFor={`${id}-claude-effort`}>{t("Claude Code thinking effort")}</label>} description={t("Choose from Claude Code's native effort levels.")}>
-            <select id={`${id}-claude-effort`} className="settings-select" disabled={disabled} value={config.effort || ""} onChange={(event) => setConfig((current) => ({ ...current, effort: event.target.value }))}>
+            <select id={`${id}-claude-effort`} className="settings-select" disabled={fieldsDisabled} value={config.effort || ""} onChange={(event) => setConfig((current) => ({ ...current, effort: event.target.value }))}>
               <option value="">{t("Claude default")}</option>
               {CLAUDE_EFFORTS.map((effort) => <option key={effort} value={effort}>{effortLabel(effort)}</option>)}
             </select>
           </SettingsRow>}
           {selected === "claude" && <SettingsRow stacked title={<label htmlFor={`${id}-claude-permissions`}>{t("Claude Code permissions")}</label>} description={t("Uses Claude Code's native permission mode for this session.")}>
-            <select id={`${id}-claude-permissions`} className="settings-select" disabled={disabled} value={config.permissionMode || "ask"} onChange={(event) => setConfig((current) => ({ ...current, permissionMode: event.target.value as AgentBackendConfig["permissionMode"] }))}>
+            <select id={`${id}-claude-permissions`} className="settings-select" disabled={fieldsDisabled} value={config.permissionMode || "ask"} onChange={(event) => setConfig((current) => ({ ...current, permissionMode: event.target.value as AgentBackendConfig["permissionMode"] }))}>
               <option value="ask">{t("Manual")}</option>
               <option value="accept-edits">{t("Accept edits")}</option>
               <option value="plan">{t("Plan")}</option>
@@ -225,8 +237,13 @@ export default function AgentBackendSettings({ bridge, onBackendChange, workspac
               <option value="full-access">{t("Bypass permissions")}</option>
             </select>
           </SettingsRow>}
+          {selected === "antigravity" && <SettingsRow stacked title={<label htmlFor={`${id}-antigravity-permissions`}>{t("Antigravity permissions")}</label>} description={t(config.permissionMode === "plan" ? "Plan without making changes. Native tool rules still apply." : config.permissionMode === "auto" ? "Let Antigravity automatically review tool requests using its native rules." : config.permissionMode === "accept-edits" ? "Accept file edits automatically; other operations follow native approval rules." : "Ask for native approvals. Existing CLI tool rules still apply.")}>
+            <select id={`${id}-antigravity-permissions`} className="settings-select" disabled={fieldsDisabled} value={config.permissionMode || "ask"} onChange={(event) => setConfig(current => ({ ...current, permissionMode: event.target.value as AgentBackendConfig["permissionMode"] }))}>
+              <option value="ask">{t("Ask for approval")}</option><option value="accept-edits">{t("Accept edits")}</option><option value="auto">{t("Auto")}</option><option value="plan">{t("Plan")}</option>
+            </select>
+          </SettingsRow>}
           {selected === "codex" && <SettingsRow stacked title={<label htmlFor={`${id}-effort`}>{t("Codex thinking effort")}</label>} description={t("Choose from the selected Codex model's native reasoning efforts.")}>
-            <select id={`${id}-effort`} className="settings-select" disabled={disabled || catalogLoading} value={config.effort || ""} onFocus={() => {
+            <select id={`${id}-effort`} className="settings-select" disabled={fieldsDisabled || catalogLoading} value={config.effort || ""} onFocus={() => {
               if (!models.length || (!config.model && !effectiveModelId)) void loadCodexCatalog(config);
             }} onChange={(event) => setConfig((current) => ({ ...current, effort: event.target.value }))}>
               <option value="">{catalogLoading ? t("Loading Codex model options…") : t("Codex default")}</option>
@@ -236,20 +253,20 @@ export default function AgentBackendSettings({ bridge, onBackendChange, workspac
             {catalogError && <small className="agent-backend-note" role="status">{catalogError}</small>}
           </SettingsRow>}
           {selected === "codex" && <SettingsRow stacked title={<label htmlFor={`${id}-permissions`}>{t("Codex permissions")}</label>} description={t(config.permissionMode === "full-access" ? "Run without sandbox or approval prompts." : config.permissionMode === "auto-review" ? "Codex reviews approval requests automatically." : "Ask before commands that need elevated access.")}>
-            <select id={`${id}-permissions`} className="settings-select" disabled={disabled} value={config.permissionMode || "ask"} onChange={(event) => setConfig((current) => ({ ...current, permissionMode: event.target.value as AgentBackendConfig["permissionMode"] }))}>
+            <select id={`${id}-permissions`} className="settings-select" disabled={fieldsDisabled} value={config.permissionMode || "ask"} onChange={(event) => setConfig((current) => ({ ...current, permissionMode: event.target.value as AgentBackendConfig["permissionMode"] }))}>
               <option value="ask">{t("Ask for approval")}</option>
               <option value="auto-review">{t("Approve for me")}</option>
               <option value="full-access">{t("Full access")}</option>
             </select>
           </SettingsRow>}
         </div>
-        {(selected === "opencode" || selected === "antigravity") && <div className="agent-backend-permissions">
+        {selected === "opencode" && <div className="agent-backend-permissions">
           <strong>{t("Permissions")}</strong>
-          <p>{t(selected === "antigravity" ? "Uses your Antigravity permission settings. When Antigravity requests approval, you can respond in the conversation." : "Uses your OpenCode permission settings. When OpenCode requests approval, you can respond in the conversation.")}</p>
+          <p>{t("Uses your OpenCode permission settings. When OpenCode requests approval, you can respond in the conversation.")}</p>
         </div>}
         <div className="agent-backend-actions">
-          <button type="button" className="secondary-button" disabled={disabled || (selected === "codex" && catalogLoading) || !config.binary.trim()} onClick={() => void apply("check")}>{busy === "check" ? <LoaderCircle className="spin" size={14} /> : <Network size={14} />}{t(`Check ${name}`)}</button>
-          <button type="button" className="primary-button" disabled={disabled || !config.binary.trim()} onClick={() => void apply(selected)}>{busy === "save" ? <LoaderCircle className="spin" size={14} /> : <Save size={14} />}{savedConfig?.backend === selected ? t("Save backend") : t(`Use ${name}`)}</button>
+          <button type="button" className="secondary-button" disabled={fieldsDisabled || (selected === "codex" && catalogLoading) || !config.binary.trim()} onClick={() => void apply("check")}>{busy === "check" ? <LoaderCircle className="spin" size={14} /> : <Network size={14} />}{t(`Check ${name}`)}</button>
+          <button type="button" className="primary-button" disabled={fieldsDisabled || !config.binary.trim()} onClick={() => void apply(selected)}>{busy === "save" ? <LoaderCircle className="spin" size={14} /> : <Save size={14} />}{savedConfig?.backend === selected ? t("Save backend") : t(`Use ${name}`)}</button>
         </div>
       </>}
       </div>
