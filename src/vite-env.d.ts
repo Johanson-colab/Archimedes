@@ -26,6 +26,16 @@ type WorkbenchSettingsSnapshot = {
   layout?: WorkbenchLayoutSnapshot;
 };
 interface ResearchDeskBridge {
+    listResearchApps: (workspace: string) => Promise<GeneratedResearchApp[]>;
+    setupResearchApp: (workspace: string, id: string) => Promise<{ installed: boolean; packages: string[] }>;
+    runResearchAppAgent: (workspace: string, id: string, input: { backend: string; prompt: string }) => Promise<string>;
+    researchAppStatus: (workspace: string, id: string) => Promise<ResearchAppRuntimeStatus>;
+    startResearchApp: (workspace: string, id: string) => Promise<ResearchAppRuntimeStatus>;
+    stopResearchApp: (workspace: string, id: string) => Promise<ResearchAppRuntimeStatus>;
+    installResearchApp: (workspace: string, id: string) => Promise<GeneratedResearchApp[]>;
+    pinResearchApp: (workspace: string, id: string, pinned: boolean) => Promise<GeneratedResearchApp[]>;
+    removeResearchApp: (workspace: string, id: string) => Promise<GeneratedResearchApp[]>;
+    onResearchAppsChanged?: (callback: (event: { workspace: string }) => void) => () => void;
     platform?: string;
     getInitialWorkspace: () => Promise<string | null>;
     getLocalIdentity: () => Promise<LocalIdentity>;
@@ -440,6 +450,28 @@ interface ExtensionMarketplaceItem {
   updateAvailable?: boolean;
 }
 
+interface ResearchAppRuntimeStatus {
+  status: "stopped" | "starting" | "running" | "stopping" | "failed" | "invalid";
+  url: string | null;
+  error: string;
+  logs: string;
+}
+interface GeneratedResearchApp extends ResearchAppRuntimeStatus {
+  id: string;
+  name: string;
+  description?: string;
+  version?: string;
+  category: import("./research-apps").ResearchAppCategory;
+  runtime?: { kind: "static" | "python-http"; entry: string };
+  environment?: string[];
+  agents?: string[];
+  skills?: string[];
+  needsSetup?: boolean;
+  workspace: string;
+  directory: string;
+  installed: boolean;
+  pinned: boolean;
+}
 interface SidebarPluginRecord {
   researchCategory?: import("./research-apps").ResearchAppCategory;
   id: string;

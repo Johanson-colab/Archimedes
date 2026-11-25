@@ -1,4 +1,25 @@
 const { app, BrowserWindow, Menu, ipcMain: electronIpcMain, dialog, nativeTheme, net, protocol, clipboard, shell, session, safeStorage, systemPreferences, Notification } = require("electron");
+const { installMainWindowLinks } = require("./main-window-links.cjs");
+const { createResearchAppRuntime } = require("./research-app-runtime.cjs");
+const { createSetup: createResearchAppSetup } = require("./research-app-setup.cjs");
+const { createAppAgent } = require("./research-app-agent.cjs");
+const researchAppRuntime = createResearchAppRuntime({
+  readSecret: (name) => environmentVault?.get(name) || "",
+  approve: async ({ app: researchApp, operation }) => {
+    const owner = BrowserWindow.getAllWindows().find((window) => workspaceForWindow(window) === researchApp.workspace) ?? BrowserWindow.getFocusedWindow();
+    if (!owner) return false;
+    const result = await dialog.showMessageBox(owner, {
+      type: "question", title: operation === "install" ? "Install Research App" : "Run Research App",
+      message: researchApp.name,
+      detail: `${researchApp.directory}\n\n${researchApp.runtime.kind}: ${researchApp.runtime.entry}\n\n${researchApp.environment.length ? `Requested Environment keys: ${researchApp.environment.join(", ")}. These values will be passed to the App process when it starts.` : "No Environment keys requested."}\n\nLocal App code runs with your user permissions; it is not an OS sandbox. The embedded page has no access to the Archimedes host bridge. Only approve code you have reviewed. Installing does not start it automatically.`,
+      buttons: ["Cancel", operation === "install" ? "Install" : "Run"], defaultId: 0, cancelId: 0,
+    });
+    return result.response === 1;
+  },
+  changed: (workspace) => {
+    for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.webContents.send("research-apps:changed", { workspace });
+  },
+});
 const { spawn } = require("node:child_process");
 const { randomUUID } = require("node:crypto");
 const os = require("node:os");
@@ -305,6 +326,10 @@ function createWindow(workspace) {
   if (process.platform !== "darwin") browserWindow.setMenuBarVisibility(false);
 
   const senderId = browserWindow.webContents.id;
+  installMainWindowLinks(browserWindow.webContents, {
+    openExternal: (url) => shell.openExternal(url),
+    onError: () => console.warn("Could not open the web link in the external browser."),
+  });
   browserWindow.webContents.on("will-attach-webview", (event, webPreferences, params) => {
     const browserTab = params.partition === WORKBENCH_BROWSER_PARTITION;
     const allowed = browserTab ? isWebPage(params.src) : isEmbeddableProjectPage(params.src);
@@ -899,6 +924,47 @@ app.whenReady().then(async () => {
     uiPlugins: sidebarPlugins.listPlugins(),
   }));
   ipcMain.handle("plugins:list", () => sidebarPlugins.listPlugins());
+  const researchAppWorkspace = (event, input) => {
+    const root = workspaceForWindow(BrowserWindow.fromWebContents(event.sender));
+    if (!root || !input?.workspace || fs.realpathSync(input.workspace) !== fs.realpathSync(root)) throw new Error("Research App access requires the active workspace.");
+    return fs.realpathSync(root);
+  };
+  const researchAppSetup = createResearchAppSetup({ approve: async ({ app: researchApp, packages }) => {
+    const owner = BrowserWindow.getAllWindows().find((window) => workspaceForWindow(window) === researchApp.workspace);
+    if (!owner) return false;
+    const result = await dialog.showMessageBox(owner, {
+      type: "question", title: "Set up App dependencies", message: researchApp.name,
+      detail: `Create a Python environment in ${researchApp.directory}/.venv and download these packages from PyPI:\n\n${packages.join("\n") || "No additional packages"}\n\nPackages and their transitive dependencies can execute code during installation.`,
+      buttons: ["Cancel", "Set up"], defaultId: 0, cancelId: 0,
+    });
+    return result.response === 1;
+  } });
+  ipcMain.handle("research-apps:setup", (event, input = {}) => researchAppSetup.setup(researchAppWorkspace(event, input), input.id));
+  const appAgent = createAppAgent({
+    runtime: researchAppRuntime, getConfig: () => agentBackendConfig.get(), runNative: nativeAgent.runNative,
+    approve: async ({ app: researchApp, backend, prompt }) => {
+      const owner = BrowserWindow.getAllWindows().find(window => workspaceForWindow(window) === researchApp.workspace);
+      if (!owner) return false;
+      const result = await dialog.showMessageBox(owner, { type: "question", title: "Research App Agent request", message: `${researchApp.name} requests ${backend}`,
+        detail: `Prompt:\n${prompt}\n\nApp skills: ${researchApp.skills.join(", ") || "none"}. This sends the prompt and any Agent-selected context to the selected provider. Tool operations may require separate approval.`, buttons: ["Cancel", "Run Agent"], defaultId: 0, cancelId: 0 });
+      return result.response === 1;
+    },
+    approveTool: async ({ app: researchApp, backend, request }) => {
+      const owner = BrowserWindow.getAllWindows().find(window => workspaceForWindow(window) === researchApp.workspace);
+      if (!owner || request.signal?.aborted) return false;
+      const { signal, ...details } = request;
+      const fullRequest = JSON.stringify(details);
+      if (fullRequest.length > 50000) return false;
+      const result = await dialog.showMessageBox(owner, { type: "question", title: "Agent tool approval", message: `${researchApp.name} · ${backend}`,
+        detail: fullRequest,
+        buttons: ["Deny", "Allow once"], defaultId: 0, cancelId: 0 });
+      return result.response === 1 && !signal?.aborted;
+    },
+  });
+  ipcMain.handle("research-apps:agent", (event, input = {}) => appAgent.run(researchAppWorkspace(event, input), input.id, input));
+  for (const operation of ["list", "status", "start", "stop", "install", "pin", "remove"]) {
+    ipcMain.handle(`research-apps:${operation}`, (event, input = {}) => researchAppRuntime[operation](researchAppWorkspace(event, input), input.id, input.pinned));
+  }
   ipcMain.handle("plugins:set-enabled", (_event, input = {}) => sidebarPlugins.setEnabled(String(input?.id || ""), Boolean(input?.enabled)));
   ipcMain.handle("plugins:remove", (_event, input = {}) => sidebarPlugins.removePlugin(String(input?.id || "")));
   ipcMain.handle("sidebar:get-settings", () => sidebarSettings.getSettings());
@@ -2670,7 +2736,15 @@ app.whenReady().then(async () => {
 });
 
 app.on("window-all-closed", () => {
+  void researchAppRuntime.shutdown();
   if (process.platform !== "darwin") app.quit();
+});
+
+let researchAppsStoppedForQuit = false;
+app.on("before-quit", (event) => {
+  if (researchAppsStoppedForQuit) return;
+  event.preventDefault();
+  void researchAppRuntime.shutdown().finally(() => { researchAppsStoppedForQuit = true; app.quit(); });
 });
 
 app.on("activate", () => {

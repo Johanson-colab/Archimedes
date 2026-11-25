@@ -12,6 +12,16 @@ class Fixture extends EventEmitter {
   request(method,params){this.sent.push({method,params});if(method==='initialize')return Promise.resolve({models:[{value:'sonnet',displayName:'Sonnet',supportedEffortLevels:['low','medium','high']}]});return Promise.resolve({});}
 }
 function options(backend='claude') { const saves=[],events=[];return {config:{backend,binary:process.execPath,permissionMode:'ask'},workspace:process.cwd(),thread:{id:'local',turns:[]},turn:{id:'turn',user_message:'hi'},emit:e=>events.push(e),bindings:{get:()=>null,save:b=>saves.push(b)},Client:Fixture,saves,events}; }
+test('Claude Create receives targeted capability retrieval without installing global skills',async t=>{
+ const o=options();o.workspace=fs.mkdtempSync(path.join(os.tmpdir(),'archimedes-claude-create-'));
+ t.after(()=>fs.rmSync(o.workspace,{recursive:true,force:true}));
+ o.thread.mode='create';o.turn.mode='create';
+ assert.equal(await runNative(o),'Hello');
+ const text=Fixture.last.sent.find(m=>m.type==='user').message.content[0].text;
+ assert.match(text,/creator-capabilities-cli.cjs/);
+ assert.match(text,/zero, one or multiple/);
+ assert.deepEqual(fs.readdirSync(o.workspace),[]);
+});
 test('external resume requires backend workspace model and completed local turn',()=>{
  const b={backend:'claude',native_thread_id:'id',workspace:'/x',model:'m',last_turn_id:'t'};
  assert.equal(canResumeExternal(b,{backend:'claude',workspace:'/x',model:'m',previousTurnId:'t'}),true);
@@ -49,6 +59,17 @@ class ACPFixture extends Fixture {
     return Promise.resolve({});
   }
 }
+test('OpenCode Create receives the same capability entry through ACP',async t=>{
+ const o=options('opencode');o.Client=ACPFixture;
+ o.workspace=fs.mkdtempSync(path.join(os.tmpdir(),'archimedes-opencode-create-'));
+ t.after(()=>fs.rmSync(o.workspace,{recursive:true,force:true}));
+ o.thread.mode='create';o.turn.mode='create';
+ assert.equal(await runNative(o),'ACP answer');
+ const text=Fixture.last.sent.find(m=>m.method==='session/prompt').params.prompt[0].text;
+ assert.match(text,/creator-capabilities-cli.cjs/);
+ assert.match(text,/direct APIs\/links or deterministic scripts/);
+ assert.deepEqual(fs.readdirSync(o.workspace),[]);
+});
 test('Claude maps native effort and permission selections onto its CLI flags', async () => {
  const o=options();o.config.model='sonnet';o.config.effort='high';o.config.permissionMode='accept-edits';
  assert.equal(await runNative(o),'Hello');
