@@ -5,6 +5,7 @@ const path = require("node:path");
 const { randomUUID } = require("node:crypto");
 const test = require("node:test");
 const { createWorkspaceStore } = require("./store.cjs");
+const { createNode } = require("./research-graph/service.cjs");
 const { captureManuscriptSources, writeManuscriptSnapshot } = require("./manuscript-snapshot.cjs");
 const { saveAnalysis } = require("./project-results.cjs");
 const { saveEvidence, getEvidence, listEvidence } = require("./manuscript-evidence.cjs");
@@ -20,12 +21,17 @@ test("reopen linked manuscript values, flag changed or missing evidence, and enf
   const otherRoot = path.join(root, "other");
   fs.mkdirSync(otherRoot);
   const other = store.createResearchProject({ name: "Other project", workspacePath: otherRoot });
-  const thread = store.createResearchThread({ projectId: project.id, workspacePath: root, prompt: "Compare experiments" });
-  const graph = store.createResearchNode({ projectId: project.id, threadId: thread.id, kind: "experiment", title: "Compare accuracy" });
+  const thread = store.createResearchThread({ projectId: project.id, workspacePath: root, prompt: "Compare experiments", mode: "research" });
+  const scopeForNode = { projectId: project.id, threadId: thread.id, content: {} };
+  const graph = store.run(() => {
+    const question = createNode({ ...scopeForNode, kind: "question", title: "Accuracy" });
+    const idea = createNode({ ...scopeForNode, kind: "idea", title: "Compare accuracy", parents: [{ nodeId: question.id }] });
+    return createNode({ ...scopeForNode, kind: "experiment", title: "Compare accuracy", parents: [{ nodeId: idea.id }] });
+  });
   const log = path.join(root, ".archimedes", "fixture.log");
   fs.writeFileSync(log, "seed 1: 70 73\nseed 2: 72 72\nseed 3: 71 74\n");
   const run = store.createExperimentRun({ projectId: project.id, threadId: thread.id, nodeId: graph.id, cwd: root, command: "printf fixture", logPath: log });
-  store.updateExperimentRun(run.id, { status: "succeeded", exitCode: 0 });
+  store.updateExperimentRun({ runId: run.id, status: "succeeded", exitCode: 0 });
   const bytes = Buffer.from("seed,baseline,target\n1,70,73\n2,72,72\n3,71,74\n");
   const saved = saveAnalysis(root, project.id, { bytes, name: "accuracy.csv", recipe: {
     column: 2, seedColumn: 0, unit: "%", config: { type: "line", x: 0, y: 2, group: -1 },

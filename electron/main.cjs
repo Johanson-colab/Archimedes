@@ -1057,11 +1057,6 @@ app.whenReady().then(async () => {
     fetchImpl: (...args) => net.fetch(...args),
   });
 
-  ipcMain.handle("paper:build-snapshot", (_event, input = {}) => {
-    const workspace = resolveWorkspace(input.workspace);
-    return require("./manuscript-snapshot.cjs").readManuscriptSnapshot(workspace, input.manifestPath);
-  });
-
   const manuscriptEvidence = require("./manuscript-evidence.cjs");
   function manuscriptStore(event) {
     if (!windowWorkspaces.get(event.sender.id)) throw new Error("Open a workspace before opening manuscript results.");
@@ -1071,6 +1066,11 @@ app.whenReady().then(async () => {
   ipcMain.handle("paper:evidence-save", (event, input = {}) => manuscriptEvidence.saveEvidence(manuscriptStore(event), input));
   ipcMain.handle("paper:evidence-get", (event, input = {}) => manuscriptEvidence.getEvidence(manuscriptStore(event), input));
   ipcMain.handle("paper:evidence-list", (event, input = {}) => manuscriptEvidence.listEvidence(manuscriptStore(event), input));
+
+  ipcMain.handle("paper:build-snapshot", (_event, input = {}) => {
+    const workspace = resolveWorkspace(input.workspace);
+    return require("./manuscript-snapshot.cjs").readManuscriptSnapshot(workspace, input.manifestPath);
+  });
 
   ipcMain.handle("paper:compile", async (event, input = {}) => {
     const workspace = resolveWorkspace(input.workspace);
