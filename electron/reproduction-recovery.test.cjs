@@ -57,9 +57,9 @@ test("reopening reports a remote run that may still be active and leaves an unow
   const root = workspace();
   const { execFileSync } = require("node:child_process");
   try {
-    const ids = JSON.parse(execFileSync(process.execPath, ["-e", `
-      const store = require("./store.cjs");
-      const graph = require("./research-graph/service.cjs");
+    const ids = JSON.parse(execFileSync(process.execPath, ["--input-type=module", "-e", `
+      import store from "./store.cjs";
+      import graph from "./research-graph/service.cjs";
       store.openWorkspace(process.argv[1]);
       const repro = store.createReproduction({ title: "Remote fixture" });
       const attempt = store.createReproductionRun({ reproductionId: repro.id, backend: "SSH · fixture.invalid" });
@@ -70,7 +70,7 @@ test("reopening reports a remote run that may still be active and leaves an unow
       const question = graph.createNode({ ...common, kind: "question", title: "Question" });
       const idea = graph.createNode({ ...common, kind: "idea", title: "Idea", parents: [{ nodeId: question.id }] });
       const node = graph.createNode({ ...common, kind: "experiment", title: "Experiment", parents: [{ nodeId: idea.id }] });
-      const run = store.createExperimentRun({ ...common, nodeId: node.id, status: "starting", backend: "local", command: "fixture", cwd: process.argv[1] });
+      const run = await store.createExperimentRun({ ...common, nodeId: node.id, status: "starting", backend: "local", command: "fixture", cwd: process.argv[1] });
       store.updateExperimentRun({ runId: run.id, status: "running", pid: Number(process.argv[2]) });
       console.log(JSON.stringify({ repro: repro.id, attempt: attempt.id, run: run.id }));
     `, root, String(process.pid)], { cwd: __dirname, encoding: "utf8" }));
