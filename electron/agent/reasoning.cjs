@@ -41,11 +41,15 @@ function reasoningPolicy(value, mode = "free-chat") {
   };
 }
 
-function openAiReasoningOptions(config, value) {
+function openAiReasoningOptions(config, value, hasTools = false) {
   if (!isNativeThinkingModel(config)) return {};
   const effort = normalizeForModel(config, value);
   const provider = String(config?.provider || "").toLowerCase();
   if (provider === "openrouter") return { reasoning: { effort } };
+  // With function tools, Luna requires an explicit "none" on OpenAI Chat Completions.
+  if (hasTools && config.model === "gpt-6-luna" && new URL(config.baseUrl).origin === "https://api.openai.com") {
+    return { reasoning_effort: "none" };
+  }
   if (provider === "openai" || provider === "gemini") return { reasoning_effort: effort };
   if (provider === "custom") return { reasoning_effort: effort };
   return {};

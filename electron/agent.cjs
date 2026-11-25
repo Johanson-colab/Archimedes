@@ -1321,11 +1321,12 @@ function applyDelta(accumulator, delta, onTextDelta) {
 async function complete(config, messages, { signal, onTextDelta = () => {}, allowTools = true, availableTools = tools, reasoningEffort, maxOutputTokens, allowLargeOutput = false, requireComplete = false, responseFormat } = {}) {
   const tokenLimit = Number.isFinite(Number(maxOutputTokens)) ? Math.max(64, Math.min(allowLargeOutput && !allowTools ? 32768 : 8192, Math.round(Number(maxOutputTokens)))) : 0;
   if (config.provider === "anthropic") return completeAnthropic(config, messages, { signal, onTextDelta, allowTools, availableTools, maxOutputTokens: tokenLimit, allowLargeOutput, requireComplete });
-  const nativeReasoning = openAiReasoningOptions(config, reasoningEffort);
+  const hasTools = allowTools && availableTools.length > 0;
+  const nativeReasoning = openAiReasoningOptions(config, reasoningEffort, hasTools);
   const request = { model: config.model, messages, stream: true, ...nativeReasoning };
   if (tokenLimit) request.max_tokens = tokenLimit;
   if (responseFormat) request.response_format = responseFormat;
-  if (allowTools && availableTools.length) Object.assign(request, { tools: availableTools, tool_choice: "auto" });
+  if (hasTools) Object.assign(request, { tools: availableTools, tool_choice: "auto" });
   const requestCompletion = (body) => fetchModelWithRetry(`${config.baseUrl}/chat/completions`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${config.apiKey}` },
@@ -1364,7 +1365,7 @@ async function complete(config, messages, { signal, onTextDelta = () => {}, allo
       request.max_completion_tokens = tokenLimit;
       continue;
     }
-    const hasNativeReasoning = Object.hasOwn(request, "reasoning_effort") || Object.hasOwn(request, "reasoning");
+    const hasNativeReasoning = (Object.hasOwn(request, "reasoning_effort") && request.reasoning_effort !== "none") || Object.hasOwn(request, "reasoning");
     if (hasNativeReasoning && [400, 422].includes(response.status)) {
       delete request.reasoning_effort;
       delete request.reasoning;

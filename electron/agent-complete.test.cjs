@@ -10,6 +10,35 @@ function successfulResponse() {
   };
 }
 
+test("Luna sends the tool-compatible reasoning effort on its first OpenAI chat request", async (t) => {
+  const tools = [{ type: "function", function: { name: "lookup", parameters: { type: "object", properties: {} } } }];
+  const requests = [];
+  t.mock.method(global, "fetch", async (_url, options) => {
+    requests.push(JSON.parse(options.body));
+    return successfulResponse();
+  });
+  for (const [model, endpoint, availableTools, expected] of [
+    ["gpt-6-luna", "https://api.openai.com/v1", tools, "none"],
+    ["gpt-6-luna", "https://api.openai.com/v1", [], "high"],
+    ["gpt-5", "https://api.openai.com/v1", tools, "high"],
+    ["gpt-6-luna", "https://gateway.example/v1", tools, "high"],
+  ]) {
+    const config = { provider: "openai", baseUrl: endpoint, model, apiKey: "test-key" };
+    await complete(config, [{ role: "user", content: "Test" }], { availableTools, reasoningEffort: "high" });
+    assert.equal(requests.length, 1);
+    const body = requests.pop();
+    assert.equal(body.reasoning_effort, expected);
+    assert.deepEqual(body.tools ?? [], availableTools);
+  }
+});
+
+test("Luna tool requests surface other OpenAI errors without dropping the required effort", async (t) => {
+  const fetch = t.mock.method(global, "fetch", async () => new Response("Invalid tool schema", { status: 400 }));
+  const config = { provider: "openai", model: "gpt-6-luna", baseUrl: "https://api.openai.com/v1", apiKey: "test-key" };
+  await assert.rejects(complete(config, [{ role: "user", content: "Test" }]), /Invalid tool schema/);
+  assert.equal(fetch.mock.callCount(), 1);
+});
+
 test("large tool-free reconstruction requests reject truncated model output", async () => {
   const originalFetch = global.fetch;
   let sent;
