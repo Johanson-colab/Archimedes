@@ -59,6 +59,54 @@ class ACPFixture extends Fixture {
     return Promise.resolve({});
   }
 }
+test('Antigravity uses agy ACP, validates models, streams and resumes its own session', async () => {
+ class AntigravityFixture extends ACPFixture {
+  request(method, params) {
+   if (method !== 'session/prompt') return super.request(method, params);
+   this.sent.push({method, params});
+   assert.equal(this.options.backend, 'antigravity');
+   this.emit('message',{method:'session/update',params:{sessionId:'native-acp',update:{sessionUpdate:'agent_message_chunk',content:{type:'text',text:'Antigravity answer'}}}});
+   return Promise.resolve({stopReason:'end_turn'});
+  }
+ }
+ const o=options('antigravity');o.Client=AntigravityFixture;o.config.binary='agy';o.config.model='p/model';
+ assert.equal(await runNative(o),'Antigravity answer');
+ assert.equal(Fixture.last.options.binary,'agy');assert.deepEqual(Fixture.last.options.args,['acp']);
+ assert.equal(o.saves.at(-1).backend,'antigravity');
+ assert.ok(Fixture.last.sent.some(m=>m.method==='session/set_config_option'));
+ assert.ok(o.events.some(e=>e.type==='assistant_delta' && e.delta==='Antigravity answer'));
+ const prior=o.saves.at(-1);o.bindings.get=()=>prior;o.thread.turns=[{id:'turn'}];o.turn={id:'second',user_message:'next'};
+ assert.equal(await runNative(o),'Antigravity answer');
+ assert.ok(Fixture.last.sent.some(m=>m.method==='session/load'));
+});
+test('Antigravity connection check creates an ACP session without asking for inference', async () => {
+ const c=await checkNative({backend:'antigravity',binary:'agy'},{Client:ACPFixture});
+ assert.equal(c.ready,true);assert.equal(c.models[0].id,'p/model');
+ assert.equal(Fixture.last.sent.some(m=>m.method==='session/prompt'),false);assert.equal(Fixture.last.closed,true);
+});
+test('Antigravity forwards native tool approval and respects denial', async () => {
+ class PermissionFixture extends ACPFixture {
+  request(method, params) {
+   if (method !== 'session/prompt') return super.request(method, params);
+   this.sent.push({method, params});
+   return new Promise(resolve => {
+    this.finishPrompt=resolve;
+    this.emit('message',{jsonrpc:'2.0',id:7,method:'session/request_permission',params:{sessionId:'native-acp',toolCall:{title:'Run command',kind:'execute',rawInput:{command:'pwd'}},options:[{kind:'allow_once',optionId:'yes'},{kind:'reject_once',optionId:'no'}]}});
+   });
+  }
+  respond(id, result) {
+   this.sent.push({id,result});
+   this.emit('message',{method:'session/update',params:{sessionId:'native-acp',update:{sessionUpdate:'agent_message_chunk',content:{type:'text',text:'Denied'}}}});
+   this.finishPrompt({stopReason:'end_turn'});
+  }
+ }
+ const o=options('antigravity');o.Client=PermissionFixture;o.config.binary='agy';
+ let requested;o.approve=async request=>{requested=request;return false;};
+ assert.equal(await runNative(o),'Denied');
+ assert.match(requested.command,/pwd/);
+ assert.equal(requested.nativeMethod,'antigravity/tool');
+ assert.equal(Fixture.last.sent.find(m=>m.id===7).result.outcome.optionId,'no');
+});
 test('OpenCode Create receives the same capability entry through ACP',async t=>{
  const o=options('opencode');o.Client=ACPFixture;
  o.workspace=fs.mkdtempSync(path.join(os.tmpdir(),'archimedes-opencode-create-'));

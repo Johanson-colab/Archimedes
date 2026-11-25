@@ -1808,7 +1808,7 @@ interface ResearchComment {
 interface ResearchThread {
   id: string;
   kind?: "research" | "paper";
-  harness?: "api" | "codex" | "claude" | "opencode" | null;
+  harness?: "api" | "codex" | "claude" | "opencode" | "antigravity" | null;
   project_id: string;
   owner_id?: string | null;
   visibility?: "project" | "private";
@@ -1934,7 +1934,7 @@ interface AgentAction {
   id: string;
   task_id: string;
   kind: "write" | "command";
-  payload: { path?: string; content?: string; command?: string; cwd?: string; managedByAgent?: boolean; remoteOperation?: "ssh_remote_exec" | "ssh_remote_read" | "ssh_remote_edit"; editPreview?: { before: string; after: string }; externalAgent?: "codex" | "claude" | "opencode"; change?: WorkspaceFileChange; changes?: WorkspaceFileChange[] };
+  payload: { path?: string; content?: string; command?: string; cwd?: string; managedByAgent?: boolean; remoteOperation?: "ssh_remote_exec" | "ssh_remote_read" | "ssh_remote_edit"; editPreview?: { before: string; after: string }; externalAgent?: "codex" | "claude" | "opencode" | "antigravity"; change?: WorkspaceFileChange; changes?: WorkspaceFileChange[] };
   status: "pending" | "approved" | "rejected";
   created_at: string;
   resolved_at: string | null;
@@ -1947,8 +1947,8 @@ interface AgentBackendProfile {
   permissionMode?: "read-only" | "workspace-write" | "ask" | "auto-review" | "full-access" | "accept-edits" | "plan" | "auto";
 }
 interface AgentBackendConfig extends AgentBackendProfile {
-  backend: "api" | "codex" | "claude" | "opencode";
-  profiles?: Partial<Record<"codex" | "claude" | "opencode", AgentBackendProfile>>;
+  backend: "api" | "codex" | "claude" | "opencode" | "antigravity";
+  profiles?: Partial<Record<"codex" | "claude" | "opencode" | "antigravity", AgentBackendProfile>>;
 }
 
 interface NativeAgentModel { id: string; label: string; efforts?: string[]; defaultEffort?: string; isDefault?: boolean }

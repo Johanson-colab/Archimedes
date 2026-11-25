@@ -16,7 +16,7 @@ function canResumeExternal(binding, { backend, workspace, model, previousTurnId 
   return Boolean(binding?.backend === backend && binding.native_thread_id && binding.last_turn_id && binding.workspace === workspace && binding.model === (model || '') && binding.last_turn_id === previousTurnId);
 }
 function assertPolicy(config) {
-  if (!['claude', 'opencode'].includes(config.backend)) throw new Error('Unsupported native backend.');
+  if (!['claude', 'opencode', 'antigravity'].includes(config.backend)) throw new Error('Unsupported native backend.');
   const mode = config.permissionMode || 'ask';
   const allowed = config.backend === 'claude' ? ['ask', 'accept-edits', 'plan', 'auto', 'full-access'] : ['ask'];
   if (!allowed.includes(mode)) throw new Error(`${config.backend} does not support the requested permission mode. Use native approvals; this adapter does not provide a filesystem sandbox.`);
@@ -31,7 +31,7 @@ function boundedText(value, max) {
 async function runExternal(options) {
   const { config, workspace, thread, turn, contextItems = [], researchSkill, mineruToken, experimentBridgeInstructions = "", bindings, emit = () => {}, recordEvent = () => {}, approve = async () => false, signal = new AbortController().signal, Client = NativeProcess, timeoutMs = 30 * 60_000, disableSharedEnvironment = false, runtimeId = thread.id } = options;
   assertPolicy(config);
-  const backend = config.backend, title = backend === 'claude' ? 'Claude Code' : 'OpenCode';
+  const backend = config.backend, title = backend === 'claude' ? 'Claude Code' : backend === 'antigravity' ? 'Antigravity' : 'OpenCode';
   const root = fs.realpathSync(workspace);
   const attachments = codex.nativeContext(contextItems);
   if (contextItems.filter(item => item.type === 'image').length > 4) throw new Error('Native turns support at most four image attachments. No request was sent.');
@@ -46,10 +46,10 @@ async function runExternal(options) {
   const skill = prepareResearchSkill({ workspace: root, backend, thread, requested: researchSkill, emit, recordEvent });
   // ACP has no developer-instructions field. Native skill discovery is paired
   // with an explicit per-turn workflow request; no user config is overwritten.
-  const prompt = (backend === 'opencode' && skill ? `${skill.instructions}\n\nUser request:\n` : '') + codex.userPrompt(thread, turn, resume, attachments, experimentBridgeInstructions);
+  const prompt = (backend !== 'claude' && skill ? `${skill.instructions}\n\nUser request:\n` : '') + codex.userPrompt(thread, turn, resume, attachments, experimentBridgeInstructions);
   const input = backend === 'claude' ? claudePrompt(prompt, contextItems) : openCodePrompt(prompt, contextItems);
   if (Buffer.byteLength(JSON.stringify(input)) > 8 * 1024 * 1024 - 1000) throw new Error('Native attachments exceed the protocol limit. No request was sent.');
-  const launch = backend === 'claude' ? claudeLaunch({ config, root, resume, binding, skill }) : opencodeLaunch({ config, root });
+  const launch = backend === 'claude' ? claudeLaunch({ config, root, resume, binding, skill }) : backend === 'antigravity' ? { backend, binary: config.binary || 'agy', args: ['acp'], cwd: root } : opencodeLaunch({ config, root });
   const launchEnv = { ...(disableSharedEnvironment || turn.task_id === "research-graph-extraction" ? {} : getSharedEnvironment()), ...(mineruToken ? { MINERU_API_TOKEN: mineruToken } : {}) };
   const client = new Client({ ...launch, ...(Object.keys(launchEnv).length ? { env: launchEnv } : {}) });
   let response = '', streamed = false, settled = false, sent = false, resultStatus = 'failed';
@@ -145,14 +145,14 @@ async function runExternal(options) {
     if (backend === 'claude') {
       const initialized = await initializeClaude(client, config); session.sessionId = initialized.sessionId;
     } else {
-      const capabilities = await initializeOpenCode(client);
-      if (contextItems.some(item => item.type === 'image') && !capabilities.agentCapabilities?.promptCapabilities?.image) throw new Error('OpenCode does not advertise image capability. No request was sent.');
-      if (resume && !capabilities.agentCapabilities?.loadSession) throw new Error('This OpenCode installation cannot resume native ACP sessions. No request was sent.');
+      const capabilities = await initializeOpenCode(client, title);
+      if (contextItems.some(item => item.type === 'image') && !capabilities.agentCapabilities?.promptCapabilities?.image) throw new Error(`${title} does not advertise image capability. No request was sent.`);
+      if (resume && !capabilities.agentCapabilities?.loadSession) throw new Error(`This ${title} installation cannot resume native ACP sessions. No request was sent.`);
       const created = await client.request(resume ? 'session/load' : 'session/new', { cwd: root, mcpServers: [], ...(resume ? { sessionId: binding.native_thread_id } : {}) });
       session.sessionId = resume ? binding.native_thread_id : created?.sessionId;
-      if (resume && created?.sessionId && created.sessionId !== binding.native_thread_id) throw new Error('OpenCode returned a different native session.');
-      if (!session.sessionId) throw new Error('OpenCode did not provide a native session.');
-      await configureOpenCode(client, config, created, session.sessionId);
+      if (resume && created?.sessionId && created.sessionId !== binding.native_thread_id) throw new Error(`${title} returned a different native session.`);
+      if (!session.sessionId) throw new Error(`${title} did not provide a native session.`);
+      await configureOpenCode(client, config, created, session.sessionId, title);
     }
     if (!session.sessionId || settled || signal.aborted) throw new Error(`${title} ended before starting. No request was sent.`);
     session.bindingId = session.sessionId;
@@ -163,7 +163,7 @@ async function runExternal(options) {
     if (backend === 'claude') client.send(input);
     else {
       const outcome = await client.request('session/prompt', { sessionId: session.sessionId, prompt: input }, timeoutMs);
-      finish(outcome?.stopReason === 'end_turn' ? null : new Error(`OpenCode ended without a completed turn. No request was replayed.`));
+      finish(outcome?.stopReason === 'end_turn' ? null : new Error(`${title} ended without a completed turn. No request was replayed.`));
     }
     await done;
     if (!response.trim()) throw new Error(`${title} completed without a visible text response. Check its recorded activity before continuing.`);
@@ -198,13 +198,18 @@ async function compactNative(options) {
 }
 function closeAllNativeClients() { closeAllExternalClients(); closeAllCodexClients(); }
 async function checkNative(config, { Client = NativeProcess } = {}) {
-  if (!['claude', 'opencode'].includes(config.backend)) throw new Error('Choose a supported native backend.');
+  if (!['claude', 'opencode', 'antigravity'].includes(config.backend)) throw new Error('Choose a supported native backend.');
   let client;
   try {
     assertPolicy(config);
-    const launch = config.backend === 'claude' ? claudeLaunch({ config: { ...config, model: '', effort: '' }, root: os.tmpdir(), resume: false }) : opencodeLaunch({ config, root: os.tmpdir() });
+    const launch = config.backend === 'claude' ? claudeLaunch({ config: { ...config, model: '', effort: '' }, root: os.tmpdir(), resume: false }) : config.backend === 'antigravity' ? { backend: 'antigravity', binary: config.binary || 'agy', args: ['acp'], cwd: os.tmpdir() } : opencodeLaunch({ config, root: os.tmpdir() });
     client = new Client(launch); await client.start();
-    const initialized = config.backend === 'claude' ? await initializeClaude(client, {}) : await initializeOpenCode(client);
+    const initialized = config.backend === 'claude' ? await initializeClaude(client, {}) : await initializeOpenCode(client, config.backend === 'antigravity' ? 'Antigravity' : 'OpenCode');
+    if (config.backend === 'antigravity') {
+      const created = await client.request('session/new', { cwd: os.tmpdir(), mcpServers: [] });
+      if (!created?.sessionId) throw new Error('Antigravity did not create a session. Sign in with agy, then retry.');
+      return { ready: true, models: openCodeModels(created), message: 'Antigravity ACP is ready. Native permissions and account settings apply; no inference was requested.' };
+    }
     return { ready: true, models: config.backend === 'claude' ? initialized.models : [], message: config.backend === 'claude' ? 'Claude control protocol is ready. Uses native login and configuration; no inference was requested.' : 'OpenCode ACP is ready. Uses native login and configuration. Models and effort are validated when a native session starts; no inference was requested.' };
   } catch (error) { return { ready: false, models: [], message: error.message }; }
   finally { client?.close(); }

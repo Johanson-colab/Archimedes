@@ -2040,7 +2040,7 @@ app.whenReady().then(async () => {
     const clientRunId = typeof input.clientRunId === "string" && input.clientRunId ? input.clientRunId : undefined;
     const configuredBackend = agentBackendConfig.get();
     const selectedBackend = input.backend || configuredBackend.backend;
-    if (!["api", "codex", "claude", "opencode"].includes(selectedBackend)) throw new Error("Unknown Agent backend.");
+    if (!["api", "codex", "claude", "opencode", "antigravity"].includes(selectedBackend)) throw new Error("Unknown Agent backend.");
     const backend = selectedBackend === "api" ? configuredBackend : { ...configuredBackend, ...configuredBackend.profiles[selectedBackend], backend: selectedBackend };
     const externalBackend = input.origin === "research" && selectedBackend !== "api" ? backend : null;
     let remoteServer = null;

@@ -3667,7 +3667,7 @@ function updateExperimentRun({
 }
 
 function bindResearchThreadHarness(id, harness) {
-  if (!["api", "codex", "claude", "opencode"].includes(harness)) throw new Error("Unknown Agent backend.");
+  if (!["api", "codex", "claude", "opencode", "antigravity"].includes(harness)) throw new Error("Unknown Agent backend.");
   const db = requireDatabase();
   const thread = getResearchThread(id);
   if (!canAccessProject(thread.project_id, "editor")) throw new Error("You do not have permission to edit this conversation.");

@@ -27,7 +27,7 @@ before(async () => {
     ...Object.fromEntries(["Brain", "Workflow", "Check", "ChevronDown", "Key", "LoaderCircle", "Network", "RefreshCw", "Route", "Save", "Server", "Sparkle", "X"].map((name) => [name, icons[name]])),
     useUISettings: () => ({ t: translate }),
     createPortal: require("react-dom").createPortal,
-    ...Object.fromEntries(["anthropicLogo", "claudeLogo", "opencodeLogo", "geminiLogo", "minimaxLogo", "zaiLogo", "deepseekLogo", "moonshotLogo", "openaiLogo", "qwenLogo"].map((name) => [name, name])),
+    ...Object.fromEntries(["anthropicLogo", "claudeLogo", "opencodeLogo", "antigravityLogo", "geminiLogo", "minimaxLogo", "zaiLogo", "deepseekLogo", "moonshotLogo", "openaiLogo", "qwenLogo"].map((name) => [name, name])),
   };
   async function load(name, exports) {
     const source = fs.readFileSync(path.join(__dirname, "..", "src", `${name}.tsx`), "utf8");
@@ -443,13 +443,13 @@ test("OpenCode discovers, searches and selects models while preserving a manual 
   } finally { await cleanup(); }
 });
 
-test("Harnesses are three expandable cards and OpenCode keeps readable static permission copy", async () => {
+test("Harnesses are four expandable cards and OpenCode keeps readable static permission copy", async () => {
   const cleanup = await mount(bridge());
   try {
     await click("Harnesses");
     const cards = [...document.querySelectorAll('.agent-backend-card')];
-    assert.equal(cards.length, 3);
-    assert.deepEqual(cards.map(card => card.getAttribute('aria-label')), ['Codex', 'Claude Code', 'OpenCode']);
+    assert.equal(cards.length, 4);
+    assert.deepEqual(cards.map(card => card.getAttribute('aria-label')), ['Codex', 'Claude Code', 'OpenCode', 'Antigravity']);
     assert.ok(cards.every(card => card.querySelector('.agent-backend-panel').hidden));
     await click("Claude Code");
     const claudeCard = document.querySelector('.agent-backend-card[aria-label="Claude Code"]');
@@ -468,6 +468,23 @@ test("Harnesses are three expandable cards and OpenCode keeps readable static pe
     assert.doesNotMatch(card.querySelector('.agent-backend-fields').textContent, /Claude Code thinking effort|Claude Code permissions/);
     assert.deepEqual(calls.savedBackends, []);
     assert.deepEqual(calls.checkedBackends, []);
+  } finally { await cleanup(); }
+});
+
+test("Antigravity can be checked and selected using its own executable and models", async () => {
+  const cleanup = await mount(bridge());
+  try {
+    await click("Harnesses");
+    await click("Antigravity");
+    const field = document.getElementById([...document.querySelectorAll('label')].find(node => node.textContent === 'Antigravity executable').htmlFor);
+    assert.equal(field.value, 'agy');
+    await click("Check Antigravity");
+    assert.equal(calls.checkedBackends.at(-1).backend, 'antigravity');
+    assert.equal(calls.checkedBackends.at(-1).binary, 'agy');
+    await input('Antigravity model', 'native-model');
+    await click('Use Antigravity');
+    assert.equal(calls.savedBackends.at(-1).backend, 'antigravity');
+    assert.equal(calls.savedBackends.at(-1).model, 'native-model');
   } finally { await cleanup(); }
 });
 

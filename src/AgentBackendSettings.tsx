@@ -3,6 +3,7 @@ import { Check, ChevronDown, LoaderCircle, Network, RefreshCw, Save } from "luci
 import openaiLogo from "@lobehub/icons-static-svg/icons/openai.svg";
 import claudeLogo from "@lobehub/icons-static-svg/icons/claude-color.svg";
 import opencodeLogo from "@lobehub/icons-static-svg/icons/opencode.svg";
+import antigravityLogo from "@lobehub/icons-static-svg/icons/antigravity.svg";
 import { SettingsGroup, SettingsRow, SettingsSection } from "./SettingsPrimitives";
 import { useUISettings } from "./i18n";
 import { MenuItem, MenuSurface } from "./Menu";
@@ -33,12 +34,12 @@ export default function AgentBackendSettings({ bridge, onBackendChange, workspac
   const [opencodeIndex, setOpenCodeIndex] = useState(0);
   const mounted = useRef(false);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
-  const [connections, setConnections] = useState<Partial<Record<"codex" | "claude" | "opencode", "unchecked" | "connected" | "error">>>({});
+  const [connections, setConnections] = useState<Partial<Record<"codex" | "claude" | "opencode" | "antigravity", "unchecked" | "connected" | "error">>>({});
   const [feedback, setFeedback] = useState<{ error: boolean; text: string } | null>(null);
-  const [catalogs, setCatalogs] = useState<Partial<Record<"codex" | "claude" | "opencode", NativeAgentModel[]>>>({});
-  const [selected, setSelected] = useState<"codex" | "claude" | "opencode">("codex");
+  const [catalogs, setCatalogs] = useState<Partial<Record<"codex" | "claude" | "opencode" | "antigravity", NativeAgentModel[]>>>({});
+  const [selected, setSelected] = useState<"codex" | "claude" | "opencode" | "antigravity">("codex");
   const [drafts, setDrafts] = useState<AgentBackendConfig["profiles"]>({});
-  const labels = { codex: "Codex", claude: "Claude Code", opencode: "OpenCode", api: "Archimedes" };
+  const labels = { codex: "Codex", claude: "Claude Code", opencode: "OpenCode", antigravity: "Antigravity", api: "Archimedes" };
   const name = labels[selected];
   const models = catalogs[selected] || [];
   const openCodeFiltered = models.filter((model) => `${model.id} ${model.label}`.toLowerCase().includes(opencodeSearch.toLowerCase()));
@@ -53,7 +54,7 @@ export default function AgentBackendSettings({ bridge, onBackendChange, workspac
     const profiles = { ...drafts, [selected]: fields(config) };
     setDrafts(profiles);
     setSelected(next);
-    const nextConfig: AgentBackendConfig = { backend: next, binary: next, model: "", effort: "", ...profiles[next], permissionMode: next === "codex" && ["read-only", "workspace-write"].includes(profiles[next]?.permissionMode || "") ? "ask" : profiles[next]?.permissionMode || "ask" };
+    const nextConfig: AgentBackendConfig = { backend: next, binary: next === "antigravity" ? "agy" : next, model: "", effort: "", ...profiles[next], permissionMode: next === "codex" && ["read-only", "workspace-write"].includes(profiles[next]?.permissionMode || "") ? "ask" : profiles[next]?.permissionMode || "ask" };
     setConfig(nextConfig);
     if (next === "codex") codexDraft.current = nextConfig;
     if (next === "opencode") opencodeDraft.current = { binary: nextConfig.binary, workspace };
@@ -166,7 +167,7 @@ export default function AgentBackendSettings({ bridge, onBackendChange, workspac
     {loadError && <div className="agent-backend-feedback error" role="alert"><span>{loadError}</span><button type="button" className="secondary-button" onClick={() => setLoadAttempt((value) => value + 1)}>{t("Reload configuration")}</button></div>}
 
     <div className="agent-backend-list">
-    {(["codex", "claude", "opencode"] as const).map((item) => <section key={item} className="agent-backend-card" aria-label={labels[item]}>
+    {(["codex", "claude", "opencode", "antigravity"] as const).map((item) => <section key={item} className="agent-backend-card" aria-label={labels[item]}>
       <button type="button" className="agent-backend-card-toggle" disabled={disabled} aria-label={labels[item]} aria-expanded={expanded && selected === item} aria-controls={`${id}-${item}-config`} onClick={() => {
         const opening = selected !== item || !expanded;
         const draft = selected === item ? config : choose(item);
@@ -174,7 +175,7 @@ export default function AgentBackendSettings({ bridge, onBackendChange, workspac
         if (item === "codex" && opening && (!catalogs.codex?.length || (!draft.model && !effectiveModelId))) void loadCodexCatalog(draft);
         if (item === "opencode" && opening && !catalogs.opencode?.length) void loadOpenCodeCatalog(draft);
       }}>
-        <span className="provider-icon large"><img className={`provider-brand-logo${item === "claude" ? "" : " provider-brand-mono"}`} src={item === "codex" ? openaiLogo : item === "claude" ? claudeLogo : opencodeLogo} alt="" /></span>
+        <span className="provider-icon large"><img className={`provider-brand-logo${item === "claude" ? "" : " provider-brand-mono"}`} src={item === "codex" ? openaiLogo : item === "claude" ? claudeLogo : item === "antigravity" ? antigravityLogo : opencodeLogo} alt="" /></span>
         <span className="agent-backend-card-copy"><strong>{labels[item]}</strong><small>{item === "codex" ? t("Local CLI · uses your existing Codex login") : t("Local CLI · uses its existing login and configuration")}</small></span>
         <span className="agent-backend-card-status">
           <span className={`agent-connection-status ${connections[item] || "unchecked"}`} aria-live="polite">{busy === "check" && selected === item && <LoaderCircle className="spin" size={13} />}{connectionLabel(item)}</span>
@@ -188,7 +189,7 @@ export default function AgentBackendSettings({ bridge, onBackendChange, workspac
           <SettingsRow stacked title={<label htmlFor={`${id}-binary`}>{t(`${name} executable`)}</label>} description={selected === "codex" ? t("Use codex from PATH or an absolute executable path. Run codex login in a terminal first.") : t("Use the CLI name or an absolute executable path. Sign in through its terminal command first.")}>
             <input id={`${id}-binary`} className="settings-text-input settings-text-input-wide" disabled={disabled} value={config.binary} spellCheck={false} onChange={(event) => edit("binary", event.target.value)} onBlur={() => { if (selected === "codex" && !models.length) void loadCodexCatalog(config); }} />
           </SettingsRow>
-          <SettingsRow stacked controlClassName="agent-opencode-model-control" title={<label htmlFor={`${id}-model`}>{t(`${name} model`)}</label>} description={selected === "codex" ? t("Leave empty to use your Codex configuration. API model settings do not select the Codex model.") : selected === "claude" ? t("Leave empty to use your Claude Code configuration.") : t("Leave empty to use native configuration. OpenCode model IDs use provider/model.")}>
+          <SettingsRow stacked controlClassName="agent-opencode-model-control" title={<label htmlFor={`${id}-model`}>{t(`${name} model`)}</label>} description={selected === "codex" ? t("Leave empty to use your Codex configuration. API model settings do not select the Codex model.") : selected === "claude" ? t("Leave empty to use your Claude Code configuration.") : selected === "antigravity" ? t("Leave empty to use your Antigravity configuration. Check the connection to discover models.") : t("Leave empty to use native configuration. OpenCode model IDs use provider/model.")}>
             <>
               <div className="agent-opencode-model-anchor" ref={opencodeAnchor}>
                 <input id={`${id}-model`} className="settings-text-input settings-text-input-wide" disabled={disabled} value={config.model} spellCheck={false} role="combobox" aria-autocomplete="list" aria-expanded={opencodeOpen} aria-controls={`${id}-opencode-models`} onClick={() => { setOpenCodeOpen(true); setOpenCodeSearch(""); setOpenCodeIndex(0); }} onFocus={() => { setOpenCodeOpen(true); setOpenCodeSearch(""); setOpenCodeIndex(0); if (selected === "opencode" && !catalogs.opencode?.length) void loadOpenCodeCatalog(config); if (selected === "codex" && !catalogs.codex?.length) void loadCodexCatalog(config); }} onChange={(event) => { edit("model", event.target.value); setOpenCodeSearch(event.target.value); setOpenCodeOpen(true); setOpenCodeIndex(0); }} onKeyDown={(event) => {
@@ -199,7 +200,7 @@ export default function AgentBackendSettings({ bridge, onBackendChange, workspac
                 {selected === "opencode" && <button type="button" className="agent-opencode-refresh" disabled={disabled || opencodeLoading} onClick={() => void loadOpenCodeCatalog(config)} aria-label={t("Refresh OpenCode models")} title={t("Refresh OpenCode models")}>{opencodeLoading ? <LoaderCircle size={14} className="spin" /> : <RefreshCw size={14} />}</button>}
               </div>
               <MenuSurface open={opencodeOpen} onClose={() => setOpenCodeOpen(false)} anchorRef={opencodeAnchor} placement="bottom-start" width={360} minWidth={0} maxWidth="calc(100vw - 16px)" maxHeight={280} id={`${id}-opencode-models`} className="agent-opencode-model-menu" ariaLabel={t(`${name} model`)} focus="none" role="listbox">
-                {!opencodeSearch && <MenuItem role="option" aria-selected={!config.model} onMouseDown={(event) => event.preventDefault()} onClick={() => { edit("model", ""); setOpenCodeOpen(false); }}>{t(selected === "codex" ? "Codex default" : selected === "claude" ? "Claude default" : "Use OpenCode default")}</MenuItem>}
+                {!opencodeSearch && <MenuItem role="option" aria-selected={!config.model} onMouseDown={(event) => event.preventDefault()} onClick={() => { edit("model", ""); setOpenCodeOpen(false); }}>{t(selected === "codex" ? "Codex default" : selected === "claude" ? "Claude default" : selected === "antigravity" ? "Antigravity default" : "Use OpenCode default")}</MenuItem>}
                 {openCodeMatches.map((item, index) => <MenuItem key={item.id} role="option" aria-selected={item.id === config.model} className={index === opencodeIndex ? "active" : ""} onMouseDown={(event) => event.preventDefault()} onClick={() => { edit("model", item.id); setOpenCodeOpen(false); }}>{item.id}</MenuItem>)}
                 {!(selected === "opencode" ? opencodeLoading : selected === "codex" && catalogLoading) && !openCodeMatches.length && <span className="agent-opencode-model-hint">{t("No matching models. You can enter an ID manually.")}</span>}
                 {selected === "opencode" && opencodeLoading && <span className="agent-opencode-model-hint">{t("Loading OpenCode models…")}</span>}
@@ -242,9 +243,9 @@ export default function AgentBackendSettings({ bridge, onBackendChange, workspac
             </select>
           </SettingsRow>}
         </div>
-        {selected === "opencode" && <div className="agent-backend-permissions">
+        {(selected === "opencode" || selected === "antigravity") && <div className="agent-backend-permissions">
           <strong>{t("Permissions")}</strong>
-          <p>{t("Uses your OpenCode permission settings. When OpenCode requests approval, you can respond in the conversation.")}</p>
+          <p>{t(selected === "antigravity" ? "Uses your Antigravity permission settings. When Antigravity requests approval, you can respond in the conversation." : "Uses your OpenCode permission settings. When OpenCode requests approval, you can respond in the conversation.")}</p>
         </div>}
         <div className="agent-backend-actions">
           <button type="button" className="secondary-button" disabled={disabled || (selected === "codex" && catalogLoading) || !config.binary.trim()} onClick={() => void apply("check")}>{busy === "check" ? <LoaderCircle className="spin" size={14} /> : <Network size={14} />}{t(`Check ${name}`)}</button>

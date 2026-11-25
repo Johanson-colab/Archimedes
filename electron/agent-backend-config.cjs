@@ -7,9 +7,10 @@ const { listNativeModels, resolveNativeModel } = require("./agent/codex-models.c
 let configPath;
 
 function initialize(userData) { configPath = path.join(userData, "agent-backend.json"); }
-const nativeIds = ["codex", "claude", "opencode"];
+const nativeIds = ["codex", "claude", "opencode", "antigravity"];
 function profile(input = {}, backend = "codex") {
-  const binary = String(input.binary || backend).trim();
+  const defaultBinary = backend === "antigravity" ? "agy" : backend;
+  const binary = String(input.binary || defaultBinary).trim();
   const model = String(input.model || "").trim();
   const effort = String(input.effort || "").trim();
   const permissionMode = input.permissionMode || "ask";
@@ -19,7 +20,7 @@ function profile(input = {}, backend = "codex") {
       ? ["ask", "accept-edits", "plan", "auto", "full-access"]
       : ["ask"];
   if (!permissionModes.includes(permissionMode)) throw new Error("Unsupported native permission mode.");
-  if (binary !== backend && !path.isAbsolute(binary)) throw new Error("Native executable path must be absolute.");
+  if (binary !== defaultBinary && !path.isAbsolute(binary)) throw new Error("Native executable path must be absolute.");
   if (binary.length > 2000 || model.length > 160 || effort.length > 100 || /[\r\n\0]/.test(binary + model + effort)) throw new Error("Invalid native configuration.");
   return { binary, model, effort, permissionMode };
 }
@@ -84,7 +85,7 @@ async function listOpenCodeModelCatalog(input = {}, workspace) {
 }
 async function check(input = get(), Client = CodexClient) {
   const config = normalize(input);
-  if (["claude", "opencode"].includes(config.backend)) return require("./agent/external-backend.cjs").checkNative(config);
+  if (["claude", "opencode", "antigravity"].includes(config.backend)) return require("./agent/external-backend.cjs").checkNative(config);
   const client = new Client({ binary: config.binary });
   try {
     await client.start();

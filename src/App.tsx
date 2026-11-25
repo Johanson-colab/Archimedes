@@ -3748,7 +3748,7 @@ function App() {
                 if (agentBusy) throw new Error(t("Stop the running turn before using this command."));
                 const current = await desktopBridge.getAgentBackendConfig();
                 const target = backend === "api" ? "codex" : backend;
-                const profile = current.profiles?.[target] || (current.backend === backend ? current : { binary: target, model: "", effort: "", permissionMode: target === "codex" ? "read-only" as const : "ask" as const });
+                const profile = current.profiles?.[target] || (current.backend === backend ? current : { binary: target === "antigravity" ? "agy" : target, model: "", effort: "", permissionMode: target === "codex" ? "read-only" as const : "ask" as const });
                 const saved = await desktopBridge.saveAgentBackendConfig({ ...profile, backend });
                 setNativeBackend(saved);
                 if (boundHarness && backend !== boundHarness) startNewTask();
@@ -4173,7 +4173,7 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
     for (const event of trajectoryEvents) {
       if (event.type === "native_session_busy") {
         const backend = (event.payload as { backend?: unknown } | null)?.backend;
-        if (backend === "codex" || backend === "claude" || backend === "opencode") busy.set(event.turn_id, backend);
+        if (backend === "codex" || backend === "claude" || backend === "opencode" || backend === "antigravity") busy.set(event.turn_id, backend);
         continue;
       }
       if (!event.type.startsWith("native_")) continue;
@@ -4273,7 +4273,7 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
         {pendingAction && <section className="conversation-approval">
           <div className="approval-content">
             <div className="approval-head">
-              <span className="approval-kind">{pendingAction.payload.externalAgent ? ({ codex: "Codex", claude: "Claude Code", opencode: "OpenCode" }[pendingAction.payload.externalAgent]) : pendingAction.kind === "write" ? "Write file" : "Run command"}</span>
+              <span className="approval-kind">{pendingAction.payload.externalAgent ? ({ codex: "Codex", claude: "Claude Code", opencode: "OpenCode", antigravity: "Antigravity" }[pendingAction.payload.externalAgent]) : pendingAction.kind === "write" ? "Write file" : "Run command"}</span>
               {pendingAction.payload.change && <div className="approval-diff-stats"><span>+{pendingAction.payload.change.additions}</span><span>-{pendingAction.payload.change.deletions}</span></div>}
             </div>
             <code>{pendingAction.kind === "write" ? pendingAction.payload.path : pendingAction.payload.command}</code>

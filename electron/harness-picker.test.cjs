@@ -10,7 +10,7 @@ before(async () => {
   React = require("react"); ({ createRoot } = require("react-dom/client"));
   const { transformWithOxc } = await import("vite");
   const icons = require("lucide-react");
-  const scope = { React, ...React, createPortal: require("react-dom").createPortal, Check: icons.Check, ChevronDown: icons.ChevronDown, ChevronRight: icons.ChevronRight, Settings: icons.Settings, useUISettings: () => ({ t: (key) => key }), ArchimedesMark: () => React.createElement("svg"), openaiLogo: "openai", claudeLogo: "claude", opencodeLogo: "opencode" };
+  const scope = { React, ...React, createPortal: require("react-dom").createPortal, Check: icons.Check, ChevronDown: icons.ChevronDown, ChevronRight: icons.ChevronRight, Settings: icons.Settings, useUISettings: () => ({ t: (key) => key }), ArchimedesMark: () => React.createElement("svg"), openaiLogo: "openai", claudeLogo: "claude", opencodeLogo: "opencode", antigravityLogo: "antigravity" };
   for (const [file, names] of [["Menu", ["MenuSurface", "MenuItem", "MenuDivider", "MenuLabel"]], ["HarnessPicker", ["HarnessPicker"]]]) {
     const text = fs.readFileSync(path.join(__dirname, `../src/${file}.tsx`), "utf8").replace(/^import[\s\S]*?from\s+"[^"]+";\r?\n/gm, "").replace(/^import "[^"]+";\r?\n/gm, "").replace(/export default function/g, "function").replace(/export function/g, "function");
     const { code } = await transformWithOxc(text, `${file}.tsx`, { jsx: { runtime: "classic" } });
@@ -27,7 +27,7 @@ async function mount(props) {
 function harnessOptions() {
   return [...document.querySelectorAll(".harness-picker-menu > .menu-item")].filter((node) => node.textContent !== "Model settings");
 }
-test("harness picker exposes four entries, switches only supported runtimes and opens Models", async () => {
+test("harness picker exposes five entries, switches supported runtimes and opens Models", async () => {
   const changes = []; let settings = 0;
   const cleanup = await mount({ backend: "codex", busy: false, onChange: async (id) => changes.push(id), onSettings: () => { settings++; } });
   try {
@@ -35,12 +35,15 @@ test("harness picker exposes four entries, switches only supported runtimes and 
     const open = () => React.act(async () => document.querySelector(".harness-picker-trigger").click());
     await open();
     const options = harnessOptions();
-    assert.equal(options.length, 4);
+    assert.equal(options.length, 5);
     assert.ok(document.querySelector('[aria-label="Model settings"]'));
-    assert.deepEqual(options.map((node) => node.querySelector(".menu-item-body").textContent), ["Codex", "Claude Code", "OpenCode", "Archimedes"]);
+    assert.deepEqual(options.map((node) => node.querySelector(".menu-item-body").textContent), ["Codex", "Claude Code", "OpenCode", "Antigravity", "Archimedes"]);
     assert.equal(options[1].disabled, false); assert.equal(options[2].disabled, false);
     await React.act(async () => options[3].click());
-    assert.deepEqual(changes, ["api"]);
+    assert.deepEqual(changes, ["antigravity"]);
+    await open();
+    await React.act(async () => harnessOptions()[4].click());
+    assert.deepEqual(changes, ["antigravity", "api"]);
     await open();
     await React.act(async () => {
       const menu = document.querySelector('[role="menu"]');
