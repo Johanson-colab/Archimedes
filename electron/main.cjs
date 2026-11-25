@@ -110,6 +110,7 @@ const { searchConferencePapers } = require("./conferences.cjs");
 const skillCatalog = require("./skill-catalog.cjs");
 const speech = require("./speech.cjs");
 const store = require("./store.cjs");
+const { registerLibraryReads } = require("./ipc/library.cjs");
 const { createWorkspaceIpc, isWorkspaceDataChannel } = require("./workspace-context.cjs");
 const researchGraph = require("./research-graph/service.cjs");
 const experimentRunner = require("./research-graph/experiment-runner.cjs");
@@ -198,9 +199,9 @@ function closeWindowTerminals(senderId) {
 function stopWorkspaceWatcher(senderId) {
   const current = workspaceWatchers.get(senderId);
   if (!current) return;
+  workspaceWatchers.delete(senderId);
   if (current.timer) clearTimeout(current.timer);
   current.watcher.close();
-  workspaceWatchers.delete(senderId);
 }
 
 function setWindowWorkspace(senderId, workspace) {
@@ -277,6 +278,9 @@ function watchWorkspace(sender, workspace) {
       }, 180);
     });
     workspaceWatchers.set(sender.id, state);
+    state.watcher.on("error", () => {
+      if (workspaceWatchers.get(sender.id) === state) stopWorkspaceWatcher(sender.id);
+    });
   } catch {
     // Recursive watching is not available on every platform; manual refresh remains available.
   }
@@ -1319,7 +1323,7 @@ app.whenReady().then(async () => {
 
   ipcMain.handle("web-search:save-config", (_event, input = {}) => webSearch.saveWebSearchConfig(input));
 
-  ipcMain.handle("library:list", (_event, input = {}) => store.listLibraries(input.projectId ?? null));
+  registerLibraryReads(ipcMain, store);
 
   ipcMain.handle("library:create", (_event, input) => {
     if (!input || typeof input.name !== "string" || !input.name.trim() || input.name.length > 120) {
@@ -1336,15 +1340,6 @@ app.whenReady().then(async () => {
   ipcMain.handle("library:delete", (_event, id) => {
     if (typeof id !== "string") throw new Error("A library ID is required.");
     return store.deleteLibrary(id);
-  });
-
-  ipcMain.handle("library:list-projects", () => store.listLibraryProjects());
-
-  ipcMain.handle("library:list-papers", (_event, { libraryId, query = "" }) => {
-    if (typeof libraryId !== "string" || typeof query !== "string" || query.length > 300) {
-      throw new Error("A library ID and a short search query are required.");
-    }
-    return store.listPapers(libraryId, query);
   });
 
   ipcMain.handle("library:search-external", (_event, { query, limit }) => searchAcademicPapers(query, limit));
@@ -1861,7 +1856,6 @@ app.whenReady().then(async () => {
     return store.addPaper(libraryId, paper);
   });
 
-  ipcMain.handle("library:get-bibliography", (_event, { paperId }) => store.getPaperBibliography(paperId));
   ipcMain.handle("library:set-bibliography", (_event, { paperId, patch }) => store.setPaperBibliography(paperId, patch));
   ipcMain.handle("library:repair-metadata", (_event, { paperId, patch }) => store.repairLibraryPaperMetadata(paperId, patch));
 

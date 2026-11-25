@@ -1,6 +1,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { createHash } = require("node:crypto");
+const { resolveWorkspaceTarget } = require("./security/path-sandbox.cjs");
 const { diffLines } = require("diff");
 
 const IGNORED_NAMES = new Set([".archimedes", ".git", "node_modules", "dist", "build", ".next", ".DS_Store"]);
@@ -23,18 +24,7 @@ function normalizeRelative(value = "") {
 }
 
 function workspacePath(root, requested = "", { mustExist = true } = {}) {
-  const workspace = path.resolve(root);
-  const target = path.resolve(workspace, normalizeRelative(requested));
-  if (target !== workspace && !target.startsWith(`${workspace}${path.sep}`)) {
-    throw new Error("The requested path is outside the active workspace.");
-  }
-  if (!mustExist) return target;
-  const realWorkspace = fs.realpathSync(workspace);
-  const realTarget = fs.realpathSync(target);
-  if (realTarget !== realWorkspace && !realTarget.startsWith(`${realWorkspace}${path.sep}`)) {
-    throw new Error("The requested path resolves outside the active workspace.");
-  }
-  return realTarget;
+  return resolveWorkspaceTarget(root, normalizeRelative(requested), mustExist).target;
 }
 
 function relativePath(root, target) {
