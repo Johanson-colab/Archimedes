@@ -32,7 +32,7 @@ test("Work composer keeps attachment snapshots separate and recovers failed queu
     shouldSubmitPaperChatKey: event => event.key === "Enter",
     workspacePathName: value => value,
     WorkspaceMarkdownProvider: ({ children }) => children,
-    ConversationHistory: none, ContextPicker: none, HarnessPicker: none, MenuSurface: none, MenuItem: none,
+    ConversationHistory: none, ContextPicker: none, HarnessPicker: none, ComposerModelPicker: none, MenuSurface: none, MenuItem: none,
     MenuLabel: none, MenuDivider: none, VoiceInputButton: none, desktopBridge: {},
     ContextChips: ({ items }) => items.map(item => React.createElement("output", { key: item.id }, item.id)),
   };
