@@ -104,15 +104,24 @@ function initialize(userDataPath, safeStorage) {
   credentials = settingsSecrets(safeStorage, transformCredentials);
   settings = null;
   readError = null;
+  let saved;
+  let plain;
   try {
-    const saved = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
-    const plain = credentials.open(saved);
+    saved = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
+    plain = credentials.open(saved);
     settings = normalizeSettings(plain);
-    if (credentials.available() && credentials.hasPlaintext(saved)) credentials.write(settingsPath, plain);
   } catch (error) {
     if (error.code !== "ENOENT") readError = error instanceof SyntaxError
       ? new Error("News settings could not be opened. The original file was kept.") : error;
   }
+  if (!readError && saved && credentials.available() && credentials.hasPlaintext(saved)) {
+    try { credentials.write(settingsPath, plain); }
+    catch {
+      // Keep the loaded configuration usable. A future launch can retry migration.
+    }
+  }
+  redditTokenCache.token = "";
+  redditTokenCache.expiresAt = 0;
   newsStore.initialize(userDataPath);
   initialized = true;
   return readError ? null : publicSettings();

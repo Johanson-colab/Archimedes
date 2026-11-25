@@ -4,6 +4,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 
+const fixtureSafeStorage = require("./test-support/safe-storage.cjs");
 const news = require("./news.cjs");
 const newsStore = require("./news-store.cjs");
 
@@ -72,7 +73,7 @@ test("settings normalisation clamps values and drops invalid feeds", () => {
 
 test("public settings never return secrets and report configuration state", () => {
   const dir = tempDir();
-  news.initialize(dir);
+  news.initialize(dir, fixtureSafeStorage);
   try {
     news.setSettings({ reddit: { clientId: "client-id", clientSecret: "shh" }, x: { bearerToken: "token" }, github: { token: "ghp_secret" } });
     const settings = news.getSettings();

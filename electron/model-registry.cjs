@@ -49,7 +49,7 @@ function initializeModelRegistry(userDataPath, safeStorage) {
 function readRecord(file, legacy = false) {
   try { return JSON.parse(fs.readFileSync(file, "utf8")); }
   catch (error) {
-    if (error.code === "ENOENT" || (legacy && error instanceof SyntaxError)) return null;
+    if (error.code === "ENOENT" || legacy) return null;
     throw new Error("Model settings could not be opened. The original file was kept.");
   }
 }
@@ -61,9 +61,10 @@ function readRegistry() {
   const legacyPath = path.join(path.dirname(registryPath), "model-config.json");
   const legacySaved = readRecord(legacyPath, Boolean(saved));
   const migrateLegacy = legacySaved && legacySecrets.available() && legacySecrets.hasPlaintext(legacySaved);
-  const legacy = legacySaved && (!saved || migrateLegacy) ? legacySecrets.open(legacySaved) : null;
+
   let data = emptyRegistry();
   let original;
+  let legacy;
   if (saved) {
     if (!Array.isArray(saved.models)) throw new Error("The model registry is invalid. The original file was kept.");
     original = registrySecrets.open(saved);
@@ -75,15 +76,20 @@ function readRegistry() {
         proactive: typeof original.roles?.proactive === "string" ? original.roles.proactive : null,
       },
     };
-  } else if (legacy) {
+  } else if (legacySaved) {
+    legacy = legacySecrets.open(legacySaved);
     const roles = Object.hasOwn(legacy, "agent") || Object.hasOwn(legacy, "proactive") ? legacy : { agent: legacy };
     migrateLegacyConfigs(data, roles);
   }
-  if (registrySecrets.available() && (saved ? registrySecrets.hasPlaintext(saved) : data.models.length > 0)) {
-    registrySecrets.write(registryPath, original || data);
-  }
-  if (migrateLegacy) legacySecrets.write(legacyPath, legacy);
   cache = data;
+  try {
+    if (registrySecrets.available() && (saved ? registrySecrets.hasPlaintext(saved) : data.models.length > 0)) {
+      registrySecrets.write(registryPath, original || data);
+    }
+    if (migrateLegacy) legacySecrets.write(legacyPath, legacy || legacySecrets.open(legacySaved));
+  } catch {
+    // Keep the loaded configuration usable. A future launch can retry migration.
+  }
   return cache;
 }
 

@@ -80,7 +80,7 @@ test("News API surface is wired through preload and main", () => {
   }
   assert.match(preload, /listNews: \(filters\) => ipcRenderer\.invoke\("news:list", filters\)/);
   assert.match(preload, /refreshNews: \(input\) => ipcRenderer\.invoke\("news:refresh", input\)/);
-  assert.match(main, /news\.initialize\(app\.getPath\("userData"\)\)/);
+  assert.match(main, /news\.initialize\(app\.getPath\("userData"\), safeStorage\)/);
 });
 
 test("News keeps secrets out of the renderer and ships default feeds", () => {

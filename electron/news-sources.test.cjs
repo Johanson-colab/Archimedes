@@ -1,5 +1,12 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
+const news = require("./news.cjs");
+const newsStore = require("./news-store.cjs");
+const sources = require("./news-sources.cjs");
+const fixtureSafeStorage = require("./test-support/safe-storage.cjs");
 
 const {
   canonicalUrl,
@@ -192,4 +199,79 @@ test("parsers tolerate empty and malformed payloads", () => {
   assert.deepEqual(parseRssFeed("<not-xml"), []);
   assert.deepEqual(parseReddit({}), []);
   assert.deepEqual(parseX({}), []);
+});
+
+test("migrates all three News credentials and uses them on refresh after reopening", async (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-news-crypto-"));
+  t.after(() => {
+    newsStore.close();
+    fs.rmSync(directory, { recursive: true, force: true });
+  });
+  const file = path.join(directory, "news-settings.json");
+  const reddit = { clientId: "fixture-id", clientSecret: "fixture-reddit-secret" };
+  const github = { token: "fixture-github-token" };
+  const x = { bearerToken: "fixture-x-bearer", query: "research" };
+  fs.writeFileSync(file, JSON.stringify({
+    view: "board", reddit, github, x,
+    sources: { hn: false, github: true, arxiv: false, lobsters: false, reddit: true, rss: false, x: true },
+  }));
+  news.initialize(directory, fixtureSafeStorage);
+  const saved = fs.readFileSync(file, "utf8");
+  assert.match(saved, /"ciphertext"/);
+  for (const secret of [reddit.clientSecret, github.token, x.bearerToken]) assert.equal(saved.includes(secret), false);
+  if (process.platform !== "win32") assert.equal(fs.statSync(file).mode & 0o777, 0o600);
+
+  newsStore.close();
+  const settings = news.initialize(directory, fixtureSafeStorage);
+  assert.equal(settings.view, "board");
+  assert.equal(settings.reddit.configured, true);
+  assert.equal(settings.github.configured, true);
+  assert.equal(settings.x.configured, true);
+  assert.deepEqual([settings.reddit.clientSecret, settings.github.token, settings.x.bearerToken], ["", "", ""]);
+  const redditRequest = t.mock.method(sources, "fetchReddit", async () => ({ items: [] }));
+  const githubRequest = t.mock.method(sources, "fetchGitHub", async () => ({ items: [] }));
+  const xRequest = t.mock.method(sources, "fetchX", async () => ({ items: [] }));
+  await news.refresh({ force: true });
+  assert.equal(redditRequest.mock.calls[0].arguments[0].clientSecret, reddit.clientSecret);
+  assert.equal(githubRequest.mock.calls[0].arguments[0].token, github.token);
+  assert.equal(xRequest.mock.calls[0].arguments[0].bearerToken, x.bearerToken);
+});
+
+test("keeps News settings readable after encryption or replacement fails", (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-news-crypto-error-"));
+  t.after(() => {
+    newsStore.close();
+    fs.rmSync(directory, { recursive: true, force: true });
+  });
+  const originalRename = fs.renameSync;
+  const before = JSON.stringify({ view: "board", github: { token: "legacy-fixture-token" } });
+  const profiles = [
+    { name: "unavailable", storage: { isEncryptionAvailable: () => false } },
+    { name: "bad-round-trip", storage: { ...fixtureSafeStorage, decryptString: () => "incorrect" } },
+    { name: "interrupted", storage: fixtureSafeStorage },
+  ];
+  for (const { name, storage } of profiles) {
+    const profileDir = path.join(directory, name);
+    fs.mkdirSync(profileDir);
+    const file = path.join(profileDir, "news-settings.json");
+    fs.writeFileSync(file, before);
+    const rename = name === "interrupted" && t.mock.method(fs, "renameSync", (source, target) => {
+      if (target === file) throw new Error("fixture replacement interrupted");
+      return originalRename(source, target);
+    });
+    try {
+      assert.equal(news.initialize(profileDir, storage).github.configured, true);
+      assert.throws(() => news.setSettings({ view: "feed" }),
+        /encryption is unavailable|could not be verified|fixture replacement interrupted/);
+      assert.equal(news.getSettings().view, "board");
+      assert.equal(fs.readFileSync(file, "utf8"), before);
+      assert.equal(fs.readdirSync(profileDir).some(name => name.endsWith(".tmp")), false);
+    } finally {
+      newsStore.close();
+      if (rename) rename.mock.restore();
+    }
+    assert.equal(news.initialize(profileDir, fixtureSafeStorage).github.configured, true);
+    assert.equal(fs.readFileSync(file, "utf8").includes("legacy-fixture-token"), false);
+    newsStore.close();
+  }
 });
