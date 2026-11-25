@@ -441,16 +441,31 @@ async function benchmarkDesktop(fixture) {
 function runChild(executable, flag, metadata, timeout) {
   const env = { ...process.env };
   delete env.ELECTRON_RUN_AS_NODE;
+  delete env.VITE_DEV_SERVER_URL;
   const processResult = spawnSync(executable, [__filename, flag, metadata], { cwd: root, encoding: "utf8", maxBuffer: 64 * 1024 * 1024, timeout, env });
   if (processResult.error) throw processResult.error;
   if (processResult.status !== 0) throw new Error(processResult.stderr.trim() || `Benchmark child exited ${processResult.status}.`);
   return JSON.parse(processResult.stdout.trim().split("\n").at(-1));
 }
 
+function readFixture(file) {
+  const metadata = fs.realpathSync(file);
+  const directory = path.dirname(metadata);
+  const fixture = JSON.parse(fs.readFileSync(metadata, "utf8"));
+  if (path.dirname(directory) !== fs.realpathSync(os.tmpdir()) ||
+      !path.basename(directory).startsWith("archimedes-thread-bench-") ||
+      path.dirname(fs.realpathSync(fixture.workspace)) !== directory ||
+      path.dirname(fs.realpathSync(fixture.profile)) !== directory ||
+      fs.realpathSync(fixture.database) !== path.join(fixture.workspace, ".archimedes", "archimedes.db")) {
+    throw new Error("Benchmark children require a generated temporary fixture.");
+  }
+  return fixture;
+}
+
 async function main() {
   const [command, file] = process.argv.slice(2);
-  if (command === "--core-child") return console.log(JSON.stringify(await benchmarkCore(JSON.parse(fs.readFileSync(file, "utf8")))));
-  if (command === "--desktop-child") return benchmarkDesktop(JSON.parse(fs.readFileSync(file, "utf8")));
+  if (command === "--core-child") return console.log(JSON.stringify(await benchmarkCore(readFixture(file))));
+  if (command === "--desktop-child") return benchmarkDesktop(readFixture(file));
   const settings = options();
   const desktop = settings.desktop ? require("./electron-runtime.cjs").electronBinary() : null;
   if (desktop && !fs.existsSync(path.join(root, "dist", "index.html"))) throw new Error("--desktop needs the production renderer. Run npm run build first.");
