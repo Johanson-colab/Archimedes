@@ -1429,7 +1429,10 @@ app.whenReady().then(async () => {
     });
   });
 
-  const reproductionScope = (id) => ({ workspace: store.currentStore().workspace, ownerId: localIdentity.localIdentity().userId, domain: "reproduction", id });
+  const reproductionScope = (id) => {
+    const dataStore = store.currentStore();
+    return { workspace: dataStore.workspace, store: dataStore, ownerId: localIdentity.localIdentity().userId, domain: "reproduction", id };
+  };
 
   const notifyRunFinished = (record, summary) => {
     // The user is told when they are not looking; a run that finishes while the

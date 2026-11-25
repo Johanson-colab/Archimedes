@@ -31,12 +31,13 @@ function alive(pid) {
 }
 
 test("run ownership distinguishes data directories, domains, and principals", () => {
-  const scope = { workspace: "/fixture/a", domain: "graph", id: "same", ownerId: "owner" };
+  const scope = { workspace: "/fixture/a", store: {}, domain: "graph", id: "same", ownerId: "owner" };
   const first = { cancel() {} }, replacement = { cancel() {} };
   const release = registerActiveRun(scope, first);
   try {
     assert.equal(findActiveRun(scope), first);
     assert.equal(findActiveRun({ ...scope, workspace: "/fixture/b" }), undefined);
+    assert.equal(findActiveRun({ ...scope, store: {} }), undefined);
     assert.equal(findActiveRun({ ...scope, ownerId: "viewer" }), undefined);
     assert.equal(findActiveRun({ ...scope, domain: "reproduction" }), undefined);
     assert.equal(hasActiveRun({ ...scope, ownerId: "viewer" }), true);
