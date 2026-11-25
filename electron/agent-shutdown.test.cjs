@@ -49,7 +49,7 @@ test("the actual quit handler waits for agent shutdown and prevents duplicate cl
     closeAllNativeClients: () => calls.push("native"), closeAllTerminals: () => calls.push("terminals"),
     experimentRunner: { shutdownExperimentRuns: () => calls.push("experiments") },
     collaborationServer: { close: () => calls.push("server") }, presence: { closeAll: () => calls.push("presence") },
-    deepReadingRuns: new Map(), activeLiteratureSearches: new Map(), workspaceWatchers: new Map(), windowPreviewTokens: new Map(),
+    deepReadingRuns: new Map(), activeLiteratureSearches: new Map(), workspaceWatchers: new Map(), windowPreviewTokens: new Map(), latexCompiles: new Map(),
   });
   app.emit("before-quit", event());
   await new Promise(setImmediate);
