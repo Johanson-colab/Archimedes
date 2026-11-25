@@ -1355,7 +1355,10 @@ app.whenReady().then(async () => {
    * Requirements come from the plan; values come from the encrypted store. The
    * renderer only ever sees whether a name is set, never what it is set to.
    */
-  const reproductionScope = (id) => ({ workspace: store.currentStore().workspace, ownerId: localIdentity.localIdentity().userId, domain: "reproduction", id });
+  const reproductionScope = (id) => {
+    const dataStore = store.currentStore();
+    return { workspace: dataStore.workspace, store: dataStore, ownerId: localIdentity.localIdentity().userId, domain: "reproduction", id };
+  };
   const reproductionEnvItems = (id, scope = reproductionScope(id)) => {
     const record = presentReproduction(store.getReproduction(id));
     if (!record) throw new Error("That reproduction does not exist.");
