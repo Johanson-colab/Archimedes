@@ -12,4 +12,11 @@ function feed(input = {}) {
 }
 const bibtex = "@article{handoff2026,\n title={Evidence handoff fixture},\n author={Research Fixture},\n year={2026},\n doi={10.5555/archimedes-literature-fixture}\n}";
 const warningBibtex = ["@string{source = {Fixture Press}}", "@article{needsTitle, year={2025}}", bibtex].join("\n");
-module.exports = { paper, feed, bibtex, warningBibtex };
+const lossyBibtex = [
+  "@article{opticalCalibration,",
+  " title={Optical calibration records},",
+  " author={{Institute for Calibration}},",
+  " volume={12}, number={3}, pages={10--20}",
+  "}",
+].join("\n");
+module.exports = { paper, feed, bibtex, warningBibtex, lossyBibtex };

@@ -28,6 +28,8 @@ export const library: Record<string, string> = {
   "Back to results": "返回结果",
   "Background": "背景",
   "Based on titles and abstracts only. Source references do not verify individual claims; read the original papers.": "仅基于标题和摘要。来源标记不代表逐条论断已核实，请阅读原论文。",
+  "BibTeX export drops the grouping around {authors}. Citation labels and sorting may change.": "导出 BibTeX 会省略作者名称 {authors} 外层的分组括号，可能改变引用标签和排序。",
+  "BibTeX export omits {fields} from this reference.": "导出 BibTeX 时，此条目的 {fields} 字段会被省略。",
   "BibTeX export preview": "BibTeX 导出预览",
   "BibTeX interchange": "BibTeX 导入与导出",
   "BibTeX source": "BibTeX 原文",

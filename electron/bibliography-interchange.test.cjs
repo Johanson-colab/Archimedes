@@ -98,6 +98,33 @@ test("the BibTeX preview localizes parser warnings without losing their context 
   }
 });
 
+test("the preview warns about article data and author grouping that BibTeX export omits", async () => {
+  const [reference] = scope.parseBibliography(fixture.lossyBibtex).entries;
+  assert.deepEqual(reference.exportLoss, { locatorFields: ["volume", "number", "pages"], literalAuthors: ["Institute for Calibration"] });
+  const [ordinary] = scope.parseBibliography('@article{ordinary, title={A separate reference}, author={{Jane} Doe and {Institute for Light and Optics}}}').entries;
+  assert.equal(ordinary.exportLoss, undefined, "partial name braces and preserved groups do not warn");
+  const data = database("BibTeX export loss");
+  let unmount;
+  try {
+    const library = data.db.listLibraries(data.project.id)[0];
+    unmount = await mount(scope.BibliographyDialog, { bridge: data.bridge, library, onClose() {}, onChanged: async () => {} });
+    await input(document.querySelector('[aria-label="BibTeX source"]'), fixture.lossyBibtex);
+    assert.deepEqual([...document.querySelectorAll(".external-paper [role=alert]")].map((notice) => notice.textContent), [
+      "BibTeX export omits volume, number, pages from this reference.",
+      "BibTeX export drops the grouping around Institute for Calibration. Citation labels and sorting may change.",
+    ]);
+    await click("Import selected references");
+    const [saved] = data.db.listPapers(library.id);
+    assert.equal(saved.citekey, "opticalCalibration");
+    const exported = scope.exportBibliography([saved]);
+    assert.doesNotMatch(exported, /\b(volume|number|pages)\s*=/);
+    assert.match(exported, /author = \{Institute for Calibration\}/);
+  } finally {
+    if (unmount) await unmount();
+    data.close();
+  }
+});
+
 test("a local title-only candidate cannot override a conflict-free global strong identifier", () => {
   const data = database("Strong before title");
   try {
