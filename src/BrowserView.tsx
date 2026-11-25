@@ -59,6 +59,7 @@ export default function BrowserView({ active = true, onOpenExternal }: { active?
   const viewRef = useRef<BrowserWebview | null>(null);
   const attachedRef = useRef(false);
   const urlRef = useRef(url);
+  const hasPage = Boolean(url);
   const activeRef = useRef(active);
 
   useEffect(() => {
@@ -73,15 +74,14 @@ export default function BrowserView({ active = true, onOpenExternal }: { active?
   }, [active]);
 
   useEffect(() => {
-    if (!url || viewRef.current) return;
+    if (!hasPage) return;
     const host = hostRef.current;
     if (!host) return;
     const view = document.createElement("webview") as BrowserWebview;
-    view.setAttribute("src", url);
+    view.setAttribute("src", urlRef.current);
     view.setAttribute("partition", BROWSER_PARTITION);
     view.setAttribute("allowpopups", "");
     view.setAttribute("webpreferences", "contextIsolation=yes, sandbox=yes, nodeIntegration=no");
-    view.setAttribute("aria-label", t("Browser page"));
     view.style.width = "100%";
     view.style.height = "100%";
 
@@ -123,14 +123,14 @@ export default function BrowserView({ active = true, onOpenExternal }: { active?
     };
     const describeError = (detail: WebviewEvent) => {
       const description = detail.errorDescription || "";
-      if (/ERR_NAME_NOT_RESOLVED/.test(description) || detail.errorCode === -105) return t("This address could not be resolved. Check the URL or your connection.");
-      if (/ERR_CONNECTION_REFUSED/.test(description) || detail.errorCode === -102) return t("The site refused the connection.");
-      if (/ERR_INTERNET_DISCONNECTED/.test(description) || detail.errorCode === -106) return t("You appear to be offline.");
-      if (/ERR_CONNECTION_CLOSED|ERR_CONNECTION_RESET/.test(description)) return t("The connection closed before the page loaded.");
-      if (/ERR_CONNECTION_TIMED_OUT|ERR_TIMED_OUT/.test(description)) return t("The site took too long to respond.");
-      if (/ERR_ADDRESS_UNREACHABLE/.test(description) || detail.errorCode === -109) return t("The site could not be reached.");
-      if (/ERR_CERT_|ERR_SSL_/.test(description)) return t("The secure connection to this site failed.");
-      return description || t("This page could not be loaded.");
+      if (/ERR_NAME_NOT_RESOLVED/.test(description) || detail.errorCode === -105) return "This address could not be resolved. Check the URL or your connection.";
+      if (/ERR_CONNECTION_REFUSED/.test(description) || detail.errorCode === -102) return "The site refused the connection.";
+      if (/ERR_INTERNET_DISCONNECTED/.test(description) || detail.errorCode === -106) return "You appear to be offline.";
+      if (/ERR_CONNECTION_CLOSED|ERR_CONNECTION_RESET/.test(description)) return "The connection closed before the page loaded.";
+      if (/ERR_CONNECTION_TIMED_OUT|ERR_TIMED_OUT/.test(description)) return "The site took too long to respond.";
+      if (/ERR_ADDRESS_UNREACHABLE/.test(description) || detail.errorCode === -109) return "The site could not be reached.";
+      if (/ERR_CERT_|ERR_SSL_/.test(description)) return "The secure connection to this site failed.";
+      return description || "This page could not be loaded.";
     };
     const onFail = (event: Event) => {
       const detail = event as WebviewEvent;
@@ -142,16 +142,25 @@ export default function BrowserView({ active = true, onOpenExternal }: { active?
       syncNavigation();
     };
 
-    view.addEventListener("dom-ready", onReady);
-    view.addEventListener("did-start-loading", onStart);
-    view.addEventListener("did-stop-loading", onStop);
-    view.addEventListener("did-navigate", onNavigate);
-    view.addEventListener("did-navigate-in-page", onNavigate);
-    view.addEventListener("page-title-updated", onTitle);
-    view.addEventListener("did-fail-load", onFail);
+    const listeners = new AbortController();
+    view.addEventListener("dom-ready", onReady, { signal: listeners.signal });
+    view.addEventListener("did-start-loading", onStart, { signal: listeners.signal });
+    view.addEventListener("did-stop-loading", onStop, { signal: listeners.signal });
+    view.addEventListener("did-navigate", onNavigate, { signal: listeners.signal });
+    view.addEventListener("did-navigate-in-page", onNavigate, { signal: listeners.signal });
+    view.addEventListener("page-title-updated", onTitle, { signal: listeners.signal });
+    view.addEventListener("did-fail-load", onFail, { signal: listeners.signal });
     host.replaceChildren(view);
     viewRef.current = view;
-  }, [t, url]);
+    return () => {
+      listeners.abort();
+      attachedRef.current = false;
+      viewRef.current = null;
+      view.remove();
+    };
+  }, [hasPage]);
+
+  useEffect(() => { viewRef.current?.setAttribute("aria-label", t("Browser page")); }, [hasPage, t]);
 
   useEffect(() => {
     const view = viewRef.current;
@@ -168,25 +177,19 @@ export default function BrowserView({ active = true, onOpenExternal }: { active?
         const message = reason instanceof Error ? reason.message : String(reason);
         if (/ERR_ABORTED|\(-3\)/.test(message)) return;
         setLoading(false);
-        setError(message || t("This page could not be loaded."));
+        setError(message || "This page could not be loaded.");
       });
     } catch (reason) {
       if (urlRef.current !== target) return;
       setLoading(false);
-      setError(reason instanceof Error ? reason.message : t("This page could not be loaded."));
+      setError(reason instanceof Error ? reason.message : "This page could not be loaded.");
     }
-  }, [t, url]);
-
-  useEffect(() => () => {
-    attachedRef.current = false;
-    viewRef.current?.remove();
-    viewRef.current = null;
-  }, []);
+  }, [url]);
 
   function navigate() {
     const next = normalizeBrowserAddress(draft);
     if (!next) {
-      setAddressError(t("Enter an http:// or https:// address."));
+      setAddressError("Enter an http:// or https:// address.");
       return;
     }
     setAddressError("");
@@ -231,7 +234,7 @@ export default function BrowserView({ active = true, onOpenExternal }: { active?
       <button className="browser-nav-button" onClick={openExternal} disabled={!url} title={t("Open in system browser")} aria-label={t("Open in system browser")}><ExternalLink size={14} /></button>
     </header>
 
-    {addressError && <div className="browser-status error" role="alert">{addressError}</div>}
+    {addressError && <div className="browser-status error" role="alert">{t(addressError)}</div>}
 
     <div className="browser-page">
       {!url ? <div className="browser-empty">
@@ -243,7 +246,7 @@ export default function BrowserView({ active = true, onOpenExternal }: { active?
         <div className="browser-page-host" ref={hostRef} />
         {error && <div className="browser-error" role="alert">
           <strong>{t("This page could not be loaded")}</strong>
-          <span>{error}</span>
+          <span>{t(error)}</span>
           <div className="browser-error-actions">
             <button className="secondary-button" onClick={() => { setError(""); setLoading(true); try { viewRef.current?.reload(); } catch { /* not ready yet */ } }}>{t("Retry")}</button>
             <button className="secondary-button" onClick={openExternal}>{t("Open in system browser")}</button>
