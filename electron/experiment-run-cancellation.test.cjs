@@ -2,10 +2,12 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+const { EventEmitter } = require("node:events");
 const test = require("node:test");
 const store = require("./store.cjs");
 const graph = require("./research-graph/service.cjs");
 const runner = require("./research-graph/experiment-runner.cjs");
+const { findActiveRun, hasActiveRun, installQuitGuard, registerActiveRun } = require("./runtime/active-runs.cjs");
 
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 async function eventually(check, message) {
@@ -27,6 +29,51 @@ function alive(pid) {
   try { process.kill(pid, 0); return true; }
   catch (error) { if (error.code === "ESRCH") return false; throw error; }
 }
+
+test("run ownership distinguishes data directories, domains, and principals", () => {
+  const scope = { workspace: "/fixture/a", domain: "graph", id: "same", ownerId: "owner" };
+  const first = { cancel() {} }, replacement = { cancel() {} };
+  const release = registerActiveRun(scope, first);
+  try {
+    assert.equal(findActiveRun(scope), first);
+    assert.equal(findActiveRun({ ...scope, workspace: "/fixture/b" }), undefined);
+    assert.equal(findActiveRun({ ...scope, ownerId: "viewer" }), undefined);
+    assert.equal(findActiveRun({ ...scope, domain: "reproduction" }), undefined);
+    assert.equal(hasActiveRun({ ...scope, ownerId: "viewer" }), true);
+    release();
+    const releaseReplacement = registerActiveRun(scope, replacement);
+    try {
+      release();
+      assert.equal(findActiveRun(scope), replacement);
+    } finally { releaseReplacement(); }
+  } finally { release(); }
+});
+
+test("native quit confirmation keeps work on cancel and exits once after confirmed cleanup", async () => {
+  const app = new EventEmitter();
+  let dialogs = 0, stopped = 0, quit = 0, work = true, respond;
+  const beforeQuit = () => {
+    let prevented = false;
+    app.emit("before-quit", { preventDefault: () => { prevented = true; } });
+    if (!prevented) quit++;
+  };
+  app.quit = beforeQuit;
+  const dialog = { showMessageBox: ({ buttons }) => {
+    assert.deepEqual(buttons, ["Keep running", "Stop and quit"]);
+    dialogs++;
+    return new Promise(resolve => { respond = response => resolve({ response }); });
+  } };
+  installQuitGuard({ app, dialog, hasWork: () => work, stopWork: () => { stopped++; work = false; } });
+  beforeQuit(); beforeQuit();
+  assert.equal(dialogs, 1);
+  respond(0);
+  await pause(0);
+  assert.deepEqual({ stopped, quit, work }, { stopped: 0, quit: 0, work: true });
+  beforeQuit(); beforeQuit();
+  respond(1);
+  await eventually(() => quit === 1, "quit did not finish");
+  assert.deepEqual({ dialogs, stopped, quit, work }, { dialogs: 2, stopped: 1, quit: 1, work: false });
+});
 
 for (const { name, ignoreTerm, stdio, shutdown, stopThenShutdown } of [
   { name: "cancel stops a run's descendant process", ignoreTerm: false, stdio: "inherit" },
