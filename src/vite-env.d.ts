@@ -114,6 +114,7 @@ interface ResearchDeskBridge {
     readManuscriptSnapshot?: (workspace: string, manifestPath: string) => Promise<import("./manuscript-snapshot").ManuscriptBuildVerification>;
     onLatexCompileProgress?: (callback: (input: { path: string; stage: string; log?: string }) => void) => () => void;
     getResearchTurnImage: (threadId: string, turnId: string, position: number, workspace?: string) => Promise<string | null>;
+    getResearchThreadEventChanges: (threadId: string, cursor: ResearchEventCursor | null, workspace?: string) => Promise<{ reset: boolean; events: ResearchEvent[]; cursor: ResearchEventCursor | null }>;
     getResearchThread: (threadId: string, workspace?: string) => Promise<ResearchThreadDetail>;
     createResearchThread: (input: { projectId?: string; workspacePath?: string; workspaceId?: string; mode?: ResearchMode; visibility?: "project" | "private"; title?: string }) => Promise<ResearchThreadDetail>;
     forkResearchThread: (threadId: string, workspace?: string, side?: boolean) => Promise<ResearchThreadDetail>;
@@ -1891,7 +1892,10 @@ interface ResearchEvent {
   created_at: string;
 }
 
+interface ResearchEventCursor { generation: string; newest: string | null; tail: string | null; count: number }
+
 interface ResearchThreadDetail extends ResearchThread {
+  eventCursor?: ResearchEventCursor;
   turns: ResearchTurn[];
   messages: ResearchThreadMessage[];
   changeSets: WorkspaceChangeSet[];

@@ -10,7 +10,7 @@ const { AsyncLocalStorage } = require("node:async_hooks");
 const bibliographyRecords = require("./bibliography-records.cjs");
 const librarySeeds = require("../shared/library-seeds.json");
 const { presentStoredAssistantMessage } = require("./agent/model-response.cjs");
-const { readThreadEvents, readThreadTurns } = require("./storage/threads.cjs");
+const { readThreadEvents, readThreadTurns, readEventChanges, eventCursor, invalidateEventCursor } = require("./storage/threads.cjs");
 const { hasRole, isProjectRole, normalizeRole } = require("./collaboration/roles.cjs");
 const { applyApprovedWrite } = require("./agent/workspace-tools.cjs");
 const researchGraphConstants = require("./research-graph/constants.cjs");
@@ -3906,6 +3906,7 @@ function applyCloudThread(projectId, detail, { currentCloudUserId = "", localUse
       String(event.created_at || now),
     );
   }
+  invalidateEventCursor(db);
   return db.prepare("SELECT * FROM research_threads WHERE id = ?").get(thread.id);
 }
 
@@ -3935,6 +3936,12 @@ function requireReadableResearchThread(thread) {
   if (thread.project_id && !canAccessProject(thread.project_id, "viewer")) throw new Error("You do not have access to this research thread.");
   if (thread.visibility === "private" && thread.owner_id !== localIdentity.userId) throw new Error("This research thread is a private draft.");
   return thread;
+}
+
+function getResearchThreadEventChanges(id, cursor) {
+  const db = requireDatabase();
+  requireReadableResearchThread(db.prepare("SELECT project_id, owner_id, visibility FROM research_threads WHERE id = ?").get(id));
+  return readEventChanges(db, id, cursor);
 }
 
 function getResearchThread(id) {
@@ -4028,6 +4035,7 @@ function getResearchThread(id) {
     turns,
     changeSets,
     events,
+    eventCursor: eventCursor(db, id, events),
     messages: turns.flatMap((turn) => {
       const items = [{ id: `${turn.id}:user`, turn_id: turn.id, role: "user", text: turn.user_message, attachments: attachmentsByTurn.get(turn.id) || [], created_at: turn.created_at }];
       if (turn.assistant_message) {
@@ -4147,6 +4155,7 @@ function undoResearchTurn(id) {
     db.prepare("UPDATE research_threads SET status = 'idle', context_summary = '', context_summary_through_turn_id = NULL, updated_at = ? WHERE id = ?").run(timestamp(), id);
     recordAuditEvent(db, { projectId: source.project_id, action: "thread.turn_undone", targetType: "thread", targetId: id, metadata: { turnId: lastTurn.id, backupThreadId: backup.id } });
     db.exec("COMMIT");
+    invalidateEventCursor(db);
     return { thread: getResearchThread(id), prompt: lastTurn.user_message, backupThreadId: backup.id };
   } catch (error) { db.exec("ROLLBACK"); throw error; }
 }
@@ -4780,6 +4789,7 @@ module.exports = {
   upsertCloudPresentation,
   listProjectThreadsForSync,
   listResearchThreadEvents,
+  getResearchThreadEventChanges,
   listProjectComments,
   applyCloudThread,
   applyCloudComment,

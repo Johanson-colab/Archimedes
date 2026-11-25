@@ -716,6 +716,11 @@ const previewBridge = {
   compileLatexDocument: async (_workspace: string, path: string) => ({ ok: true, engine: "latexmk", source_path: path, pdf_path: ".archimedes/latex-build/preview/main.pdf", duration_ms: 438, diagnostics: [], log: "Browser preview build succeeded." }),
   importLocalLibraryPaper: async () => { throw new Error("Local PDF import is available in the desktop app."); },
   getResearchTurnImage: async (threadId: string, turnId: string, position: number) => previewThreads.find((thread) => thread.id === threadId)?.messages.find((message) => message.turn_id === turnId && message.role === "user")?.attachments?.find((item) => item.position === position)?.imageData ?? null,
+  getResearchThreadEventChanges: async (threadId: string) => {
+    const thread = previewThreads.find(candidate => candidate.id === threadId);
+    if (!thread) throw new Error("Research session not found.");
+    return { reset: true, events: structuredClone(thread.events || []), cursor: null };
+  },
   getResearchThread: async (threadId: string) => {
     const thread = previewThreads.find((candidate) => candidate.id === threadId);
     if (!thread) throw new Error("Research session not found.");
@@ -1399,6 +1404,11 @@ function App() {
   const commandLockRef = useRef(false);
   const [events, setEvents] = useState<TimelineEvent[]>(initialEvents);
   const [trajectoryEvents, setTrajectoryEvents] = useState<ResearchEvent[]>([]);
+  const trajectorySource = useRef<{ threadId?: string; cursor: ResearchEventCursor | null }>({ cursor: null });
+  function restoreTrajectory(thread?: ResearchThreadDetail | null) {
+    trajectorySource.current = { threadId: thread?.id, cursor: thread?.eventCursor || null };
+    setTrajectoryEvents(thread?.events || []);
+  }
   const [workspace, setWorkspace] = useState(DEFAULT_WORKSPACE);
   const [workspaceReady, setWorkspaceReady] = useState(false);
   const [workspaceOpenError, setWorkspaceOpenError] = useState("");
@@ -1786,13 +1796,19 @@ function App() {
   useEffect(() => {
     if (!agentBusy || !activeThreadId) return;
     let cancelled = false;
-    const refresh = () => {
-      void desktopBridge.getResearchThread(activeThreadId, workspace)
-        .then((thread) => {
-          if (cancelled || activeThreadIdRef.current !== thread.id) return;
-          setTrajectoryEvents(thread.events ?? []);
-        })
-        .catch(() => undefined);
+    let pending = false;
+    const refresh = async () => {
+      const source = trajectorySource.current;
+      if (pending || (source.threadId && source.threadId !== activeThreadId)) return;
+      pending = true;
+      try {
+        const delta = await desktopBridge.getResearchThreadEventChanges(activeThreadId, source.cursor, workspace);
+        if (cancelled || activeThreadIdRef.current !== activeThreadId || trajectorySource.current !== source) return;
+        trajectorySource.current = { threadId: activeThreadId, cursor: delta.cursor };
+        if (delta.reset) setTrajectoryEvents(delta.events);
+        else if (delta.events.length) setTrajectoryEvents(previous => [...previous, ...delta.events]);
+      } catch { /* A later poll retries from the last accepted cursor. */ }
+      finally { pending = false; }
     };
     const timer = window.setInterval(refresh, 8_000);
     return () => { cancelled = true; window.clearInterval(timer); };
@@ -2415,7 +2431,7 @@ function App() {
       setFileError("");
       replaceFileEditorScopes({});
       setMessages(thread?.messages.length ? thread.messages : initialMessages);
-      setTrajectoryEvents(thread?.events ?? []);
+      restoreTrajectory(thread);
       setEvents([]);
       setActiveThreadId(thread?.id ?? null);
       setBoundHarness(thread?.harness ?? null);
@@ -2556,7 +2572,7 @@ function App() {
     setBoundHarness(null);
     setThreadVisibility("project");
     setMessages(initialMessages);
-    setTrajectoryEvents([]);
+    restoreTrajectory();
     setPendingAction(null);
     setContextItems([]);
     setChangeSets([]);
@@ -2599,7 +2615,7 @@ function App() {
         if (activeThreadIdRef.current === threadId) {
           clearPendingAssistantDeltas();
           setMessages(result.thread.messages.length ? result.thread.messages : initialMessages);
-          setTrajectoryEvents(result.thread.events ?? []);
+          restoreTrajectory(result.thread);
           setChangeSets(result.thread.changeSets);
           setPendingAction(null);
           setEvents([]);
@@ -2614,7 +2630,7 @@ function App() {
       if (command === "compact") {
         const thread = await desktopBridge.compactResearchThread(threadId!, workspace);
         setThreads((current) => current.map((item) => item.id === thread.id ? thread : item));
-        if (activeThreadIdRef.current === thread.id) { setTrajectoryEvents(thread.events ?? []); setNativeStream({ threadId: "", events: [] }); }
+        if (activeThreadIdRef.current === thread.id) { restoreTrajectory(thread); setNativeStream({ threadId: "", events: [] }); }
         return { notice: t(selectedHarness === "codex" ? "Codex context compacted. Original messages are preserved." : "Context compacted. Original messages are preserved.") };
       }
     } finally { commandLockRef.current = false; }
@@ -2647,7 +2663,7 @@ function App() {
       setActiveProjectId(thread.project_id);
       if (thread.workspace_id) setActiveWorkspaceId(thread.workspace_id);
       setMessages(thread.messages.length ? thread.messages : initialMessages);
-      setTrajectoryEvents(thread.events ?? []);
+      restoreTrajectory(thread);
       setEvents([]);
       setResearchMode(thread.mode === "experiment-setup" ? "experiment-setup" : chatModeFromThread(thread.mode, thread.events));
       setChangeSets(thread.changeSets ?? []);
@@ -2974,7 +2990,7 @@ function App() {
         clearPendingAssistantDeltas();
         activeThreadIdRef.current = result.threadId;
         setMessages(result.thread.messages.length ? result.thread.messages : initialMessages);
-        setTrajectoryEvents(result.thread.events ?? []);
+        restoreTrajectory(result.thread);
         setEvents([]);
         setActiveThreadId(result.threadId);
         setBoundHarness(result.thread.harness ?? backendOverride ?? selectedHarness);
