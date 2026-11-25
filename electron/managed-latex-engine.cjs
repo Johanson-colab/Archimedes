@@ -95,14 +95,15 @@ function outputStage(text) {
 function createManagedCompiler(options) {
   let tail = Promise.resolve();
   const pending = new Map();
-  return (workspace, sourcePath, onProgress = () => {}) => {
+  return (workspace, sourcePath, onProgress = () => {}, signal) => {
     let requestedSource;
     try {
+      signal?.throwIfAborted();
       sourcePath = require('./latex-workspace.cjs').normalizePaperPath(sourcePath);
       requestedSource = captureManuscriptSources(workspace, sourcePath);
       workspace = requestedSource.workspace;
     } catch (error) { return Promise.reject(error); }
-    const key = JSON.stringify([workspace, sourcePath, requestedSource.source_version]);
+    const key = signal || JSON.stringify([workspace, sourcePath, requestedSource.source_version]);
     if (pending.has(key)) {
       pending.get(key).listeners.add(onProgress);
       return pending.get(key).task;
@@ -111,8 +112,10 @@ function createManagedCompiler(options) {
     const progress = (stage, log) => { for (const listener of listeners) listener(stage, log); };
     const task = tail.then(async () => {
       pending.delete(key);
+      signal?.throwIfAborted();
       progress('Preparing compiler');
       const executable = await ensureManagedEngine({ ...options, onProgress: progress });
+      signal?.throwIfAborted();
       const cache = path.join(options.runtimeRoot, 'tex-cache');
       fs.mkdirSync(cache, { recursive: true });
       const bundle = options.bundle || manifest.bundleUrl;
@@ -121,7 +124,7 @@ function createManagedCompiler(options) {
       progress(stage, `Managed Tectonic ${manifest.version}\n${Object.keys(proxyEnv).length ? 'Using system HTTP proxy.' : 'Using existing network/proxy configuration.'}\n`);
       const result = await require('./latex-workspace.cjs').compileLatexDocument(workspace, sourcePath, {
         executable, managed: true, bundle,
-        requestedSource,
+        requestedSource, signal,
         spawnImpl: options.spawnImpl,
         timeoutMs: options.timeoutMs || 600_000, idleTimeoutMs: options.idleTimeoutMs || 120_000,
         onOutput: (log) => { stage = outputStage(log) || stage; progress(stage, log); },

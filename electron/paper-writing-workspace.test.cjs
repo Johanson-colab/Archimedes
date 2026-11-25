@@ -7,6 +7,12 @@ const { JSDOM } = require("jsdom");
 
 let dom, React, createRoot, Writing;
 const proactiveSignals = [];
+const projectScans = new Set();
+async function actWithScans(render) {
+  await React.act(render);
+  while (projectScans.size) await React.act(async () => { await Promise.all(projectScans); });
+}
+
 before(async () => {
   dom = new JSDOM('<!doctype html><div id="root"></div>', { url: "http://localhost", pretendToBeVisual: true });
   dom.window.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
@@ -56,7 +62,12 @@ async function fixture(t, overrides = {}) {
   const preview = (root, name) => ({ name: path.basename(name), path: name, kind: "text", size: 100, modifiedAt: "now", content: fs.readFileSync(path.join(root, name), "utf8") });
   let progress;
   const bridge = {
-    listLatexProjects: async root => overrides.listProjects ? overrides.listProjects(root) : require("./latex-workspace.cjs").listLatexProjects(root),
+    listLatexProjects: async root => {
+      if (overrides.listProjects) return overrides.listProjects(root);
+      const request = require("./latex-workspace.cjs").listLatexProjects(root);
+      projectScans.add(request);
+      try { return await request; } finally { projectScans.delete(request); }
+    },
     listWorkspaceFiles: async (root, parent) => require("./workspace-files.cjs").listWorkspaceDirectory(root, parent),
     createLatexFile: async (root, name) => require("./latex-workspace.cjs").createLatexFile(root, name),
     createLatexDirectory: async (root, name) => require("./latex-workspace.cjs").createLatexDirectory(root, name),
@@ -74,7 +85,7 @@ async function fixture(t, overrides = {}) {
     onLatexCompileProgress: callback => { progress = callback; return () => { progress = undefined; }; },
   };
   let reactRoot = createRoot(document.getElementById("root"));
-  const render = (workspace, token = 1, filePath = "paper/main.tex", active = true) => React.act(async () => reactRoot.render(React.createElement(Writing, {
+  const render = (workspace, token = 1, filePath = "paper/main.tex", active = true) => actWithScans(async () => reactRoot.render(React.createElement(Writing, {
     bridge, workspace, projectId: overrides.projectId || (workspace === a ? "a" : "b"), threadId: workspace === a ? "thread-a" : "thread-b", openRequest: token === null ? null : { path: filePath, token }, onRefresh() {}, onAskAI() {}, active,
   })));
   t.after(async () => { await React.act(async () => reactRoot.unmount()); fs.rmSync(directory, { recursive: true, force: true }); });
@@ -238,7 +249,8 @@ test("the actual preload preserves compile ownership and rejects writing over ne
   const sender = { isDestroyed: () => false, send: (channel, payload) => listeners.get(channel)?.({}, payload) };
   vm.runInNewContext(main.slice(writeBegin, writeEnd) + main.slice(begin, end), {
     ipcMain: { handle: (name, callback) => handlers.set(name, callback) }, resolveWorkspace: root => root,
-    workspaceFiles: require("./workspace-files.cjs"),
+    workspaceFiles: require("./workspace-files.cjs"), latexCompiles: new Map(), AbortController,
+    latexWorkspace: { findLocalLatexCompiler: () => "" },
     managedPaperCompiler: async (root, name, progress) => { compilerCalls.push({ root, name }); progress("Compiling", "Fake compiler output"); return { ok: false, diagnostics: [], log: "fake" }; },
   });
   const ipcRenderer = {
@@ -280,7 +292,7 @@ test('Writing opens existing manuscripts before templates and restores the chose
   assert.equal(document.querySelector('.latex-editor-textarea'), null, 'multiple manuscripts do not cause a guessed auto-open');
   const open = [...document.querySelectorAll('.paper-existing-projects button')].find(button => button.querySelector('small')?.textContent === 'paper/alternate.tex');
   assert.ok(open);
-  await React.act(async () => open.click());
+  await actWithScans(async () => open.click());
   await autoCompileOff();
   assert.match(document.querySelector('.latex-editor-textarea').value, /Explicit alternate main/);
   const main = document.querySelector('.paper-main-document select');
@@ -397,7 +409,7 @@ test('a main document at the execution root opens in place and a removed recent 
   fs.writeFileSync(path.join(f.a, 'root.tex'), source('Root manuscript'));
   await f.render(f.a, null);
   const open = [...document.querySelectorAll('.paper-existing-projects button')].find(button => button.querySelector('small')?.textContent === 'root.tex');
-  await React.act(async () => open.click());
+  await actWithScans(async () => open.click());
   assert.match(document.querySelector('.latex-editor-textarea').value, /Root manuscript/);
   assert.equal(document.querySelector('.paper-main-document select').value, 'root.tex');
   assert.equal(fs.readFileSync(path.join(f.a, 'root.tex'), 'utf8'), source('Root manuscript'));

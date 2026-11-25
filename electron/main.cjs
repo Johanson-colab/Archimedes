@@ -106,6 +106,7 @@ const sidebarPlugins = require("./sidebar-plugins.cjs");
 const commandSessions = new Map();
 const interactiveTerminalSessions = new Map();
 const windowWorkspaces = new Map();
+const latexCompiles = new Map();
 const windowStartupWorkspaces = new Map();
 const windowApprovalClaims = new Map();
 const windowPreviewTokens = new Map();
@@ -344,6 +345,8 @@ function createWindow(workspace) {
   }
 
   browserWindow.on("closed", () => {
+    for (const job of latexCompiles.get(senderId)?.values() || []) job.abort();
+    latexCompiles.delete(senderId);
     releaseWindowApprovalClaim(senderId);
     closeWindowTerminals(senderId);
     stopWorkspaceWatcher(senderId);
@@ -1045,7 +1048,7 @@ app.whenReady().then(async () => {
       ? await dialog.showOpenDialog(browserWindow, options)
       : await dialog.showOpenDialog(options);
     if (selection.canceled || !selection.filePaths[0]) return { canceled: true };
-    const imported = latexWorkspace.importLatexProject(workspace, selection.filePaths[0]);
+    const imported = await latexWorkspace.importLatexProject(workspace, selection.filePaths[0]);
     if (!event.sender.isDestroyed()) event.sender.send("workspace:files-changed", { path: imported.directory });
     return { canceled: false, ...imported };
   });
@@ -1065,13 +1068,40 @@ app.whenReady().then(async () => {
   ipcMain.handle("paper:compile", async (event, input = {}) => {
     const workspace = resolveWorkspace(input.workspace);
     const requestId = typeof input.requestId === "string" ? input.requestId.slice(0, 200) : undefined;
-    const result = await managedPaperCompiler(workspace, input.path, (stage, log) => {
-      if (!event.sender.isDestroyed()) event.sender.send("paper:compile-progress", { workspace, requestId, path: input.path, stage, log });
-    });
-    if (!result.ok || !result.pdf_path) return result;
-    const token = createPreviewToken(event.sender.id, workspace);
-    const encodedPath = result.pdf_path.split("/").map(encodeURIComponent).join("/");
-    return { ...result, preview_url: `archimedes-file://${token}/${encodedPath}?v=${Date.now()}` };
+    const senderId = event.sender.id;
+    const jobs = latexCompiles.get(senderId) || new Map();
+    latexCompiles.set(senderId, jobs);
+    const key = requestId || Symbol();
+    const abort = new AbortController();
+    jobs.get(key)?.abort();
+    jobs.set(key, abort);
+    const onProgress = (stage, log) => {
+      if (!abort.signal.aborted && !event.sender.isDestroyed()) event.sender.send("paper:compile-progress", { workspace, requestId, path: input.path, stage, log });
+    };
+    try {
+      const result = input.engine === "local"
+        ? await latexWorkspace.compileLatexDocument(workspace, input.path, { localOnly: true, signal: abort.signal, onOutput: log => onProgress("Compiling paper", log) })
+        : await managedPaperCompiler(workspace, input.path, onProgress, abort.signal);
+      if (!result.ok || !result.pdf_path) {
+        if (result.cancelled || input.engine === "local") return result;
+        const localCompiler = latexWorkspace.findLocalLatexCompiler();
+        return localCompiler ? { ...result, local_compiler: path.basename(localCompiler) } : result;
+      }
+      const token = createPreviewToken(senderId, workspace);
+      const encodedPath = result.pdf_path.split("/").map(encodeURIComponent).join("/");
+      return { ...result, preview_url: `archimedes-file://${token}/${encodedPath}?v=${Date.now()}` };
+    } catch (error) {
+      if (!abort.signal.aborted) throw error;
+      return { ok: false, cancelled: true, timed_out: false, engine: "", source_path: input.path, pdf_path: "", duration_ms: 0, diagnostics: [], log: "LaTeX compilation cancelled." };
+    } finally {
+      if (jobs.get(key) === abort) jobs.delete(key);
+      if (jobs.size === 0 && latexCompiles.get(senderId) === jobs) latexCompiles.delete(senderId);
+    }
+  });
+  ipcMain.handle("paper:cancel-compile", (event, requestId) => {
+    const job = typeof requestId === "string" ? latexCompiles.get(event.sender.id)?.get(requestId.slice(0, 200)) : undefined;
+    job?.abort();
+    return Boolean(job);
   });
 
   ipcMain.handle("research-thread:get", (_event, input = {}) => {
@@ -2689,6 +2719,8 @@ app.on("activate", () => {
 });
 
 app.on("will-quit", () => {
+  for (const jobs of latexCompiles.values()) for (const job of jobs.values()) job.abort();
+  latexCompiles.clear();
   closeAllNativeClients();
   closeAllTerminals();
   experimentRunner.shutdownExperimentRuns();

@@ -67,7 +67,8 @@ contextBridge.exposeInMainWorld("researchDesk", {
   createLatexFile: (workspace, path) => ipcRenderer.invoke("paper:create-file", { workspace, path }),
   createLatexDirectory: (workspace, path) => ipcRenderer.invoke("paper:create-directory", { workspace, path }),
   importLatexFolder: (workspace) => ipcRenderer.invoke("paper:import-folder", { workspace }),
-  compileLatexDocument: (workspace, path, requestId) => ipcRenderer.invoke("paper:compile", { workspace, path, requestId }),
+  compileLatexDocument: (workspace, path, requestId, engine) => ipcRenderer.invoke("paper:compile", { workspace, path, requestId, engine }),
+  cancelLatexCompile: (requestId) => ipcRenderer.invoke("paper:cancel-compile", requestId),
   readManuscriptSnapshot: (workspace, manifestPath) => ipcRenderer.invoke("paper:build-snapshot", { workspace, manifestPath }),
   onLatexCompileProgress: (callback) => {
     const listener = (_event, payload) => callback(payload);

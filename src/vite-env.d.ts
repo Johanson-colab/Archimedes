@@ -110,7 +110,8 @@ interface ResearchDeskBridge {
     createLatexFile: (workspace: string, path: string) => Promise<WorkspaceFilePreview>;
     createLatexDirectory: (workspace: string, path: string) => Promise<LatexDirectoryResult>;
     importLatexFolder: (workspace: string) => Promise<LatexImportResult>;
-    compileLatexDocument: (workspace: string, path: string, requestId?: string) => Promise<LatexCompileResult>;
+    compileLatexDocument: (workspace: string, path: string, requestId?: string, engine?: "local") => Promise<LatexCompileResult>;
+    cancelLatexCompile?: (requestId: string) => Promise<boolean>;
     readManuscriptSnapshot?: (workspace: string, manifestPath: string) => Promise<import("./manuscript-snapshot").ManuscriptBuildVerification>;
     onLatexCompileProgress?: (callback: (input: { workspace?: string; requestId?: string; path: string; stage: string; log?: string }) => void) => () => void;
     getResearchTurnImage: (threadId: string, turnId: string, position: number, workspace?: string) => Promise<string | null>;
@@ -845,6 +846,8 @@ interface LatexCompileDiagnostic {
 }
 
 interface LatexCompileResult {
+  cancelled?: boolean;
+  local_compiler?: string;
   source_snapshot?: import("./manuscript-snapshot").ManuscriptBuildSnapshot;
   timed_out?: boolean;
   ok: boolean;
