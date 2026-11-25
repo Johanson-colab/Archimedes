@@ -8,7 +8,11 @@ const store = require("./store.cjs");
 const fixture = require("./test-support/bibliography-fixture.cjs");
 let dom, React, createRoot, scope;
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
-const t = (key) => key;
+let language = "en";
+const t = (key, values) => {
+  const template = language === "zh" ? scope.library[key] ?? key : key;
+  return values ? template.replace(/\{(\w+)\}/g, (placeholder, name) => values[name] ?? placeholder) : template;
+};
 before(async () => {
   dom = new JSDOM('<div id="root"></div>', { url: "http://localhost", pretendToBeVisual: true });
   for (const key of ["window", "document", "HTMLElement", "Node"]) global[key] = dom.window[key];
@@ -36,6 +40,7 @@ before(async () => {
     Object.assign(scope, result);
   }
   await load("bibliography.ts", ["parseBibliography", "bibliographyTitleKey", "indexBibliographyBatch", "exportBibliography", "matchBibliographyPaper", "hasConflictingBibliographyIdentifiers", "metadataDifferences", "paperWithLearnedIdentifiers", "citationKeyIdentity"]);
+  await load("i18n/translations/library.ts", ["library"]);
   await load("Tabs.tsx", ["Tabs", "Tab", "FilterGroup", "FilterButton"]);
   scope.conferenceCatalog = require("../shared/conferences.json");
   scope.ReactMarkdown = ({ children }) => React.createElement("span", null, children); scope.remarkMath = () => {}; scope.rehypeKatex = () => {};
@@ -80,6 +85,76 @@ test("a redundant title-only row cannot hide a later paper with a distinct DOI",
   assert.deepEqual([...scope.indexBibliographyBatch(batch.entries).repeatedRows], [1, 3]);
 });
 
+test("the preview points to the same source locations in English and Chinese, and imports valid entries", async () => {
+  const source = fixture.warningBibtex;
+  const first = source.indexOf("@string");
+  const second = source.lastIndexOf("@string");
+  const invalid = source.indexOf("@article invalid");
+  const english = [`Skipped @string directive at ${first}`, `Skipped @string directive at ${second}`, `Invalid entry at ${invalid}`, "needsTitle: Missing title"];
+  const chinese = [`已跳过位置 ${first} 的 @string 指令`, `已跳过位置 ${second} 的 @string 指令`, `位置 ${invalid} 的 BibTeX 条目格式无效`, "needsTitle：缺少标题"];
+  assert.deepEqual(scope.parseBibliography(source).warnings, english);
+  const data = database("Localized BibTeX warnings");
+  let unmount;
+  try {
+    const library = data.db.listLibraries(data.project.id)[0];
+    for (const [locale, label, warnings] of [["en", "BibTeX source", english], ["zh", "BibTeX 原文", chinese]]) {
+      language = locale;
+      unmount = await mount(scope.BibliographyDialog, { bridge: data.bridge, library, onClose() {}, onChanged: async () => {} });
+      await input(document.querySelector(`[aria-label="${label}"]`), source);
+      assert.deepEqual([...document.querySelectorAll('[role="alert"]')].map((notice) => notice.textContent), warnings);
+      if (locale === "zh") await click("导入所选文献");
+      await unmount();
+      unmount = undefined;
+    }
+    assert.deepEqual(data.db.listPapers(library.id).map((paper) => paper.citekey), ["handoff2026"]);
+  } finally {
+    if (unmount) await unmount();
+    language = "en";
+    data.close();
+  }
+});
+
+test("article and proceedings previews identify fields and author groups that the actual export omits", async () => {
+  const proceedings = fixture.lossyBibtex.replace("@article", "@inproceedings");
+  const loss = { locatorFields: ["volume", "number", "pages"], literalAuthors: ["Institute for Calibration"] };
+  for (const source of [fixture.lossyBibtex, proceedings, fixture.lossyBibtex.replace("@article", "@book")]) {
+    const [reference] = scope.parseBibliography(source).entries;
+    assert.deepEqual(reference.exportLoss, loss);
+    const exported = scope.exportBibliography([{ ...reference.paper, id: "reference", citekey: reference.citekey, entry_type: reference.entryType }]);
+    assert.doesNotMatch(exported, /\b(volume|number|pages)\s*=/);
+    assert.match(exported, /author = \{Institute for Calibration\}/);
+  }
+  const [ordinary] = scope.parseBibliography('@article{ordinary, title={A separate reference}, author={{Jane} Doe and {Institute for Light and Optics}}}').entries;
+  assert.equal(ordinary.exportLoss, undefined, "partial name braces and preserved groups do not warn");
+  const data = database("BibTeX export loss");
+  let unmount;
+  try {
+    const library = data.db.listLibraries(data.project.id)[0];
+    for (const [locale, label, warnings] of [
+      ["en", "BibTeX source", ["BibTeX export omits volume, number, pages from this reference.", "BibTeX export drops the grouping around Institute for Calibration. Citation labels and sorting may change."]],
+      ["zh", "BibTeX 原文", ["导出 BibTeX 时，此条目的 volume, number, pages 字段会被省略。", "导出 BibTeX 会省略作者名称 Institute for Calibration 外层的分组括号，可能改变引用标签和排序。"]],
+    ]) {
+      language = locale;
+      unmount = await mount(scope.BibliographyDialog, { bridge: data.bridge, library, onClose() {}, onChanged: async () => {} });
+      await input(document.querySelector(`[aria-label="${label}"]`), proceedings);
+      assert.deepEqual([...document.querySelectorAll(".external-paper [role=alert]")].map((notice) => notice.textContent), warnings);
+      if (locale === "zh") await click("导入所选文献");
+      await unmount();
+      unmount = undefined;
+    }
+    const [saved] = data.db.listPapers(library.id);
+    assert.equal(saved.citekey, "opticalCalibration");
+    const exported = scope.exportBibliography([saved]);
+    assert.match(exported, /^@inproceedings/);
+    assert.doesNotMatch(exported, /\b(volume|number|pages)\s*=/);
+    assert.match(exported, /author = \{Institute for Calibration\}/);
+  } finally {
+    if (unmount) await unmount();
+    language = "en";
+    data.close();
+  }
+});
+
 test("a local title-only candidate cannot override a conflict-free global strong identifier", () => {
   const data = database("Strong before title");
   try {
@@ -106,6 +181,23 @@ test("BibTeX supports nested values, grouped authors, stable keys and explicit u
   assert.ok(scope.parseBibliography('@article{bad,title={Unclosed}').warnings.length);
   assert.equal(scope.parseBibliography('% @article{ignored,title={Do not import}}\n' + source).entries.length, 1);
   assert.equal(scope.parseBibliography('@article{bad#key,title={Invalid key}}').entries.length, 0);
+});
+
+
+test("BibTeX decodes TeX accents and exports caret and tilde as literal characters", () => {
+  const source = String.raw`@article{latin2026, title={Garc{\'i}a: Art~of A^2 at \textasciitilde{}/data}, author={Jos{\'e} Garc{\'{\i}}a and Bj{\o}rn M{\"u}ller and Donald~Knuth}, journal={L{\oe}we \& S{\v{c}}uka}, year=2026}`;
+  const parsed = scope.parseBibliography(source);
+  assert.deepEqual(parsed.warnings, []);
+  const [{ paper, citekey, entryType }] = parsed.entries;
+  assert.equal(paper.title, "García: Art\u00a0of A^2 at ~/data");
+  assert.deepEqual(paper.authors, ["José García", "Bjørn Müller", "Donald\u00a0Knuth"]);
+  assert.equal(paper.venue, "Lœwe & Sčuka");
+
+  const exported = scope.exportBibliography([{ ...paper, id: "characters", citekey, entry_type: entryType }]);
+  assert.match(exported, /García: Art~of A\\textasciicircum\{\}2 at \\textasciitilde\{\}\/data/);
+  assert.match(exported, /author = \{José García and Bjørn Müller and Donald~Knuth\}/);
+  assert.deepEqual(scope.parseBibliography(exported), parsed);
+  assert.equal(scope.parseBibliography(String.raw`@article{spaces,title={Note \textasciicircum{} and \textasciitilde{} marks}}`).entries[0].paper.title, "Note ^ and ~ marks");
 });
 
 
@@ -617,4 +709,57 @@ test("retained title keys and truncated authors agree in the preview and the sav
     assert.deepEqual([old, group].map(paper => saved.find(row => row.id === paper.id)?.citekey), ["old", "group"]);
     assert.ok(saved.some(row => row.citekey === "other" && row.id !== group.id));
   } finally { if (unmount) await unmount(); data.close(); }
+});
+
+test("URL fields retain literal URI characters instead of text-mode TeX commands", () => {
+  const url = "https://example.org/~alice/a_b?x=%2F&y=2#item";
+  const paper = { ...fixture.paper, url, id: "uri-1", citekey: "url", entry_type: "article" };
+  const exported = scope.exportBibliography([paper]);
+  assert.ok(exported.includes(`url = {${url}}`), exported);
+  assert.equal(scope.parseBibliography(exported).entries[0].paper.url, url);
+});
+
+test("a repeat import finds a previously stored TeX-accented title and offers to repair it", async () => {
+  const data = database("Legacy accents"); let unmount;
+  try {
+    const library = data.db.createLibrary({ projectId: data.project.id, name: "References" });
+    const source = String.raw`@article{legacy,title={Garc\'ia}}`;
+    const { paper } = scope.parseBibliography(source).entries[0];
+    const old = data.db.addPaper(library.id, { ...paper, title: String.raw`Garc\'ia` });
+    data.db.setPaperBibliography(old.id, { citekey: "legacy", entryType: "article" });
+    const stored = data.db.listPapers(library.id);
+    const otherKey = scope.parseBibliography(source.replace("{legacy,", "{different,")).entries[0].paper;
+    assert.equal(scope.matchBibliographyPaper(otherKey, stored), undefined);
+    unmount = await mount(scope.BibliographyDialog, { bridge: data.bridge, library, onClose() {}, onChanged: async () => {} });
+    await input(document.querySelector('[aria-label="BibTeX source"]'), source);
+    const repair = [...document.querySelectorAll("label")].find(label => label.textContent.includes("title"));
+    assert.ok(repair, document.body.textContent);
+    await React.act(async () => { repair.querySelector("input").click(); await tick(); });
+    await click("Import selected references");
+    assert.deepEqual(data.db.listPapers(library.id).map(row => [row.id, row.title, row.citekey]), [[old.id, "García", "legacy"]]);
+  } finally {
+    if (unmount) await unmount();
+    data.close();
+  }
+});
+
+test("a literal TeX command remains distinct from its Unicode character in both directions", () => {
+  const [literal, unicode] = scope.parseBibliography(String.raw`@article{code,title={Result \textbackslash{}AA}}
+@article{ring,title={Result Å}}`).entries.map(({ paper }) => paper);
+  assert.equal(literal.title, String.raw`Result \AA`);
+  assert.equal(unicode.title, "Result Å");
+  assert.equal(scope.matchBibliographyPaper(literal, [{ ...unicode, id: "unicode", citekey: "ring" }]), undefined);
+  assert.equal(scope.matchBibliographyPaper(unicode, [{ ...literal, id: "literal", citekey: "code" }]), undefined);
+});
+
+test("DOIs with literal BibTeX delimiters keep their strong identity across export", () => {
+  for (const suffix of ["a{b}", String.raw`a\b`, "a%7bb%7d", "a~b"]) {
+    const doi = "10.5555/" + suffix;
+    const paper = { ...fixture.paper, doi, arxiv_id: "", s2_id: "", id: "doi-literal", citekey: "exact", entry_type: "article" };
+    const exported = scope.exportBibliography([paper]);
+    if (suffix.includes("%")) assert.ok(exported.includes(String.raw`doi = {10.5555/a\%7bb\%7d}`));
+    const imported = scope.parseBibliography(exported).entries[0].paper;
+    assert.equal(imported.doi, doi);
+    assert.equal(scope.matchBibliographyPaper(imported, [paper], { strongOnly: true }), paper);
+  }
 });

@@ -22,7 +22,7 @@ export default function BibliographyDialog({ bridge, library, onClose, onChanged
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
   const [identity, setIdentity] = useState<{ source: string; keys: string[] }>({ source: "", keys: [] });
   const latestSource = useRef("");
-  const parsed = useMemo(() => parseBibliography(input), [input]);
+  const parsed = useMemo(() => parseBibliography(input, t), [input, t]);
   const batch = useMemo(() => indexBibliographyBatch(parsed.entries), [parsed.entries]);
   const preview = useMemo(() => {
     const pendingKeys = new Map<string, string | number>();
@@ -140,6 +140,8 @@ export default function BibliographyDialog({ bridge, library, onClose, onChanged
     {preview.map((row, index) => <article className="external-paper" key={index}>
       <div><label><input type="checkbox" checked={selected.has(index) && !row.blocked} disabled={busy || done.has(index) || row.blocked} onChange={(event) => setSelected((current) => { const next = new Set(current); if (event.target.checked) next.add(index); else next.delete(index); return next; })} />{row.entry.citekey}: {row.entry.paper.title}</label>
         <small>{t(row.identifierConflict ? "Conflicting DOI or arXiv IDs: edit the source before importing" : row.keyConflict ? "Citation key conflict: edit the source before importing" : row.duplicate ? "Duplicate in this import" : row.existing ? Object.keys(row.differences).length ? "Existing paper with metadata differences" : "Existing paper" : "New paper")}{done.has(index) ? ` · ${t("Imported")}` : ""}</small>
+        {!row.blocked && row.entry.exportLoss?.locatorFields.length ? <InlineNotice tone="warning">{t("BibTeX export omits {fields} from this reference.", { fields: row.entry.exportLoss.locatorFields.join(", ") })}</InlineNotice> : null}
+        {!row.blocked && row.entry.exportLoss?.literalAuthors.length ? <InlineNotice tone="warning">{t("BibTeX export drops the grouping around {authors}. Citation labels and sorting may change.", { authors: row.entry.exportLoss.literalAuthors.join(", ") })}</InlineNotice> : null}
         {row.existing?.citekey && row.existing.citekey !== row.entry.citekey && <label><input type="checkbox" disabled={busy || done.has(index) || row.duplicate || row.identifierConflict} checked={(repairs[index] || []).includes("citekey")} onChange={(event) => setRepairs((current) => ({ ...current, [index]: event.target.checked ? [...(current[index] || []), "citekey"] : (current[index] || []).filter((name) => name !== "citekey") }))} />{t("Replace citation key explicitly")}: {row.existing.citekey} → {row.entry.citekey}</label>}
         {row.existing && Object.entries(row.differences).map(([field, value]) => <label key={field}><input type="checkbox" disabled={busy || done.has(index) || row.blocked} checked={(repairs[index] || []).includes(field)} onChange={(event) => setRepairs((current) => ({ ...current, [index]: event.target.checked ? [...(current[index] || []), field] : (current[index] || []).filter((name) => name !== field) }))} />{t("Repair selected metadata")}: {field}: {JSON.stringify(row.existing![field as keyof MetadataPatch])} → {JSON.stringify(value)}</label>)}
       </div>
