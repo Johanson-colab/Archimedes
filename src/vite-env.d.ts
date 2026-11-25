@@ -1816,6 +1816,7 @@ interface ModelConfigInput {
 }
 
 interface ModelCatalogInput {
+  purpose?: "work";
   provider: ModelProviderId;
   baseUrl: string;
   apiKey?: string;
