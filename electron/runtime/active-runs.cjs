@@ -28,13 +28,15 @@ function listActiveRuns(domain) {
 }
 
 function installQuitGuard({ app, dialog, hasWork, stopWork, timeoutMs = 2_000 }) {
-  let pending = false;
-  let confirmed = false;
+  let asking = false;
+  let allowQuit = false;
+  let cleaning = false;
+  let cleaned = false;
   app.on("before-quit", event => {
-    if (confirmed || !pending && !hasWork()) return;
+    if (allowQuit || cleaned || !asking && !hasWork()) return;
     event.preventDefault();
-    if (pending) return;
-    pending = true;
+    if (asking || cleaning) return;
+    asking = true;
     void (async () => {
       try {
         const { response } = await dialog.showMessageBox({
@@ -46,25 +48,32 @@ function installQuitGuard({ app, dialog, hasWork, stopWork, timeoutMs = 2_000 })
           cancelId: 0,
         });
         if (response !== 1) return;
-        let timeout;
-        try {
-          await Promise.race([
-            Promise.resolve().then(stopWork),
-            new Promise(resolve => { timeout = setTimeout(resolve, timeoutMs); }),
-          ]);
-        } catch (error) {
-          console.warn("Could not finish stopping active research:", error.message);
-        } finally {
-          clearTimeout(timeout);
-        }
-        confirmed = true;
+        allowQuit = true;
         app.quit();
       } catch (error) {
         console.warn("Could not confirm quitting:", error.message);
       } finally {
-        pending = false;
+        allowQuit = false;
+        asking = false;
       }
     })();
+  });
+
+  // The unsaved-editor guard can veto closing a window after before-quit.
+  app.on("will-quit", event => {
+    if (cleaned || !cleaning && !hasWork()) return;
+    event.preventDefault();
+    if (cleaning) return;
+    cleaning = true;
+    let timeout;
+    void Promise.race([
+      Promise.resolve().then(stopWork),
+      new Promise(resolve => { timeout = setTimeout(resolve, timeoutMs); }),
+    ]).catch(error => console.warn("Could not finish stopping active research:", error.message)).finally(() => {
+      clearTimeout(timeout);
+      cleaned = true;
+      app.quit();
+    });
   });
 }
 

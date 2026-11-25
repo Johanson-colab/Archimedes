@@ -51,11 +51,13 @@ test("run ownership distinguishes data directories, domains, and principals", ()
 
 test("native quit confirmation keeps work on cancel and exits once after confirmed cleanup", async () => {
   const app = new EventEmitter();
-  let dialogs = 0, stopped = 0, quit = 0, work = true, respond;
+  let dialogs = 0, stopped = 0, quit = 0, work = true, windowCanClose = false, respond;
   const beforeQuit = () => {
-    let prevented = false;
-    app.emit("before-quit", { preventDefault: () => { prevented = true; } });
-    if (!prevented) quit++;
+    const event = { defaultPrevented: false, preventDefault() { this.defaultPrevented = true; } };
+    app.emit("before-quit", event);
+    if (event.defaultPrevented || !windowCanClose) return;
+    app.emit("will-quit", event);
+    if (!event.defaultPrevented) quit++;
   };
   app.quit = beforeQuit;
   const dialog = { showMessageBox: ({ buttons }) => {
@@ -71,8 +73,13 @@ test("native quit confirmation keeps work on cancel and exits once after confirm
   assert.deepEqual({ stopped, quit, work }, { stopped: 0, quit: 0, work: true });
   beforeQuit(); beforeQuit();
   respond(1);
+  await pause(0);
+  assert.deepEqual({ stopped, quit, work }, { stopped: 0, quit: 0, work: true });
+  windowCanClose = true;
+  beforeQuit(); beforeQuit();
+  respond(1);
   await eventually(() => quit === 1, "quit did not finish");
-  assert.deepEqual({ dialogs, stopped, quit, work }, { dialogs: 2, stopped: 1, quit: 1, work: false });
+  assert.deepEqual({ dialogs, stopped, quit, work }, { dialogs: 3, stopped: 1, quit: 1, work: false });
 });
 
 for (const { name, ignoreTerm, stdio, shutdown, stopThenShutdown } of [
