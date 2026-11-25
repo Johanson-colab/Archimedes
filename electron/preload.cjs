@@ -69,6 +69,11 @@ contextBridge.exposeInMainWorld("researchDesk", {
   importLatexFolder: (workspace) => ipcRenderer.invoke("paper:import-folder", { workspace }),
   compileLatexDocument: (workspace, path, requestId) => ipcRenderer.invoke("paper:compile", { workspace, path, requestId }),
   readManuscriptSnapshot: (workspace, manifestPath) => ipcRenderer.invoke("paper:build-snapshot", { workspace, manifestPath }),
+  listManuscriptEvidenceOptions: (projectId) => ipcRenderer.invoke("paper:evidence-options", { projectId }),
+  getManuscriptEvidenceColumns: (projectId, analysisId) => ipcRenderer.invoke("paper:evidence-options", { projectId, analysisId }),
+  saveManuscriptEvidence: (input) => ipcRenderer.invoke("paper:evidence-save", input),
+  getManuscriptEvidence: (input) => ipcRenderer.invoke("paper:evidence-get", input),
+  listManuscriptEvidence: (input) => ipcRenderer.invoke("paper:evidence-list", input),
   onLatexCompileProgress: (callback) => {
     const listener = (_event, payload) => callback(payload);
     ipcRenderer.on("paper:compile-progress", listener);

@@ -1507,6 +1507,18 @@ function App() {
   const [fileLoading, setFileLoading] = useState(false);
   const [fileError, setFileError] = useState("");
   const [paperOpenRequest, setPaperOpenRequest] = useState<PaperOpenRequest>(null);
+  const [manuscriptRun, setManuscriptRun] = useState<ManuscriptEvidenceRunRequest | null>(null);
+  useEffect(() => {
+    function useRun(event: Event) {
+      const request = (event as CustomEvent<ManuscriptEvidenceRunRequest>).detail;
+      if (request.projectId !== activeProjectId) return;
+      setManuscriptRun(request);
+      setMainSection("writing");
+      setResearchPanelOpen(false);
+    }
+    window.addEventListener("archimedes:manuscript-run", useRun);
+    return () => window.removeEventListener("archimedes:manuscript-run", useRun);
+  }, [activeProjectId]);
   const [changeSets, setChangeSets] = useState<WorkspaceChangeSet[]>([]);
   const [papers, setPapers] = useState(initialPapers);
   const [modal, setModal] = useState<Modal>(null);
@@ -3519,7 +3531,7 @@ function App() {
       await submitPrompt(prompt, "free-chat", reasoningEffort, contextLength, [], "paper-to-slides", backend, true, mineruToken || undefined);
     }} />,
 
-    writing: <PaperWritingView bridge={desktopBridge} workspace={executionWorkspace} projectId={activeProjectId} threadId={activeThreadId} openRequest={paperOpenRequest} onRefresh={refreshWorkspaceFiles} onAskAI={askAIAboutPaper} active={mainSection === "writing"} />,
+    writing: <PaperWritingView bridge={desktopBridge} workspace={executionWorkspace} projectId={activeProjectId} threadId={activeThreadId} openRequest={paperOpenRequest} evidenceRunId={manuscriptRun?.projectId === activeProjectId ? manuscriptRun?.runId : undefined} onRefresh={refreshWorkspaceFiles} onAskAI={askAIAboutPaper} active={mainSection === "writing"} />,
   };
   for (const entry of pluginEntries) {
     sidebarModuleContent[entry.id] = <PluginModuleView key={entry.id} entry={entry} />;

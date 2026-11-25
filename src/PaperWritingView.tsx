@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { AlertTriangle, ArrowDown, ArrowUp, Check, ChevronDown, ChevronRight, CircleDot, Cloud, FileCode2, FileImage, FilePlus2, FileText, Folder, FolderOpen, FolderPlus, FolderUp, LoaderCircle, MessageCircle, PanelLeftClose, PanelLeftOpen, Play, RefreshCw, Search, X } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowUp, Check, ChevronDown, ChevronRight, CircleDot, Cloud, FileCode2, FileImage, FilePlus2, FileText, Folder, FolderOpen, FolderPlus, FolderUp, Link2, LoaderCircle, MessageCircle, PanelLeftClose, PanelLeftOpen, Play, RefreshCw, Search, X } from "lucide-react";
 import { useUISettings } from "./i18n";
 import SharedNoteEditor from "./SharedNoteEditor";
 import PaperTemplateLibrary, { paperTemplates } from "./PaperTemplateLibrary";
@@ -129,10 +129,188 @@ function HighlightLine({ text, problem, marks, activeMatch }: { text: string; pr
   }) : " "}</span>;
 }
 
+type EvidenceSelection = ManuscriptEvidenceAnchor & { sourcePath: string; text: string };
+
+function evidenceError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.replace(/^Error invoking remote method '[^']+':\s*(?:Error:\s*)?/, "");
+}
+
+function resultValue(value: number, unit: string) {
+  const number = new Intl.NumberFormat(undefined, { maximumFractionDigits: 8 }).format(value);
+  return unit === "%" ? `${number}%` : [number, unit].filter(Boolean).join(" ");
+}
+
+function ManuscriptResultsDialog({ bridge, scope, selection, manifestPath, initialRun, dirty, onClose, onOpenSource }: {
+  bridge: ResearchDeskBridge;
+  scope: ManuscriptEvidenceScope;
+  selection: EvidenceSelection | null;
+  manifestPath: string | undefined;
+  initialRun?: string;
+  dirty: boolean;
+  onClose: () => void;
+  onOpenSource: (source: ManuscriptEvidenceSource) => void;
+}) {
+  const { t } = useUISettings();
+  const { workspace, projectId, mainPath } = scope;
+  const [entries, setEntries] = useState<ManuscriptEvidenceSummary[] | null>(null);
+  const [options, setOptions] = useState<Awaited<ReturnType<NonNullable<ResearchDeskBridge["listManuscriptEvidenceOptions"]>>> | null>(null);
+  const [columns, setColumns] = useState<Awaited<ReturnType<NonNullable<ResearchDeskBridge["getManuscriptEvidenceColumns"]>>> | null>(null);
+  const [runId, setRunId] = useState(initialRun || "");
+  const [analysisId, setAnalysisId] = useState("");
+  const [baseline, setBaseline] = useState("");
+  const [kind, setKind] = useState<ManuscriptEvidenceKind>("target");
+  const [recordId, setRecordId] = useState("");
+  const [details, setDetails] = useState<ManuscriptEvidenceDetails | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const titleId = useId();
+
+  useEffect(() => {
+    let live = true;
+    void bridge.listManuscriptEvidence?.({ workspace, projectId, mainPath }).then((next) => {
+      if (!live) return;
+      setEntries(next);
+      const entry = selection && next.find(({ manuscript }) => manuscript.sourcePath === selection.sourcePath &&
+        manuscript.line === selection.line && manuscript.column === selection.column && manuscript.text === selection.text);
+      if (entry) setRecordId(entry.id);
+    }).catch((reason: unknown) => { if (live) setError(evidenceError(reason)); });
+    return () => { live = false; };
+  }, [bridge, workspace, projectId, mainPath, selection]);
+
+  useEffect(() => {
+    if (!selection || !manifestPath || dirty) return;
+    let live = true;
+    void bridge.listManuscriptEvidenceOptions?.(projectId).then((next) => {
+      if (live) setOptions(next);
+    }).catch((reason: unknown) => { if (live) setError(evidenceError(reason)); });
+    return () => { live = false; };
+  }, [bridge, projectId, manifestPath, selection, dirty]);
+
+  useEffect(() => {
+    if (!analysisId) return;
+    let live = true;
+    void bridge.getManuscriptEvidenceColumns?.(projectId, analysisId).then((next) => {
+      if (live) setColumns(next);
+    }).catch((reason: unknown) => { if (live) setError(evidenceError(reason)); });
+    return () => { live = false; };
+  }, [bridge, projectId, analysisId]);
+
+  useEffect(() => {
+    if (!recordId) return;
+    let live = true;
+    void bridge.getManuscriptEvidence?.({ workspace, projectId, mainPath, id: recordId }).then((next) => {
+      if (live) setDetails(next);
+    }).catch((reason: unknown) => { if (live) setError(evidenceError(reason)); });
+    return () => { live = false; };
+  }, [bridge, workspace, projectId, mainPath, recordId]);
+
+  async function save(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (saving || !selection || !manifestPath || !bridge.saveManuscriptEvidence) return;
+    setSaving(true);
+    setError("");
+    try {
+      const { sourcePath, line, column, length } = selection;
+      const saved = await bridge.saveManuscriptEvidence({
+        ...scope, sourcePath, manifestPath, anchor: { line, column, length }, runId, analysisId,
+        baselineColumn: baseline ? Number(baseline) : null, kind,
+      });
+      setEntries(current => [{ id: saved.id, manuscript: saved.manuscript, value: saved.result.value, unit: saved.result.resultUnit, createdAt: new Date().toISOString() }, ...(current || [])]);
+      setDetails(null);
+      setRecordId(saved.id);
+    } catch (reason) {
+      setError(evidenceError(reason));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const display = (value: number | null, unit = "") => value === null ? "—" : resultValue(value, t(unit));
+  const detail = details?.id === recordId ? details : null;
+  return <Dialog open onClose={onClose} size="lg" ariaLabelledBy={titleId}>
+    <header className="app-dialog-header">
+      <h2 id={titleId}>{t("Manuscript results")}</h2>
+      <button type="button" className="app-dialog-close" onClick={onClose} aria-label={t("Close manuscript results")}><X size={16} /></button>
+    </header>
+    <div className="app-dialog-body paper-project-body">
+      {error && <p role="alert">{t(error)}</p>}
+      {entries === null && !error && <p role="status">{t("Loading manuscript results…")}</p>}
+      {entries?.length ? <div className="settings-group" aria-label={t("Linked results")}>{entries.map(entry =>
+        <button key={entry.id} type="button" className="secondary-button" aria-pressed={recordId === entry.id} onClick={() => { setError(""); setRecordId(entry.id); }}>
+          {entry.manuscript.sourcePath}:{entry.manuscript.line}:{entry.manuscript.column} · {display(entry.value, entry.unit)}
+        </button>
+      )}</div> : entries && <p>{t("No values are linked in this manuscript.")}</p>}
+      {detail && <section aria-label={t("Result evidence")}>
+        <h3>{t("Result evidence")} · {display(detail.result.value, detail.result.resultUnit)}</h3>
+        <p><b>{t("Manuscript value")}</b> <code>{detail.manuscript.text}</code> · <code>{detail.manuscript.sourcePath}:{detail.manuscript.line}:{detail.manuscript.column}</code></p>
+        {(dirty || detail.status.build === "stale") && <p role="status">{t("Manuscript sources changed since this result was linked.")}</p>}
+        {detail.status.build === "missing" && <p role="status">{t("The saved manuscript build is missing.")}</p>}
+        {detail.status.run === "missing" && <p role="status">{t("The original experiment run is missing.")}</p>}
+        {detail.status.log === "missing" && <p role="status">{t("The experiment run log is missing.")}</p>}
+        {detail.status.data === "missing" && <p role="status">{t("The saved analysis input is unavailable.")}</p>}
+        {detail.status.data === "changed" && <p role="status">{t("The saved analysis input has changed.")}</p>}
+        <p><b>{t("Target mean")}</b> · {detail.result.target.name} · {display(detail.result.target.mean, detail.result.unit)} (n = {detail.result.target.count})</p>
+        {detail.result.baseline && <>
+          <p><b>{t("Baseline mean")}</b> · {detail.result.baseline.name} · {display(detail.result.baseline.mean, detail.result.unit)} (n = {detail.result.baseline.count})</p>
+          <p><b>{t("Difference of means")}</b> · {display(detail.result.difference, /^(?:%|percent|percentage)$/i.test(detail.result.unit) ? "percentage points" : detail.result.unit)}</p>
+        </>}
+        {detail.rows.length > 0 && <details><summary>{t("Raw values by seed or row")}</summary>
+          <pre>{[[
+            detail.result.seedColumn || t("Row"), detail.result.target.name, ...(detail.result.baseline ? [detail.result.baseline.name] : []),
+          ], ...detail.rows.map(row => [row.seed, row.target ?? "", ...(detail.result.baseline ? [row.baseline ?? ""] : [])])].map(row => row.join("\t")).join("\n")}</pre>
+        </details>}
+        <details><summary>{t("Run and build provenance")}</summary>
+          <p><b>{t("Experiment run")}</b> <code>{detail.run.id}</code> · <code>{detail.run.command}</code></p>
+          {detail.run.commit && <p><b>{t("Git commit")}</b> <code>{detail.run.commit}</code></p>}
+          <p><b>{t("Saved analysis")}</b> {detail.result.sourceName} · <code>{detail.analysis.id}</code></p>
+          <p><b>{t("Input SHA-256")}</b> <code>{detail.result.inputSha256}</code></p>
+          <p><b>{t("Manuscript build")}</b> <code>{detail.manuscript.buildId}</code></p>
+          <p><b>{t("Source version")}</b> <code>{detail.manuscript.sourceVersion}</code></p>
+        </details>
+        {detail.log !== null && <details><summary>{t("Run log")}</summary><pre>{detail.log}</pre></details>}
+        {!dirty && detail.status.build === "ready" && <button type="button" className="secondary-button" onClick={() => onOpenSource(detail.manuscript)}>{t("Show source number")}</button>}
+      </section>}
+      <details open={Boolean(selection && !detail)} key={recordId}>
+        <summary>{t("Link selected number")}</summary>
+        {!selection ? <p>{t("Select one number in the manuscript source.")}</p> :
+          dirty || !manifestPath ? <p>{t("Compile the current manuscript before linking a result.")}</p> :
+          options && (!options.analyses.length || !options.runs.length) ? <p>{t("Save an analysis and complete an experiment run in this project first.")}</p> :
+          options && <form onSubmit={(event) => void save(event)}>
+            <p><code>{selection.text}</code> · <code>{selection.sourcePath}:{selection.line}:{selection.column}</code></p>
+            <label className="paper-main-document">{t("Experiment run")}
+              <select value={runId} onChange={event => setRunId(event.target.value)} required><option value="">{t("Choose an experiment run")}</option>
+                {options.runs.map(run => <option key={run.id} value={run.id}>{run.command} · {new Date(run.startedAt).toLocaleString()}</option>)}
+              </select>
+            </label>
+            <label className="paper-main-document">{t("Saved analysis")}
+              <select value={analysisId} onChange={event => { setAnalysisId(event.target.value); setColumns(null); setBaseline(""); setKind("target"); setError(""); }} required><option value="">{t("Choose a saved analysis")}</option>
+                {options.analyses.map(analysis => <option key={analysis.id} value={analysis.id}>{analysis.name} · {new Date(analysis.createdAt).toLocaleString()}</option>)}
+              </select>
+            </label>
+            {columns && <label className="paper-main-document">{t("Baseline column")}
+              <select value={baseline} onChange={event => { setBaseline(event.target.value); setKind(event.target.value ? "difference" : "target"); }}>
+                <option value="">{t("No baseline")}</option>
+                {columns.columns.map(column => <option key={column.index} value={column.index}>{column.name}</option>)}
+              </select>
+            </label>}
+            {columns && <label className="paper-main-document">{t("Result to link")}
+              <select value={kind} onChange={event => setKind(event.target.value as ManuscriptEvidenceKind)}>
+                <option value="target">{t("Target mean")} · {columns.column}</option>
+                {baseline && <><option value="baseline">{t("Baseline mean")}</option><option value="difference">{t("Difference of means")}</option></>}
+              </select>
+            </label>}
+            <button className="primary-button" type="submit" disabled={!runId || !analysisId || !columns || saving}>{t("Link selected number")}</button>
+          </form>}
+      </details>
+    </div>
+  </Dialog>;
+}
+
 export type PaperOpenRequest = { path: string; token: number } | null;
 
-export default function PaperWritingView({ bridge, workspace, projectId = null, threadId = null, openRequest, onRefresh, onAskAI, active = true }: {
-  bridge: ResearchDeskBridge; workspace: string; projectId?: string | null; threadId?: string | null; openRequest: PaperOpenRequest; onRefresh: () => Promise<void> | void; onAskAI: (path: string) => void; active?: boolean;
+export default function PaperWritingView({ bridge, workspace, projectId = null, threadId = null, openRequest, evidenceRunId, onRefresh, onAskAI, active = true }: {
+  bridge: ResearchDeskBridge; workspace: string; projectId?: string | null; threadId?: string | null; openRequest: PaperOpenRequest; evidenceRunId?: string; onRefresh: () => Promise<void> | void; onAskAI: (path: string) => void; active?: boolean;
 }) {
   const { t } = useUISettings();
   const scopesRef = useRef(new Map<string, WritingScope>());
@@ -207,6 +385,19 @@ export default function PaperWritingView({ bridge, workspace, projectId = null, 
   const createOpen = Boolean(createKind) && active;
   const [createName, setCreateName] = scoped("createName");
   const editorRef = useRef<HTMLTextAreaElement | null>(null);
+  const [evidenceDialog, setEvidenceDialog] = useState<{ key: string; selection: EvidenceSelection | null } | null>(null);
+  const manuscriptDirty = [...owner.documents.values()].some(document => document.draft !== document.savedDraft);
+  const resultManifest = compileResult?.source_snapshot?.status === "current" ? compileResult.source_snapshot.manifest_path : undefined;
+  const evidenceScopeKey = JSON.stringify([scopeKey, mainPath]);
+  function openManuscriptResults() {
+    const editor = editorRef.current;
+    const start = editor?.selectionStart ?? 0;
+    const text = draft.slice(start, editor?.selectionEnd ?? 0);
+    const before = draft.slice(0, start);
+    setEvidenceDialog({ key: evidenceScopeKey, selection: file && /^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i.test(text.trim())
+      ? { sourcePath: file.path, line: before.split("\n").length, column: start - before.lastIndexOf("\n"), length: text.length, text }
+      : null });
+  }
   const lineNumbersRef = useRef<HTMLDivElement | null>(null);
   const highlightRef = useRef<HTMLPreElement | null>(null);
   const workspaceRef = useRef<HTMLDivElement | null>(null);
@@ -550,11 +741,11 @@ export default function PaperWritingView({ bridge, workspace, projectId = null, 
     if (lineNumbersRef.current) lineNumbersRef.current.scrollTop = element.scrollTop;
     if (highlightRef.current) { highlightRef.current.scrollTop = element.scrollTop; highlightRef.current.scrollLeft = element.scrollLeft; }
   }
-  function revealSearchMatch(start: number, end: number) {
+  function revealSearchMatch(start: number, end: number, content = draft) {
     const editor = editorRef.current;
     if (!editor) return;
     editor.setSelectionRange(start, end);
-    const before = draft.slice(0, start);
+    const before = content.slice(0, start);
     const line = before.split("\n").length - 1;
     const column = start - before.lastIndexOf("\n") - 1;
     const style = getComputedStyle(editor);
@@ -565,7 +756,7 @@ export default function PaperWritingView({ bridge, workspace, projectId = null, 
     const context = canvas.getContext("2d");
     if (context) {
       context.font = `${style.fontSize} ${style.fontFamily}`;
-      const prefix = draft.slice(start - column, start).replace(/\t/g, "  ");
+      const prefix = content.slice(start - column, start).replace(/\t/g, "  ");
       const width = context.measureText(prefix).width;
       editor.scrollLeft = Math.max(0, width - editor.clientWidth / 2);
     }
@@ -645,7 +836,7 @@ export default function PaperWritingView({ bridge, workspace, projectId = null, 
   return <div className="paper-writing-page" data-surface="writing">
     <div className={browserCollapsed && widePanes ? "paper-writing-workspace browser-collapsed" : "paper-writing-workspace"} ref={workspaceRef} style={paneStyle}>
       <aside className="paper-source-browser"><div className="paper-browser-title"><FolderOpen size={14} /><strong>{projectLabel}</strong>{activeProject && <div className="paper-browser-actions"><button onClick={() => { setCreateKind("file"); setCreateName("section.tex"); }} aria-label="New LaTeX file"><FilePlus2 size={14} /></button><button onClick={() => { setCreateKind("folder"); setCreateName("figures"); }} aria-label="New folder"><FolderPlus size={14} /></button></div>}</div><label className="paper-main-document">Main document<select value={mainPath} disabled={!activeProject} onChange={(event) => { setMainPath(event.target.value); void openFile(event.target.value); }}>{!activeProject && <option value="">Choose a project first</option>}{mainChoices.map((project) => <option key={project.path} value={project.path}>{project.path}</option>)}</select></label><div className="paper-tree-scroll">{activeProject ? tree.entries.map((entry) => <TreeNode key={entry.path} entry={entry} depth={0} selected={file?.path || ""} activeDirectory={activeDirectory} expanded={expanded} loading={loading} onToggle={toggleDirectory} onLoad={(path) => void loadDirectory(path)} onOpen={(path) => void openFile(path)} />) : <StateView compact className="paper-project-placeholder" icon={<FolderOpen size={20} />} title={t("No project selected")} description={t("Choose an existing manuscript or start a new one.")} />}</div><div className="paper-pane-resizer" role="separator" aria-orientation="vertical" aria-label="Resize file browser" title="Drag to resize · double-click to reset" aria-valuemin={BROWSER_MIN_WIDTH} aria-valuemax={BROWSER_MAX_WIDTH} aria-valuenow={Math.round(browserWidth)} tabIndex={0} onPointerDown={(event) => beginPaneResize("browser", event)} onPointerMove={movePaneResize} onPointerUp={endPaneResize} onPointerCancel={endPaneResize} onDoubleClick={() => setBrowserWidth(BROWSER_DEFAULT_WIDTH)} onKeyDown={(event) => handlePaneResizeKey("browser", event)} /></aside>
-      <section className="latex-editor-pane" onKeyDown={handleSourceKey}><div className="paper-pane-toolbar"><button className="paper-browser-toggle" onClick={() => setBrowserCollapsed((collapsed) => !collapsed)} title={browserCollapsed ? "Show file browser" : "Hide file browser"} aria-label={browserCollapsed ? "Show file browser" : "Hide file browser"} aria-pressed={!browserCollapsed}>{browserCollapsed ? <PanelLeftOpen size={13} /> : <PanelLeftClose size={13} />}</button><FileCode2 size={14} /><strong>{file?.name || "No source selected"}</strong><button className={searchOpen ? "paper-pane-action icon active" : "paper-pane-action icon"} disabled={!file} onClick={() => searchOpen ? closeSearch() : openSearch()} title={`${t("Search source")} (Ctrl/Cmd+F)`} aria-label={t("Search source")} aria-expanded={searchOpen} aria-controls={searchId}><Search size={14} /></button><span className={`paper-save-state ${openingSource ? "saving" : saveState}`} aria-live="polite">{openingSource || saveState === "saving" ? <LoaderCircle className="spin" size={11} /> : saveState === "saved" ? <Check size={11} /> : <CircleDot size={11} />}{openingSource ? t("Opening source…") : saveState === "saving" ? "Saving" : saveState === "saved" ? "Saved" : "Unsaved"}</span><button className={coedit ? "paper-pane-action active" : "paper-pane-action"} disabled={!file || !projectId} onClick={() => { setCoedit((value) => !value); setSearchOpen(false); }} title="Co-edit this source with project members"><Cloud size={13} /><span>{coedit ? "Co-editing" : "Co-edit"}</span></button></div>
+      <section className="latex-editor-pane" onKeyDown={handleSourceKey}><div className="paper-pane-toolbar"><button className="paper-browser-toggle" onClick={() => setBrowserCollapsed((collapsed) => !collapsed)} title={browserCollapsed ? "Show file browser" : "Hide file browser"} aria-label={browserCollapsed ? "Show file browser" : "Hide file browser"} aria-pressed={!browserCollapsed}>{browserCollapsed ? <PanelLeftOpen size={13} /> : <PanelLeftClose size={13} />}</button><FileCode2 size={14} /><strong>{file?.name || "No source selected"}</strong><button className={searchOpen ? "paper-pane-action icon active" : "paper-pane-action icon"} disabled={!file} onClick={() => searchOpen ? closeSearch() : openSearch()} title={`${t("Search source")} (Ctrl/Cmd+F)`} aria-label={t("Search source")} aria-expanded={searchOpen} aria-controls={searchId}><Search size={14} /></button><span className={`paper-save-state ${openingSource ? "saving" : saveState}`} aria-live="polite">{openingSource || saveState === "saving" ? <LoaderCircle className="spin" size={11} /> : saveState === "saved" ? <Check size={11} /> : <CircleDot size={11} />}{openingSource ? t("Opening source…") : saveState === "saving" ? "Saving" : saveState === "saved" ? "Saved" : "Unsaved"}</span>{file && projectId && mainPath && bridge.listManuscriptEvidence && <button type="button" className="paper-pane-action icon" onClick={openManuscriptResults} title={t("Manuscript results")} aria-label={t("Manuscript results")}><Link2 size={14} /></button>}<button className={coedit ? "paper-pane-action active" : "paper-pane-action"} disabled={!file || !projectId} onClick={() => { setCoedit((value) => !value); setSearchOpen(false); }} title="Co-edit this source with project members"><Cloud size={13} /><span>{coedit ? "Co-editing" : "Co-edit"}</span></button></div>
         {searchOpen && file && <div className="latex-source-search" id={searchId} role="search" aria-label={t("Search source")}>
           <Search size={14} aria-hidden="true" />
           <input ref={searchInputRef} type="text" value={searchQuery} onChange={(event) => changeSearch(event.target.value)} onKeyDown={(event) => {
@@ -659,6 +850,19 @@ export default function PaperWritingView({ bridge, workspace, projectId = null, 
         {file ? <>{coedit && projectId && <div className="latex-coedit-pane"><SharedNoteEditor bridge={bridge} projectId={projectId} docKey={`latex:${file.path}`} initialText={draft} title={`Co-editing ${file.name}`} onTextChange={(text) => { setDraft(text); }} /></div>}<div className={coedit ? "latex-editor-body coediting" : "latex-editor-body"}><div className="latex-line-numbers" ref={lineNumbersRef}>{lines.map((_, index) => <span key={index} className={problemLines.has(index + 1) ? "diagnostic" : ""}>{problemLines.has(index + 1) ? <AlertTriangle size={10} /> : index + 1}</span>)}</div><div className="latex-editor-layer"><pre className="latex-highlight" ref={highlightRef} aria-hidden="true">{lines.map((line, index) => <HighlightLine key={index} text={line} marks={searchMarks.get(index)} activeMatch={activeMatchIndex} problem={problemLines.has(index + 1) || activeProblem === index + 1} />)}</pre><textarea className="latex-editor-textarea" ref={editorRef} value={draft} readOnly={openingSource} onChange={(event) => { if (!owner.pendingOpen) setDraft(event.target.value); }} onKeyDown={(event) => { if (!owner.pendingOpen && event.key === "Tab") { event.preventDefault(); const target = event.currentTarget; const next = `${draft.slice(0, target.selectionStart)}  ${draft.slice(target.selectionEnd)}`; const start = target.selectionStart; setDraft(next); window.requestAnimationFrame(() => target.setSelectionRange(start + 2, start + 2)); } if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") { event.preventDefault(); if (!owner.pendingOpen) void compile(); } }} onScroll={(event) => syncScroll(event.currentTarget)} spellCheck={false} aria-label={`Edit ${file.path}`} /></div></div></> : <StateView className="paper-writing-empty" icon={<FileText size={25} />} title="No LaTeX project open" description={t("Open an existing manuscript, or create a new paper from a template.")} action={<button className="primary-button" onClick={() => { setChooserTab("existing"); setChooserOpen(true); void refreshProjects(); }}><FolderOpen size={14} />Open project</button>} />}{buildLogOpen && <section id={buildLogId} className="latex-live-log" aria-label={t("Build log")}><strong>{t("Build log")}</strong><pre tabIndex={0}>{compileState === "compiling" ? compileLog || t("Waiting for compiler output…") : compileResult?.log || compileLog || t("No build log yet.")}</pre></section>}{(error || compileResult?.diagnostics.length || (compileResult && !compileResult.ok)) && <div className="latex-diagnostics"><header><AlertTriangle size={13} /><strong>{error ? "Workspace error" : `Problems · ${compileResult?.diagnostics.length || 1}`}</strong><span>{error ? "Resolve this before compiling again." : "Select a problem to jump to the source line."}</span></header>{error && <p>{t(error)}</p>}{compileResult?.diagnostics.map((diagnostic, index) => <button key={`${diagnostic.line}-${index}`} className={diagnostic.line === activeProblem ? "active" : ""} onClick={() => jumpToProblem(diagnostic)}><b>{diagnostic.line ? `Line ${diagnostic.line}` : "LaTeX"}</b><span>{t(diagnostic.message)}{diagnostic.help && <small className="latex-diagnostic-help">{t(diagnostic.help)}</small>}</span></button>)}{compileResult && !compileResult.ok && compileResult.log && <details><summary>Show full build log</summary><pre>{compileResult.log}</pre></details>}</div>}<div className="paper-pane-resizer" role="separator" aria-orientation="vertical" aria-label="Resize PDF preview" title="Drag to resize · double-click to reset" aria-valuemin={Math.round(PREVIEW_SPLIT_MIN * 100)} aria-valuemax={Math.round(PREVIEW_SPLIT_MAX * 100)} aria-valuenow={Math.round(effectivePreviewSplit * 100)} tabIndex={0} onPointerDown={(event) => beginPaneResize("preview", event)} onPointerMove={movePaneResize} onPointerUp={endPaneResize} onPointerCancel={endPaneResize} onDoubleClick={() => setPreviewSplit(PREVIEW_SPLIT_DEFAULT)} onKeyDown={(event) => handlePaneResizeKey("preview", event)} /></section>
       <section className="paper-pdf-pane"><div className="paper-pane-toolbar"><FileText size={14} /><strong>PDF preview</strong><label className="paper-auto-compile"><input type="checkbox" checked={autoCompile} onChange={(event) => setAutoCompile(event.target.checked)} />Auto compile</label><span className={`paper-compile-state ${compileState}`}>{compileState === "compiling" ? <LoaderCircle className="spin" size={11} /> : compileState === "success" ? <Check size={11} /> : compileState === "error" ? <AlertTriangle size={11} /> : null}{compileState === "success" ? `${compileResult?.duration_ms ?? 0} ms` : compileState === "error" ? "Build failed" : compileState === "compiling" ? `${t(compilePhase)} · ${compileElapsed}s` : "Not built"}</span><div className="paper-pane-actions"><button className={buildLogOpen ? "paper-pane-action active" : "paper-pane-action"} onClick={() => setBuildLogOpen((open) => !open)} title={t("Build log")} aria-label={t("Build log")} aria-expanded={buildLogOpen} aria-controls={buildLogId}><FileText size={13} /><span>{t("Build log")}</span></button>{file && <button className="paper-pane-action" onClick={() => void Promise.resolve(onAskAI(file.path)).catch((reason) => setError(String(reason)))} title="Ask AI about this file"><MessageCircle size={13} /><span>Ask AI</span></button>}<button className="paper-pane-action icon" onClick={() => { setChooserTab("existing"); setChooserOpen(true); void refreshProjects(); }} title="Projects" aria-label="Projects"><FolderOpen size={13} /></button>{activeProject && <><button className="paper-pane-action icon" disabled={importing} onClick={() => void importFolder()} title="Import folder" aria-label="Import folder">{importing ? <LoaderCircle className="spin" size={13} /> : <FolderUp size={13} />}</button><button className="paper-pane-action primary" disabled={!mainPath || compileState === "compiling"} onClick={() => void compile()} title="Recompile">{compileState === "compiling" ? <LoaderCircle className="spin" size={13} /> : <Play size={13} />}<span>{compileState === "compiling" ? "Compiling…" : "Recompile"}</span></button></>}</div></div>{compileResult?.ok && compileResult.preview_url ? <iframe key={compileResult.preview_url} src={compileResult.preview_url} title="Compiled paper PDF" /> : <StateView className="paper-writing-empty" icon={<FileText size={27} />} title="Compile to preview" description="The generated PDF appears here. Any build problem is listed beside the source with its line number." action={mainPath ? <button className="primary-button" disabled={compileState === "compiling"} onClick={() => void compile()}><Play size={14} />Compile paper</button> : undefined} />}</section>
     </div>
+    {active && evidenceDialog?.key === evidenceScopeKey && projectId && <ManuscriptResultsDialog key={evidenceScopeKey}
+      bridge={bridge} scope={{ workspace, projectId, mainPath }} selection={evidenceDialog.selection} manifestPath={resultManifest}
+      initialRun={evidenceRunId} dirty={manuscriptDirty} onClose={() => setEvidenceDialog(null)} onOpenSource={(source) => {
+        setEvidenceDialog(null);
+        void (source.sourcePath === file?.path ? Promise.resolve() : openFile(source.sourcePath)).then(() => requestAnimationFrame(() => {
+          const content = owner.documents.get(source.sourcePath)?.draft ?? "";
+          const start = lineStart(content, source.line) + source.column - 1;
+          if (content.slice(start, start + source.text.length) !== source.text) return;
+          editorRef.current?.focus();
+          revealSearchMatch(start, start + source.text.length, content);
+        }));
+      }}
+    />}
     <Dialog open={dialogOpen} onClose={() => setChooserOpen(false)} size="gallery" className="paper-project-dialog" overlayClassName="paper-create-backdrop app-dialog-overlay" ariaLabelledBy="paper-project-title">
         <header className="app-dialog-header"><div><h2 id="paper-project-title">{t("Continue writing")}</h2><p>{t("Open a manuscript in this project folder. Source files stay in place.")}</p></div><button className="app-dialog-close" onClick={() => setChooserOpen(false)} aria-label={t("Close project chooser")}><X size={16} /></button></header>
         <div className="app-dialog-body paper-project-body">

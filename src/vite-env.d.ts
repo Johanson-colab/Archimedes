@@ -25,6 +25,36 @@ type WorkbenchSettingsSnapshot = {
   hidden: string[];
   layout?: WorkbenchLayoutSnapshot;
 };
+type ManuscriptEvidenceRunRequest = { projectId: string; runId: string };
+type ManuscriptEvidenceScope = { workspace: string; projectId: string; mainPath: string };
+type ManuscriptEvidenceKind = "target" | "baseline" | "difference";
+type ManuscriptEvidenceAnchor = { line: number; column: number; length: number };
+type ManuscriptEvidenceSource = {
+  mainPath: string; sourcePath: string; line: number; column: number; text: string;
+  buildId: string; manifestPath: string; sourceVersion: string;
+};
+type ManuscriptEvidenceInput = ManuscriptEvidenceScope & {
+  sourcePath: string; manifestPath: string; anchor: ManuscriptEvidenceAnchor; runId: string;
+  analysisId: string; baselineColumn: number | null; kind: ManuscriptEvidenceKind;
+};
+type ManuscriptEvidenceSummary = {
+  id: string; manuscript: ManuscriptEvidenceSource; value: number; unit: string; createdAt: string;
+};
+type ManuscriptEvidenceRecord = {
+  id: string; manuscript: ManuscriptEvidenceSource;
+  run: { id: string; nodeId: string; threadId: string; command: string; commit: string | null };
+  analysis: { id: string; kind: ManuscriptEvidenceKind; baselineColumn: number | null };
+  result: {
+    sourceName: string; inputSha256: string; target: { name: string; mean: number; count: number };
+    baseline: { name: string; mean: number; count: number } | null; difference: number | null;
+    unit: string; resultUnit: string; value: number; seedColumn: string | null;
+  };
+};
+type ManuscriptEvidenceDetails = ManuscriptEvidenceRecord & {
+  status: { build: "ready" | "stale" | "missing"; run: "ready" | "missing"; log: "ready" | "missing"; data: "ready" | "missing" | "changed" };
+  rows: Array<{ seed: string; target: number | null; baseline: number | null }>;
+  log: string | null;
+};
 interface ResearchDeskBridge {
     platform?: string;
     getInitialWorkspace: () => Promise<string | null>;
@@ -112,6 +142,13 @@ interface ResearchDeskBridge {
     importLatexFolder: (workspace: string) => Promise<LatexImportResult>;
     compileLatexDocument: (workspace: string, path: string, requestId?: string) => Promise<LatexCompileResult>;
     readManuscriptSnapshot?: (workspace: string, manifestPath: string) => Promise<import("./manuscript-snapshot").ManuscriptBuildVerification>;
+    listManuscriptEvidenceOptions?: (projectId: string) => Promise<{
+      analyses: { id: string; name: string; createdAt: string }[]; runs: { id: string; command: string; startedAt: string }[];
+    }>;
+    getManuscriptEvidenceColumns?: (projectId: string, analysisId: string) => Promise<{ column: string; columns: { index: number; name: string }[] }>;
+    saveManuscriptEvidence?: (input: ManuscriptEvidenceInput) => Promise<ManuscriptEvidenceRecord>;
+    getManuscriptEvidence?: (input: ManuscriptEvidenceScope & { id: string }) => Promise<ManuscriptEvidenceDetails>;
+    listManuscriptEvidence?: (input: ManuscriptEvidenceScope) => Promise<ManuscriptEvidenceSummary[]>;
     onLatexCompileProgress?: (callback: (input: { workspace?: string; requestId?: string; path: string; stage: string; log?: string }) => void) => () => void;
     getResearchTurnImage: (threadId: string, turnId: string, position: number, workspace?: string) => Promise<string | null>;
     getResearchThread: (threadId: string, workspace?: string) => Promise<ResearchThreadDetail>;
