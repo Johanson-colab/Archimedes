@@ -50,6 +50,13 @@ test("inspects files and nested directories without escaping the workspace", (t)
     t.after(() => fs.rmSync(outside, { recursive: true, force: true }));
     fs.symlinkSync(outside, path.join(root, "escape"));
     assert.throws(() => inspectWorkspacePath(root, "escape"), /outside/);
+    const nested = "escape/notes/result.md";
+    assert.throws(() => fileChangeForContent(root, nested, "note"), /outside/);
+    assert.throws(() => writeWorkspaceTextFile(root, nested, "note"), /outside/);
+    assert.deepEqual(fs.readdirSync(outside), []);
+    fs.symlinkSync(path.join(root, "src"), path.join(root, "linked-src"));
+    writeWorkspaceTextFile(root, "linked-src/notes/result.md", "note");
+    assert.equal(fs.readFileSync(path.join(root, "src/notes/result.md"), "utf8"), "note");
   }
 });
 
