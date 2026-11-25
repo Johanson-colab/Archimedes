@@ -12,7 +12,8 @@ const pendingCleanup = new Set();
 const TERMINAL = new Set(["succeeded", "failed", "cancelled"]);
 
 function runScope(id) {
-  return { workspace: store.currentStore().workspace, ownerId: localIdentity().userId, domain: "graph", id };
+  const dataStore = store.currentStore();
+  return { workspace: dataStore.workspace, store: dataStore, ownerId: localIdentity().userId, domain: "graph", id };
 }
 
 function shellFor(command) {
@@ -184,15 +185,7 @@ function startInWorkspace({
     else complete(code === 0 ? "succeeded" : "failed", code);
   });
 
-  try {
-    run = store.updateExperimentRun({ runId, status: "running", pid: child.pid ?? null });
-    onUpdate(run);
-  } catch (error) {
-    complete("failed", null, error.message);
-    return { run, completion };
-  }
-
-  releaseRun = registerActiveRun(runScope(runId), {
+  const active = {
     completion,
     cancel: (force = false) => {
       if ((cancelled || settled) && !force) return;
@@ -226,7 +219,15 @@ function startInWorkspace({
         timer.unref();
       }
     },
-  });
+  };
+  releaseRun = registerActiveRun(runScope(runId), active);
+  try {
+    run = store.updateExperimentRun({ runId, status: "running", pid: child.pid ?? null });
+    onUpdate(run);
+  } catch (error) {
+    active.cancel(true);
+    complete("failed", null, error.message);
+  }
   return { run, completion };
 }
 

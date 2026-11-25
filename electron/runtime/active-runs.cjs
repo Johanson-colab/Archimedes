@@ -10,13 +10,13 @@ function hasActiveRun(scope) {
 
 function findActiveRun(scope) {
   const entry = activeRuns.get(keyFor(scope));
-  return entry && entry.ownerId === scope.ownerId ? entry.run : undefined;
+  return entry && entry.store === scope.store && entry.ownerId === scope.ownerId ? entry.run : undefined;
 }
 
 function registerActiveRun(scope, run) {
   const key = keyFor(scope);
   if (activeRuns.has(key)) throw new Error("This run is already active.");
-  const entry = { domain: scope.domain, ownerId: scope.ownerId, run };
+  const entry = { domain: scope.domain, store: scope.store, ownerId: scope.ownerId, run };
   activeRuns.set(key, entry);
   return () => {
     if (activeRuns.get(key) === entry) activeRuns.delete(key);
