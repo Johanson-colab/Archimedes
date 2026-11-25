@@ -26,6 +26,7 @@ before(async () => {
     Object.assign(scope, values); return values;
   }
   await load("Tabs.tsx", ["Tabs", "Tab", "FilterGroup", "FilterButton"]);
+  await load("discovery-state.ts", ["readDiscoveryControls", "writeDiscoveryControls"]);
   await load("StateView.tsx", ["StateView"]); await load("InlineNotice.tsx", ["InlineNotice"]);
   scope.LoadingState = () => React.createElement(scope.StateView, { tone: "loading", title: "Loading research records…" });
   ({ ConferenceDiscovery } = await load("ConferenceDiscovery.tsx", ["ConferenceDiscovery"]));
