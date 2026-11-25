@@ -1,0 +1,56 @@
+name: Desktop CI
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  macos:
+    name: macOS arm64
+    runs-on: macos-15
+    timeout-minutes: 25
+    env:
+      TEX_ARCHIVE: .archimedes/latex-package/mac-arm64/engine.tar.gz
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 26.13.0
+
+      - name: Install npm 11.20.0
+        run: npm install --global npm@11.20.0
+
+      - run: npm ci
+      - run: npm run prepare:desktop
+      - run: npm run lint
+      - run: npm run check:theme
+
+      - name: Restore the pinned Tectonic archive
+        id: tex-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ env.TEX_ARCHIVE }}
+          key: tectonic-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('shared/latex-engine.json') }}
+
+      - name: Package the desktop app
+        run: npm run package:desktop
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+
+      - name: Verify packed production dependencies
+        run: npm run verify:package -- release/mac-arm64/Archimedes.app/Contents/Resources/app.asar
+
+      - name: Cache the verified Tectonic archive
+        if: steps.tex-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ env.TEX_ARCHIVE }}
+          key: ${{ steps.tex-cache.outputs.cache-primary-key }}
+
+      - run: npm run test:core
