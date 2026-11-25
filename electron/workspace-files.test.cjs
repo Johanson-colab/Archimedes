@@ -59,6 +59,7 @@ test("reads and writes text without allowing workspace escapes", () => {
   assert.match(file.content, /answer/);
   writeWorkspaceTextFile(root, "notes/result.md", "# Result\n");
   assert.equal(readWorkspaceFile(root, "notes/result.md").kind, "markdown");
+  if (process.platform !== "win32") assert.equal(fs.statSync(path.join(root, "notes/result.md")).mode & 0o777, 0o666 & ~process.umask());
   fs.writeFileSync(path.join(root, "references.bib"), "@article{archimedes, title={Paper}}\n");
   fs.writeFileSync(path.join(root, "paper.sty"), "\\ProvidesPackage{paper}\n");
   assert.match(readWorkspaceFile(root, "references.bib").content, /@article/);
@@ -67,6 +68,53 @@ test("reads and writes text without allowing workspace escapes", () => {
   assert.equal(readWorkspaceFile(root, "paper.pdf").kind, "pdf");
   assert.throws(() => workspacePath(root, "../outside.txt", { mustExist: false }), /outside/);
   fs.rmSync(root, { recursive: true, force: true });
+});
+
+test("a failed write or replacement preserves the saved source and allows a retry", async (t) => {
+  for (const operation of ["writeFileSync", "renameSync"]) {
+    await t.test(operation, (t) => {
+      const root = fixture();
+      t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+      const target = "src/index.js";
+      const sibling = path.join(root, "src", ".archimedes-save-unrelated.tmp");
+      fs.writeFileSync(sibling, "another operation's file");
+      const original = fs.readFileSync(path.join(root, target), "utf8");
+      const draft = "const answer = 42;\n";
+      const write = fs.writeFileSync;
+      t.mock.method(fs, operation, (...args) => {
+        if (operation === "writeFileSync") write(args[0], draft.slice(0, 8), args[2]);
+        throw new Error("Simulated save failure");
+      });
+
+      assert.throws(() => writeWorkspaceTextFile(root, target, draft), /Simulated save failure/);
+      assert.equal(fs.readFileSync(path.join(root, target), "utf8"), original);
+      assert.deepEqual(fs.readdirSync(path.join(root, "src")).sort(), [path.basename(sibling), "index.js"]);
+      assert.equal(fs.readFileSync(sibling, "utf8"), "another operation's file");
+
+      t.mock.restoreAll();
+      assert.equal(writeWorkspaceTextFile(root, target, draft).content, draft);
+    });
+  }
+});
+
+test("saving an existing symlink target preserves the link and its file permissions", { skip: process.platform === "win32" }, (t) => {
+  const root = fixture();
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const target = path.join(root, "src", "index.js");
+  const alias = path.join(root, "linked.js");
+  const draft = "const answer = 42;\n";
+  fs.chmodSync(target, 0o731);
+  fs.symlinkSync("src/index.js", alias);
+
+  assert.equal(writeWorkspaceTextFile(root, "linked.js", draft).path, "src/index.js");
+  assert.equal(fs.readlinkSync(alias), "src/index.js");
+  assert.equal(fs.readFileSync(target, "utf8"), draft);
+  assert.equal(fs.statSync(target).mode & 0o777, 0o731);
+  if (process.getuid() !== 0) {
+    fs.chmodSync(target, 0o444);
+    assert.throws(() => writeWorkspaceTextFile(root, "linked.js", "must not replace this file"), { code: "EACCES" });
+    assert.equal(fs.readFileSync(target, "utf8"), draft);
+  }
 });
 
 test("computes line changes for direct writes and command snapshots", () => {

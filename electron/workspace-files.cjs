@@ -147,9 +147,31 @@ function writeWorkspaceTextFile(root, relative, content) {
   }
   const normalized = normalizeRelative(relative);
   if (!normalized || normalized === ".") throw new Error("A workspace-relative file path is required.");
-  const target = workspacePath(root, normalized, { mustExist: false });
-  fs.mkdirSync(path.dirname(target), { recursive: true });
-  fs.writeFileSync(target, content, "utf8");
+  const requested = workspacePath(root, normalized, { mustExist: false });
+  const target = fs.lstatSync(requested, { throwIfNoEntry: false }) ? workspacePath(root, normalized) : requested;
+  const stats = fs.statSync(target, { throwIfNoEntry: false });
+  if (stats) {
+    if (!stats.isFile()) throw new Error("The write target is not a file.");
+    // A rename can replace a read-only file, so check the target without truncating it.
+    fs.closeSync(fs.openSync(target, fs.constants.O_WRONLY));
+  }
+  const directory = path.dirname(target);
+  fs.mkdirSync(directory, { recursive: true });
+  const temporary = path.join(directory, `.archimedes-save-${crypto.randomUUID()}.tmp`);
+  const fd = fs.openSync(temporary, "wx", stats ? stats.mode & 0o600 : 0o666);
+  try {
+    try {
+      fs.writeFileSync(fd, content, "utf8");
+      if (stats && process.platform !== "win32") fs.fchmodSync(fd, stats.mode & 0o777);
+    } finally {
+      fs.closeSync(fd);
+    }
+    // Replace only after the complete draft is written and the handle is closed.
+    fs.renameSync(temporary, target);
+  } catch (error) {
+    try { fs.unlinkSync(temporary); } catch { /* Preserve the original save error. */ }
+    throw error;
+  }
   return readWorkspaceFile(root, normalized);
 }
 
