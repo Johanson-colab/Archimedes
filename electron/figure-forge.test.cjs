@@ -1,6 +1,11 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const { mkdtempSync, rmSync } = require("node:fs");
+const { createServer } = require("node:http");
+const os = require("node:os");
+const path = require("node:path");
 const { prepareFigurePlan, analyzeReferences, generateSvg, generateBitmap, reconstructFigure, resolveFigureConfig } = require("./figure-forge.cjs");
+const modelConfig = require("./model-config.cjs");
 
 const paperText = "[Page 1] A research method and evidence. ".repeat(8);
 const config = { apiKey: "test", model: "test-model", provider: "test" };
@@ -127,6 +132,44 @@ test("Infistar Gemini images use the native image endpoint and retain reference 
   assert.equal(request.body.contents[0].parts.filter((part) => part.inlineData).length, 2);
   assert.equal(request.body.generationConfig.imageConfig.aspectRatio, "16:9");
   assert.equal(result.image, "data:image/png;base64,YWJj");
+});
+
+test("Gemini no-image errors with private headers never expose echoed credentials", async t => {
+  const settings = mkdtempSync(path.join(os.tmpdir(), "archimedes-figure-provider-"));
+  t.after(() => rmSync(settings, { recursive: true, force: true }));
+  modelConfig.initializeModelConfig(settings);
+  const requests = [];
+  const server = createServer((request, response) => {
+    requests.push(request.headers);
+    request.resume();
+    const echoes = [request.headers.authorization, request.headers["x-fixture-private"], request.headers["x-opencode-session"]].filter(Boolean);
+    response.writeHead(200, { "content-type": "application/json" });
+    response.end(JSON.stringify({
+      responseId: echoes.join(" "),
+      candidates: [{ finishReason: echoes.at(-1), finishMessage: echoes.join(" "), content: { parts: [{ text: echoes.join(" ") }] } }],
+    }));
+  });
+  await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
+  t.after(() => server.close());
+  const input = { references: Array(2).fill("data:image/png;base64,YWJj"), plan: "a paper", method: "direct", model: "gemini-3-pro-image" };
+  const apiKey = "fixture-image-api-key";
+  for (const [extra, session] of [
+    [{ headers: { "x-fixture-private": "fixture-private-header" }, sessionHeader: { name: "x-opencode-session", strategy: "thread" } }, "archimedes-figure-forge"],
+    [{ sessionHeader: { name: "x-opencode-session", strategy: "fixed", value: "fixture-fixed-session" } }, "fixture-fixed-session"],
+  ]) {
+    const saved = modelConfig.saveModelConfig({ provider: "custom", baseUrl: "https://infistar.cc/v1", model: input.model, apiKey, headers: {}, ...extra });
+    const current = modelConfig.getActiveModelConfig("agent");
+    await assert.rejects(generateBitmap(input, {
+      config: resolveFigureConfig({ provider: "configured" }, current),
+      fetchImpl: (url, options) => fetch(`http://127.0.0.1:${server.address().port}${new URL(url).pathname}`, options),
+    }), { message: "Gemini returned no image (NO_IMAGE)." });
+    const publicSettings = JSON.stringify(saved);
+    for (const secret of [apiKey, "fixture-private-header", "fixture-fixed-session"]) assert.ok(!publicSettings.includes(secret));
+    assert.equal(requests.at(-1).authorization, `Bearer ${apiKey}`);
+    assert.equal(requests.at(-1)["x-opencode-session"], session);
+    assert.equal(requests.at(-1)["x-fixture-private"], extra.headers?.["x-fixture-private"]);
+  }
+  assert.equal(requests.length, 2);
 });
 
 test("reconstruction requires valid dimensions and multiple scene objects", async () => {

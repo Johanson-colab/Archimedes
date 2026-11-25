@@ -1,4 +1,4 @@
-const { buildModelRequestOptions } = require("./model-request-headers.cjs");
+const { buildModelRequestOptions, hasPrivateHeaderValues } = require("./model-request-headers.cjs");
 const { parseModelResponseJson, readModelResponseJson } = require("./model-response-json.cjs");
 
 const MAX_PAPER_CHARS = 60_000;
@@ -214,6 +214,7 @@ async function generateBitmap(input, { config, fetchImpl = fetch }) {
     throw new Error("Image provider returned neither a supported base64 image nor an HTTPS image URL.");
   } catch (error) {
     if (error?.name === "AbortError") throw new Error("Image generation timed out.");
+    if (error?.code === "GEMINI_NO_IMAGE" && hasPrivateHeaderValues(config)) throw new Error("Gemini returned no image (NO_IMAGE).");
     throw new Error(String(error?.message || error).split(config.apiKey).join("[redacted]"));
   } finally { clearTimeout(timer); }
 }
