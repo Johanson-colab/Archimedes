@@ -1850,6 +1850,7 @@ interface PublicModelProfile {
 }
 
 interface ModelCatalogInput {
+  purpose?: "work";
   id?: string | null;
   provider: ModelProviderId;
   baseUrl: string;

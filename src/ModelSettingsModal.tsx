@@ -53,7 +53,7 @@ const providers: Array<{
   sessionHeader?: ModelSessionHeaderConfig;
   userAgent?: string;
 }> = [
-  { id: "openai", name: "OpenAI", caption: "GPT and reasoning models", baseUrl: "https://api.openai.com/v1", models: ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.1", "gpt-5", "gpt-5-mini", "gpt-5-nano", "gpt-5.1-codex", "gpt-5.1-codex-max", "gpt-5-codex", "gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano", "o3", "o4-mini", "o3-deep-research", "o4-mini-deep-research"], icon: brandIcon(openaiLogo, true) },
+  { id: "openai", name: "OpenAI", caption: "GPT and reasoning models", baseUrl: "https://api.openai.com/v1", models: ["gpt-6.2-sol", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.1", "gpt-5", "gpt-5-mini", "gpt-5-nano", "gpt-5.1-codex", "gpt-5.1-codex-max", "gpt-5-codex", "gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano", "o3", "o4-mini", "o3-deep-research", "o4-mini-deep-research"], icon: brandIcon(openaiLogo, true) },
   { id: "anthropic", name: "Anthropic", caption: "Claude · native Messages API", baseUrl: "https://api.anthropic.com/v1", models: ["claude-fable-5-1", "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5", "claude-fable-5", "claude-opus-5", "claude-sonnet-5", "claude-opus-4-8", "claude-opus-4-7", "claude-opus-4-6", "claude-opus-4-5-20251101", "claude-sonnet-4-6", "claude-sonnet-4-5-20250929", "claude-haiku-4-5-20251001"], icon: brandIcon(anthropicLogo) },
   { id: "gemini", name: "Google Gemini", caption: "Gemini OpenAI-compatible API", baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai", models: ["gemini-4-argon", "gemini-3.8-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-3.1-pro-preview", "gemini-3.1-flash-lite", "gemini-3-flash-preview", "gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.5-flash-lite", "gemma-4-31b-it", "gemma-4-26b-a4b-it"], icon: brandIcon(geminiLogo) },
   { id: "glm", name: "Z.AI / GLM", caption: "GLM chat, reasoning, and vision models", baseUrl: "https://api.z.ai/api/paas/v4", models: ["glm-5.3", "glm-5.3-flashx", "glm-5.3-flash", "glm-5.2", "glm-5.1", "glm-5", "glm-4.7", "glm-4.7-flashx", "glm-4.7-flash", "glm-4.6", "glm-4.6v", "glm-4.6v-flashx", "glm-4.6v-flash", "glm-4.5", "glm-4.5-x", "glm-4.5-air", "glm-4.5-airx", "glm-4.5-flash", "glm-4.5v", "glm-4-32b-0414-128k"], icon: brandIcon(zaiLogo, true) },
@@ -320,7 +320,7 @@ export default function ModelSettingsModal({ bridge, open, onClose, onSaved, emb
     setCatalogLoading(true);
     setCatalogError("");
     try {
-      const result = await bridge.listProviderModels({ provider, baseUrl, apiKey, ...requestExtras() }, role);
+      const result = await bridge.listProviderModels({ provider, baseUrl, apiKey, ...requestExtras(), ...(!proactiveRole ? { purpose: "work" as const } : {}) }, role);
       if (request === catalogRevision.current) setCatalogModels(result.models);
     } catch (error) {
       if (request === catalogRevision.current) setCatalogError(formatModelConnectionError(error, t));
