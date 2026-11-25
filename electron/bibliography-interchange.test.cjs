@@ -600,11 +600,14 @@ test("retained title keys and truncated authors agree in the preview and the sav
     });
     data.db.updatePaper(old.id, { notes: "Keep the experiment note." });
     data.db.repairLibraryPaperMetadata(old.id, { title: "Edited title", year: 2026 });
+    const competitor = data.db.addPaper(library.id, { ...scope.parseBibliography(originals).entries[0].paper, doi: "10.5555/other-original" });
+    data.db.setPaperBibliography(competitor.id, { citekey: "otherOriginal" });
     unmount = await mount(scope.BibliographyDialog, { bridge: data.bridge, library, onClose() {}, onChanged: async () => {} });
     await input(document.querySelector('[aria-label="BibTeX source"]'), originals.replace("and Kai Li", "and others") +
       "\n@article{other,title={Group work},author={Different Author and others},year={2025}}");
     const rows = [...document.querySelectorAll("article.external-paper small")];
     assert.deepEqual(rows.map(row => row.textContent.startsWith("Existing paper")), [true, true, false]);
+    assert.doesNotMatch(rows[0].parentElement.textContent, /Replace citation key explicitly/);
     await click("Import selected references");
     assert.equal(data.db.addPaper(library.id, scope.parseBibliography(originals.replace("and Kai Li", "and others")).entries[1].paper).id, group.id);
     data.db.closeAllWorkspaces();

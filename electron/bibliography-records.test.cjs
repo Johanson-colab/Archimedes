@@ -86,6 +86,8 @@ test("reimporting the original title preserves both legacy and current canonical
     const paper = f.owner.addPaper(f.libraryA.id, input);
     f.owner.updatePaper(paper.id, { notes: "Keep the reading note", reading_status: "read" });
     f.owner.repairLibraryPaperMetadata(paper.id, { title: original.title + " (repaired)" });
+    const competitor = f.owner.addPaper(f.libraryA.id, { ...original, doi: `10.5555/distinct-${legacy ? "legacy" : "fingerprint"}` });
+    assert.notEqual(competitor.id, paper.id);
     const reimported = f.owner.addPaper(f.libraryA.id, original);
     assert.equal(reimported.id, paper.id);
     assert.equal(reimported.canonical_key, paper.canonical_key);

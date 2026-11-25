@@ -195,14 +195,13 @@ export function matchBibliographyPaper<T extends AcademicSearchResult>(incoming:
   }
   if (strongOnly) return undefined;
   const normalizedTitle = title(incoming.title);
-  const matchingTitle = papers.find(paper => compatible(paper) && compatibleTitleMetadata(incoming, paper)
-    && (titleAlreadyMatched || normalizedTitle && normalizedTitle === title(paper.title)));
-  if (matchingTitle || !originalKey) return matchingTitle;
   // A metadata repair does not rewrite the stored key assigned at import.
   const legacyKey = `title:${normalizedTitle}`;
-  return papers.find(paper => "canonical_key" in paper && compatible(paper)
+  const retained = originalKey && papers.find(paper => "canonical_key" in paper && compatible(paper)
     && (paper.canonical_key === originalKey && originalKey !== legacyKey
       || paper.canonical_key === legacyKey && compatibleTitleMetadata(incoming, paper)));
+  return retained || papers.find(paper => compatible(paper) && compatibleTitleMetadata(incoming, paper)
+    && (titleAlreadyMatched || normalizedTitle && normalizedTitle === title(paper.title)));
 }
 
 // Complete a compatible record's identity without replacing saved identifiers.

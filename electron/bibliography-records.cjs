@@ -70,7 +70,8 @@ function findImportMatch(db, paper, canonicalKey, { libraryId, projectId, cloudP
     ? db.prepare("SELECT * FROM papers WHERE canonical_key = ?").get(legacyKey) : null;
   const exactMatch = compatibleExact ? exact : legacy && compatible(legacy) ? legacy : null;
   if (!Object.entries(identifier).some(([key, normalize]) => normalize(paper[key]))) {
-    const scopedWeak = weak(ownLibrary) || weak(ownProject);
+    const scopedTitle = rows => exactMatch && rows.some(row => row.id === exactMatch.id) ? exactMatch : weak(rows);
+    const scopedWeak = scopedTitle(ownLibrary) || scopedTitle(ownProject);
     if (scopedWeak || exactMatch) return scopedWeak || exactMatch;
   }
   // A citation can gain a DOI/arXiv/S2 id after initial import. Only scan the
