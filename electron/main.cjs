@@ -2009,7 +2009,7 @@ app.whenReady().then(async () => {
     if (input.researchSkill && input.origin !== "research") throw new Error("Research skills are available only in Work conversations.");
     if (input.mineruToken != null && (input.researchSkill !== "paper-to-slides" || typeof input.mineruToken !== "string" || input.mineruToken.length > 8192 || /[\r\n]/.test(input.mineruToken))) throw new Error("Invalid MinerU token.");
     if (externalBackend && input.modelProfileId !== undefined) throw new Error("API model profiles are available only with Archimedes.");
-    const config = externalBackend ? null : modelConfig.getAgentModelConfig(input.modelProfileId);
+    const config = externalBackend ? null : input.modelProfileId === undefined ? modelConfig.getActiveModelConfig() : modelConfig.getAgentModelConfig(input.modelProfileId);
     const reasoningEffort = externalBackend ? undefined : normalizeReasoningEffort(config, input.reasoningEffort);
     const contextLength = externalBackend ? undefined : normalizeContextLength(config, input.contextLength);
     if (externalBackend && input.threadId && store.getResearchThread(input.threadId).kind === "paper") throw new Error("Paper chat uses the API harness in this version.");

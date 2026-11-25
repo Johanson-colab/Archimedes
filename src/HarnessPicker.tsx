@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ComponentProps } from "react";
 import { Brain, ChevronDown, LoaderCircle } from "lucide-react";
 import openaiLogo from "@lobehub/icons-static-svg/icons/openai.svg";
 import claudeLogo from "@lobehub/icons-static-svg/icons/claude-color.svg";
@@ -7,6 +7,10 @@ import ArchimedesMark from "./brand/ArchimedesMark";
 import { MenuDivider, MenuItem, MenuSurface } from "./Menu";
 import { useUISettings } from "./i18n";
 import "./harness-picker.css";
+
+function ComposerPickerMenu(props: ComponentProps<typeof MenuSurface>) {
+  return <MenuSurface placement="top-start" maxHeight={340} className="harness-picker-menu" {...props} />;
+}
 
 export default function HarnessPicker({ backend, bound, busy, onlyCurrent = false, onChange, onSettings }: {
   backend: AgentBackendConfig["backend"];
@@ -36,7 +40,7 @@ export default function HarnessPicker({ backend, bound, busy, onlyCurrent = fals
     <button ref={trigger} type="button" className="composer-tool harness-picker-trigger" disabled={busy || saving} aria-label={accessibleLabel} aria-haspopup="menu" aria-expanded={open && !busy} onClick={() => { setError(""); setOpen((value) => !value); }}>
       <span className="harness-brand" aria-hidden="true">{brand(backend)}</span><span>{label}</span><ChevronDown size={13} />
     </button>
-    <MenuSurface open={open && !busy} onClose={() => setOpen(false)} anchorRef={trigger} placement="top-start" width={250} className="harness-picker-menu" ariaLabel={t("Harnesses")}>
+    <ComposerPickerMenu open={open && !busy} onClose={() => setOpen(false)} anchorRef={trigger} width={250} ariaLabel={t("Harnesses")}>
       {onlyCurrent ? <p className="harness-picker-notice">{t("Side conversations use Archimedes. Native agents need the main chat.")}</p> : bound && <p className="harness-picker-notice">{t("Start a new chat to use this agent")}</p>}
       <MenuItem checked={backend === "codex"} title={bound && backend !== "codex" ? t("Start a new chat to use this agent") : undefined} disabled={saving || (onlyCurrent && backend !== "codex")} onClick={() => void choose("codex")}>Codex</MenuItem>
       <MenuItem checked={backend === "claude"} title={bound && backend !== "claude" ? t("Start a new chat to use this agent") : undefined} disabled={saving || (onlyCurrent && backend !== "claude")} onClick={() => void choose("claude")}>Claude Code</MenuItem>
@@ -45,7 +49,7 @@ export default function HarnessPicker({ backend, bound, busy, onlyCurrent = fals
       {error && <p className="harness-picker-error" role="alert">{error}</p>}
       <MenuDivider />
       <MenuItem chevron disabled={saving} aria-label={t("Model settings")} onClick={() => { setOpen(false); onSettings(); }}>{t("Model settings")}</MenuItem>
-    </MenuSurface>
+    </ComposerPickerMenu>
   </div>;
 }
 
@@ -113,7 +117,7 @@ export function ComposerModelPicker({ bridge, native, workspace, defaultModel, p
     <button ref={trigger} type="button" className="composer-tool harness-picker-trigger" disabled={disabled} aria-label={`${t("Model")}: ${label}`} aria-haspopup="menu" aria-expanded={open && !disabled} title={label} onClick={() => setOpen(current => !current)}>
       <Brain size={14} aria-hidden="true" /><span className="composer-model-name">{label}</span><ChevronDown size={13} />
     </button>
-    <MenuSurface open={open && !disabled} onClose={() => setOpen(false)} anchorRef={trigger} placement="top-start" width={275} maxHeight={340} className="harness-picker-menu" ariaLabel={t("Chat models")}>
+    <ComposerPickerMenu open={open && !disabled} onClose={() => setOpen(false)} anchorRef={trigger} width={275} ariaLabel={t("Chat models")}>
       {native && bound && <p className="harness-picker-notice">{t("Changing model starts a new native session with this chat’s recent context.")}</p>}
       <MenuItem checked={value === undefined} onClick={() => choose(undefined)}>{native ? t("Use agent setting: {model}", { model: defaultLabel }) : t("Use Agent model: {model}", { model: defaultLabel })}</MenuItem>
       {native?.model && <MenuItem checked={value === ""} onClick={() => choose("")}>{automatic}</MenuItem>}
@@ -124,6 +128,6 @@ export function ComposerModelPicker({ bridge, native, workspace, defaultModel, p
       {error && <p className="harness-picker-error" role="alert">{error}</p>}
       <MenuDivider />
       <MenuItem chevron onClick={() => { setOpen(false); onSettings(); }}>{t("Model settings")}</MenuItem>
-    </MenuSurface>
+    </ComposerPickerMenu>
   </div>;
 }
