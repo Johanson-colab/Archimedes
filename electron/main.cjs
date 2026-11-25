@@ -1,4 +1,5 @@
 const { app, BrowserWindow, Menu, ipcMain: electronIpcMain, dialog, nativeTheme, net, protocol, clipboard, shell, session, safeStorage, systemPreferences, Notification } = require("electron");
+const { installMainWindowLinks } = require("./main-window-links.cjs");
 const { spawn } = require("node:child_process");
 const { randomUUID } = require("node:crypto");
 const os = require("node:os");
@@ -301,6 +302,10 @@ function createWindow(workspace) {
   if (process.platform !== "darwin") browserWindow.setMenuBarVisibility(false);
 
   const senderId = browserWindow.webContents.id;
+  installMainWindowLinks(browserWindow.webContents, {
+    openExternal: (url) => shell.openExternal(url),
+    onError: () => console.warn("Could not open the web link in the external browser."),
+  });
   browserWindow.webContents.on("will-attach-webview", (event, webPreferences, params) => {
     const browserTab = params.partition === WORKBENCH_BROWSER_PARTITION;
     const allowed = browserTab ? isWebPage(params.src) : isEmbeddableProjectPage(params.src);

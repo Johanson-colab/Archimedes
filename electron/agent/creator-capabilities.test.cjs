@@ -154,6 +154,8 @@ test("Create instructions reach API and shared native prompts on new and resumed
         assert.match(native, /creator-capabilities-cli.cjs/);
         assert.match(native, /no global skill installation is necessary/);
         assert.match(native, /zero, one or multiple/);
+        assert.match(native, /A localhost URL is not a completed sidebar Research App/);
+        assert.match(api, /may be reclaimed when the turn ends/);
         assert.doesNotMatch(native, /# Paper Lookup/);
       } else {
         assert.doesNotMatch(api, /search_research_capabilities/);
