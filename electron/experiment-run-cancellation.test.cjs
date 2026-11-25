@@ -50,6 +50,33 @@ test("run ownership distinguishes data directories, domains, and principals", ()
   } finally { release(); }
 });
 
+test("a Graph run still preparing Git metadata cannot start after accepted quit", async () => {
+  const source = fs.readFileSync(path.join(__dirname, "main.cjs"), "utf8");
+  const start = source.indexOf('  ipcMain.handle("experiment-run:start",');
+  const end = source.indexOf('  ipcMain.handle("experiment-run:cancel",', start);
+  let handler, startProcess = 0, completeGit;
+  const gitProbe = new Promise(resolve => { completeGit = resolve; });
+  const scope = {
+    ipcMain: { handle: (_channel, callback) => { handler = callback; } },
+    stoppingResearch: false,
+    resolveWorkspace: value => value,
+    experimentRunner: {
+      async startExperimentRun(input) {
+        await gitProbe;
+        input.verifyStart?.();
+        startProcess++;
+        return { run: { id: "fixture" } };
+      },
+    },
+  };
+  new Function("scope", `with (scope) { ${source.slice(start, end)} }`)(scope);
+  const pending = handler({ sender: { isDestroyed: () => false } }, { workspace: "/fixture" });
+  scope.stoppingResearch = true;
+  completeGit();
+  await assert.rejects(pending, /Archimedes is quitting/);
+  assert.equal(startProcess, 0);
+});
+
 test("native quit confirmation keeps work on cancel and exits once after confirmed cleanup", async () => {
   const app = new EventEmitter();
   let dialogs = 0, stopped = 0, quit = 0, work = true, windowCanClose = false, respond;

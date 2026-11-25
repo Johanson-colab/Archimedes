@@ -1182,6 +1182,10 @@ app.whenReady().then(async () => {
     const started = await experimentRunner.startExperimentRun({
       ...input,
       workspace,
+      verifyStart: () => {
+        if (stoppingResearch) throw new Error("Archimedes is quitting.");
+        if (event.sender.isDestroyed()) throw new Error("The experiment window was closed.");
+      },
       onUpdate: (run) => {
         if (!event.sender.isDestroyed()) event.sender.send("experiment-run:update", run);
       },
