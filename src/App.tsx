@@ -1,6 +1,6 @@
 import { Fragment, lazy, memo, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent as ReactClipboardEvent, type ReactNode } from "react";
 import { flushSync } from "react-dom";
-import { localCommandApprovalId, startApprovalCountdown } from "./approval-countdown.mjs";
+import { startApprovalCountdown } from "./approval-countdown.mjs";
 import ReactMarkdown from "react-markdown";
 import { WorkspaceMarkdownLink, WorkspaceMarkdownProvider, workspaceMarkdownUrlTransform } from "./WorkspaceMarkdownLink";
 import remarkGfm from "remark-gfm";
@@ -3291,7 +3291,7 @@ function App() {
       if (action.source === "agent") await desktopBridge.approveAgentAction(action.id);
       setPendingAction(current => current?.id === action.id ? null : current);
       clearThreadPendingAction();
-      if (action.kind === "command" && action.payload.command && !action.payload.remoteOperation && !action.payload.externalAgent && !action.payload.managedByAgent) {
+      if (action.kind === "command" && action.payload.command && !action.payload.externalAgent && !action.payload.managedByAgent && !action.payload.remoteOperation) {
         await runCommand(action.payload.command, action.id);
       } else if (action.kind === "write" && action.payload.path) {
         await refreshWorkspaceFiles();
@@ -4054,7 +4054,7 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
   const [autoRunIn, setAutoRunIn] = useState<number | null>(null);
   const approveRef = useRef(onApprove);
   useEffect(() => { approveRef.current = onApprove; }, [onApprove]);
-  const autoRunId = localCommandApprovalId(pendingAction);
+  const autoRunId = pendingAction?.kind === "command" && pendingAction.payload.managedByAgent && !pendingAction.payload.remoteOperation ? pendingAction.id : null;
   useEffect(() => {
     if (!autoRunId) {
       setAutoRunIn(null);

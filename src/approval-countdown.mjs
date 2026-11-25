@@ -1,8 +1,3 @@
-export function localCommandApprovalId(action) {
-  return action?.kind === 'command' && action.payload.managedByAgent && !action.payload.remoteOperation
-    ? action.id : null;
-}
-
 export function startApprovalCountdown(onTick, onComplete, clock = {
   now: () => performance.now(),
   setInterval: (callback, milliseconds) => window.setInterval(callback, milliseconds),
