@@ -1,3 +1,4 @@
+const fixtureSafeStorage = require("./test-support/safe-storage.cjs");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
@@ -116,7 +117,7 @@ test("custom provider resolution validates required fields", () => {
 test("agent mode inherits the main agent provider and model", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-paper-review-model-"));
   try {
-    modelConfig.initializeModelConfig(dir);
+    modelConfig.initializeModelConfig(dir, fixtureSafeStorage);
     modelConfig.saveModelConfig({ provider: "custom", baseUrl: "https://main.example.com/v1", model: "main-agent-model", apiKey: "main-secret" }, "agent");
     const resolved = model.resolveReviewModel({ model: { mode: "agent", provider: "openai", baseUrl: "https://api.openai.com/v1", model: "", apiKey: "" } });
     assert.equal(resolved.source, "agent");

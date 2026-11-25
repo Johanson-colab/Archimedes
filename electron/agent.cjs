@@ -8,14 +8,16 @@ const { searchWeb } = require("./web-search.cjs");
 const { prepareConversation } = require("./agent/context.cjs");
 const { workspaceInstructions } = require("./thread-commands.cjs");
 const { hasApprovalSurface: hasClaimedSurface, resolveApproval, setApprovalSurface: claimApprovalSurface, waitForApproval } = require("./agent/approval-manager.cjs");
+const { completeResponses, responsesRequest } = require("./agent/openai-responses.cjs");
+const { isOfficialOpenAI, openAIWorkModel } = require("./agent/openai-work-models.cjs");
 const { StreamContentGuard, normalizeAssistantMessage } = require("./agent/model-response.cjs");
 const { ModelIncompleteError, assertModelCompletion } = require("./agent/model-completion.cjs");
-const { completeAnthropic } = require("./agent/anthropic.cjs");
+const { completeAnthropic, toAnthropicRequest } = require("./agent/anthropic.cjs");
 const { extractPdfText, extractPdfTextData, findPdfTextData, renderPdfPageData } = require("./agent/pdf-reader.cjs");
 const { fetchPublicPdf, findPublicPage, isPrivateAddress, openPublicPage } = require("./agent/remote-content.cjs");
 const { evidenceForTool } = require("./agent/evidence.cjs");
 const { openAiReasoningOptions, reasoningPolicy } = require("./agent/reasoning.cjs");
-const { contextCharacterLimit, normalizeContextLength, normalizeReasoningEffort: normalizeModelReasoningEffort } = require("./agent/model-capabilities.cjs");
+const { contextCharacterLimit, estimateTokenCharacters, normalizeContextLength, normalizeReasoningEffort: normalizeModelReasoningEffort, outputTokenLimit } = require("./agent/model-capabilities.cjs");
 const { snapshotWorkspace, compareWorkspaceSnapshots, workspacePath: existingWorkspacePath } = require("./workspace-files.cjs");
 const { artifactKind } = require("./artifacts.cjs");
 const { runNative } = require("./agent/external-backend.cjs");
@@ -24,7 +26,9 @@ const { runApprovedCommand } = require("./agent/command-runner.cjs");
 const { readLines, searchWorkspace, prepareWrite, prepareEdit, readCommandLog, visibleExisting } = require("./agent/workspace-tools.cjs");
 const { ToolRegistry } = require("./agent/tool-registry.cjs");
 const { fetchModelWithRetry } = require("./agent/model-retry.cjs");
-const { boundActiveContext } = require("./agent/active-context.cjs");
+const { buildModelRequestOptions, formatModelRequestError, modelProviderErrorDetail, requiresSessionHeader } = require("./model-request-headers.cjs");
+const { readModelResponseJson } = require("./model-response-json.cjs");
+const { boundActiveContext, CONTEXT_BUDGET_FAILURE } = require("./agent/active-context.cjs");
 const { discoverSkills, readSkillResource } = require("./agent/api-skills.cjs");
 const { prepareResearchSkill } = require("./agent/research-skills.cjs");
 const graphAutoBuild = require("./research-graph/auto-build.cjs");
@@ -815,10 +819,11 @@ async function executeBuiltInTool({ root, taskId, threadId, turnId, call, emit, 
       let response = "";
       const approvedOutputs = new Set();
       for (let round = 0; round < 12; round += 1) {
-        const bounded = boundActiveContext(messages, contextCharacterLimit(config, "standard"));
+        const completionOptions = { signal, availableTools: definitions, reasoningEffort, requireComplete: true, sessionId: threadId || turnId || "archimedes-phase-worker" };
+        const bounded = boundModelContext(config, messages, contextCharacterLimit(config, "standard"), completionOptions);
         if (bounded.removed || bounded.clipped) workerRecord({ type: "active_context_bounded", payload: bounded });
-        const message = await complete(config, messages, { signal, availableTools: definitions, reasoningEffort, requireComplete: true });
-        messages.push({ role: "assistant", content: message.content || "", tool_calls: message.tool_calls });
+        const message = await complete(config, messages, completionOptions);
+        messages.push(assistantHistoryMessage(message));
         if (!message.tool_calls.length) { response = message.content || ""; break; }
         for (const child of message.tool_calls) {
           try {
@@ -903,7 +908,7 @@ async function executeBuiltInTool({ root, taskId, threadId, turnId, call, emit, 
         { type: "text", text: `PDF page ${image.page}. Question: ${question}` },
         { type: "image_url", image_url: { url: `data:image/png;base64,${image.data.toString("base64")}`, detail: "high" } },
       ] },
-    ], { signal, allowTools: false, onTextDelta: () => {} });
+    ], { signal, allowTools: false, onTextDelta: () => {}, sessionId: threadId || turnId || "archimedes-pdf-vision" });
     return { content: JSON.stringify({ kind: "pdf_vision", source_url: url, title: image.name,
       page: image.page, page_count: image.page_count, text: String(vision.content || "").slice(0, 12_000),
       retrieved_at: new Date().toISOString(), method: "vision_model",
@@ -1318,17 +1323,78 @@ function applyDelta(accumulator, delta, onTextDelta) {
   }
 }
 
-async function complete(config, messages, { signal, onTextDelta = () => {}, allowTools = true, availableTools = tools, reasoningEffort, maxOutputTokens, allowLargeOutput = false, requireComplete = false, responseFormat } = {}) {
-  const tokenLimit = Number.isFinite(Number(maxOutputTokens)) ? Math.max(64, Math.min(allowLargeOutput && !allowTools ? 32768 : 8192, Math.round(Number(maxOutputTokens)))) : 0;
-  if (config.provider === "anthropic") return completeAnthropic(config, messages, { signal, onTextDelta, allowTools, availableTools, maxOutputTokens: tokenLimit, allowLargeOutput, requireComplete });
-  const nativeReasoning = openAiReasoningOptions(config, reasoningEffort);
-  const request = { model: config.model, messages, stream: true, ...nativeReasoning };
+function assistantHistoryMessage(message) {
+  return { role: "assistant", content: message.content || "", tool_calls: message.tool_calls,
+    ...(message.responseItems ? { responseItems: message.responseItems } : {}) };
+}
+
+function officialResponseOptions(config, { allowTools = true, availableTools = tools, reasoningEffort, maxOutputTokens, allowLargeOutput, responseFormat }) {
+  const profile = isOfficialOpenAI(config) ? openAIWorkModel(config.model) : null;
+  if (profile?.endpoint !== "responses") return null;
+  const effort = config.capabilities?.nativeThinking === false ? undefined : normalizeModelReasoningEffort(config, reasoningEffort);
+  return { profile, tools: allowTools ? availableTools : [], effort, responseFormat,
+    tokenLimit: outputTokenLimit(config, { maxOutputTokens, allowTools, allowLargeOutput }) };
+}
+
+function openAiRequest(config, messages, { allowTools = true, availableTools = tools, reasoningEffort, maxOutputTokens, allowLargeOutput = false, responseFormat } = {}) {
+  const tokenLimit = outputTokenLimit(config, { maxOutputTokens, allowTools, allowLargeOutput });
+  const request = { model: config.model, messages, stream: true, ...openAiReasoningOptions(config, reasoningEffort) };
   if (tokenLimit) request.max_tokens = tokenLimit;
   if (responseFormat) request.response_format = responseFormat;
   if (allowTools && availableTools.length) Object.assign(request, { tools: availableTools, tool_choice: "auto" });
+  return request;
+}
+
+function modelContextSize(config, messages, options) {
+  // Count the provider's actual request structure and reserve its output limit.
+  // Base64 transport length is not an estimate of the model's image cost.
+  const textMessages = messages.map((message) => Array.isArray(message.content)
+    ? { ...message, content: message.content.map((part) => part.type === "image_url"
+      ? { ...part, image_url: { ...part.image_url, url: "data:image/png;base64,AA==" } }
+      : part) }
+    : message);
+  const official = officialResponseOptions(config, options);
+  if (official) {
+    const request = responsesRequest(config, official.profile, textMessages, official);
+    return JSON.stringify(request).length + estimateTokenCharacters(official.tokenLimit);
+  }
+  const anthropic = config.provider === "anthropic";
+  const request = anthropic ? toAnthropicRequest(config, textMessages, options) : openAiRequest(config, textMessages, options);
+  if (!anthropic) {
+    // Compatible gateways can require a longer limit key or a non-streaming retry.
+    request.stream = false;
+    if (Object.hasOwn(request, "max_tokens")) {
+      request.max_completion_tokens = request.max_tokens;
+      delete request.max_tokens;
+    }
+  }
+  return JSON.stringify(request).length + estimateTokenCharacters(request.max_tokens ?? request.max_completion_tokens ?? 0);
+}
+
+function boundModelContext(config, messages, characterLimit, options, continuitySummary) {
+  const strict = config.contextWindowTokens > 0;
+  const measure = strict ? (history) => modelContextSize(config, history, options) : undefined;
+  return boundActiveContext(messages, characterLimit, { strict, continuitySummary, measure });
+}
+
+const MODEL_SESSION_HEADER_REQUIRED = "MODEL_SESSION_HEADER_REQUIRED";
+
+function failIfModelSessionHeaderRequired(detail, config) {
+  if (requiresSessionHeader(detail)) {
+    throw Object.assign(new Error(modelProviderErrorDetail(detail, config)), { code: MODEL_SESSION_HEADER_REQUIRED });
+  }
+}
+
+async function complete(config, messages, { signal, onTextDelta = () => {}, allowTools = true, availableTools = tools, reasoningEffort, maxOutputTokens, allowLargeOutput = false, requireComplete = false, responseFormat, sessionId = "archimedes-internal" } = {}) {
+  if (config.provider === "anthropic") return completeAnthropic(config, messages, { signal, onTextDelta, allowTools, availableTools, maxOutputTokens, allowLargeOutput, requireComplete, sessionId });
+  const options = { allowTools, availableTools, reasoningEffort, maxOutputTokens, allowLargeOutput, responseFormat };
+  const official = officialResponseOptions(config, options);
+  if (official) return completeResponses(config, official.profile, messages, { ...official, signal, sessionId, onTextDelta });
+  const request = openAiRequest(config, messages, options);
+  const tokenLimit = request.max_tokens;
   const requestCompletion = (body) => fetchModelWithRetry(`${config.baseUrl}/chat/completions`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${config.apiKey}` },
+    ...buildModelRequestOptions(config, sessionId, { baseHeaders: { "Content-Type": "application/json" } }),
     body: JSON.stringify(body),
     signal,
   });
@@ -1336,9 +1402,10 @@ async function complete(config, messages, { signal, onTextDelta = () => {}, allo
     const fallback = await requestCompletion({ ...request, stream: false });
     if (!fallback.ok) {
       const fallbackDetail = (await fallback.text()).slice(0, 500);
-      throw new Error(`Model stream was incompatible and its non-streaming retry failed (${fallback.status}): ${fallbackDetail}`);
+      failIfModelSessionHeaderRequired(fallbackDetail, config);
+      throw new Error(`Model stream was incompatible and its non-streaming retry failed. ${formatModelRequestError(fallback.status, fallbackDetail, config)}`);
     }
-    const body = await fallback.json();
+    const body = await readModelResponseJson(fallback);
     const choice = body?.choices?.[0];
     const responseMessage = choice?.message || (typeof choice?.text === "string" ? { role: "assistant", content: choice.text } : null);
     if (!responseMessage) throw new Error("The model returned neither a compatible stream nor a complete response message.");
@@ -1356,6 +1423,10 @@ async function complete(config, messages, { signal, onTextDelta = () => {}, allo
     response = await requestCompletion(request);
     if (response.ok) break;
     detail = (await response.text()).slice(0, 500);
+    failIfModelSessionHeaderRequired(detail, config);
+    const rejectsStreaming = /\b(?:streaming|stream(?:["']?\s*[:=]\s*true)?(?:\s+parameter)?)["']?\s+(?:is\s+)?(?:not supported|unsupported|disabled)\b/i.test(detail) ||
+      /\b(?:does not support|doesn't support|unsupported\s+(?:parameter|value)\s*:?)\s*["']?(?:streaming|stream)\b/i.test(detail);
+    if ([400, 422].includes(response.status) && rejectsStreaming) return completeWithoutStream();
     const canUseCompletionTokens = tokenLimit && Object.hasOwn(request, "max_tokens") &&
       /(?:unsupported parameter|not supported)[^\n]{0,180}max_tokens|max_tokens[^\n]{0,180}(?:unsupported|not supported)/i.test(detail) &&
       /max_completion_tokens/i.test(detail);
@@ -1364,8 +1435,8 @@ async function complete(config, messages, { signal, onTextDelta = () => {}, allo
       request.max_completion_tokens = tokenLimit;
       continue;
     }
-    const hasNativeReasoning = Object.hasOwn(request, "reasoning_effort") || Object.hasOwn(request, "reasoning");
-    if (hasNativeReasoning && [400, 422].includes(response.status)) {
+    const hasNativeReasoning = (Object.hasOwn(request, "reasoning_effort") && request.reasoning_effort !== "none") || Object.hasOwn(request, "reasoning");
+    if (hasNativeReasoning && [400, 422].includes(response.status) && /(?:unsupported|unknown|unrecognized) (?:parameter|field)[: ]+['"]?reasoning(?:_effort)?\b|reasoning(?:_effort)?['"]? (?:parameter )?(?:is )?not supported/i.test(detail)) {
       delete request.reasoning_effort;
       delete request.reasoning;
       continue;
@@ -1377,12 +1448,12 @@ async function complete(config, messages, { signal, onTextDelta = () => {}, allo
     break;
   }
   if (!response.ok) {
-    throw new Error(`Model request failed (${response.status}): ${detail}`);
+    throw new Error(formatModelRequestError(response.status, detail, config));
   }
 
   const contentType = response.headers.get("content-type") || "";
-  if (!contentType.includes("text/event-stream") || !response.body) {
-    const body = await response.json();
+  if (!contentType.includes("text/event-stream")) {
+    const body = await readModelResponseJson(response);
     const message = body?.choices?.[0]?.message;
     if (!message) throw new Error("The model response did not contain a message.");
     const normalized = normalizeAssistantMessage(message);
@@ -1391,6 +1462,7 @@ async function complete(config, messages, { signal, onTextDelta = () => {}, allo
     return normalized;
   }
 
+  if (!response.body) throw new ModelIncompleteError({ provider: "openai", reason: "missing_terminal" });
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   const message = { content: "", tool_calls: [] };
@@ -1410,7 +1482,9 @@ async function complete(config, messages, { signal, onTextDelta = () => {}, allo
         let body;
         try { body = JSON.parse(serialized); }
         catch { throw new ModelIncompleteError({ provider: "openai", reason: "malformed_frame" }); }
-        if (body.error) throw new Error(body.error.message || "Model stream error.");
+        if (body?.error || body?.type === "error") {
+          throw new Error(body.error?.message || body.message || "Model stream error.");
+        }
         if (body?.choices?.[0]?.finish_reason) finishReason = body.choices[0].finish_reason;
         applyDelta(message, body?.choices?.[0]?.delta || {}, (delta) => contentGuard.push(delta));
       }
@@ -1419,16 +1493,13 @@ async function complete(config, messages, { signal, onTextDelta = () => {}, allo
   } catch (error) {
     const partialResponse = message.content.trimStart().startsWith("<｜｜DSML｜｜") ? "" : message.content;
     try { await reader.cancel(); } catch { /* Preserve the actual stream error. */ }
-    if (signal?.aborted || error?.name === "AbortError") { error.partialResponse = partialResponse; throw error; }
+    if (signal?.aborted || error?.name === "AbortError") throw Object.assign(new Error("Model request interrupted."), { name: "AbortError", partialResponse });
     if (error.code === "MODEL_RESPONSE_INCOMPLETE") { error.partialResponse = partialResponse; throw error; }
-    throw new ModelIncompleteError({ provider: "openai", reason: "stream_error", partialResponse, detail: error.message });
+    throw new ModelIncompleteError({ provider: "openai", reason: "stream_error", partialResponse, detail: modelProviderErrorDetail(error?.message, config) });
   } finally { reader.releaseLock(); }
-  if (!message.content && !message.tool_calls.length) {
-    if (finishReason) assertModelCompletion({ provider: "openai", finishReason, partialResponse: "" });
-    return completeWithoutStream();
-  }
   const normalized = normalizeAssistantMessage(message);
   assertModelCompletion({ provider: "openai", finishReason, terminalSeen: Boolean(finishReason), partialResponse: normalized.content, toolCalls: normalized.tool_calls });
+  if (!message.content && !message.tool_calls.length) throw new ModelIncompleteError({ provider: "openai", reason: "empty_stream", finishReason });
   contentGuard.finish(normalized);
   return normalized;
 }
@@ -1447,7 +1518,7 @@ async function translatePaperSelection({ text, targetLanguage = "Simplified Chin
       content: `You are a precise academic translator. Translate the user's passage into ${targetLanguage}. Preserve technical terms, citations, equations, symbols, and paragraph structure. Return only the translation; do not add commentary, a preface, Markdown headings, or an explanation.`,
     },
     { role: "user", content: passage },
-  ], { allowTools: false, onTextDelta: () => {} });
+  ], { allowTools: false, onTextDelta: () => {}, sessionId: "archimedes-translation" });
   const translation = String(message.content || "").trim();
   if (!translation) throw new Error("The model did not return a translation.");
   return { translation };
@@ -1459,7 +1530,7 @@ async function runAgent(options) {
   finally { captured.release(); }
 }
 
-async function runAgentInStore({ prompt, workspace, threadId, projectId, workspaceId, visibility = "project", mode = "standard", researchSkill, mineruToken, reasoningEffort = "medium", contextLength = "standard", contextItems = [], capabilities, origin, title, emit = () => {}, browser, transient = false, externalBackend = null, externalSignal, toolRegistry = defaultToolRegistry, autoBuildGraph = true, remoteServer = null, dataStore }) {
+async function runAgentInStore({ prompt, workspace, threadId, projectId, workspaceId, visibility = "project", mode = "standard", researchSkill, mineruToken, reasoningEffort = "medium", contextLength = "standard", contextItems = [], capabilities, origin, title, emit = () => {}, browser, transient = false, externalBackend = null, apiConfig, externalSignal, toolRegistry = defaultToolRegistry, autoBuildGraph = true, remoteServer = null, dataStore }) {
   const store = dataStore;
   if (externalBackend && (transient || origin !== "research" || capabilities?.write !== "ask" || capabilities?.command !== "ask")) throw new Error("The native backend is available only for main Work conversations with an approval surface.");
   const transientThread = {
@@ -1474,7 +1545,7 @@ async function runAgentInStore({ prompt, workspace, threadId, projectId, workspa
   const turn = transient
     ? { id: randomUUID(), thread_id: thread.id, task_id: task.id, mode, user_message: prompt, assistant_message: "", status: "running", created_at: new Date().toISOString(), completed_at: null }
     : store.startResearchTurn({ threadId: thread.id, taskId: task.id, prompt, mode, contextItems });
-  const config = externalBackend ? null : getActiveModelConfig();
+  const config = externalBackend ? null : apiConfig || getActiveModelConfig();
   const resolvedReasoningEffort = externalBackend ? null : normalizeModelReasoningEffort(config, reasoningEffort);
   const resolvedContextLength = externalBackend ? null : normalizeContextLength(config, contextLength);
   const policy = externalBackend ? null : reasoningPolicy(resolvedReasoningEffort, mode);
@@ -1651,6 +1722,15 @@ async function runAgentInStore({ prompt, workspace, threadId, projectId, workspa
       return completed;
     }
     const researchRun = !transient && origin === "research" ? prepareResearchSkill({ workspace, backend: "api", thread: store.getResearchThread(thread.id), requested: researchSkill, emit: emitTurn, recordEvent }) : null;
+    const strictContextLimit = config.contextWindowTokens > 0;
+    const characterLimit = contextCharacterLimit(config, resolvedContextLength);
+    let academicSearches = 0;
+    let webSearches = 0;
+    const availableToolDefinitions = () => toolRegistry.definitions().filter((tool) =>
+        !(tool.function.name === "search_academic_papers" && academicSearches >= policy.maxAcademicSearches) &&
+        !(tool.function.name === "web_search" && webSearches >= policy.maxWebSearches) &&
+        (["research", "experiment-setup"].includes(mode) || !["create_experiment", "prepare_experiment_workspace", "run_experiment"].includes(tool.function.name)));
+    const initialRequest = { availableTools: availableToolDefinitions(), reasoningEffort: resolvedReasoningEffort };
     const context = prepareConversation({
       // Internal review workers are intentionally not persisted, but their
       // active turn still has to be present for the normal context builder.
@@ -1660,7 +1740,8 @@ async function runAgentInStore({ prompt, workspace, threadId, projectId, workspa
       mode,
       reasoningInstruction: policy.instruction,
       projectInstructions: workspaceInstructions(workspace),
-      contextCharacterLimit: contextCharacterLimit(config, resolvedContextLength),
+      contextCharacterLimit: strictContextLimit ? characterLimit - modelContextSize(config, [], initialRequest) : characterLimit,
+      strictContextLimit,
     });
     if (context.compacted) {
       if (!transient) store.updateResearchThreadSummary(thread.id, context.summary);
@@ -1676,8 +1757,6 @@ async function runAgentInStore({ prompt, workspace, threadId, projectId, workspa
         ...images.map((item) => ({ type: "image_url", image_url: { url: item.image.dataUrl, detail: "high" } })),
       ];
     }
-    let academicSearches = 0;
-    let webSearches = 0;
     const foundPapers = new Map();
     const pdfCache = new Map();
     const maxToolRounds = researchRun ? Math.max(policy.maxToolRounds, 32) : policy.maxToolRounds;
@@ -1685,23 +1764,21 @@ async function runAgentInStore({ prompt, workspace, threadId, projectId, workspa
     emitTurn({ type: "status", title: "Research turn started", detail: `Model: ${config.model} · thinking: ${resolvedReasoningEffort} · context: ${resolvedContextLength}` });
 
     for (let round = 0; round < maxToolRounds; round += 1) {
-      const bounded = boundActiveContext(messages, contextCharacterLimit(config, resolvedContextLength));
+      const completionOptions = {
+        signal: controller.signal,
+        availableTools: round === 0 ? initialRequest.availableTools : availableToolDefinitions(),
+        reasoningEffort: resolvedReasoningEffort,
+        sessionId: thread.id,
+        onTextDelta: (delta) => emitTurn({ type: "assistant_delta", title: "Writing response", detail: "Streaming model output", delta }),
+      };
+      const bounded = boundModelContext(config, messages, characterLimit, completionOptions, context.continuitySummary);
       if (bounded.removed || bounded.clipped) {
         recordEvent({ type: "active_context_bounded", payload: bounded });
-        emitTurn({ type: "status", title: "Context adjusted", detail: "Older tool output was removed from the active model context; saved events remain available." });
+        emitTurn({ type: "status", title: "Context adjusted", detail: "Context was reduced to fit the active budget. Saved turns and events remain available." });
       }
-      const availableTools = toolRegistry.definitions().filter((tool) =>
-        !(tool.function.name === "search_academic_papers" && academicSearches >= policy.maxAcademicSearches) &&
-        !(tool.function.name === "web_search" && webSearches >= policy.maxWebSearches) &&
-        (["research", "experiment-setup"].includes(mode) || !["create_experiment", "prepare_experiment_workspace", "run_experiment"].includes(tool.function.name)));
-      const message = await complete(config, messages, {
-        signal: controller.signal,
-        availableTools,
-        reasoningEffort: resolvedReasoningEffort,
-        onTextDelta: (delta) => emitTurn({ type: "assistant_delta", title: "Writing response", detail: "Streaming model output", delta }),
-      });
-      messages.push({ role: "assistant", content: message.content || "", tool_calls: message.tool_calls });
-      recordEvent({ type: "assistant_step", payload: { content: message.content || "", tool_calls: message.tool_calls, protocol: message.protocol } });
+      const message = await complete(config, messages, completionOptions);
+      messages.push(assistantHistoryMessage(message));
+      recordEvent({ type: "assistant_step", payload: { content: message.content || "", tool_calls: message.tool_calls, protocol: message.protocol, model: config.model, provider: config.provider } });
       if (!message.tool_calls.length) {
         const response = message.content || "The research turn completed without a final text response.";
         emitTurn({ type: "complete", title: "Research turn complete", detail: `${actions.length} approval item${actions.length === 1 ? "" : "s"}` });
@@ -1742,13 +1819,15 @@ async function runAgentInStore({ prompt, workspace, threadId, projectId, workspa
       content: "The tool budget for this turn is exhausted. Do not request more tools. Synthesize the best useful final answer from the evidence already collected, explicitly state important gaps, and suggest a focused next step.",
     });
     emitTurn({ type: "status", title: "Synthesizing findings", detail: "Tool budget reached; preparing an evidence-aware answer" });
-    boundActiveContext(messages, contextCharacterLimit(config, resolvedContextLength));
-    const finalMessage = await complete(config, messages, {
+    const synthesisOptions = {
       signal: controller.signal,
       allowTools: false,
       reasoningEffort: resolvedReasoningEffort,
+      sessionId: thread.id,
       onTextDelta: (delta) => emitTurn({ type: "assistant_delta", title: "Writing response", detail: "Synthesizing collected evidence", delta }),
-    });
+    };
+    boundModelContext(config, messages, characterLimit, synthesisOptions, context.continuitySummary);
+    const finalMessage = await complete(config, messages, synthesisOptions);
     const response = finalMessage.content || "The tool budget was reached before enough evidence was collected. Continue in this chat with a narrower research question.";
     emitTurn({ type: "complete", title: "Research turn complete", detail: "Answer synthesized at the tool budget" });
     const completed = finish(response, "completed");
@@ -1764,6 +1843,13 @@ async function runAgentInStore({ prompt, workspace, threadId, projectId, workspa
       recordEvent({ type: "model_incomplete", payload: failure });
       emitTurn({ type: "incomplete", title: "Response incomplete", detail: "Partial text was kept. Continue in this chat to retry; no tool from the unfinished response was executed.", error: failure });
       return { ...finish(`${error.partialResponse ? `${error.partialResponse}\n\n` : ""}This model response is incomplete: ${error.message} Continue in this chat to retry.`, "incomplete"), error: failure };
+    }
+    if (error.code === CONTEXT_BUDGET_FAILURE || error.code === MODEL_SESSION_HEADER_REQUIRED) {
+      const failure = { code: error.code };
+      const type = error.code === CONTEXT_BUDGET_FAILURE ? "context_budget_exceeded" : "model_session_header_required";
+      recordEvent({ type, payload: failure });
+      emitTurn({ type: "failed", title: "Research turn failed", detail: error.message, error: failure });
+      return { ...finish(error.message, "failed"), error: failure };
     }
     if (error instanceof NativeSessionBusyError) {
       recordEvent({ type: "native_session_busy", payload: { backend: error.backend } });

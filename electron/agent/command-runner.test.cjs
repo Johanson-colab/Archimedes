@@ -1,3 +1,4 @@
+const fixtureSafeStorage = require("../test-support/safe-storage.cjs");
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -50,7 +51,7 @@ test('timeout and cancellation stop a real command', { skip: process.platform ==
 test('approved command output reaches the next model request, and denial never executes', { skip: process.platform === 'win32' }, async t => {
   const root = workspace(t);
   store.openWorkspace(root);
-  modelConfig.initializeModelConfig(root);
+  modelConfig.initializeModelConfig(root, fixtureSafeStorage);
   fs.writeFileSync(path.join(root, 'model-config.json'), JSON.stringify({ provider: 'custom', baseUrl: 'https://example.test/v1', model: 'fixture', apiKey: 'test' }));
   const originalFetch = global.fetch;
   t.after(() => { global.fetch = originalFetch; });

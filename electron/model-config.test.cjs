@@ -1,3 +1,4 @@
+const fixtureSafeStorage = require("./test-support/safe-storage.cjs");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const os = require("node:os");
@@ -31,7 +32,7 @@ test("extracts model identifiers from OpenAI and Model Studio catalog shapes", (
 test("accepts new providers without reusing another provider's API key", () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-model-"));
   try {
-    initializeModelConfig(directory);
+    initializeModelConfig(directory, fixtureSafeStorage);
     saveModelConfig({ provider: "openai", baseUrl: "https://api.openai.com/v1", model: "gpt-4.1-mini", apiKey: "openai-key" });
     assert.throws(() => saveModelConfig({ provider: "anthropic", baseUrl: "https://api.anthropic.com/v1", model: "claude-sonnet-4-6" }), /valid API key/);
     saveModelConfig({ provider: "anthropic", baseUrl: "https://api.anthropic.com/v1", model: "claude-sonnet-4-6", apiKey: "anthropic-key" });
@@ -45,7 +46,7 @@ test("accepts new providers without reusing another provider's API key", () => {
 test("reads the legacy flat model config as the Agent role", () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-model-legacy-"));
   try {
-    initializeModelConfig(directory);
+    initializeModelConfig(directory, fixtureSafeStorage);
     fs.writeFileSync(path.join(directory, "model-config.json"), JSON.stringify({ provider: "openai", baseUrl: "https://api.openai.com/v1", model: "gpt-4.1-mini", apiKey: "legacy-key" }));
     assert.equal(getPublicModelConfig("agent").model, "gpt-4.1-mini");
     assert.equal(getActiveModelConfig("proactive").model, "gpt-4.1-mini");
@@ -55,10 +56,56 @@ test("reads the legacy flat model config as the Agent role", () => {
   }
 });
 
+test("a valid Custom connection can replace a malformed environment endpoint", async (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-model-repair-"));
+  const savedBaseUrl = process.env.ARCHIMEDES_LLM_BASE_URL;
+  t.after(() => {
+    if (savedBaseUrl === undefined) delete process.env.ARCHIMEDES_LLM_BASE_URL;
+    else process.env.ARCHIMEDES_LLM_BASE_URL = savedBaseUrl;
+    fs.rmSync(directory, { recursive: true, force: true });
+  });
+  const request = t.mock.method(globalThis, "fetch", async () => Response.json({ choices: [{ message: { content: "OK" } }] }));
+  const replacement = { provider: "custom", baseUrl: "https://fixture.example/v1", model: "test", apiKey: "fixture-key" };
+  for (const [index, oldEndpoint] of ["not a URL", "http://192.0.2.10/v1"].entries()) {
+    initializeModelConfig(path.join(directory, String(index)), fixtureSafeStorage);
+    process.env.ARCHIMEDES_LLM_BASE_URL = oldEndpoint;
+    assert.equal((await testModelConfig(replacement)).ok, true);
+    assert.equal(saveModelConfig(replacement).baseUrl, replacement.baseUrl);
+  }
+  assert.deepEqual(request.mock.calls.map(({ arguments: [url, options] }) => [url, options.headers.Authorization]), [
+    ["https://fixture.example/v1/chat/completions", "Bearer fixture-key"],
+    ["https://fixture.example/v1/chat/completions", "Bearer fixture-key"],
+  ]);
+});
+
+test("environment URLs are normalized before using their configured credentials", async (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-model-env-url-"));
+  initializeModelConfig(directory, fixtureSafeStorage);
+  const saved = { baseUrl: process.env.ARCHIMEDES_LLM_BASE_URL, apiKey: process.env.ARCHIMEDES_LLM_API_KEY };
+  t.after(() => {
+    if (saved.baseUrl === undefined) delete process.env.ARCHIMEDES_LLM_BASE_URL;
+    else process.env.ARCHIMEDES_LLM_BASE_URL = saved.baseUrl;
+    if (saved.apiKey === undefined) delete process.env.ARCHIMEDES_LLM_API_KEY;
+    else process.env.ARCHIMEDES_LLM_API_KEY = saved.apiKey;
+    fs.rmSync(directory, { recursive: true, force: true });
+  });
+  process.env.ARCHIMEDES_LLM_BASE_URL = "https://opencode.ai/inference/go/openai/v1/";
+  process.env.ARCHIMEDES_LLM_API_KEY = "fixture-key";
+  const config = getPublicModelConfig();
+  assert.equal(config.baseUrl, "https://opencode.ai/inference/go/openai/v1");
+  assert.equal(config.provider, "opencode-go");
+  assert.equal(config.hasApiKey, true);
+  const request = t.mock.method(globalThis, "fetch", async () => Response.json({ data: [{ id: "test" }] }));
+  assert.deepEqual((await listProviderModels({ provider: config.provider, baseUrl: config.baseUrl + "/" })).models, ["test"]);
+  const { headers } = request.mock.calls[0].arguments[1];
+  assert.equal(headers.Authorization, "Bearer fixture-key");
+  assert.equal(headers["x-opencode-session"], "archimedes-model-catalog");
+});
+
 test("keeps the Agent and Proactive models separate and supports inheritance", () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-model-roles-"));
   try {
-    initializeModelConfig(directory);
+    initializeModelConfig(directory, fixtureSafeStorage);
     saveModelConfig({ provider: "openai", baseUrl: "https://api.openai.com/v1", model: "gpt-4.1-mini", apiKey: "agent-key" });
     saveModelConfig({ provider: "deepseek", baseUrl: "https://api.deepseek.com", model: "deepseek-chat", apiKey: "proactive-key" }, "proactive");
     assert.equal(getPublicModelConfig("agent").model, "gpt-4.1-mini");
@@ -98,4 +145,99 @@ test("Anthropic model listing and connection test use native API paths", async (
     assert.equal(calls[1].request.headers.Authorization, undefined);
     assert.equal(JSON.parse(calls[1].request.body).max_tokens, 32);
   } finally { global.fetch = originalFetch; }
+});
+
+test("official Work catalog and connection use the model profile while image discovery stays available", async t => {
+  const input = { provider: "openai", baseUrl: "https://api.openai.com/v1", model: "gpt-6.2-sol", apiKey: "fixture" };
+  const ids = ["gpt-6.2-sol", "gpt-image-2", "gpt-realtime", "gpt-4o-mini"];
+  const requests = [];
+  t.mock.method(global, "fetch", async (url, options) => {
+    requests.push(url);
+    if (url.endsWith("/models")) return Response.json({ data: ids.map(id => ({ id })) });
+    assert.equal(JSON.parse(options.body).store, false);
+    return Response.json({ model: "resolved-fixture", status: "completed", output: [{ type: "message", content: [{ type: "output_text", text: "OK" }] }] });
+  });
+  assert.deepEqual((await listProviderModels({ ...input, purpose: "work" })).models, ["gpt-4o-mini", "gpt-6.2-sol"]);
+  assert.equal((await listProviderModels(input)).models.length, ids.length);
+  assert.equal((await testModelConfig(input)).resolvedModel, input.model);
+  assert.equal(requests.at(-1), input.baseUrl + "/responses");
+});
+
+test("migrates legacy and registered connections and uses their encrypted credentials after reopening", async (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-model-crypto-"));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const legacyFile = path.join(directory, "model-config.json");
+  const registryFile = path.join(directory, "model-registry.json");
+  const credentials = {
+    provider: "custom", baseUrl: "https://credential-fixture.example/v1", model: "fixture-model",
+    apiKey: "fixture-key-original", headers: { "X-Private-Header": "fixture-header-original" },
+    sessionHeader: { name: "X-Session-ID", strategy: "fixed", value: "fixture-session-original" },
+  };
+  fs.writeFileSync(legacyFile, JSON.stringify({ agent: credentials }));
+  fs.writeFileSync(registryFile, JSON.stringify({
+    version: 1, models: [{ id: "fixture", ...credentials }], roles: { agent: "fixture", proactive: null },
+  }));
+  initializeModelConfig(directory, fixtureSafeStorage);
+  assert.equal(getActiveModelConfig().modelId, "fixture");
+  for (const file of [legacyFile, registryFile]) {
+    const content = fs.readFileSync(file, "utf8");
+    assert.match(content, /"ciphertext"/);
+    for (const secret of [credentials.apiKey, ...Object.values(credentials.headers), credentials.sessionHeader.value]) {
+      assert.equal(content.includes(secret), false);
+    }
+    if (process.platform !== "win32") assert.equal(fs.statSync(file).mode & 0o777, 0o600);
+  }
+
+  initializeModelConfig(directory, fixtureSafeStorage);
+  const publicConfig = getPublicModelConfig();
+  assert.equal(publicConfig.hasApiKey, true);
+  assert.equal(publicConfig.hasCustomHeaders, true);
+  assert.equal(publicConfig.sessionHeader.hasValue, true);
+  for (const secret of [credentials.apiKey, ...Object.values(credentials.headers), credentials.sessionHeader.value]) {
+    assert.equal(JSON.stringify(publicConfig).includes(secret), false);
+  }
+  const request = t.mock.method(globalThis, "fetch", async () => Response.json({ choices: [{ message: { content: "OK" } }] }));
+  assert.equal((await testModelConfig({ id: "fixture" })).ok, true);
+  const [, { headers }] = request.mock.calls[0].arguments;
+  assert.equal(headers.Authorization, `Bearer ${credentials.apiKey}`);
+  assert.equal(headers["X-Private-Header"], credentials.headers["X-Private-Header"]);
+  assert.equal(headers["X-Session-ID"], credentials.sessionHeader.value);
+});
+
+test("keeps the original model config readable after encryption or replacement fails", (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-model-crypto-error-"));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const originalRename = fs.renameSync;
+  const input = { provider: "custom", baseUrl: "https://credential-fixture.example/v1", model: "fixture-model", apiKey: "legacy-fixture-key" };
+  const profiles = [
+    { name: "unavailable", storage: { isEncryptionAvailable: () => false } },
+    { name: "basic-text", storage: { ...fixtureSafeStorage, getSelectedStorageBackend: () => "basic_text" } },
+    { name: "bad-round-trip", storage: { ...fixtureSafeStorage, decryptString: () => "incorrect" } },
+    { name: "interrupted", storage: fixtureSafeStorage },
+  ];
+  for (const { name, storage } of profiles) {
+    const profileDir = path.join(directory, name);
+    fs.mkdirSync(profileDir);
+    const configFile = path.join(profileDir, "model-registry.json");
+    const before = JSON.stringify({ version: 1, models: [{ id: "fixture", ...input }], roles: { agent: "fixture", proactive: null } });
+    fs.writeFileSync(configFile, before);
+    const rename = name === "interrupted" && t.mock.method(fs, "renameSync", (source, target) => {
+      if (target === configFile) throw new Error("fixture replacement interrupted");
+      return originalRename(source, target);
+    });
+    try {
+      initializeModelConfig(profileDir, storage);
+      assert.equal(getActiveModelConfig().apiKey, input.apiKey);
+      assert.throws(() => saveModelConfig({ ...input, id: "fixture", apiKey: "replacement" }),
+        /encryption is unavailable|could not be verified|fixture replacement interrupted/);
+      assert.equal(getActiveModelConfig().apiKey, input.apiKey);
+      assert.equal(fs.readFileSync(configFile, "utf8"), before);
+      assert.deepEqual(fs.readdirSync(profileDir), ["model-registry.json"]);
+    } finally {
+      if (rename) rename.mock.restore();
+    }
+    initializeModelConfig(profileDir, fixtureSafeStorage);
+    assert.equal(getActiveModelConfig().apiKey, input.apiKey);
+    assert.equal(fs.readFileSync(configFile, "utf8").includes(input.apiKey), false);
+  }
 });

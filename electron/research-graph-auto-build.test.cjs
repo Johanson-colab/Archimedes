@@ -1,3 +1,4 @@
+const fixtureSafeStorage = require("./test-support/safe-storage.cjs");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const os = require("node:os");
@@ -436,7 +437,7 @@ test("maybeAutoBuild records a failure event when both API attempts fail", async
 
 test("retry extracts only a failed completed turn and records success without duplicating nodes", async () => {
   await withWorkspaceAsync(async ({ root, project }) => {
-    modelConfig.initializeModelConfig(root);
+    modelConfig.initializeModelConfig(root, fixtureSafeStorage);
     fs.writeFileSync(path.join(root, "model-config.json"), JSON.stringify({ provider: "custom", baseUrl: "https://example.test/v1", model: "fixture", apiKey: "test" }));
     const { thread, turn } = threadFor(project.id);
     store.finishResearchTurn(turn.id, { response: "The answer proposes a severity sweep.", status: "completed" });
@@ -655,7 +656,7 @@ test("extraction prompts support experiments in Research without promoting prepa
 
 test("a completed API Research turn schedules a background graph build", async () => {
   await withWorkspaceAsync(async ({ root, project }) => {
-    modelConfig.initializeModelConfig(root);
+    modelConfig.initializeModelConfig(root, fixtureSafeStorage);
     fs.writeFileSync(path.join(root, "model-config.json"), JSON.stringify({
       provider: "custom",
       baseUrl: "https://example.test/v1",

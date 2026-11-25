@@ -4,6 +4,7 @@ import remarkGfm from "remark-gfm";
 import { ArrowUp, Expand, Square, X } from "lucide-react";
 import { useUISettings } from "./i18n";
 import { shouldSubmitPaperChatKey } from "./paperChatKeyboard";
+import HarnessPicker, { ComposerModelPicker } from "./HarnessPicker";
 
 const SideMessage = memo(function SideMessage({ message }: { message: { id: string; role: string; text: string } }) {
   return <article className={`side-chat-message ${message.role}`}><ReactMarkdown remarkPlugins={[remarkGfm]}>{message.text}</ReactMarkdown></article>;
@@ -12,10 +13,13 @@ const SideMessages = memo(function SideMessages({ messages }: { messages: Array<
   return <>{messages.map((message) => <SideMessage key={message.id} message={message} />)}</>;
 });
 
-export default function SideConversation({ bridge, initialThread, dataWorkspace, reasoningEffort, contextLength, onBusyChange, onClose, onOpenMain, onUpdated }: {
+export default function SideConversation({ bridge, initialThread, dataWorkspace, defaultChatModel, modelProfiles, onModelSettings, reasoningEffort, contextLength, onBusyChange, onClose, onOpenMain, onUpdated }: {
   bridge: ResearchDeskBridge;
   initialThread: ResearchThreadDetail;
   dataWorkspace: string;
+  defaultChatModel: string;
+  modelProfiles: PublicModelProfile[];
+  onModelSettings: () => void;
   reasoningEffort: ReasoningEffort;
   contextLength: ContextLength;
   onBusyChange: (busy: boolean) => void;
@@ -25,6 +29,9 @@ export default function SideConversation({ bridge, initialThread, dataWorkspace,
 }) {
   const { t } = useUISettings();
   const [thread, setThread] = useState(initialThread);
+  const [chosenProfile, setChosenProfile] = useState<string>();
+  const profile = modelProfiles.find(item => item.id === chosenProfile);
+  const nativeBound = Boolean(thread.harness && thread.harness !== "api");
   const [messages, setMessages] = useState<Array<{ id: string; role: string; text: string }>>(initialThread.messages);
   const draftKey = `archimedes-side-draft:${initialThread.id}`;
   const [draft, setDraft] = useState(() => { try { return localStorage.getItem(draftKey) || ""; } catch { return ""; } });
@@ -58,7 +65,7 @@ export default function SideConversation({ bridge, initialThread, dataWorkspace,
 
   async function send() {
     const prompt = draft.trim();
-    if (!prompt || runRef.current) return;
+    if (!prompt || runRef.current || nativeBound) return;
     runRef.current = true;
     setBusy(true);
     onBusyChange(true);
@@ -66,7 +73,7 @@ export default function SideConversation({ bridge, initialThread, dataWorkspace,
     setDraft("");
     setMessages((current) => [...current, { id: crypto.randomUUID(), role: "user", text: prompt }]);
     try {
-      const result = await bridge.runAgent({ prompt, threadId: thread.id, workspace: thread.workspace_path || dataWorkspace, projectId: thread.project_id, visibility: thread.visibility, mode: "free-chat", reasoningEffort, contextLength, clientRunId, capabilities: { write: "deny", command: "deny" } });
+      const result = await bridge.runAgent({ prompt, threadId: thread.id, workspace: thread.workspace_path || dataWorkspace, projectId: thread.project_id, visibility: thread.visibility, mode: "free-chat", backend: "api", modelProfileId: profile?.id, reasoningEffort, contextLength, clientRunId, capabilities: { write: "deny", command: "deny" } });
       setThread(result.thread);
       setMessages(result.thread.messages);
       onUpdated(result.thread);
@@ -93,6 +100,12 @@ export default function SideConversation({ bridge, initialThread, dataWorkspace,
     <p className="side-chat-note">{t("Separate history. Open in main chat to apply file changes.")}</p>
     <div className="side-chat-messages" ref={scrollRef}><SideMessages messages={messages} />{!messages.length && <p>{t("Ask a follow-up without changing the main conversation.")}</p>}</div>
     {error && <p className="side-chat-error" role="alert">{error}</p>}
-    <div className="side-chat-composer"><textarea ref={fieldRef} value={draft} aria-label={t("Message side conversation")} placeholder={t("Ask a side question…")} rows={3} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (shouldSubmitPaperChatKey(event)) { event.preventDefault(); void send(); } }} />{busy ? <button type="button" aria-label={t("Stop")} onClick={() => void stop()}><Square size={14} /></button> : <button type="button" disabled={!draft.trim()} aria-label={t("Send")} onClick={() => void send()}><ArrowUp size={17} /></button>}</div>
+    <div className="composer-agent-model side-chat-tools">
+      <HarnessPicker backend={thread.harness || "api"} bound={nativeBound} busy={busy} onlyCurrent onSettings={onModelSettings} />
+      {nativeBound ? <button type="button" className="composer-tool" onClick={() => onOpenMain(thread)}>{t("Open in main chat")}</button>
+        : <ComposerModelPicker bridge={bridge} native={null} workspace={dataWorkspace} defaultModel={defaultChatModel} profiles={modelProfiles}
+          value={profile?.id} bound={false} disabled={busy} onChange={setChosenProfile} onSettings={onModelSettings} />}
+    </div>
+    <div className="side-chat-composer"><textarea ref={fieldRef} value={draft} disabled={nativeBound} aria-label={t("Message side conversation")} placeholder={t("Ask a side question…")} rows={3} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (shouldSubmitPaperChatKey(event)) { event.preventDefault(); void send(); } }} />{busy ? <button type="button" aria-label={t("Stop")} onClick={() => void stop()}><Square size={14} /></button> : <button type="button" disabled={nativeBound || !draft.trim()} aria-label={t("Send")} onClick={() => void send()}><ArrowUp size={17} /></button>}</div>
   </aside>;
 }

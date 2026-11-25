@@ -1,3 +1,4 @@
+const fixtureSafeStorage = require("../test-support/safe-storage.cjs");
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -85,7 +86,7 @@ test('oversized tool results are rejected instead of inflating the model context
 test('registered external adapters are advertised and invoked through the actual API agent loop', async t => {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'archimedes-registry-')));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
-  store.openWorkspace(root); modelConfig.initializeModelConfig(root);
+  store.openWorkspace(root); modelConfig.initializeModelConfig(root, fixtureSafeStorage);
   fs.writeFileSync(path.join(root, 'model-config.json'), JSON.stringify({ provider: 'custom', baseUrl: 'https://example.test/v1', model: 'fixture', apiKey: 'test' }));
   const registry = createToolRegistry();
   for (const source of ['mcp', 'research-app']) {
@@ -114,7 +115,7 @@ test('registered external adapters are advertised and invoked through the actual
 test('API IdeaSpark invokes a fresh isolated model context and records correlated phase events', async t => {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'archimedes-api-phase-')));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
-  store.openWorkspace(root); modelConfig.initializeModelConfig(root);
+  store.openWorkspace(root); modelConfig.initializeModelConfig(root, fixtureSafeStorage);
   fs.writeFileSync(path.join(root, 'model-config.json'), JSON.stringify({ provider: 'custom', baseUrl: 'https://example.test/v1', model: 'fixture', apiKey: 'test' }));
   const previous = global.fetch;
   t.after(() => { global.fetch = previous; });
@@ -166,7 +167,7 @@ test('an existing output is not proof that an isolated phase wrote it', async t 
 test('API harness initializes IdeaSpark only when the user explicitly selects it', async t => {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'archimedes-modes-')));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
-  store.openWorkspace(root); modelConfig.initializeModelConfig(root);
+  store.openWorkspace(root); modelConfig.initializeModelConfig(root, fixtureSafeStorage);
   fs.writeFileSync(path.join(root, 'model-config.json'), JSON.stringify({ provider: 'custom', baseUrl: 'https://example.test/v1', model: 'fixture', apiKey: 'test' }));
   const previous = global.fetch, requests = [];
   t.after(() => { global.fetch = previous; });

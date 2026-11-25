@@ -1,5 +1,7 @@
+const fixtureSafeStorage = require("./test-support/safe-storage.cjs");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
+const { createServer } = require("node:http");
 const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
@@ -94,8 +96,91 @@ test("a transport error after text retains that text and does not retry the mode
       else controller.error(new Error("test connection lost"));
     } }, { highWaterMark: 0 }), { headers: { "content-type": "text/event-stream" } });
   });
-  await assert.rejects(agent.complete(config, [], {}), error => error.code === "MODEL_RESPONSE_INCOMPLETE" && error.reason === "stream_error" && error.partialResponse === "Before disconnect");
+  await assert.rejects(agent.complete(config, [], {}), error => error.code === "MODEL_RESPONSE_INCOMPLETE" && error.reason === "stream_error" && error.partialResponse === "Before disconnect" && error.message === "test connection lost");
   assert.equal(requests, 1);
+});
+
+test("successful incomplete streams never make a second POST or execute a tool", async t => {
+  const store = require("./store.cjs");
+  const model = require("./model-config.cjs");
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-model-stream-")));
+  store.openWorkspace(root);
+  t.after(() => { fs.rmSync(root, { recursive: true, force: true }); });
+  model.initializeModelConfig(path.join(root, "settings"), fixtureSafeStorage);
+  const registry = new ToolRegistry();
+  let executions = 0;
+  registry.register({ definition: { type: "function", function: { name: "spy", description: "Local fixture", parameters: { type: "object" } } },
+    source: "builtin", execute: async () => { executions++; return { content: "Executed" }; } });
+  let events;
+  const requests = [];
+  const server = createServer(async (request, response) => {
+    let input = "";
+    for await (const chunk of request) input += chunk;
+    const { stream } = JSON.parse(input);
+    requests.push([request.method, stream]);
+    response.writeHead(200, { "content-type": stream ? "text/event-stream" : "application/json" });
+    response.end(stream ? events.map(frame).join("") : JSON.stringify({ choices: [{ finish_reason: "stop", message: { content: "Retried" } }] }));
+  });
+  await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
+  t.after(() => server.close());
+  model.saveModelConfig({ ...config, baseUrl: `http://127.0.0.1:${server.address().port}/v1` });
+
+  const tool = { choices: [{ delta: { tool_calls: [{ index: 0, id: "call", function: { name: "spy", arguments: "{}" } }] } }] };
+  for (const [label, response, reason, partial] of [
+    ["empty", [], "missing_terminal", ""],
+    ["empty with stop", [delta("", { finish_reason: "stop" })], "empty_stream", ""],
+    ["nonstandard", [{ type: "response.output_text.delta", delta: "Unexpected" }, "[DONE]"], "missing_terminal", ""],
+    ["unterminated tool", [delta("Useful partial"), tool, "[DONE]"], "missing_terminal", "Useful partial"],
+  ]) {
+    events = response;
+    requests.length = 0;
+    const result = await agent.runAgent({ workspace: root, prompt: label, transient: true, toolRegistry: registry });
+    assert.deepEqual(requests, [["POST", true]], label);
+    assert.equal(result.status, "incomplete", label);
+    assert.equal(result.error.reason, reason, label);
+    assert.ok(result.response.startsWith(partial ? `${partial}\n\n` : "This model response is incomplete:"), label);
+    assert.equal(executions, 0, label);
+  }
+});
+
+test("provider stream errors preserve partial answers and keep header values out of saved failures", async t => {
+  const store = require("./store.cjs");
+  const model = require("./model-config.cjs");
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-stream-secret-"));
+  store.openWorkspace(root);
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  model.initializeModelConfig(path.join(root, "settings"), fixtureSafeStorage);
+
+  const gatewayToken = "DUMMY_GATEWAY_TOKEN";
+  const sessionToken = "DUMMY_FIXED_SESSION";
+  const message = `Gateway rejected ${gatewayToken} and ${sessionToken}`;
+  let frameError, partial, terminal;
+  let requests = 0;
+  fakeFetch(t, async (_url, { headers }) => {
+    requests++;
+    assert.equal(headers["X-Gateway-Token"], gatewayToken);
+    assert.equal(headers["X-Session"], sessionToken);
+    return stream(terminal ? [partial, ...terminal] : [partial, frameError]);
+  });
+  for (const provider of ["custom", "anthropic"]) {
+    model.saveModelConfig({ ...config, provider, headers: { "X-Gateway-Token": gatewayToken }, sessionHeader: { name: "X-Session", strategy: "fixed", value: sessionToken } });
+    frameError = provider === "anthropic" ? { type: "error", error: { message } } : { error: { message } };
+    partial = provider === "anthropic" ? { type: "content_block_start", index: 0, content_block: { type: "text", text: "Useful partial answer" } } : delta("Useful partial answer");
+    const result = await agent.runAgent({ workspace: root, prompt: "Inspect the fixture" });
+    assert.equal(result.status, "incomplete");
+    assert.match(result.response, /Useful partial answer/);
+    assert.match(result.response, /incomplete \(stream_error\).*Continue in this chat to retry/);
+    assert.doesNotMatch(JSON.stringify(store.getResearchThread(result.threadId)), /DUMMY_GATEWAY_TOKEN|DUMMY_FIXED_SESSION/);
+
+    terminal = provider === "anthropic"
+      ? [{ type: "message_delta", delta: { stop_reason: gatewayToken } }, { type: "message_stop" }]
+      : [delta("", { finish_reason: gatewayToken })];
+    const unexpectedStop = await agent.runAgent({ workspace: root, prompt: "Inspect the fixture's completion metadata" });
+    assert.equal(unexpectedStop.error.reason, "unsupported_stop_reason");
+    assert.doesNotMatch(JSON.stringify(store.getResearchThread(unexpectedStop.threadId)), /DUMMY_GATEWAY_TOKEN/);
+    terminal = null;
+  }
+  assert.equal(requests, 4);
 });
 
 test("real agent persists incomplete text and executes none of a mixed complete/partial tool batch; a later valid turn can continue", async t => {
@@ -105,7 +190,7 @@ test("real agent persists incomplete text and executes none of a mixed complete/
   store.openWorkspace(root);
   const owner = store;
   t.after(() => { fs.rmSync(root, { recursive: true, force: true }); });
-  model.initializeModelConfig(path.join(root, "settings")); model.saveModelConfig(config);
+  model.initializeModelConfig(path.join(root, "settings"), fixtureSafeStorage); model.saveModelConfig(config);
   const registry = new ToolRegistry();
   let executions = 0, requests = 0;
   registry.register({ definition: { type: "function", function: { name: "spy", description: "Local fixture", parameters: { type: "object", properties: { value: { type: "string" } }, required: ["value"], additionalProperties: false } } }, source: "builtin", execute: async () => { executions++; return { content: "Executed complete fixture" }; } });
@@ -170,4 +255,90 @@ test("JSON review/planner refuses truncated but parseable output before its sing
     } }), error => error.code === "MODEL_RESPONSE_INCOMPLETE" && error.partialResponse === '{"incomplete":true}');
     assert.equal(requests, 1);
   }
+});
+
+test("real Agent requests reserve tool schemas, provider structure and output tokens within the profile window", async t => {
+  const http = require("node:http");
+  const store = require("./store.cjs");
+  const model = require("./model-config.cjs");
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-request-budget-")));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  store.openWorkspace(root);
+  model.initializeModelConfig(path.join(root, "settings"), fixtureSafeStorage);
+  const fixture = JSON.stringify(Array(2000).fill("abcd"));
+  fs.writeFileSync(path.join(root, "fixture.json"), fixture);
+  let requests = [];
+  const server = http.createServer(async (request, response) => {
+    let raw = "";
+    for await (const chunk of request) raw += chunk;
+    const body = JSON.parse(raw);
+    requests.push({ raw, body });
+    const anthropic = request.url.endsWith("/messages");
+    const name = "read_workspace_file";
+    const args = { path: "fixture.json" };
+    const answer = "The local request stayed within its configured estimate.";
+    const first = requests.length === 1;
+    const result = anthropic
+      ? first
+        ? { stop_reason: "tool_use", content: [{ type: "tool_use", id: "fixture-result", name, input: args }] }
+        : { stop_reason: "end_turn", content: [{ type: "text", text: answer }] }
+      : { choices: [{ finish_reason: first ? "tool_calls" : "stop", message: first
+        ? { role: "assistant", content: "", tool_calls: [{ type: "function", id: "fixture-result", function: { name, arguments: JSON.stringify(args) } }] }
+        : { role: "assistant", content: answer } }] };
+    response.writeHead(200, { "Content-Type": "application/json" });
+    response.end(JSON.stringify(result));
+  });
+  await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
+  t.after(() => new Promise(resolve => server.close(resolve)));
+
+  const contextWindowTokens = 12_000;
+  const maxOutputTokens = 321;
+  for (const provider of ["custom", "anthropic"]) {
+    requests = [];
+    model.saveModelConfig({ ...config, provider, baseUrl: `http://127.0.0.1:${server.address().port}/v1`, contextWindowTokens, maxOutputTokens });
+    const thread = store.createResearchThread({ prompt: "Review the local fixture", mode: "standard", workspacePath: root });
+    for (let index = 0; index < 20; index++) {
+      const turn = store.startResearchTurn({ threadId: thread.id, prompt: `Prior research question ${index}`, mode: "standard" });
+      store.finishResearchTurn(turn.id, { response: "x".repeat(51_000) });
+    }
+
+    const result = await agent.runAgent({ threadId: thread.id, workspace: root, prompt: "Read fixture.json and summarize.", autoBuildGraph: false });
+    assert.equal(result.status, "completed", result.response);
+    assert.equal(requests.length, 2);
+    for (const { raw, body } of requests) {
+      assert.ok(body.tools.length >= 20, "keep the actual built-in tool schemas");
+      assert.equal(body.max_tokens, maxOutputTokens);
+      assert.ok(raw.length + 4 * body.max_tokens <= 4 * contextWindowTokens, `${provider} request consumed ${raw.length + 4 * body.max_tokens} estimated characters`);
+    }
+    const messages = requests[1].body.messages;
+    const toolResult = provider === "anthropic"
+      ? messages.flatMap(message => message.content).find(block => block.tool_use_id === "fixture-result")
+      : messages.find(message => message.tool_call_id === "fixture-result");
+    assert.ok(toolResult);
+    assert.match(toolResult.content, /abcd/);
+    t.diagnostic(`${provider} serialized request lengths: ${requests.map(request => request.raw.length).join(", ")}; output reserve: ${4 * maxOutputTokens}`);
+  }
+});
+
+test("a fixed prompt that cannot fit emits and persists a stable context-budget error before sending a request", async t => {
+  const store = require("./store.cjs");
+  const model = require("./model-config.cjs");
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-fixed-context-")));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  store.openWorkspace(root);
+  model.initializeModelConfig(path.join(root, "settings"), fixtureSafeStorage);
+  model.saveModelConfig({ ...config, contextWindowTokens: 6_000, maxOutputTokens: 321 });
+  let requests = 0;
+  fakeFetch(t, async () => { requests++; throw new Error("No request should have been sent"); });
+  const events = [];
+  const result = await agent.runAgent({ workspace: root, prompt: "Review the local evidence. ".repeat(1000), emit: event => events.push(event) });
+  assert.equal(result.status, "failed");
+  assert.deepEqual(result.error, { code: "MODEL_CONTEXT_BUDGET_EXCEEDED" });
+  assert.equal(requests, 0);
+  assert.match(result.response, /^The active prompt exceeds this model profile's context budget/);
+  assert.deepEqual(events.find(event => event.type === "failed").error, result.error);
+  assert.equal(events.find(event => event.type === "failed").detail, result.response);
+  const saved = store.getResearchThread(result.threadId);
+  assert.deepEqual(saved.events.find(event => event.type === "context_budget_exceeded").payload, result.error);
+  assert.equal(saved.turns.at(-1).assistant_message, result.response);
 });

@@ -4137,7 +4137,7 @@ function forkResearchThread(id, { side = false } = {}) {
   const db = requireDatabase();
   db.exec("BEGIN");
   try {
-    const copy = copyResearchThread(source, { title: `${side ? "Side" : "Fork"}: ${source.title}`, forkId: source.id });
+    const copy = copyResearchThread(side ? { ...source, harness: "api" } : source, { title: `${side ? "Side" : "Fork"}: ${source.title}`, forkId: source.id });
     recordAuditEvent(db, { projectId: source.project_id, action: "thread.forked", targetType: "thread", targetId: copy.id, metadata: { sourceThreadId: id, side } });
     db.exec("COMMIT");
     return copy;

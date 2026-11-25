@@ -166,7 +166,12 @@ interface ResearchDeskBridge {
   getResearchThreadSnapshot: (snapshotId: string) => Promise<{ id: string; thread_id: string; project_id: string; sequence: number; created_at: string; manifest: Record<string, unknown> } | null>;
     deleteResearchThread: (id: string) => Promise<{ deleted: boolean }>;
     getModelConfig: (role?: ModelRole) => Promise<PublicModelConfig>;
-    getModelCapabilities: (role?: ModelRole) => Promise<ModelCapabilities>;
+    listModelProfiles: () => Promise<PublicModelProfile[]>;
+    saveModelProfile: (input: ModelConfigInput) => Promise<PublicModelProfile>;
+    deleteModelProfile: (id: string) => Promise<boolean>;
+    setModelRole: (role: ModelRole, id: string | null) => Promise<PublicModelConfig>;
+    getModelRoleAssignments: () => Promise<Record<ModelRole, string | null>>;
+    getModelCapabilities: (role?: ModelRole, profileId?: string) => Promise<ModelCapabilities>;
     listProviderModels: (input: ModelCatalogInput, role?: ModelRole) => Promise<ModelCatalogResponse>;
     saveModelConfig: (input: ModelConfigInput, role?: ModelRole) => Promise<PublicModelConfig>;
     testModelConfig: (input: ModelConfigInput, role?: ModelRole) => Promise<ModelConnectionResult>;
@@ -272,7 +277,7 @@ interface ResearchDeskBridge {
     writeClipboardText: (text: string) => Promise<void>;
     readClipboardImage: () => Promise<ContextImage | null>;
     saveTask: (task: { prompt: string; response: string; status?: string }) => Promise<SavedTask>;
-    runAgent: (input: { prompt: string; workspace: string; paperId?: string; threadId?: string; projectId?: string; workspaceId?: string; visibility?: "project" | "private"; mode: ResearchMode; researchSkill?: "idea-spark" | "paper-to-slides"; mineruToken?: string; reasoningEffort?: ReasoningEffort; contextLength?: ContextLength; contextItems?: ContextAttachment[]; capabilities?: { write: "ask" | "deny"; command: "ask" | "deny" }; origin?: "research" | "paper"; backend?: AgentBackendConfig["backend"]; remoteServerId?: string; title?: string; clientRunId?: string }) => Promise<AgentRunResult>;
+    runAgent: (input: { prompt: string; workspace: string; paperId?: string; threadId?: string; projectId?: string; workspaceId?: string; visibility?: "project" | "private"; mode: ResearchMode; researchSkill?: "idea-spark" | "paper-to-slides"; mineruToken?: string; reasoningEffort?: ReasoningEffort; contextLength?: ContextLength; contextItems?: ContextAttachment[]; capabilities?: { write: "ask" | "deny"; command: "ask" | "deny" }; origin?: "research" | "paper"; backend?: AgentBackendConfig["backend"]; modelProfileId?: string; nativeModel?: string; remoteServerId?: string; title?: string; clientRunId?: string }) => Promise<AgentRunResult>;
     getAgentBackendConfig: () => Promise<AgentBackendConfig>;
     saveAgentBackendConfig: (input: AgentBackendConfig) => Promise<AgentBackendConfig>;
     listCodexModelCatalog: (input: AgentBackendConfig) => Promise<{ models: NativeAgentModel[]; effectiveModelId?: string }>;
@@ -400,6 +405,7 @@ interface ExtensionSource {
   url: string;
   query?: string;
   token?: string;
+  hasToken?: boolean;
   enabled: boolean;
   builtin?: boolean;
   count?: number;
@@ -1800,25 +1806,59 @@ interface ResearchThread {
   archived_at: string | null;
 }
 
-type ModelProviderId = "openai" | "anthropic" | "gemini" | "glm" | "minimax" | "deepseek" | "qwen" | "moonshot" | "openrouter" | "custom";
+type ModelProviderId = "openai" | "anthropic" | "gemini" | "glm" | "minimax" | "deepseek" | "qwen" | "moonshot" | "openrouter" | "opencode-go" | "custom";
 type WebSearchProviderId = "brave" | "tavily" | "exa" | "firecrawl";
 interface PublicWebSearchConfig { provider: WebSearchProviderId; hasApiKey: boolean; configuredProviders: WebSearchProviderId[] }
 
 type ModelRole = "agent" | "proactive";
+
+interface ModelSessionHeaderConfig {
+  name: string;
+  strategy: "thread" | "fixed" | "disabled";
+  value?: string;
+}
 
 interface ModelConfigInput {
   provider: ModelProviderId;
   baseUrl: string;
   model: string;
   apiKey?: string;
+  id?: string | null;
+  label?: string;
+  headers?: Record<string, string>;
+  sessionHeader?: ModelSessionHeaderConfig | null;
+  userAgent?: string;
+  contextWindowTokens?: number;
+  maxOutputTokens?: number;
+  capabilities?: Record<string, unknown>;
   /** Proactive only: drop the dedicated model and inherit the main Agent's. */
   useAgent?: boolean;
 }
 
+interface PublicModelProfile {
+  id: string;
+  label: string;
+  provider: ModelProviderId;
+  baseUrl: string;
+  model: string;
+  hasApiKey: boolean;
+  hasCustomHeaders: boolean;
+  sessionHeader: PublicModelConfig["sessionHeader"];
+  userAgent: string;
+  contextWindowTokens: number;
+  maxOutputTokens: number;
+  capabilities: Record<string, unknown>;
+}
+
 interface ModelCatalogInput {
+  purpose?: "work";
+  id?: string | null;
   provider: ModelProviderId;
   baseUrl: string;
   apiKey?: string;
+  headers?: Record<string, string>;
+  sessionHeader?: ModelSessionHeaderConfig | null;
+  userAgent?: string;
 }
 
 interface ModelCatalogResponse {
@@ -1831,6 +1871,15 @@ interface PublicModelConfig {
   baseUrl: string;
   model: string;
   hasApiKey: boolean;
+  hasCustomHeaders?: boolean;
+  sessionHeader?: Omit<ModelSessionHeaderConfig, "value"> & { hasValue: boolean } | null;
+  userAgent?: string;
+  modelId?: string;
+  modelLabel?: string;
+  sharedAcrossRoles?: boolean;
+  contextWindowTokens?: number;
+  maxOutputTokens?: number;
+  capabilities?: Record<string, unknown>;
   source: "saved" | "environment" | "agent";
   role?: ModelRole;
   inheritedFromAgent?: boolean;
@@ -1932,10 +1981,12 @@ interface AgentRunResult {
   taskId: string;
   response: string;
   status: string;
-  error?: ModelIncompleteFailure;
+  error?: ModelIncompleteFailure | LocalizableModelFailure;
   actions: AgentAction[];
   thread: ResearchThreadDetail;
 }
+
+interface LocalizableModelFailure { code: "MODEL_CONTEXT_BUDGET_EXCEEDED" | "MODEL_SESSION_HEADER_REQUIRED" }
 
 interface WorkspaceSnapshotScanCoverage {
   entries: number;
@@ -1960,7 +2011,7 @@ interface AgentEvent {
   turnId?: string;
   delta?: string;
   clientRunId?: string;
-  error?: ModelIncompleteFailure;
+  error?: ModelIncompleteFailure | LocalizableModelFailure;
   action?: AgentAction;
   changeSet?: WorkspaceChangeSet;
   snapshotCoverage?: WorkspaceSnapshotCoverage;

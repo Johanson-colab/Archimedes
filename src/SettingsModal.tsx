@@ -39,7 +39,7 @@ type SettingsModalProps = {
   appearance: AppearanceSettings;
   onAppearanceChange: (appearance: AppearanceSettings) => void;
   bridge: ResearchDeskBridge;
-  onModelSaved: (config: PublicModelConfig) => void;
+  onModelSaved: () => void;
   executionPreferences?: ModelExecutionPreferences;
   workspace: string;
   modelWorkspace?: string;
@@ -198,6 +198,7 @@ export default function SettingsModal({
             onChangeProactiveSettings={onChangeProactiveSettings}
             onObserveProactive={onObserveProactive}
             onResetProactiveHistory={onResetProactiveHistory}
+            onModelSaved={onModelSaved}
             proactiveHistoryCount={proactiveHistoryCount}
             bridge={bridge}
             sessionTools={sessionTools}
