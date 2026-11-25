@@ -37,9 +37,9 @@ test("harness picker exposes five entries, switches supported runtimes and opens
     const options = harnessOptions();
     assert.equal(options.length, 5);
     assert.ok(document.querySelector('[aria-label="Model settings"]'));
-    assert.deepEqual(options.map((node) => node.querySelector(".menu-item-body").textContent), ["Codex", "Claude Code", "OpenCode", "Antigravity", "Archimedes"]);
+    assert.deepEqual(options.map((node) => node.querySelector(".menu-item-body").textContent), ["Codex", "Claude Code", "Antigravity", "OpenCode", "Archimedes"]);
     assert.equal(options[1].disabled, false); assert.equal(options[2].disabled, false);
-    await React.act(async () => options[3].click());
+    await React.act(async () => options[2].click());
     assert.deepEqual(changes, ["antigravity"]);
     await open();
     await React.act(async () => harnessOptions()[4].click());

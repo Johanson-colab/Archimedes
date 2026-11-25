@@ -3,7 +3,7 @@ import { Check, ChevronDown, LoaderCircle, Network, RefreshCw, Save } from "luci
 import openaiLogo from "@lobehub/icons-static-svg/icons/openai.svg";
 import claudeLogo from "@lobehub/icons-static-svg/icons/claude-color.svg";
 import opencodeLogo from "@lobehub/icons-static-svg/icons/opencode.svg";
-import antigravityLogo from "@lobehub/icons-static-svg/icons/antigravity.svg";
+import antigravityLogo from "@lobehub/icons-static-svg/icons/antigravity-color.svg";
 import { SettingsGroup, SettingsRow, SettingsSection } from "./SettingsPrimitives";
 import { useUISettings } from "./i18n";
 import { MenuItem, MenuSurface } from "./Menu";
@@ -167,7 +167,7 @@ export default function AgentBackendSettings({ bridge, onBackendChange, workspac
     {loadError && <div className="agent-backend-feedback error" role="alert"><span>{loadError}</span><button type="button" className="secondary-button" onClick={() => setLoadAttempt((value) => value + 1)}>{t("Reload configuration")}</button></div>}
 
     <div className="agent-backend-list">
-    {(["codex", "claude", "opencode", "antigravity"] as const).map((item) => <section key={item} className="agent-backend-card" aria-label={labels[item]}>
+    {(["codex", "claude", "antigravity", "opencode"] as const).map((item) => <section key={item} className="agent-backend-card" aria-label={labels[item]}>
       <button type="button" className="agent-backend-card-toggle" disabled={disabled} aria-label={labels[item]} aria-expanded={expanded && selected === item} aria-controls={`${id}-${item}-config`} onClick={() => {
         const opening = selected !== item || !expanded;
         const draft = selected === item ? config : choose(item);
@@ -175,7 +175,7 @@ export default function AgentBackendSettings({ bridge, onBackendChange, workspac
         if (item === "codex" && opening && (!catalogs.codex?.length || (!draft.model && !effectiveModelId))) void loadCodexCatalog(draft);
         if (item === "opencode" && opening && !catalogs.opencode?.length) void loadOpenCodeCatalog(draft);
       }}>
-        <span className="provider-icon large"><img className={`provider-brand-logo${item === "claude" ? "" : " provider-brand-mono"}`} src={item === "codex" ? openaiLogo : item === "claude" ? claudeLogo : item === "antigravity" ? antigravityLogo : opencodeLogo} alt="" /></span>
+        <span className="provider-icon large"><img className={`provider-brand-logo${item === "claude" || item === "antigravity" ? "" : " provider-brand-mono"}`} src={item === "codex" ? openaiLogo : item === "claude" ? claudeLogo : item === "antigravity" ? antigravityLogo : opencodeLogo} alt="" /></span>
         <span className="agent-backend-card-copy"><strong>{labels[item]}</strong><small>{item === "codex" ? t("Local CLI · uses your existing Codex login") : t("Local CLI · uses its existing login and configuration")}</small></span>
         <span className="agent-backend-card-status">
           <span className={`agent-connection-status ${connections[item] || "unchecked"}`} aria-live="polite">{busy === "check" && selected === item && <LoaderCircle className="spin" size={13} />}{connectionLabel(item)}</span>

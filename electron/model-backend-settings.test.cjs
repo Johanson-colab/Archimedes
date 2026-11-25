@@ -449,7 +449,7 @@ test("Harnesses are four expandable cards and OpenCode keeps readable static per
     await click("Harnesses");
     const cards = [...document.querySelectorAll('.agent-backend-card')];
     assert.equal(cards.length, 4);
-    assert.deepEqual(cards.map(card => card.getAttribute('aria-label')), ['Codex', 'Claude Code', 'OpenCode', 'Antigravity']);
+    assert.deepEqual(cards.map(card => card.getAttribute('aria-label')), ['Codex', 'Claude Code', 'Antigravity', 'OpenCode']);
     assert.ok(cards.every(card => card.querySelector('.agent-backend-panel').hidden));
     await click("Claude Code");
     const claudeCard = document.querySelector('.agent-backend-card[aria-label="Claude Code"]');
