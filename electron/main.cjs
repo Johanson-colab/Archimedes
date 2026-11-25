@@ -2725,7 +2725,8 @@ installQuitGuard({ app, dialog,
   },
 });
 
-app.on("will-quit", () => {
+app.on("will-quit", (event) => {
+  if (event?.defaultPrevented) return;
   closeAllNativeClients();
   closeAllTerminals();
   experimentRunner.shutdownExperimentRuns();
