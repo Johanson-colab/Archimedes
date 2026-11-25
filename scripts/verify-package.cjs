@@ -11,7 +11,7 @@
  * package the way Node would, and fails if a required package is absent.
  *
  * Runs as an electron-builder afterPack hook, or standalone:
- *   node scripts/verify-package.cjs release/win-unpacked/resources/app.asar
+ *   node scripts/verify-package.cjs <path-to-app.asar>
  */
 const fs = require("node:fs");
 const path = require("node:path");
@@ -34,10 +34,9 @@ function searchDirs(fromDir) {
   return dirs;
 }
 
-function verify(asarPath) {
-  const asar = require("@electron/asar");
+function verify(asarPath, { asar = require("@electron/asar"), separator = path.sep } = {}) {
   const entries = new Set(asar.listPackage(asarPath).map(normalize));
-  const readJson = (p) => JSON.parse(asar.extractFile(asarPath, p.split("/").join("\\")).toString("utf8"));
+  const readJson = (p) => JSON.parse(asar.extractFile(asarPath, p.split("/").join(separator)).toString("utf8"));
 
   const root = readJson("package.json");
   const failures = [];
@@ -90,7 +89,7 @@ function verify(asarPath) {
 }
 
 module.exports = async function afterPack(context) {
-  const asarPath = path.join(context.appOutDir, "resources", "app.asar");
+  const asarPath = path.join(context.packager.getResourcesDir(context.appOutDir), "app.asar");
   if (!fs.existsSync(asarPath)) throw new Error(`verify-package: app.asar not found at ${asarPath}`);
   verify(asarPath);
 };
@@ -98,7 +97,11 @@ module.exports = async function afterPack(context) {
 module.exports.verify = verify;
 
 if (require.main === module) {
-  const target = path.resolve(process.argv[2] || path.join("release", "win-unpacked", "resources", "app.asar"));
+  if (!process.argv[2]) {
+    console.error("Usage: npm run verify:package -- <path-to-app.asar>");
+    process.exit(2);
+  }
+  const target = path.resolve(process.argv[2]);
   if (!fs.existsSync(target)) {
     console.error(`verify-package: ${target} does not exist`);
     process.exit(2);
