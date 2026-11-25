@@ -348,14 +348,14 @@ async function benchmarkDesktop(fixture) {
   let running;
   const observed = new Map();
   const pollSamples = [];
-  const tracked = new Set(["workspace:open", "research-thread:get", "agent:run"]);
+  const tracked = new Set(["workspace:open", "research-thread:get", "research-thread:event-changes", "agent:run"]);
   const handle = ipcMain.handle;
   installSqlCounters();
   ipcMain.handle = function(channel, listener) {
     handle.call(this, channel, tracked.has(channel) ? async (event, ...args) => {
       const sql = counters();
       const start = performance.now();
-      const poll = channel === "research-thread:get" && polling;
+      const poll = polling && (channel === "research-thread:get" || channel === "research-thread:event-changes");
       const input = poll ? event.sender.executeJavaScript("window.threadBench.input()") : null;
       const intervalMs = poll ? start - lastPoll : undefined;
       if (poll) lastPoll = start;
@@ -363,7 +363,7 @@ async function benchmarkDesktop(fixture) {
       const result = await sqlScope.run(sql, () => listener(event, ...args));
       const row = { ms: performance.now() - start, sql };
       if (poll) {
-        input.then(inputMs => pollSamples.push({ ...row, intervalMs, inputMs, v8Bytes: serialize(result).byteLength }));
+        input.then(inputMs => pollSamples.push({ channel, ...row, intervalMs, inputMs, v8Bytes: serialize(result).byteLength }));
       } else {
         // Serialize outside the measured IPC/renderer path.
         observed.set(channel, { row, result });
