@@ -7432,6 +7432,22 @@ html[data-card-style="outlined"] :is(.settings-group, .library-card, .daily-pape
 }
 .journey-map-scrim { background: var(--workbench-ground); backdrop-filter: none; }
 .command-palette-backdrop.app-dialog-overlay { display: flex; align-items: flex-start; justify-content: center; padding: min(12vh, 120px) 20px 20px; }
+.first-run-guide-overlay { background: color-mix(in srgb, var(--text-muted) 14%, transparent); backdrop-filter: none; }
+.first-run-guide-overlay:not(.intro) { align-items: end; }
+.first-run-guide-overlay.workbench { justify-items: start; }
+.first-run-guide { display: grid; gap: 16px; padding: 20px; overflow: auto; }
+.first-run-guide h2 { margin: 0 0 8px; font-size: 19px; }
+.first-run-guide p { margin: 0; color: var(--text-muted); line-height: 1.5; }
+.first-run-guide .first-run-guide-progress { margin-bottom: 8px; font-size: 12px; }
+.first-run-guide .secondary-button { color: var(--night-ink); }
+.codex-shell[data-guide-step="chat"] .chat-main,
+.codex-shell[data-guide-step="sidebar"] .codex-sidebar,
+.codex-shell[data-guide-step="workbench-toggle"] .workbench-toggle,
+.codex-shell[data-guide-step="workbench"] .right-workbench,
+.codex-shell[data-guide-step="aids"] .main-toolbar .dock-toggle {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
 .workspace-opening-dialog { padding: 0; }
 .workspace-opening-dialog::backdrop { background: color-mix(in srgb, var(--text-muted) 24%, transparent); backdrop-filter: blur(7px); }
 .workspace-opening-dialog > div { display: flex; align-items: center; gap: 10px; padding: 18px 20px; }
