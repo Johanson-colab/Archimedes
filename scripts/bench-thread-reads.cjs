@@ -470,6 +470,7 @@ async function main() {
   const desktop = settings.desktop ? require("./electron-runtime.cjs").electronBinary() : null;
   if (desktop && !fs.existsSync(path.join(root, "dist", "index.html"))) throw new Error("--desktop needs the production renderer. Run npm run build first.");
   if (desktop && settings.sessions < 2) throw new Error("--desktop requires at least two sessions to switch between.");
+  const revision = spawnSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" }).stdout.trim();
   const temp = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), "archimedes-thread-bench-"));
   try {
     const fixtures = [];
@@ -486,8 +487,7 @@ async function main() {
       fixtures.push(record);
     }
     const output = {
-      environment: { platform: process.platform, arch: process.arch, cpu: os.cpus()[0]?.model, cores: os.cpus().length, memoryBytes: os.totalmem(), node: process.version,
-        revision: spawnSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" }).stdout.trim() },
+      environment: { platform: process.platform, arch: process.arch, cpu: os.cpus()[0]?.model, cores: os.cpus().length, memoryBytes: os.totalmem(), node: process.version, revision },
       settings, units: { timing: "milliseconds", sql: "prepared statement calls and materialized rows", ipc: "V8 serialization byte size", memory: "peak process RSS in KiB" },
       fixtures,
     };
