@@ -19,7 +19,7 @@ const GIT_STATES = new Set(["none", "empty", "ready", "nested", "suspicious"]);
 const WORKSPACE_KINDS = new Set(["shared", "worktree", "sandbox"]);
 /** Sandboxes are an isolated copy; never copy caches, VCS data, or the app DB. */
 const SANDBOX_SKIP = new Set([".git", ".archimedes", "node_modules", "dist", "build", ".next"]);
-const recoveredDatabases = new Map();
+const recoveredDatabases = new Set();
 const RECOVERED_TURN_NOTICE = "The app closed while this turn was running. You can continue in this chat. Check any partial changes before continuing.";
 // SQL functions stay shared; each bound facade selects its own state. A run
 // captures the facade/lease, so opening another window cannot redirect it.
@@ -1195,19 +1195,23 @@ function backfillPaperRepositories(db) {
 }
 
 /**
- * A run cannot survive the process that owned it: the container is gone, and no
- * session is left to stop. Leaving those rows as "running" makes the UI show a
- * Stop button for a job that no longer exists, so they are reconciled on open.
+ * A new process has no Reproduce session to stop. An SSH process may still be
+ * running on its host, so require the researcher to verify it before retrying.
  */
 function reconcileInterruptedReproductions(db) {
   const now = timestamp();
-  const stuck = db.prepare("SELECT id FROM reproductions WHERE status IN ('provisioning', 'running', 'diagnosing')").all();
+  const stuck = db.prepare(`SELECT reproductions.id, (
+    SELECT backend FROM reproduction_runs
+    WHERE reproduction_id = reproductions.id AND status = 'running' ORDER BY started_at DESC LIMIT 1
+  ) AS backend FROM reproductions WHERE status IN ('provisioning', 'running', 'diagnosing')`).all();
   if (!stuck.length) return 0;
-  const message = "The app stopped while this was running. Start it again.";
   for (const row of stuck) {
+    const message = /^ssh\b/i.test(row.backend || "")
+      ? "Remote process status is unconfirmed after the app closed. Check the SSH host before running again."
+      : "The app stopped while this was running. Start it again.";
     db.prepare("UPDATE reproductions SET status = 'blocked', error = ?, updated_at = ? WHERE id = ?").run(message, now, row.id);
-    db.prepare("UPDATE reproduction_runs SET status = 'interrupted', finished_at = ?, updated_at = ? WHERE reproduction_id = ? AND status = 'running'")
-      .run(now, now, row.id);
+    db.prepare("UPDATE reproduction_runs SET status = 'interrupted', error = ?, finished_at = ?, updated_at = ? WHERE reproduction_id = ? AND status = 'running'")
+      .run(message, now, now, row.id);
   }
   return stuck.length;
 }
@@ -1271,16 +1275,21 @@ function reconcileInterruptedExperimentRuns(db) {
     const now = timestamp();
     for (const row of rows) {
       let alive = false;
-      if (row.pid) {
+      const pid = Number(row.pid);
+      if (Number.isSafeInteger(pid) && pid > 0) {
         try {
-          process.kill(Number(row.pid), 0);
+          process.kill(pid, 0);
           alive = true;
         } catch (error) {
           // EPERM means the process exists but belongs to another user.
           alive = error?.code === "EPERM";
         }
       }
-      if (alive) continue;
+      if (alive) {
+        db.prepare("UPDATE experiment_runs SET error = ?, updated_at = ? WHERE id = ?")
+          .run("A process with the saved PID is still present. Verify its identity before stopping or rerunning it.", now, row.id);
+        continue;
+      }
       db.prepare("UPDATE experiment_runs SET status = 'failed', error = ?, ended_at = ?, updated_at = ? WHERE id = ?")
         .run("The run process is no longer available.", now, now, row.id);
     }
@@ -1349,16 +1358,15 @@ function initializeWorkspace(state, workspacePath) {
   schema(database);
   state.localIdentity = localIdentity;
   canonicalizeStoredWorkspacePaths(database);
-  reconcileInterruptedExperimentRuns(database);
   backfillPaperRepositories(database);
-  // Window switches reopen the same file while its turns are still running.
-  const canonicalDatabase = fs.realpathSync(databasePath);
-  const file = fs.statSync(canonicalDatabase, { bigint: true });
+  // Reopening a file through another folder does not create a new process owner.
+  const file = fs.statSync(databasePath, { bigint: true });
   const identity = `${file.dev}:${file.ino}:${file.birthtimeNs}`;
-  if (recoveredDatabases.get(canonicalDatabase) !== identity) {
+  if (!recoveredDatabases.has(identity)) {
+    reconcileInterruptedExperimentRuns(database);
     reconcileInterruptedReproductions(database);
     reconcileInterruptedResearch(database);
-    recoveredDatabases.set(canonicalDatabase, identity);
+    recoveredDatabases.add(identity);
   }
   migrateLegacyTasks(database);
   seedLibraries(database);

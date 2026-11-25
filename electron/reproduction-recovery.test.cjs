@@ -53,6 +53,40 @@ test("a verified reproduction is left alone", () => {
   }
 });
 
+test("reopening reports a remote run that may still be active and leaves an unowned PID alone", () => {
+  const root = workspace();
+  const { execFileSync } = require("node:child_process");
+  try {
+    const ids = JSON.parse(execFileSync(process.execPath, ["-e", `
+      const store = require("./store.cjs");
+      const graph = require("./research-graph/service.cjs");
+      store.openWorkspace(process.argv[1]);
+      const repro = store.createReproduction({ title: "Remote fixture" });
+      const attempt = store.createReproductionRun({ reproductionId: repro.id, backend: "SSH · fixture.invalid" });
+      store.updateReproduction(repro.id, { status: "running" });
+      const project = store.createResearchProject({ name: "PID fixture" });
+      const thread = store.createResearchThread({ projectId: project.id, prompt: "Synthetic experiment", mode: "research" });
+      const common = { projectId: project.id, threadId: thread.id, content: {} };
+      const question = graph.createNode({ ...common, kind: "question", title: "Question" });
+      const idea = graph.createNode({ ...common, kind: "idea", title: "Idea", parents: [{ nodeId: question.id }] });
+      const node = graph.createNode({ ...common, kind: "experiment", title: "Experiment", parents: [{ nodeId: idea.id }] });
+      const run = store.createExperimentRun({ ...common, nodeId: node.id, status: "starting", backend: "local", command: "fixture", cwd: process.argv[1] });
+      store.updateExperimentRun({ runId: run.id, status: "running", pid: Number(process.argv[2]) });
+      console.log(JSON.stringify({ repro: repro.id, attempt: attempt.id, run: run.id }));
+    `, root, String(process.pid)], { cwd: __dirname, encoding: "utf8" }));
+    store.openWorkspace(root);
+    assert.equal(store.getReproduction(ids.repro).status, "blocked");
+    assert.match(store.getReproduction(ids.repro).error, /Remote process status is unconfirmed/);
+    assert.equal(store.getReproductionRun(ids.attempt).status, "interrupted");
+    const run = store.getExperimentRun(ids.run);
+    assert.equal(run.status, "running");
+    assert.equal(run.pid, process.pid);
+    assert.match(run.error, /Verify its identity/);
+    store.openWorkspace(root);
+    assert.deepEqual(store.getExperimentRun(ids.run), run);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
 test("a fresh process recovers interrupted turns, pending approvals and commands without rewriting completed output", () => {
   const { spawnSync } = require("node:child_process"), path = require("node:path");
   const root = workspace();
@@ -96,6 +130,8 @@ test("a fresh process recovers interrupted turns, pending approvals and commands
     assert.equal(answers.length, 1);
     assert.equal(answers[0].payload.text, "Durable completed output");
     assert.equal(persisted.messages.at(-1).recoveryNotice, undefined);
+    store.openWorkspace(root);
+    assert.equal(store.getResearchThread(ids.orphan).events.filter(event => event.type === "run_recovered").length, 1);
     const sameText = owner.getResearchThread(ids.sameText);
     assert.deepEqual(sameText.messages.map(({ text, recoveryNotice }) => [text, recoveryNotice]), [
       [englishNotice, undefined], [englishNotice, undefined],

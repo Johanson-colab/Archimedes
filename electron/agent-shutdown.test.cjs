@@ -22,33 +22,39 @@ test("app shutdown interrupts active API work and rejects a later startup", asyn
   };
   const running = agent.runAgent({ workspace: root, prompt: "Controlled pending answer" });
   await waiting;
-  const shutdown = await agent.shutdownAgents();
-  assert.equal(shutdown.pending, 0);
+  await agent.shutdownAgentRuns();
   const result = await running;
   assert.equal(result.status, "interrupted");
   assert.equal(store.getResearchThread(result.threadId).turns[0].status, "interrupted");
   assert.equal(store.getSnapshot().tasks[0].status, "interrupted");
-  await assert.rejects(agent.runAgent({ workspace: root, threadId: result.threadId, prompt: "After quit" }), /closing/);
-  assert.deepEqual(await agent.shutdownAgents(), { pending: 0 });
+  await assert.rejects(agent.runAgent({ workspace: root, threadId: result.threadId, prompt: "After quit" }), /quitting/);
+  assert.deepEqual(await agent.shutdownAgentRuns(), []);
 });
 
 test("the actual quit handler waits for agent shutdown and prevents duplicate cleanup", async () => {
   const source = fs.readFileSync(path.join(__dirname, "main.cjs"), "utf8");
-  const start = source.indexOf('app.on("will-quit",');
-  assert.ok(start > 0, "cleanup waits for the post-window-close will-quit event");
+  const start = source.indexOf("installQuitGuard({ app, dialog,");
+  assert.ok(start > 0, "the main process installs the native quit guard");
   let release;
   const gate = new Promise(resolve => { release = resolve; });
   const calls = [];
-  let handler, prevented = 0;
-  const event = { preventDefault: () => { prevented++; } };
-  const app = { on: (_name, callback) => { handler = callback; }, quit: () => { calls.push("quit"); handler(event); } };
-  new Function("app", "store", "agent", "closeAllNativeClients", "closeAllTerminals", "experimentRunner", "collaborationServer", "presence",
-    `let readyToQuit = false, quitting = false;\n${source.slice(start)}`)(app, {}, { shutdownAgents: async () => { calls.push("agents"); await gate; } }, () => calls.push("native"), () => calls.push("terminals"), { shutdownExperimentRuns: () => calls.push("experiments") }, { close: () => calls.push("server") }, { closeAll: () => calls.push("presence") });
-  handler(event); handler(event);
-  await Promise.resolve();
-  assert.deepEqual(calls, ["native", "terminals", "experiments", "agents"]);
-  assert.equal(prevented, 2);
+  const app = new (require("node:events").EventEmitter)();
+  const event = () => ({ defaultPrevented: false, preventDefault() { this.defaultPrevented = true; } });
+  app.quit = () => { calls.push("quit"); app.emit("will-quit", event()); };
+  const { installQuitGuard } = require("./runtime/active-runs.cjs");
+  new Function("scope", `with(scope) { let stoppingResearch = false; ${source.slice(start)} }`)({
+    app, installQuitGuard, listActiveRuns: () => [], dialog: { showMessageBox: async () => ({ response: 1 }) },
+    store: { closeAllWorkspaces: () => calls.push("store") },
+    agent: { hasActiveAgentRuns: () => true, shutdownAgentRuns: async () => { calls.push("agents"); await gate; } },
+    closeAllNativeClients: () => calls.push("native"), closeAllTerminals: () => calls.push("terminals"),
+    experimentRunner: { shutdownExperimentRuns: () => calls.push("experiments") },
+    collaborationServer: { close: () => calls.push("server") }, presence: { closeAll: () => calls.push("presence") },
+  });
+  app.emit("before-quit", event());
+  await new Promise(setImmediate);
+  app.emit("will-quit", event());
+  assert.deepEqual(calls, ["quit", "experiments", "agents"]);
   release();
   await new Promise(setImmediate);
-  assert.deepEqual(calls, ["native", "terminals", "experiments", "agents", "server", "presence", "quit"]);
+  assert.deepEqual(calls, ["quit", "experiments", "agents", "quit", "native", "terminals", "experiments", "server", "presence", "store"]);
 });
