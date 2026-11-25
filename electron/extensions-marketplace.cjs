@@ -2,6 +2,8 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 
+const { secretCodec, writePrivateJson } = require("./security/secrets-store.cjs");
+
 const SETTINGS_FILE = "extension-sources.json";
 const CATALOG_PATH = path.join(__dirname, "..", "shared", "extensions-catalog.json");
 const CACHE_TTL = 5 * 60 * 1000;
@@ -51,6 +53,7 @@ const DEFAULT_SOURCES = [
 ];
 
 let settingsPath = "";
+let codec;
 let sourceCache = new Map();
 let lastFeed = { items: [], at: 0 };
 
@@ -84,7 +87,6 @@ function normalizeSource(input, index = 0) {
     type,
     url: safeString(input?.url, 2_000),
     query: safeString(input?.query, 500),
-    token: safeString(input?.token, 4_000),
     enabled: input?.enabled !== false,
     builtin: Boolean(input?.builtin),
   };
@@ -92,35 +94,38 @@ function normalizeSource(input, index = 0) {
 
 function readSources() {
   if (!settingsPath) return DEFAULT_SOURCES.map((source) => ({ ...source }));
-  try {
-    if (!fs.existsSync(settingsPath)) return DEFAULT_SOURCES.map((source) => ({ ...source }));
-    const parsed = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
-    const list = Array.isArray(parsed) ? parsed : parsed?.sources;
-    if (!Array.isArray(list)) return DEFAULT_SOURCES.map((source) => ({ ...source }));
-    const normalized = list
-      .slice(0, MAX_SOURCES)
-      .map((source, index) => normalizeSource(source, index))
-      .filter((source) => source.name);
-    const seen = new Set();
-    const result = normalized.filter((source) => {
-      if (seen.has(source.id)) return false;
-      seen.add(source.id);
-      return true;
-    });
-    if (!result.some((source) => source.type === "archimedes")) result.unshift({ ...DEFAULT_SOURCES[0] });
-    return result;
-  } catch {
-    return DEFAULT_SOURCES.map((source) => ({ ...source }));
+  if (!fs.existsSync(settingsPath)) return DEFAULT_SOURCES.map(source => ({ ...source }));
+  const parsed = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
+  const list = Array.isArray(parsed) ? parsed : parsed.sources;
+  if (!Array.isArray(list)) throw new Error("Could not read extension sources.");
+  let migrated = false;
+  const seen = new Set();
+  const sources = [];
+  for (const [index, input] of list.slice(0, MAX_SOURCES).entries()) {
+    const source = normalizeSource(input, index);
+    if (seen.has(source.id)) continue;
+    seen.add(source.id);
+    if (input.token) {
+      const encrypted = codec.encrypt(input.token);
+      if (codec.decrypt(encrypted) !== input.token) throw new Error("Could not verify the saved extension credential.");
+      source.encryptedToken = encrypted;
+      migrated = true;
+    } else if (input.encryptedToken) source.encryptedToken = input.encryptedToken;
+    sources.push(source);
   }
+  if (!sources.some(source => source.type === "archimedes")) sources.unshift({ ...DEFAULT_SOURCES[0] });
+  if (migrated) writeSources(sources);
+  return sources;
 }
 
 function writeSources(sources) {
   if (!settingsPath) throw new Error("Extensions settings are unavailable.");
-  fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
-  fs.writeFileSync(settingsPath, `${JSON.stringify({ version: 1, sources }, null, 2)}\n`, "utf8");
+  writePrivateJson(settingsPath, { version: 2, sources });
 }
 
-function initialize(userDataPath) {
+function initialize(userDataPath, safeStorage) {
+  codec = secretCodec(safeStorage);
+  clearCache();
   settingsPath = path.join(userDataPath, SETTINGS_FILE);
 }
 
@@ -129,10 +134,11 @@ function clearCache() {
   lastFeed = { items: [], at: 0 };
 }
 
-function sourceStatus(source) {
+function sourceStatus({ encryptedToken, ...source }) {
   const cached = sourceCache.get(source.id);
   return {
     ...source,
+    hasToken: Boolean(encryptedToken),
     count: cached?.items?.length || 0,
     total: cached?.total || 0,
     lastSync: cached?.at ? new Date(cached.at).toISOString() : "",
@@ -146,7 +152,18 @@ function listSources() {
 
 function saveSources(input) {
   if (!Array.isArray(input)) throw new Error("Extension sources must be a list.");
-  const sources = input.slice(0, MAX_SOURCES).map((source, index) => normalizeSource(source, index));
+  const previous = new Map(readSources().map(source => [source.id, source]));
+  const sources = input.slice(0, MAX_SOURCES).map((item, index) => {
+    const source = normalizeSource(item, index);
+    const prior = previous.get(source.id);
+    if (typeof item.token === "string") {
+      const token = safeString(item.token, 4000);
+      if (token) source.encryptedToken = codec.encrypt(token);
+    } else if (prior?.encryptedToken && prior.url === source.url && prior.type === source.type && prior.query === source.query) {
+      source.encryptedToken = prior.encryptedToken;
+    }
+    return source;
+  });
   const seen = new Set();
   const unique = sources.filter((source) => {
     if (seen.has(source.id)) return false;
@@ -177,11 +194,17 @@ async function requestJson(url, source, ms = 9_000) {
   const timer = timeoutSignal(ms);
   try {
     const headers = { Accept: "application/json", "User-Agent": "Archimedes/0.1" };
-    if (source?.token) headers.Authorization = `Bearer ${source.token}`;
+    const token = source?.encryptedToken ? codec.decrypt(source.encryptedToken) : "";
+    if (token) headers.Authorization = `Bearer ${token}`;
     if (source?.type === "github") headers.Accept = "application/vnd.github+json";
-    const response = await fetch(target, { headers, signal: timer.signal });
+    const response = await fetch(target, { headers, signal: timer.signal, redirect: token ? "error" : "follow" });
     if (!response.ok) throw new Error(`Source returned HTTP ${response.status}.`);
-    return await response.json();
+    if (!token) return await response.json();
+    const body = await response.text();
+    if (body.includes(token) || body.includes(JSON.stringify(token).slice(1, -1)))
+      throw new Error("The extension source returned its credential.");
+    try { return JSON.parse(body); }
+    catch { throw new Error("The extension source returned invalid JSON."); }
   } catch (error) {
     if (error?.name === "AbortError") throw new Error("Source timed out.");
     throw error;
@@ -190,13 +213,12 @@ async function requestJson(url, source, ms = 9_000) {
   }
 }
 
-async function requestText(url, source, ms = 9_000) {
+async function requestText(url, ms = 9_000) {
   const target = safeUrl(url);
   if (!target) throw new Error("Source URL is invalid.");
   const timer = timeoutSignal(ms);
   try {
     const headers = { Accept: "text/plain", "User-Agent": "Archimedes/0.1" };
-    if (source?.token) headers.Authorization = `Bearer ${source.token}`;
     const response = await fetch(target, { headers, signal: timer.signal });
     if (!response.ok) throw new Error(`Source returned HTTP ${response.status}.`);
     return await response.text();
@@ -533,7 +555,7 @@ async function previewExtension({ id, workspace } = {}) {
     const attempts = ["SKILL.md", "README.md"];
     for (const candidate of attempts) {
       try {
-        content = await requestText(`https://raw.githubusercontent.com/${item.repo}/HEAD/${candidate}`, {});
+        content = await requestText(`https://raw.githubusercontent.com/${item.repo}/HEAD/${candidate}`);
         filename = candidate;
         break;
       } catch {
