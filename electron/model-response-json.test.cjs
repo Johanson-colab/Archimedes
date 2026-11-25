@@ -58,9 +58,7 @@ test("malformed successful responses cannot echo private headers through their d
 test("non-streaming and temperature retries use the same safe JSON decoder", async t => {
   const fetchImpl = t.mock.method(globalThis, "fetch", async (url, options) => {
     const request = JSON.parse(options.body);
-    if (request.stream) return new Response('data: {"type":"response.output_text.delta","delta":"OK"}\n\n', {
-      headers: { "Content-Type": "text/event-stream" },
-    });
+    if (request.stream) return new Response("Streaming is not supported", { status: 400 });
     if (Object.hasOwn(request, "temperature")) return new Response("temperature is unsupported", { status: 400 });
     return invalidJsonResponse(url, options);
   });
