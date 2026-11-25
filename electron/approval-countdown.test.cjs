@@ -9,6 +9,19 @@ function fakeClock() {
   return { now: () => time, setInterval: fn => { callback = fn; return 1; }, clearInterval: () => {}, advance: ms => { time += ms; callback(); } };
 }
 
+test('only managed local command approvals qualify for a countdown', async () => {
+  const { localCommandApprovalId } = await countdown;
+  const action = { id: 'local', kind: 'command', payload: { managedByAgent: true } };
+  assert.equal(localCommandApprovalId(action), 'local');
+  for (const remoteOperation of ['ssh_remote_exec', 'ssh_remote_read', 'ssh_remote_edit']) {
+    assert.equal(localCommandApprovalId({ ...action, payload: { ...action.payload, remoteOperation } }), null);
+    assert.equal(localCommandApprovalId({ ...action, payload: { remoteOperation } }), null);
+  }
+  assert.equal(localCommandApprovalId({ ...action, kind: 'write' }), null);
+  assert.equal(localCommandApprovalId({ ...action, payload: {} }), null);
+  assert.equal(localCommandApprovalId(null), null);
+});
+
 test('countdown runs exactly once after ten seconds', async () => {
   const { startApprovalCountdown } = await countdown;
   const clock = fakeClock(), ticks = []; let runs = 0;
