@@ -523,29 +523,9 @@ function applyPatchInTransaction({ projectId, threadId = null, turnId = null, pa
     edges,
   );
 
-  const supersedeMap = new Map(normalized.supersede.map((entry) => [entry.nodeId, entry]));
-  const newIdeaTempIds = newNodes.filter((node) => node.kind === "idea").map((node) => node.tempId);
-  if (newIdeaTempIds.length >= 2) {
-    const questionIds = new Set();
-    for (const edge of edges) {
-      if (edge.kind !== "generates" || !newIdeaTempIds.includes(edge.to)) continue;
-      const fromId = resolved.get(edge.from) || (existingById.has(edge.from) ? edge.from : null);
-      if (fromId && existingById.get(fromId)?.kind === "question") questionIds.add(fromId);
-    }
-    for (const questionId of questionIds) {
-      for (const edge of existingEdges) {
-        if (edge.from_node !== questionId || edge.kind !== "generates") continue;
-        const target = existingById.get(edge.to_node);
-        if (target?.kind === "idea" && target.status !== "retracted" && !supersedeMap.has(target.id)) {
-          supersedeMap.set(target.id, {
-            nodeId: target.id,
-            reason: "Superseded by a newer idea round on this question.",
-          });
-        }
-      }
-    }
-  }
-  const supersede = [...supersedeMap.values()];
+  // New alternatives do not imply that older ideas were rejected. Only
+  // explicitly requested retractions in the patch may change their status.
+  const supersede = normalized.supersede;
 
   const createdNodes = [];
   const appliedEdges = new Set();

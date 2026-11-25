@@ -17,12 +17,10 @@ test("the paper reader exposes Canvas beside the original paper and review", () 
   assert.match(library, /<PaperCanvas[\s\S]*?paperId=\{paper\.id\}/);
 });
 
-test("PDF selection, figure capture, and highlights can seed the canvas", () => {
+test("PDF selections and highlights can seed the canvas", () => {
   assert.match(library, /function addSelectionToCanvas\(\)/);
   assert.match(library, /setCanvasInsert\(\{ nonce: Date\.now\(\), type: "quote", page: pageNumber, quote: selection/);
   assert.match(library, /className="add-to-canvas-action"/);
-  assert.match(library, /function addFigureToCanvas\(\)/);
-  assert.match(library, /type: "figure", page: figureCapture\.pageNumber/);
   assert.match(library, /function addHighlightToCanvas\(highlight: PaperHighlight\)/);
   assert.match(library, /onOpenSource=\{openCanvasSource\}/);
   assert.match(library, /function openCanvasSource\(source: PaperCanvasSource\)/);

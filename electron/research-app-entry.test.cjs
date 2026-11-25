@@ -13,12 +13,14 @@ function extract(name) {
 async function harness(overrides = {}) {
   const calls = [], enabled = [];
   const scope = {
-    hiddenCoreModules: new Set(["reproduce", "image-creation", "extensions", "data-charts", "daily"]),
+    hiddenCoreModules: new Set(["reproduce", "image-creation", "extensions", "data-charts", "daily", "writing"]),
     mainNavigationRef: { current: 0 },
     setCoreModuleEnabled: async (id) => { enabled.push(id); },
     updateMainSection: (section) => calls.push(section),
     setAppEntryError: (error) => { scope.error = error; },
     setDailyStartMode: (mode) => { scope.dailyMode = mode; },
+    setDailyOpened: (open) => { scope.dailyOpen = open; },
+    setLiteratureReviewOpened: (open) => { scope.literatureReviewOpen = open; },
     setImageCreationOpened: (open) => { scope.figureOpen = open; },
     setDataChartsOpened: (open) => { scope.chartsOpen = open; },
     setDataAnalysisOpened() {}, setResearchMode() {},
@@ -41,15 +43,18 @@ const settle = () => new Promise((resolve) => setImmediate(resolve));
 
 test("home, proactive and sidebar routes enable their actual app before showing it", async () => {
   const h = await harness();
-  h.openWelcomeWorkflow("replication"); await settle();
-  assert.deepEqual(h.enabled, ["reproduce"]);
-  assert.equal(h.calls.at(-1), "reproduce");
-  h.openWelcomeWorkflow("figure"); await settle();
+  h.openWelcomeWorkflow("writing"); await settle();
+  assert.deepEqual(h.enabled, ["writing"]);
+  assert.equal(h.calls.at(-1), "writing");
+  h.openWelcomeWorkflow("illustration"); await settle();
   assert.equal(h.enabled.at(-1), "image-creation");
   assert.equal(h.scope.figureOpen, true);
-  await h.runProactiveSuggestion({ action: { kind: "open", target: "daily" } }); await settle();
+  h.openWelcomeWorkflow("literature"); await settle();
   assert.equal(h.enabled.at(-1), "daily");
   assert.equal(h.scope.dailyMode, "latest");
+  assert.equal(h.scope.dailyOpen, true);
+  await h.runProactiveSuggestion({ action: { kind: "open", target: "literature-review" } });
+  assert.equal(h.scope.literatureReviewOpen, true);
   h.activateSidebarEntry({ destination: { section: "data-charts" } }); await settle();
   assert.equal(h.scope.chartsOpen, true);
   assert.equal(h.calls.at(-1), "data-charts");
@@ -86,7 +91,7 @@ test("the command palette opens chart references for the exact legacy name", asy
     delete global.window; delete global.document; delete global.IS_REACT_ACT_ENVIRONMENT;
   });
 
-  const h = await harness({ hiddenCoreModules: new Set() });
+  const h = await harness({ hiddenCoreModules: new Set(["data-charts"]) });
   const metadata = require("../shared/research-apps.json");
   const entries = [
     { id: "data-analysis", labelKey: "Data analysis" },
@@ -96,7 +101,7 @@ test("the command palette opens chart references for the exact legacy name", asy
     React,
     activateSidebarEntry: h.activateSidebarEntry,
     legacyResearchAppLabel: id => metadata.apps[id]?.legacyLabel,
-    flatModuleEntries: entries.map(entry => ({ ...entry, commandId: "open-" + entry.id, destination: { section: entry.id }, icon: () => null })),
+    registeredSidebarEntries: entries.map(entry => ({ ...entry, commandId: "open-" + entry.id, destination: { section: entry.id }, icon: () => null })),
   });
   const mapping = /const moduleCommands: PaletteCommand\[\] = ([\s\S]*?);\n  const moduleButton/.exec(source)[1];
   const commands = await h.evaluate(mapping);
@@ -118,6 +123,7 @@ test("the command palette opens chart references for the exact legacy name", asy
     await React.act(() => input.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Enter", bubbles: true })));
     assert.equal(h.calls.at(-1), destination, query);
   }
+  assert.deepEqual(h.enabled, ["data-charts"]);
 });
 
 test("opening waits for persisted visibility, and a failed save keeps the current page reachable", async () => {

@@ -10,6 +10,7 @@ const LAYOUTS = new Set(["flat", "tabs", "sections"]);
 // Must match the ids in src/sidebar-registry.tsx coreSidebarEntries.
 const CORE_MODULE_IDS = [
   "library",
+  "literature-review",
   "daily",
   "news",
   "benchmark-radar",

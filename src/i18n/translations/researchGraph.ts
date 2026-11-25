@@ -2,6 +2,7 @@
 // Keys stay sorted so concurrent changes do not collide.
 
 export const researchGraph: Record<string, string> = {
+  "An earlier graph extraction failed. Try again.": "之前有一轮图谱提取失败，请重试。",
   "Activity completed": "已完成",
   "Activity failed": "失败",
   "Activity note": "记录",

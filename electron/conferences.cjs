@@ -1,4 +1,5 @@
 const { JSDOM } = require("jsdom");
+const { downloadConferenceCatalog } = require("./conference-download.cjs");
 const { findRepositoryUrl } = require("./paper-repository.cjs");
 const conferences = require("../shared/conferences.json");
 const { matchesDailyTopic } = require("./literature.cjs");
@@ -6,6 +7,12 @@ const { matchesDailyTopic } = require("./literature.cjs");
 const YEAR_MIN = 2023;
 const YEAR_MAX = 2026;
 const TTL = 6 * 60 * 60 * 1000;
+const ABSTRACTS_UNAVAILABLE = "Abstracts could not be loaded; titles and official links remain available.";
+const ABSTRACTS_LOADING = "Abstracts are loading; titles and official links are ready.";
+function needsAbstracts(catalog) {
+  return catalog?.abstracts_pending || (catalog?.warnings?.includes(ABSTRACTS_UNAVAILABLE)
+    && !(Date.now() - Date.parse(catalog.abstracts_attempted_at) < 60000));
+}
 const pending = new Map();
 const RANK = { oral: 3, spotlight: 2, poster: 1, unknown: 0 };
 const clean = (value) => String(value || "").replace(/\s+/g, " ").trim();
@@ -92,8 +99,8 @@ function deduplicate(papers) {
   return [...byTitle.values()];
 }
 
-async function get(url, context, optional = false) {
-  const response = await context.fetchImpl(url, { headers: { "User-Agent": "Archimedes-Research/0.1", Accept: "application/json,text/html" }, signal: AbortSignal.timeout(45000) });
+async function get(url, context, optional = false, timeoutMs = 30000) {
+  const response = await context.fetchImpl(url, { headers: { "User-Agent": "Archimedes-Research/0.1", Accept: "application/json,text/html" }, signal: AbortSignal.timeout(timeoutMs) });
   if (optional && [404, 410].includes(response.status)) return null;
   if (!response.ok) throw new Error(`Official source returned HTTP ${response.status}: ${url}`);
   const text = await response.text();
@@ -165,13 +172,26 @@ function enrichSchedule(papers, html, presentation, sourceUrl, abstracts = {}) {
 async function loadVirtual(meta, context) {
   const sourceUrl = `${meta.host}/static/virtual/data/${meta.id}-${meta.year}-orals-posters.json`;
   const abstractUrl = `${meta.host}/static/virtual/data/${meta.id}-${meta.year}-abstracts.json`;
-  const [catalogText, abstractResult] = await Promise.all([get(sourceUrl, context, true), get(abstractUrl, context, true).catch(() => null)]);
+  // Both large files use validated ranges and segment retries. Publish title
+  // records first so a slow abstract transfer does not blank the whole view.
+  const abstractDownload = downloadConferenceCatalog(abstractUrl, context).catch(() => null);
+  const catalogText = await downloadConferenceCatalog(sourceUrl, context);
   if (!catalogText) return { papers: [], status: "not_published", sources: [sourceUrl] };
   let payload = JSON.parse(catalogText);
   if (!Array.isArray(payload.results)) throw new Error("The official conference catalog format has changed.");
   const rows = [...payload.results];
-  const abstracts = abstractResult ? JSON.parse(abstractResult) : {};
-  const warnings = [];
+  context.onCatalogReady?.({ papers: deduplicate(normalizeVirtualRows(rows, {}, meta, sourceUrl)),
+    status: "partial", sources: [sourceUrl], warnings: [ABSTRACTS_LOADING], abstracts_pending: true });
+  const abstractResult = await abstractDownload;
+  let abstracts = {};
+  let hasAbstracts = false;
+  try {
+    if (abstractResult) { abstracts = JSON.parse(abstractResult); hasAbstracts = Boolean(abstracts && typeof abstracts === "object" && !Array.isArray(abstracts)); }
+  } catch { /* Optional enrichment must not discard a valid paper catalog. */ }
+  hasAbstracts = hasAbstracts && rows.some(row => typeof abstracts[String(row.id)] === "string" && clean(abstracts[String(row.id)]));
+  if (!hasAbstracts) abstracts = {};
+  const warnings = hasAbstracts ? [] : [ABSTRACTS_UNAVAILABLE];
+  let incompleteCatalog = false;
   const visited = new Set();
   while (payload.next) {
     const next = publicUrl(payload.next, meta.host);
@@ -182,6 +202,7 @@ async function loadVirtual(meta, context) {
       if (!Array.isArray(payload.results)) throw new Error("Invalid catalog page.");
       rows.push(...payload.results);
     } catch (error) {
+      incompleteCatalog = true;
       warnings.push("The official presentation catalog could not be loaded completely.");
       break;
     }
@@ -189,8 +210,8 @@ async function loadVirtual(meta, context) {
   }
   let papers = normalizeVirtualRows(rows, abstracts, meta, sourceUrl);
   const sources = [sourceUrl];
-  if (abstractResult) sources.push(abstractUrl);
-  if (warnings.length && ["cvpr", "iccv"].includes(meta.id)) {
+  if (hasAbstracts) sources.push(abstractUrl);
+  if (incompleteCatalog && ["cvpr", "iccv"].includes(meta.id)) {
     const proceedingsUrl = `https://openaccess.thecvf.com/${meta.label}${meta.year}?day=all`;
     const html = await get(proceedingsUrl, context);
     papers.push(...parseCvf(html, meta, proceedingsUrl));
@@ -204,9 +225,10 @@ async function loadVirtual(meta, context) {
       } catch { /* Proceedings remain verifiable even if a presentation schedule cannot be read. */ }
     }
     const unknown = papers.filter((paper) => paper.conference.presentation === "unknown").length;
-    warnings[0] = unknown ? `The official proceedings filled the catalog. ${unknown} papers could not be matched to an accessible presentation schedule and are marked Unclassified.` : "";
+    warnings[warnings.indexOf("The official presentation catalog could not be loaded completely.")] = unknown ? `The official proceedings filled the catalog. ${unknown} papers could not be matched to an accessible presentation schedule and are marked Unclassified.` : "";
   }
-  return { papers: deduplicate(papers), status: warnings.some(Boolean) ? "partial" : "available", sources, warnings: warnings.filter(Boolean) };
+  return { papers: deduplicate(papers), status: warnings.some(Boolean) ? "partial" : "available", sources, warnings: warnings.filter(Boolean),
+    abstracts_pending: false, abstracts_attempted_at: new Date().toISOString() };
 }
 
 function parseAnthology(html, meta, sourceUrl) {
@@ -306,30 +328,54 @@ async function searchConferencePapers(input, options = {}) {
   const context = { fetchImpl: options.fetchImpl || fetch };
   // v2 stops surfacing access-controlled OpenReview forum links as paper records.
   const cacheKey = `conference-v2:${meta.id}:${meta.year}`;
-  let catalog = !input.forceRefresh ? options.readCache?.(cacheKey, TTL) : null;
+  let catalog = input.cacheOnly ? options.readCache?.(cacheKey) : !input.forceRefresh ? options.readCache?.(cacheKey, TTL) : null;
   let cached = Boolean(catalog);
-  let stale = false;
+  const retryAbstracts = needsAbstracts(catalog);
+  let stale = Boolean(input.cacheOnly && catalog && (retryAbstracts || !(Date.now() - Date.parse(catalog.fetched_at) < TTL)));
+  if (!input.cacheOnly && retryAbstracts) { catalog = null; cached = false; }
   if (meta.parity !== undefined && query.year % 2 !== meta.parity) {
     catalog = { papers: [], status: "not_held", sources: [meta.host], fetched_at: meta.retrieved_at,
       warnings: [`${meta.label} ${query.year} is not held. ${meta.label} runs in ${meta.parity ? "odd" : "even"}-numbered years.`] };
   }
   if (!catalog) {
+    if (input.cacheOnly) return null;
     const lockKey = `${options.scope || "default"}:${cacheKey}`;
     if (!pending.has(lockKey)) {
+      const previous = options.readCache?.(cacheKey);
+      context.onCatalogReady = (ready) => {
+        // Keep existing abstracts during a refresh; never downgrade a complete
+        // cached catalog to a title-only snapshot.
+        if (previous?.papers?.length && !previous.abstracts_pending && !previous.warnings?.includes(ABSTRACTS_UNAVAILABLE)) return;
+        const snapshot = previous?.papers?.length ? { ...previous, abstracts_pending: true,
+          warnings: [...(previous.warnings || []).filter(warning => warning !== ABSTRACTS_UNAVAILABLE && warning !== ABSTRACTS_LOADING), ABSTRACTS_LOADING] } : ready;
+        options.writeCache?.(cacheKey, { ...snapshot, fetched_at: meta.retrieved_at });
+      };
       pending.set(lockKey, (async () => {
         const loaded = await (meta.type === "anthology" ? loadAnthology(meta, context) : meta.type === "aaai" ? loadAaai(meta, context) : loadVirtual(meta, context));
+        // A failed refresh must not erase abstracts that were already obtained.
+        if (loaded.warnings?.includes(ABSTRACTS_UNAVAILABLE) && previous?.papers?.length) {
+          const known = new Map(previous.papers.map(paper => [paper.external_id, paper.abstract]));
+          loaded.papers = loaded.papers.map(paper => ({ ...paper, abstract: paper.abstract || known.get(paper.external_id) || "" }));
+          loaded.sources = [...new Set([...loaded.sources, ...(previous.sources || [])])];
+        }
         const result = { ...loaded, fetched_at: meta.retrieved_at };
         options.writeCache?.(cacheKey, result);
         return result;
       })());
     }
-    try { catalog = await pending.get(lockKey); }
+    const task = pending.get(lockKey);
+    try { catalog = await task; }
     catch (error) {
       catalog = options.readCache?.(cacheKey);
       if (!catalog) throw error;
       cached = true; stale = true;
-      catalog = { ...catalog, warnings: [...(catalog.warnings || []), `Refresh failed; showing cached official records. ${error.message}`] };
-    } finally { pending.delete(lockKey); }
+      const wasPending = catalog.abstracts_pending;
+      catalog = { ...catalog, abstracts_pending: false,
+        ...(wasPending ? { status: "partial", abstracts_attempted_at: new Date().toISOString() } : {}),
+        warnings: [...(catalog.warnings || []).filter(warning => warning !== ABSTRACTS_LOADING),
+          ...(wasPending ? [ABSTRACTS_UNAVAILABLE] : []), `Refresh failed; showing cached official records. ${error.message}`] };
+      if (wasPending) { try { options.writeCache?.(cacheKey, catalog); } catch { /* Keep the readable fallback even if persistence also failed. */ } }
+    } finally { if (pending.get(lockKey) === task) pending.delete(lockKey); }
   }
   const terms = query.query.match(/"[^"]+"|\S+/g)?.map((term) => term.replace(/^"|"$/g, "").toLowerCase()) || [];
   const filtered = catalog.papers.filter((paper) => {
@@ -342,6 +388,7 @@ async function searchConferencePapers(input, options = {}) {
   return { papers: filtered.slice(query.offset, query.offset + query.limit), total: filtered.length,
     catalog_total: catalog.papers.length, presentation_counts: counts, options: query,
     sources: catalog.sources, status: catalog.status, warnings: catalog.warnings || [],
+    abstracts_pending: Boolean(catalog.abstracts_pending),
     fetched_at: catalog.fetched_at, cached, stale, has_more: query.offset + query.limit < filtered.length };
 }
 

@@ -25,12 +25,12 @@ test("welcome entrance motion is shortened and no longer loops", () => {
   assert.doesNotMatch(css, /18s 1\.05s ease-in-out infinite/);
 });
 
-test("the welcome replication card opens the reproduce module", () => {
+test("the welcome writing card opens the paper writing module", () => {
   const app = fs.readFileSync(path.resolve(__dirname, "..", "src", "App.tsx"), "utf8");
   const welcome = fs.readFileSync(path.resolve(__dirname, "..", "src", "ResearchWelcome.tsx"), "utf8");
-  assert.match(welcome, /id: "replication"/);
-  assert.match(welcome, /title: "Reproduce a paper"/);
-  assert.match(app, /action === "replication"\)\s*\{\s*void openResearchApp\("reproduce"\)/);
+  assert.match(welcome, /id: "writing"/);
+  assert.match(welcome, /title: "Create a paper"/);
+  assert.match(app, /action === "writing"\)\s*\{\s*void openResearchApp\("writing"\)/);
 });
 
 test("all welcome images resolve inside the app for file and web deployments", async () => {
@@ -60,5 +60,41 @@ test("all welcome images resolve inside the app for file and web deployments", a
         : path.join(root, "public/welcome", path.posix.basename(src));
       assert.ok(fs.statSync(asset).size > 0, `Missing welcome asset: ${src}`);
     }
+  }
+});
+
+test("clicking the writing card opens the same section as Paper writing in both languages", async () => {
+  const { JSDOM } = require("jsdom");
+  const React = require("react");
+  const { createRoot } = require("react-dom/client");
+  const { transformWithOxc } = await import("vite");
+  const rootPath = path.resolve(__dirname, "..");
+  const welcome = fs.readFileSync(path.join(rootPath, "src/ResearchWelcome.tsx"), "utf8")
+    .replace(/^import .*;\r?\n/gm, "").replace(/export (?:default |type )/g, "")
+    .replaceAll("import.meta.env.BASE_URL", JSON.stringify("./"));
+  const { code } = await transformWithOxc(welcome, "ResearchWelcome.tsx", { jsx: { runtime: "classic" } });
+  const app = fs.readFileSync(path.join(rootPath, "src/App.tsx"), "utf8");
+  const start = app.indexOf("  function openWelcomeWorkflow(");
+  const end = app.indexOf("\n  async function runProactiveSuggestion", start);
+  const handler = await transformWithOxc(app.slice(start, end), "handler.ts");
+  assert.ok(start >= 0 && end > start);
+  const dom = new JSDOM('<div id="root"></div>', { url: "http://localhost" });
+  global.window = dom.window; global.document = dom.window.document; global.IS_REACT_ACT_ENVIRONMENT = true;
+  try {
+    for (const language of ["en", "zh"]) {
+      let destination = "";
+      const onSelect = new Function("setResearchMode", "openResearchApp", `${handler.code}\nreturn openWelcomeWorkflow;`)(() => {}, value => { destination = value; });
+      const translations = { "Create a paper": "创建论文", "Draft and refine your manuscript.": "撰写与完善你的论文。" };
+      const Component = new Function("React", "ArrowUpRight", "useUISettings", `${code}\nreturn ResearchWelcome;`)(React, () => null, () => ({ t: key => language === "zh" ? translations[key] || key : key }));
+      const mount = createRoot(document.getElementById("root"));
+      await React.act(async () => mount.render(React.createElement(Component, { onSelect })));
+      const button = document.querySelector(".research-workflow-writing");
+      assert.ok(button); assert.match(button.textContent, language === "zh" ? /创建论文/ : /Create a paper/);
+      await React.act(async () => button.click());
+      assert.equal(destination, "writing");
+      await React.act(async () => mount.unmount());
+    }
+  } finally {
+    dom.window.close(); delete global.window; delete global.document; delete global.IS_REACT_ACT_ENVIRONMENT;
   }
 });

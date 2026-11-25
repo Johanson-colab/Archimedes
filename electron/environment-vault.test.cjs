@@ -34,3 +34,14 @@ test('shares only opted-in keys and never returns values to the renderer', t => 
   assert.deepEqual(vault.list(), [{ name: 'HF_TOKEN', shared: true }, { name: 'OPENAI_API_KEY', shared: false }]);
   assert.throws(() => vault.save({ name: 'PATH', value: '/tmp', shared: true }), /Only names/);
 });
+
+test('OpenAlex search can read its specific saved key without exposing other secrets', t => {
+  const { vault } = fixture(t);
+  vault.save({ name: 'OPENALEX_API_KEY', value: 'synthetic-openalex' });
+  vault.save({ name: 'HF_TOKEN', value: 'synthetic-hf' });
+  vault.save({ name: 'SEMANTIC_SCHOLAR_API_KEY', value: 'synthetic-s2' });
+  assert.equal(vault.getForService('OPENALEX_API_KEY'), 'synthetic-openalex');
+  assert.equal(vault.getForService('SEMANTIC_SCHOLAR_API_KEY'), 'synthetic-s2');
+  assert.throws(() => vault.getForService('HF_TOKEN'), /Unsupported/);
+  assert.equal(JSON.stringify(vault.list()).includes('synthetic'), false);
+});

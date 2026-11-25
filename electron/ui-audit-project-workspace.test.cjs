@@ -23,8 +23,9 @@ test("projects persist a bound folder and sessions snapshot their inherited fold
 });
 
 test("agent and review runs separate the data workspace from the execution folder", () => {
-  assert.match(main, /const dataWorkspace = workspaceForWindow\(BrowserWindow\.fromWebContents\(event\.sender\)\) \|\| workspace;/);
-  assert.match(main, /store\.openWorkspace\(dataWorkspace\);/);
+  assert.match(main, /const ipcMain = createWorkspaceIpc\(\{ ipcMain: electronIpcMain, store,/);
+  assert.match(main, /windowWorkspaces\.get\(event\.sender\.id\)/);
+  assert.match(main, /const dataStore = store\.currentStore\(\);[\s\S]*?agent\.runAgent\(\{\s+dataStore,/);
   assert.match(agent, /createResearchThread\(\{ prompt, mode, projectId, workspacePath: workspace, workspaceId, visibility, kind: origin === "paper" \? "paper" : "research", title \}\)/);
   assert.match(main, /ipcMain\.handle\("research-project:set-workspace"/);
   assert.match(preload, /setResearchProjectWorkspace: \(id, workspacePath\)/);
