@@ -7,6 +7,8 @@ export type BibliographyBridge = ResearchDeskBridge & {
 };
 
 const fields = ["title", "authors", "year", "venue", "doi", "arxiv_id", "url", "pdf_url"] as const;
+const opaqueFields = new Set(["url", "doi", "eprint"]);
+const legacyTitleSpellings = new WeakMap<AcademicSearchResult, { title: string; citekey: string }>();
 const accentMarks: Record<string, string> = {
   "'": "\u0301", "\x60": "\u0300", '"': "\u0308", "^": "\u0302", "~": "\u0303",
   "=": "\u0304", ".": "\u0307", b: "\u0331", c: "\u0327", d: "\u0323",
@@ -18,7 +20,7 @@ const characterCommands: Record<string, string> = {
 };
 
 // Grouping braces affect capitalization, escaped braces are literal metadata.
-function plain(value: string) {
+function plain(value: string, latexText = true) {
   let result = "";
   for (let index = 0; index < value.length; index++) {
     if (value[index] === "\\") {
@@ -29,11 +31,11 @@ function plain(value: string) {
       if (backslash) {
         result += "\\";
         index += backslash[0].length - 1;
-      } else if (accent) {
+      } else if (latexText && accent) {
         const letter = (accent[2] || accent[3]).replace(/^\\/, "");
         result += (letter + accentMarks[accent[1]]).normalize("NFC");
         index += accent[0].length - 1;
-      } else if (command && Object.hasOwn(characterCommands, command[1])) {
+      } else if (latexText && command && Object.hasOwn(characterCommands, command[1])) {
         result += characterCommands[command[1]];
         index += command[0].length - 1;
       } else if (/[{}&%_#$]/.test(value[index + 1] || "")) {
@@ -41,15 +43,17 @@ function plain(value: string) {
       } else {
         result += value[index];
       }
-    } else if (value[index] !== "{" && value[index] !== "}") result += value[index];
+    } else if (value[index] !== "{" && value[index] !== "}") {
+      result += latexText && value[index] === "~" ? "\u00a0" : value[index];
+    }
   }
-  return result.trim();
+  return latexText ? result.replace(/^[^\S\u00a0]+|[^\S\u00a0]+$/g, "") : result.trim();
 }
 const doi = (value: string) => value.trim().replace(/^https?:\/\/(?:dx\.)?doi\.org\//i, "").replace(/^doi:\s*/i, "").toLowerCase();
 const arxiv = (value: string) => value.trim().toLowerCase().replace(/^https?:\/\/(?:www\.)?arxiv\.org\/(?:abs|pdf)\//, "").replace(/^arxiv:\s*/, "").replace(/\.pdf$/, "").replace(/v\d+$/, "");
 const arxivUrl = (value: string) => /^https?:\/\/(?:www\.)?arxiv\.org\/(?:abs|pdf)\//i.test(value);
 const arxivId = (value: string) => /^(?:\d{4}\.\d{4,5}|[a-z-]+(?:\.[a-z]{2})?\/\d{7})$/.test(arxiv(value));
-const title = (value: string) => (value.includes("\\") ? plain(value) : value).normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+const title = (value: string) => value.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 
 function splitAuthors(value: string) {
   const authors: string[] = [];
@@ -153,21 +157,28 @@ export function parseBibliography(input: string): { entries: BibliographyEntry[]
           if (!literal || !/^\d+$/.test(literal[0].trim())) throw new Error("Unsupported BibTeX macro; expand it before import");
           value = literal[0]; cursor += value.length;
         }
-        record[name[0].toLowerCase()] = name[0].toLowerCase() === "author" ? value : plain(value);
+        const field = name[0].toLowerCase();
+        record[field] = field === "author" || field === "title" ? value : plain(value, !opaqueFields.has(field));
       }
       if (!closed) throw new Error("Unclosed BibTeX entry");
-      if (!record.title) throw new Error("Missing title");
+      const decodedTitle = plain(record.title || "");
+      if (!decodedTitle.trim()) throw new Error("Missing title");
       const normalizedDoi = doi(record.doi || "");
       const eprintIsArxiv = (!record.archiveprefix || /^arxiv$/i.test(record.archiveprefix)) && arxivId(record.eprint || "");
       const normalizedArxiv = eprintIsArxiv ? arxiv(record.eprint) : arxivUrl(record.url || "") && arxivId(record.url) ? arxiv(record.url) : "";
       const externalId = normalizedDoi ? `doi:${normalizedDoi}` : normalizedArxiv ? `arxiv:${normalizedArxiv}` : `bibtex:${key[0]}`;
-      entries.push({ citekey: key[0], entryType: kind[0].toLowerCase(), paper: {
+      const paper: AcademicSearchResult = {
         external_id: externalId, s2_id: "", arxiv_id: normalizedArxiv, doi: normalizedDoi,
-        title: record.title, authors: splitAuthors(record.author || ""),
+        title: decodedTitle, authors: splitAuthors(record.author || ""),
         year: /^\d{4}$/.test(record.year || "") ? Number(record.year) : null, venue: record.journal || record.booktitle || record.publisher || "",
         abstract: record.abstract || "", url: record.url || (normalizedDoi ? `https://doi.org/${normalizedDoi}` : normalizedArxiv ? `https://arxiv.org/abs/${normalizedArxiv}` : ""),
         pdf_url: "", citation_count: 0, source: "bibtex",
-      } });
+      };
+      if (record.title.includes("\\")) {
+        const legacyTitle = plain(record.title, false);
+        if (legacyTitle !== decodedTitle) legacyTitleSpellings.set(paper, { title: legacyTitle, citekey: key[0] });
+      }
+      entries.push({ citekey: key[0], entryType: kind[0].toLowerCase(), paper });
     } catch (cause) {
       warnings.push(`${key[0]}: ${cause instanceof Error ? cause.message : String(cause)}`);
       const next = input.indexOf("@", cursor);
@@ -188,7 +199,12 @@ export function matchBibliographyPaper(incoming: AcademicSearchResult, papers: B
     if (matched) return matched;
   }
   if (strongOnly) return undefined;
-  return papers.find(paper => compatible(paper) && title(incoming.title) && title(incoming.title) === title(paper.title));
+  const normalizedTitle = title(incoming.title);
+  const matched = normalizedTitle && papers.find(paper => compatible(paper) && normalizedTitle === title(paper.title));
+  if (matched) return matched;
+  // Match the exact spelling produced by the old parser for this citation.
+  const legacy = legacyTitleSpellings.get(incoming);
+  return legacy && papers.find(paper => paper.citekey === legacy.citekey && paper.title === legacy.title && compatible(paper));
 }
 
 export function metadataDifferences(entry: AcademicSearchResult, current: AcademicSearchResult): MetadataPatch {
@@ -222,14 +238,15 @@ export function exportBibliography(papers: BibliographyPaper[]) {
   return papers.map((paper, index) => {
     const venueField = /^(inproceedings|conference|incollection)$/.test(paper.entry_type || "") ? "booktitle" : "journal";
     const values: Record<string, string> = { title: paper.title, author: paper.authors.map((author) => /\s+and\s+/i.test(author) ? `{${author}}` : author).join(" and "), year: paper.year ? String(paper.year) : "", [venueField]: paper.venue, doi: paper.doi, eprint: paper.arxiv_id, url: paper.url };
-    const escape = (value: string) => value.replace(/[\\{}%&#_$^~]/g, (character) => {
+    const escape = (value: string) => value.replace(/[\\{}%&#_$^~\u00a0]/g, (character) => {
       if (character === "\\") return "\\textbackslash{} ";
       if (character === "^") return "\\textasciicircum{}";
       if (character === "~") return "\\textasciitilde{}";
+      if (character === "\u00a0") return "~";
       return "\\" + character;
     });
     const formatValue = (field: string, value: string) => {
-      if (field === "url" || field === "doi" || field === "eprint") {
+      if (opaqueFields.has(field)) {
         // ACM places the DOI inside a hyperlink argument, where a bare percent starts a TeX comment.
         const delimiters = field === "url" ? /[{}\\]/g : /[{}\\%&#_$]/g;
         return value.replace(delimiters, character => character === "\\" ? "\\textbackslash{} " : "\\" + character);

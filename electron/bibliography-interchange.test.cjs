@@ -99,17 +99,17 @@ test("BibTeX supports nested values, grouped authors, stable keys and explicit u
 
 
 test("BibTeX decodes TeX accents and exports caret and tilde as literal characters", () => {
-  const source = String.raw`@article{latin2026, title={Garc{\'i}a: A^2 at ~/data}, author={Jos{\'e} Garc{\'{\i}}a and Bj{\o}rn M{\"u}ller}, journal={L{\oe}we \& S{\v{c}}uka}, year=2026}`;
+  const source = String.raw`@article{latin2026, title={Garc{\'i}a: Art~of A^2 at \textasciitilde{}/data}, author={Jos{\'e} Garc{\'{\i}}a and Bj{\o}rn M{\"u}ller and Donald~Knuth}, journal={L{\oe}we \& S{\v{c}}uka}, year=2026}`;
   const parsed = scope.parseBibliography(source);
   assert.deepEqual(parsed.warnings, []);
   const [{ paper, citekey, entryType }] = parsed.entries;
-  assert.equal(paper.title, "García: A^2 at ~/data");
-  assert.deepEqual(paper.authors, ["José García", "Bjørn Müller"]);
+  assert.equal(paper.title, "García: Art\u00a0of A^2 at ~/data");
+  assert.deepEqual(paper.authors, ["José García", "Bjørn Müller", "Donald\u00a0Knuth"]);
   assert.equal(paper.venue, "Lœwe & Sčuka");
 
   const exported = scope.exportBibliography([{ ...paper, id: "characters", citekey, entry_type: entryType }]);
-  assert.match(exported, /García: A\\textasciicircum\{\}2 at \\textasciitilde\{\}\/data/);
-  assert.match(exported, /author = \{José García and Bjørn Müller\}/);
+  assert.match(exported, /García: Art~of A\\textasciicircum\{\}2 at \\textasciitilde\{\}\/data/);
+  assert.match(exported, /author = \{José García and Bjørn Müller and Donald~Knuth\}/);
   assert.deepEqual(scope.parseBibliography(exported), parsed);
   assert.equal(scope.parseBibliography(String.raw`@article{spaces,title={Note \textasciicircum{} and \textasciitilde{} marks}}`).entries[0].paper.title, "Note ^ and ~ marks");
 });
@@ -411,6 +411,9 @@ test("a repeat import finds a previously stored TeX-accented title and offers to
     const { paper } = scope.parseBibliography(source).entries[0];
     const old = data.db.addPaper(library.id, { ...paper, title: String.raw`Garc\'ia` });
     data.db.setPaperBibliography(old.id, { citekey: "legacy", entryType: "article" });
+    const stored = data.db.listPapers(library.id);
+    const otherKey = scope.parseBibliography(source.replace("{legacy,", "{different,")).entries[0].paper;
+    assert.equal(scope.matchBibliographyPaper(otherKey, stored), undefined);
     unmount = await mount(scope.BibliographyDialog, { bridge: data.bridge, library, onClose() {}, onChanged: async () => {} });
     await input(document.querySelector('[aria-label="BibTeX source"]'), source);
     const repair = [...document.querySelectorAll("label")].find(label => label.textContent.includes("title"));
@@ -422,6 +425,15 @@ test("a repeat import finds a previously stored TeX-accented title and offers to
     if (unmount) await unmount();
     data.close();
   }
+});
+
+test("a literal TeX command remains distinct from its Unicode character in both directions", () => {
+  const [literal, unicode] = scope.parseBibliography(String.raw`@article{code,title={Result \textbackslash{}AA}}
+@article{ring,title={Result Å}}`).entries.map(({ paper }) => paper);
+  assert.equal(literal.title, String.raw`Result \AA`);
+  assert.equal(unicode.title, "Result Å");
+  assert.equal(scope.matchBibliographyPaper(literal, [{ ...unicode, id: "unicode", citekey: "ring" }]), undefined);
+  assert.equal(scope.matchBibliographyPaper(unicode, [{ ...literal, id: "literal", citekey: "code" }]), undefined);
 });
 
 test("DOIs with literal BibTeX delimiters keep their strong identity across export", () => {
