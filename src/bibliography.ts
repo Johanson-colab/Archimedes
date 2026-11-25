@@ -7,15 +7,40 @@ export type BibliographyBridge = ResearchDeskBridge & {
 };
 
 const fields = ["title", "authors", "year", "venue", "doi", "arxiv_id", "url", "pdf_url"] as const;
+const accentMarks: Record<string, string> = {
+  "'": "\u0301", "\x60": "\u0300", '"': "\u0308", "^": "\u0302", "~": "\u0303",
+  "=": "\u0304", ".": "\u0307", b: "\u0331", c: "\u0327", d: "\u0323",
+  H: "\u030b", k: "\u0328", r: "\u030a", u: "\u0306", v: "\u030c",
+};
+const characterCommands: Record<string, string> = {
+  aa: "å", AA: "Å", ae: "æ", AE: "Æ", i: "ı", j: "ȷ", l: "ł", L: "Ł",
+  o: "ø", O: "Ø", oe: "œ", OE: "Œ", ss: "ß", textasciicircum: "^", textasciitilde: "~",
+};
+
 // Grouping braces affect capitalization, escaped braces are literal metadata.
 function plain(value: string) {
   let result = "";
   for (let index = 0; index < value.length; index++) {
     if (value[index] === "\\") {
-      const backslash = /^\\textbackslash\{\} ?/.exec(value.slice(index));
-      if (backslash) { result += "\\"; index += backslash[0].length - 1; }
-      else if (/[{}&%_#$]/.test(value[index + 1] || "")) result += value[++index];
-      else result += value[index];
+      const source = value.slice(index);
+      const backslash = /^\\textbackslash\{\} ?/.exec(source);
+      const accent = /^\\(['\x60".^~=]|[bcdHkruv](?![A-Za-z]))\s*(?:\{(\\[ij]|\p{L})\}|(\\[ij](?![A-Za-z])|\p{L}))/u.exec(source);
+      const command = /^\\([A-Za-z]+)(\{\}|\s*)/.exec(source);
+      if (backslash) {
+        result += "\\";
+        index += backslash[0].length - 1;
+      } else if (accent) {
+        const letter = (accent[2] || accent[3]).replace(/^\\/, "");
+        result += (letter + accentMarks[accent[1]]).normalize("NFC");
+        index += accent[0].length - 1;
+      } else if (command && Object.hasOwn(characterCommands, command[1])) {
+        result += characterCommands[command[1]];
+        index += command[0].length - 1;
+      } else if (/[{}&%_#$]/.test(value[index + 1] || "")) {
+        result += value[++index];
+      } else {
+        result += value[index];
+      }
     } else if (value[index] !== "{" && value[index] !== "}") result += value[index];
   }
   return result.trim();
@@ -24,7 +49,7 @@ const doi = (value: string) => value.trim().replace(/^https?:\/\/(?:dx\.)?doi\.o
 const arxiv = (value: string) => value.trim().toLowerCase().replace(/^https?:\/\/(?:www\.)?arxiv\.org\/(?:abs|pdf)\//, "").replace(/^arxiv:\s*/, "").replace(/\.pdf$/, "").replace(/v\d+$/, "");
 const arxivUrl = (value: string) => /^https?:\/\/(?:www\.)?arxiv\.org\/(?:abs|pdf)\//i.test(value);
 const arxivId = (value: string) => /^(?:\d{4}\.\d{4,5}|[a-z-]+(?:\.[a-z]{2})?\/\d{7})$/.test(arxiv(value));
-const title = (value: string) => value.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+const title = (value: string) => (value.includes("\\") ? plain(value) : value).normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 
 function splitAuthors(value: string) {
   const authors: string[] = [];
@@ -197,7 +222,22 @@ export function exportBibliography(papers: BibliographyPaper[]) {
   return papers.map((paper, index) => {
     const venueField = /^(inproceedings|conference|incollection)$/.test(paper.entry_type || "") ? "booktitle" : "journal";
     const values: Record<string, string> = { title: paper.title, author: paper.authors.map((author) => /\s+and\s+/i.test(author) ? `{${author}}` : author).join(" and "), year: paper.year ? String(paper.year) : "", [venueField]: paper.venue, doi: paper.doi, eprint: paper.arxiv_id, url: paper.url };
-    const escape = (value: string) => value.replace(/[\\{}%&#_$]/g, (character) => character === "\\" ? "\\textbackslash{} " : `\\${character}`);
-    return `@${paper.entry_type || "article"}{${keys[index]},\n${Object.entries(values).filter(([, value]) => value).map(([field, value]) => `  ${field} = {${field === "author" ? paper.authors.map((author) => /\s+and\s+/i.test(author) ? `{${escape(author)}}` : escape(author)).join(" and ") : escape(value)}}`).join(",\n")}\n}`;
+    const escape = (value: string) => value.replace(/[\\{}%&#_$^~]/g, (character) => {
+      if (character === "\\") return "\\textbackslash{} ";
+      if (character === "^") return "\\textasciicircum{}";
+      if (character === "~") return "\\textasciitilde{}";
+      return "\\" + character;
+    });
+    const formatValue = (field: string, value: string) => {
+      if (field === "url" || field === "doi" || field === "eprint") {
+        // ACM places the DOI inside a hyperlink argument, where a bare percent starts a TeX comment.
+        const delimiters = field === "url" ? /[{}\\]/g : /[{}\\%&#_$]/g;
+        return value.replace(delimiters, character => character === "\\" ? "\\textbackslash{} " : "\\" + character);
+      }
+      if (field === "author") return paper.authors.map(author =>
+        /\s+and\s+/i.test(author) ? `{${escape(author)}}` : escape(author)).join(" and ");
+      return escape(value);
+    };
+    return `@${paper.entry_type || "article"}{${keys[index]},\n${Object.entries(values).filter(([, value]) => value).map(([field, value]) => `  ${field} = {${formatValue(field, value)}}`).join(",\n")}\n}`;
   }).join("\n\n") + "\n";
 }

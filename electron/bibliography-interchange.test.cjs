@@ -98,6 +98,23 @@ test("BibTeX supports nested values, grouped authors, stable keys and explicit u
 });
 
 
+test("BibTeX decodes TeX accents and exports caret and tilde as literal characters", () => {
+  const source = String.raw`@article{latin2026, title={Garc{\'i}a: A^2 at ~/data}, author={Jos{\'e} Garc{\'{\i}}a and Bj{\o}rn M{\"u}ller}, journal={L{\oe}we \& S{\v{c}}uka}, year=2026}`;
+  const parsed = scope.parseBibliography(source);
+  assert.deepEqual(parsed.warnings, []);
+  const [{ paper, citekey, entryType }] = parsed.entries;
+  assert.equal(paper.title, "García: A^2 at ~/data");
+  assert.deepEqual(paper.authors, ["José García", "Bjørn Müller"]);
+  assert.equal(paper.venue, "Lœwe & Sčuka");
+
+  const exported = scope.exportBibliography([{ ...paper, id: "characters", citekey, entry_type: entryType }]);
+  assert.match(exported, /García: A\\textasciicircum\{\}2 at \\textasciitilde\{\}\/data/);
+  assert.match(exported, /author = \{José García and Bjørn Müller\}/);
+  assert.deepEqual(scope.parseBibliography(exported), parsed);
+  assert.equal(scope.parseBibliography(String.raw`@article{spaces,title={Note \textasciicircum{} and \textasciitilde{} marks}}`).entries[0].paper.title, "Note ^ and ~ marks");
+});
+
+
 test("BibTeX export retains explicit keys and disambiguates every generated key after normalization", () => {
   const exported = scope.exportBibliography([
     { ...fixture.paper, id: "paper-1", title: "Generated first", citekey: "", entry_type: "article" },
@@ -375,5 +392,46 @@ test("browser BibTeX import leaves collection links and the old key intact on a 
   } finally {
     await bridge.deleteLibrary(source.id);
     await bridge.deleteLibrary(target.id);
+  }
+});
+
+test("URL fields retain literal URI characters instead of text-mode TeX commands", () => {
+  const url = "https://example.org/~alice/a_b?x=%2F&y=2#item";
+  const paper = { ...fixture.paper, url, id: "uri-1", citekey: "url", entry_type: "article" };
+  const exported = scope.exportBibliography([paper]);
+  assert.ok(exported.includes(`url = {${url}}`), exported);
+  assert.equal(scope.parseBibliography(exported).entries[0].paper.url, url);
+});
+
+test("a repeat import finds a previously stored TeX-accented title and offers to repair it", async () => {
+  const data = database("Legacy accents"); let unmount;
+  try {
+    const library = data.db.createLibrary({ projectId: data.project.id, name: "References" });
+    const source = String.raw`@article{legacy,title={Garc\'ia}}`;
+    const { paper } = scope.parseBibliography(source).entries[0];
+    const old = data.db.addPaper(library.id, { ...paper, title: String.raw`Garc\'ia` });
+    data.db.setPaperBibliography(old.id, { citekey: "legacy", entryType: "article" });
+    unmount = await mount(scope.BibliographyDialog, { bridge: data.bridge, library, onClose() {}, onChanged: async () => {} });
+    await input(document.querySelector('[aria-label="BibTeX source"]'), source);
+    const repair = [...document.querySelectorAll("label")].find(label => label.textContent.includes("title"));
+    assert.ok(repair, document.body.textContent);
+    await React.act(async () => { repair.querySelector("input").click(); await tick(); });
+    await click("Import selected references");
+    assert.deepEqual(data.db.listPapers(library.id).map(row => [row.id, row.title, row.citekey]), [[old.id, "García", "legacy"]]);
+  } finally {
+    if (unmount) await unmount();
+    data.close();
+  }
+});
+
+test("DOIs with literal BibTeX delimiters keep their strong identity across export", () => {
+  for (const suffix of ["a{b}", String.raw`a\b`, "a%7bb%7d", "a~b"]) {
+    const doi = "10.5555/" + suffix;
+    const paper = { ...fixture.paper, doi, arxiv_id: "", s2_id: "", id: "doi-literal", citekey: "exact", entry_type: "article" };
+    const exported = scope.exportBibliography([paper]);
+    if (suffix.includes("%")) assert.ok(exported.includes(String.raw`doi = {10.5555/a\%7bb\%7d}`));
+    const imported = scope.parseBibliography(exported).entries[0].paper;
+    assert.equal(imported.doi, doi);
+    assert.equal(scope.matchBibliographyPaper(imported, [paper], { strongOnly: true }), paper);
   }
 });
