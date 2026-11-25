@@ -24,35 +24,41 @@ export default function BibliographyDialog({ bridge, library, onClose, onChanged
   const latestSource = useRef("");
   const parsed = useMemo(() => parseBibliography(input), [input]);
   const batch = useMemo(() => indexBibliographyBatch(parsed.entries), [parsed.entries]);
-  const matches = useMemo(() => parsed.entries.map((entry, index) => {
-    const candidate = batch.representatives.get(index) ?? entry.paper;
-    const savedId = done.get(index);
-    const matchOptions = { originalKey: identity.keys[index] };
-    const existing = (savedId && targetPapers.find(paper => paper.id === savedId))
-      || matchBibliographyPaper(candidate, targetPapers, { strongOnly: true })
-      || matchBibliographyPaper(candidate, projectPapers, { strongOnly: true })
-      || matchBibliographyPaper(candidate, known, { strongOnly: true })
-      || matchBibliographyPaper(candidate, targetPapers, matchOptions)
-      || matchBibliographyPaper(candidate, projectPapers, matchOptions)
-      || matchBibliographyPaper(candidate, known, matchOptions);
-    const duplicate = batch.repeatedRows.has(index);
-    const identifierConflict = batch.conflictingRows.has(index);
-    const differences = existing ? metadataDifferences(entry.paper, paperWithLearnedIdentifiers(existing, entry.paper, candidate)) : {};
-    return { entry, candidate, existing, duplicate, identifierConflict, differences };
-  }), [batch, done, parsed.entries, known, targetPapers, projectPapers, identity]);
   const preview = useMemo(() => {
     const pendingKeys = new Map<string, string | number>();
-    return matches.map((row, index) => {
+    // Earlier selected rows can give a title-only paper its first strong ID.
+    const claimed = new Map<string, BibliographyPaper>();
+    const originalKeys = identity.source === input ? identity.keys : [];
+    return parsed.entries.map((entry, index) => {
+      const candidate = batch.representatives.get(index) ?? entry.paper;
+      const savedId = done.get(index);
+      const [targetCandidates, projectCandidates, knownCandidates] = [targetPapers, projectPapers, known].map(papers =>
+        claimed.size ? papers.map(paper => claimed.get(paper.id) ?? paper) : papers);
+      const matchOptions = { originalKey: originalKeys[index] };
+      const existing = (savedId ? targetPapers.find(paper => paper.id === savedId) : undefined)
+        || matchBibliographyPaper(candidate, targetCandidates, { strongOnly: true })
+        || matchBibliographyPaper(candidate, projectCandidates, { strongOnly: true })
+        || matchBibliographyPaper(candidate, knownCandidates, { strongOnly: true })
+        || matchBibliographyPaper(candidate, targetCandidates, matchOptions)
+        || matchBibliographyPaper(candidate, projectCandidates, matchOptions)
+        || matchBibliographyPaper(candidate, knownCandidates, matchOptions);
+      const duplicate = batch.repeatedRows.has(index);
+      const identifierConflict = batch.conflictingRows.has(index);
+      const enriched = existing && paperWithLearnedIdentifiers(existing, candidate);
+      const differences = enriched ? metadataDifferences(entry.paper, enriched) : {};
       const updateKey = (repairs[index] || []).includes("citekey");
-      const key = citationKeyIdentity(!updateKey && row.existing?.citekey ? row.existing.citekey : row.entry.citekey);
-      const target = row.existing?.id ?? index;
+      const key = citationKeyIdentity(!updateKey && existing?.citekey ? existing.citekey : entry.citekey);
+      const target = existing?.id ?? index;
       const keyConflict = (pendingKeys.has(key) && pendingKeys.get(key) !== target) || targetPapers.some(
         paper => paper.id !== target && paper.citekey && citationKeyIdentity(paper.citekey) === key);
-      const blocked = row.duplicate || row.identifierConflict || keyConflict;
-      if (!blocked && selected.has(index) && !done.has(index)) pendingKeys.set(key, target);
-      return { ...row, keyConflict, blocked };
+      const blocked = duplicate || identifierConflict || keyConflict;
+      if (!blocked && selected.has(index) && !done.has(index)) {
+        pendingKeys.set(key, target);
+        if (enriched && enriched !== existing) claimed.set(enriched.id, enriched);
+      }
+      return { entry, candidate, existing, duplicate, identifierConflict, differences, keyConflict, blocked };
     });
-  }, [matches, repairs, selected, done, targetPapers]);
+  }, [batch, done, identity, input, known, parsed.entries, projectPapers, repairs, selected, targetPapers]);
   useEffect(() => {
     let active = true;
     void (async () => {
@@ -90,16 +96,16 @@ export default function BibliographyDialog({ bridge, library, onClose, onChanged
         // Keep the resolved paper after an earlier title repair. Only a new
         // identifier contradiction can invalidate this match within the batch.
         const existing = latest && !hasConflictingBibliographyIdentifiers(row.candidate, latest) ? latest : undefined;
-        const reference = existing ? paperWithLearnedIdentifiers(existing, row.entry.paper, row.candidate) : row.candidate;
+        const reference = existing ? paperWithLearnedIdentifiers(existing, row.candidate) : row.candidate;
         const fields = repairs[index] || [];
-        const paper = await bridge.addLibraryPaper(library.id, {
+        let paper = await bridge.addLibraryPaper(library.id, {
           ...reference, id: fields.includes("citekey") ? existing?.id : undefined,
           source: "bibtex", citekey: row.entry.citekey, entry_type: row.entry.entryType,
         });
         if (!alive.current) return;
         if (existing?.id === paper.id && fields.length) {
           const patch = Object.fromEntries(fields.filter((field) => field in row.differences).map((field) => [field, row.differences[field as keyof MetadataPatch]]));
-          if (Object.keys(patch).length) await (bridge as BibliographyBridge).repairLibraryPaperMetadata(paper.id, patch);
+          if (Object.keys(patch).length) paper = await (bridge as BibliographyBridge).repairLibraryPaperMetadata(paper.id, patch);
         }
         savedInBatch.set(paper.id, paper);
         setDone((current) => new Map(current).set(index, paper.id));

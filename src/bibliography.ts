@@ -205,10 +205,8 @@ export function matchBibliographyPaper<T extends AcademicSearchResult>(incoming:
       || paper.canonical_key === legacyKey && compatibleTitleMetadata(incoming, paper)));
 }
 
-// A strong duplicate can complete the identity of an existing record without
-// replacing its saved metadata. Keep the whole learned identity together.
-export function paperWithLearnedIdentifiers(paper: BibliographyPaper, original: AcademicSearchResult, representative: AcademicSearchResult) {
-  if (!identifierFields.some(([field]) => !original[field] && representative[field])) return paper;
+// Complete a compatible record's identity without replacing saved identifiers.
+export function paperWithLearnedIdentifiers(paper: BibliographyPaper, representative: AcademicSearchResult) {
   const identifiers = identifierFields
     .filter(([field]) => !paper[field] && representative[field])
     .map(([field]) => [field, representative[field]]);

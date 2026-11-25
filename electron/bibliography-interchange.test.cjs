@@ -517,6 +517,40 @@ test("a selected title repair preserves the paper ID resolved for a later row", 
   } finally { if (unmount) await unmount(); data.close(); }
 });
 
+test("two retained DOI claims resolve against the saved identity of a title-only paper", async () => {
+  const data = database("Legacy title with distinct DOI claims"); let unmount;
+  try {
+    const library = data.db.listLibraries(data.project.id)[0];
+    const existing = data.db.addPaper(library.id, { title: "Field anomaly", authors: ["Ana Bell"], year: 2025 });
+    data.db.setPaperBibliography(existing.id, { citekey: "legacy" });
+    data.db.updatePaper(existing.id, { notes: "Keep the field notes" });
+    unmount = await mount(scope.BibliographyDialog, { bridge: data.bridge, library, onClose() {}, onChanged: async () => {} });
+    await input(document.querySelector('[aria-label="BibTeX source"]'), [
+      '@article{first,title={Field Anomaly},author={Ana Bell},year={2025},doi={10.5555/one}}',
+      '@article{weak,title={Field anomaly},author={Ana Bell},year={2025}}',
+      '@article{second,title={Field anomaly},author={Ana Bell},year={2025},doi={10.5555/two}}',
+    ].join("\n"));
+    const rows = [...document.querySelectorAll("article.external-paper")];
+    const status = () => rows.map(row => row.querySelector("small").textContent);
+    assert.deepEqual(status(), ["Existing paper with metadata differences", "Duplicate in this import", "New paper"]);
+    const selection = rows[0].querySelector("input");
+    await React.act(async () => { selection.click(); await tick(); });
+    assert.match(status()[2], /^Existing paper/);
+    await React.act(async () => { selection.click(); await tick(); });
+    const repair = [...rows[0].querySelectorAll("label")].find(label => label.textContent.startsWith("Repair selected metadata: title:"));
+    await React.act(async () => { repair.querySelector("input").click(); await tick(); });
+    await click("Import selected references");
+
+    const saved = data.db.listPapers(library.id);
+    assert.deepEqual(saved.map(paper => [paper.doi, paper.citekey]).sort(), [["10.5555/one", "legacy"], ["10.5555/two", "second"]]);
+    assert.deepEqual(saved.filter(paper => paper.id === existing.id).map(paper => [paper.title, paper.notes]), [["Field Anomaly", "Keep the field notes"]]);
+    assert.equal(status().filter(text => /^Existing paper.*· Imported$/.test(text)).length, 2);
+    await click("Preview BibTeX export");
+    const exported = scope.parseBibliography(document.querySelector('[aria-label="BibTeX export preview"]').value);
+    assert.deepEqual(exported.entries.map(({ paper, citekey }) => [paper.doi, citekey]).sort(), [["10.5555/one", "legacy"], ["10.5555/two", "second"]]);
+  } finally { if (unmount) await unmount(); data.close(); }
+});
+
 test("contradictory identifier claims are blocked before writing and unrelated rows can be imported", async () => {
   const data = database("BibTeX identifier claims"); let unmount;
   try {
