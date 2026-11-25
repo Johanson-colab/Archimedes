@@ -24,7 +24,9 @@ function canonicalTitleKey(paper) {
 function compatibleTitleMetadata(row, paper) {
   if (row.year && paper.year && row.year !== paper.year) return false;
   const savedAuthors = authorIdentity(JSON.parse(row.authors_json)), importedAuthors = authorIdentity(paper.authors);
-  return !savedAuthors || !importedAuthors || savedAuthors === importedAuthors;
+  return !savedAuthors || !importedAuthors || savedAuthors === importedAuthors
+    || (savedAuthors.endsWith("\nothers") && importedAuthors.startsWith(savedAuthors.slice(0, -"others".length)))
+    || (importedAuthors.endsWith("\nothers") && savedAuthors.startsWith(importedAuthors.slice(0, -"others".length)));
 }
 
 function conflictingIdentifiers(first, second) {
