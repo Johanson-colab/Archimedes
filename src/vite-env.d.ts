@@ -416,6 +416,7 @@ interface ExtensionSource {
   url: string;
   query?: string;
   token?: string;
+  hasToken?: boolean;
   enabled: boolean;
   builtin?: boolean;
   count?: number;
