@@ -75,21 +75,27 @@ function database(name) {
   return { root, db, project, bridge, close() { store.openWorkspace(idle); fs.rmSync(root, { recursive: true, force: true }); fs.rmSync(idle, { recursive: true, force: true }); } };
 }
 
-test("the BibTeX preview localizes parser warnings without losing their context or valid entries", async () => {
-  const baseline = scope.parseBibliography(fixture.warningBibtex);
-  assert.deepEqual(baseline.warnings, ["Skipped @string directive", "needsTitle: Missing title"]);
+test("the preview points to the same source locations in English and Chinese, and imports valid entries", async () => {
+  const source = fixture.warningBibtex;
+  const first = source.indexOf("@string");
+  const second = source.lastIndexOf("@string");
+  const invalid = source.indexOf("@article invalid");
+  const english = [`Skipped @string directive at ${first}`, `Skipped @string directive at ${second}`, `Invalid entry at ${invalid}`, "needsTitle: Missing title"];
+  const chinese = [`已跳过位置 ${first} 的 @string 指令`, `已跳过位置 ${second} 的 @string 指令`, `位置 ${invalid} 的 BibTeX 条目格式无效`, "needsTitle：缺少标题"];
+  assert.deepEqual(scope.parseBibliography(source).warnings, english);
   const data = database("Localized BibTeX warnings");
   let unmount;
   try {
-    language = "zh";
     const library = data.db.listLibraries(data.project.id)[0];
-    unmount = await mount(scope.BibliographyDialog, { bridge: data.bridge, library, onClose() {}, onChanged: async () => {} });
-    await input(document.querySelector('[aria-label="BibTeX 原文"]'), fixture.warningBibtex);
-    assert.deepEqual(
-      [...document.querySelectorAll('[role="alert"]')].map((notice) => notice.textContent),
-      ["已跳过 @string 指令", "needsTitle：缺少标题"],
-    );
-    await click("导入所选文献");
+    for (const [locale, label, warnings] of [["en", "BibTeX source", english], ["zh", "BibTeX 原文", chinese]]) {
+      language = locale;
+      unmount = await mount(scope.BibliographyDialog, { bridge: data.bridge, library, onClose() {}, onChanged: async () => {} });
+      await input(document.querySelector(`[aria-label="${label}"]`), source);
+      assert.deepEqual([...document.querySelectorAll('[role="alert"]')].map((notice) => notice.textContent), warnings);
+      if (locale === "zh") await click("导入所选文献");
+      await unmount();
+      unmount = undefined;
+    }
     assert.deepEqual(data.db.listPapers(library.id).map((paper) => paper.citekey), ["handoff2026"]);
   } finally {
     if (unmount) await unmount();
@@ -98,29 +104,43 @@ test("the BibTeX preview localizes parser warnings without losing their context 
   }
 });
 
-test("the preview warns about article data and author grouping that BibTeX export omits", async () => {
-  const [reference] = scope.parseBibliography(fixture.lossyBibtex).entries;
-  assert.deepEqual(reference.exportLoss, { locatorFields: ["volume", "number", "pages"], literalAuthors: ["Institute for Calibration"] });
+test("article and proceedings previews identify fields and author groups that the actual export omits", async () => {
+  const proceedings = fixture.lossyBibtex.replace("@article", "@inproceedings");
+  const loss = { locatorFields: ["volume", "number", "pages"], literalAuthors: ["Institute for Calibration"] };
+  for (const source of [fixture.lossyBibtex, proceedings, fixture.lossyBibtex.replace("@article", "@book")]) {
+    const [reference] = scope.parseBibliography(source).entries;
+    assert.deepEqual(reference.exportLoss, loss);
+    const exported = scope.exportBibliography([{ ...reference.paper, id: "reference", citekey: reference.citekey, entry_type: reference.entryType }]);
+    assert.doesNotMatch(exported, /\b(volume|number|pages)\s*=/);
+    assert.match(exported, /author = \{Institute for Calibration\}/);
+  }
   const [ordinary] = scope.parseBibliography('@article{ordinary, title={A separate reference}, author={{Jane} Doe and {Institute for Light and Optics}}}').entries;
   assert.equal(ordinary.exportLoss, undefined, "partial name braces and preserved groups do not warn");
   const data = database("BibTeX export loss");
   let unmount;
   try {
     const library = data.db.listLibraries(data.project.id)[0];
-    unmount = await mount(scope.BibliographyDialog, { bridge: data.bridge, library, onClose() {}, onChanged: async () => {} });
-    await input(document.querySelector('[aria-label="BibTeX source"]'), fixture.lossyBibtex);
-    assert.deepEqual([...document.querySelectorAll(".external-paper [role=alert]")].map((notice) => notice.textContent), [
-      "BibTeX export omits volume, number, pages from this reference.",
-      "BibTeX export drops the grouping around Institute for Calibration. Citation labels and sorting may change.",
-    ]);
-    await click("Import selected references");
+    for (const [locale, label, warnings] of [
+      ["en", "BibTeX source", ["BibTeX export omits volume, number, pages from this reference.", "BibTeX export drops the grouping around Institute for Calibration. Citation labels and sorting may change."]],
+      ["zh", "BibTeX 原文", ["导出 BibTeX 时，此条目的 volume, number, pages 字段会被省略。", "导出 BibTeX 会省略作者名称 Institute for Calibration 外层的分组括号，可能改变引用标签和排序。"]],
+    ]) {
+      language = locale;
+      unmount = await mount(scope.BibliographyDialog, { bridge: data.bridge, library, onClose() {}, onChanged: async () => {} });
+      await input(document.querySelector(`[aria-label="${label}"]`), proceedings);
+      assert.deepEqual([...document.querySelectorAll(".external-paper [role=alert]")].map((notice) => notice.textContent), warnings);
+      if (locale === "zh") await click("导入所选文献");
+      await unmount();
+      unmount = undefined;
+    }
     const [saved] = data.db.listPapers(library.id);
     assert.equal(saved.citekey, "opticalCalibration");
     const exported = scope.exportBibliography([saved]);
+    assert.match(exported, /^@inproceedings/);
     assert.doesNotMatch(exported, /\b(volume|number|pages)\s*=/);
     assert.match(exported, /author = \{Institute for Calibration\}/);
   } finally {
     if (unmount) await unmount();
+    language = "en";
     data.close();
   }
 });

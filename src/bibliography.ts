@@ -70,7 +70,18 @@ function formatWarning(template: string, values?: Record<string, string | number
 // Small BibTeX interchange parser: balanced braced/quoted values and literals.
 // Macro expressions are reported instead of silently importing a wrong title.
 export function parseBibliography(input: string, t = formatWarning): { entries: BibliographyEntry[]; warnings: string[] } {
-  input = input.replace(/^\s*%.*$/gm, "");
+  const omittedComments: Array<{ start: number; length: number }> = [];
+  input = input.replace(/^\s*%.*$/gm, (comment, start: number) => {
+    omittedComments.push({ start, length: comment.length });
+    return "";
+  });
+  const sourceOffset = (offset: number) => {
+    for (const { start, length } of omittedComments) {
+      if (start > offset) break;
+      offset += length;
+    }
+    return offset;
+  };
   const entries: BibliographyEntry[] = [], warnings: string[] = [];
   let cursor = 0;
   const skip = () => { while (cursor < input.length) { if (/\s|,/.test(input[cursor])) cursor++; else if (input[cursor] === "%") { while (cursor < input.length && input[cursor] !== "\n") cursor++; } else break; } };
@@ -123,16 +134,16 @@ export function parseBibliography(input: string, t = formatWarning): { entries: 
     const kind = /^[a-z]+/i.exec(input.slice(cursor));
     if (!kind) { cursor++; continue; }
     cursor += kind[0].length; skip();
-    if (!["{", "("].includes(input[cursor])) { warnings.push(t("Invalid entry at {offset}", { offset: at })); continue; }
+    if (!["{", "("].includes(input[cursor])) { warnings.push(t("Invalid entry at {offset}", { offset: sourceOffset(at) })); continue; }
     const open = input[cursor], close = open === "{" ? "}" : ")";
     cursor++;
     if (["comment", "preamble", "string"].includes(kind[0].toLowerCase())) {
       try { skipDelimited(open, close, kind[0].toLowerCase() !== "comment"); } catch { cursor = input.length; }
-      warnings.push(t("Skipped @{directive} directive", { directive: kind[0] })); continue;
+      warnings.push(t("Skipped @{directive} directive at {offset}", { directive: kind[0], offset: sourceOffset(at) })); continue;
     }
     skipWhitespace();
     const key = /^[^,}\s)]+/.exec(input.slice(cursor));
-    if (!key) { warnings.push(t("Missing citation key at {offset}", { offset: at })); continue; }
+    if (!key) { warnings.push(t("Missing citation key at {offset}", { offset: sourceOffset(at) })); continue; }
     cursor += key[0].length;
     if (/[\s,{}\\#%"]/.test(key[0])) { warnings.push(t("Invalid citation key: {citekey}", { citekey: key[0] })); const next = input.indexOf("@", cursor); cursor = next < 0 ? input.length : next; continue; }
     const record: Record<string, string> = {};
@@ -164,7 +175,7 @@ export function parseBibliography(input: string, t = formatWarning): { entries: 
       const externalId = normalizedDoi ? `doi:${normalizedDoi}` : normalizedArxiv ? `arxiv:${normalizedArxiv}` : `bibtex:${key[0]}`;
       const entryType = kind[0].toLowerCase();
       const { authors, literalAuthors } = splitAuthors(record.author || "");
-      const locatorFields = entryType === "article" ? ["volume", "number", "pages"].filter(field => record[field]) : [];
+      const locatorFields = ["volume", "number", "pages"].filter(field => record[field]);
       const exportLoss = locatorFields.length || literalAuthors.length ? { locatorFields, literalAuthors } : undefined;
       entries.push({ citekey: key[0], entryType, ...(exportLoss ? { exportLoss } : {}), paper: {
         external_id: externalId, s2_id: "", arxiv_id: normalizedArxiv, doi: normalizedDoi,

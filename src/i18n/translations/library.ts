@@ -270,7 +270,7 @@ export const library: Record<string, string> = {
   "Show paper details": "展开论文详情",
   "Show reader controls": "显示阅读器工具栏",
   "Showing up to 32 ranked papers with observed links.": "最多显示 32 篇存在引用关系的排序结果。",
-  "Skipped @{directive} directive": "已跳过 @{directive} 指令",
+  "Skipped @{directive} directive at {offset}": "已跳过位置 {offset} 的 @{directive} 指令",
   "Sort papers": "论文排序",
   "Source failed": "数据源请求失败",
   "Star paper": "收藏论文",

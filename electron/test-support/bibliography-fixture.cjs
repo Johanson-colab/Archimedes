@@ -11,7 +11,15 @@ function feed(input = {}) {
   return { papers: [paper], providers: ["local fixture"], options: { mode: "latest", range: "7d", topic: "all", categories: [], query: "", limit: 60, ...input }, fetched_at: "2026-11-16T00:00:00.000Z", cached: false, stale: true, warning: "Fixture fallback; no model was used." };
 }
 const bibtex = "@article{handoff2026,\n title={Evidence handoff fixture},\n author={Research Fixture},\n year={2026},\n doi={10.5555/archimedes-literature-fixture}\n}";
-const warningBibtex = ["@string{source = {Fixture Press}}", "@article{needsTitle, year={2025}}", bibtex].join("\n");
+const warningBibtex = [
+  "% Citation manager export",
+  "@string{source = {Fixture Press}}",
+  "% Additional abbreviation",
+  "@string{series = {Fixture Series}}",
+  "@article invalid",
+  "@article{needsTitle, year={2025}}",
+  bibtex,
+].join("\n");
 const lossyBibtex = [
   "@article{opticalCalibration,",
   " title={Optical calibration records},",
