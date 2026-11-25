@@ -164,7 +164,11 @@ async function preparePdfDocument({ filePath, signal, emit = () => {} }) {
 
 async function prepareDocument(source = {}, context = {}) {
   const kind = source.kind || "library";
-  if (kind === "library") return prepareLibraryDocument({ ...source, ...context });
+  if (kind === "library") {
+    const lease = libraryStore.captureStore();
+    try { return await prepareLibraryDocument({ ...source, ...context }); }
+    finally { lease.release(); }
+  }
   if (kind === "arxiv") return prepareArxivDocument({ ...source, ...context });
   if (kind === "pdf") return preparePdfDocument({ ...source, ...context });
   throw new Error(`Unknown paper source: ${kind}`);

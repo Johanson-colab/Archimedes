@@ -17,6 +17,40 @@ async function invoke(bridge, method, args) {
   return JSON.parse(result.stdout);
 }
 
+test('SSH bridge permits only remote operations and expires with the turn', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ssh-bridge-'));
+  let bridge;
+  try {
+    const calls = [];
+    bridge = await createExperimentBridge({ workspace: root, mode: 'ssh', invoke: async (name, args, _signal, isActive) => {
+      assert.equal(isActive(), true); calls.push({ name, args }); return { exitCode: 0, output: 'fixture' };
+    } });
+    assert.match(bridge.instructions, /native dynamic tools.*unavailable/);
+    assert.equal((await invoke(bridge, 'ssh_remote_exec', { command: 'pwd' })).output, 'fixture');
+    assert.equal(calls[0].name, 'ssh_remote_exec');
+    await assert.rejects(() => invoke(bridge, 'run_experiment', { command: 'pwd' }), /not authorized/);
+    bridge.close();
+    await assert.rejects(() => invoke(bridge, 'ssh_remote_exec', { command: 'pwd' }));
+  } finally { bridge?.close(); fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('denied SSH bridge command never starts an SSH process', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ssh-bridge-deny-'));
+  let bridge, spawned = false, approval;
+  try {
+    const ssh = require('../ssh-servers.cjs');
+    ssh.initialize(root);
+    const server = ssh.saveServer({ host: 'test.invalid', user: 'test', workspace: '/tmp' });
+    bridge = await createExperimentBridge({ workspace: root, mode: 'ssh', invoke: (name, args, signal) => {
+      assert.equal(name, 'ssh_remote_exec');
+      return require('./ssh-workspace.cjs').runSshWorkspace({ server, command: args.command, signal, approve: async request => { approval = request; return false; }, spawnImpl: () => { spawned = true; } });
+    } });
+    await assert.rejects(() => invoke(bridge, 'ssh_remote_exec', { command: 'touch denied' }), /not approved/);
+    assert.match(approval.command, /test@test.invalid/);
+    assert.equal(spawned, false);
+  } finally { bridge?.close(); fs.rmSync(root, { recursive: true, force: true }); }
+});
+
 test("live bridge records session-scoped work and is revoked at turn end", async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "ab-"));
   let bridge;

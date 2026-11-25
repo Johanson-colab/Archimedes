@@ -3,6 +3,7 @@ const path = require('node:path');
 const { createHash } = require('node:crypto');
 const manifest = require('../shared/latex-engine.json');
 const { extractExecutable } = require('./latex-engine-archive.cjs');
+const { captureManuscriptSources } = require('./manuscript-snapshot.cjs');
 const inflight = new Map();
 const digest = (data) => createHash('sha256').update(data).digest('hex');
 function verified(file, sha256) {
@@ -95,7 +96,13 @@ function createManagedCompiler(options) {
   let tail = Promise.resolve();
   const pending = new Map();
   return (workspace, sourcePath, onProgress = () => {}) => {
-    const key = JSON.stringify([workspace, sourcePath]);
+    let requestedSource;
+    try {
+      sourcePath = require('./latex-workspace.cjs').normalizePaperPath(sourcePath);
+      requestedSource = captureManuscriptSources(workspace, sourcePath);
+      workspace = requestedSource.workspace;
+    } catch (error) { return Promise.reject(error); }
+    const key = JSON.stringify([workspace, sourcePath, requestedSource.source_version]);
     if (pending.has(key)) {
       pending.get(key).listeners.add(onProgress);
       return pending.get(key).task;
@@ -114,6 +121,8 @@ function createManagedCompiler(options) {
       progress(stage, `Managed Tectonic ${manifest.version}\n${Object.keys(proxyEnv).length ? 'Using system HTTP proxy.' : 'Using existing network/proxy configuration.'}\n`);
       const result = await require('./latex-workspace.cjs').compileLatexDocument(workspace, sourcePath, {
         executable, managed: true, bundle,
+        requestedSource,
+        spawnImpl: options.spawnImpl,
         timeoutMs: options.timeoutMs || 600_000, idleTimeoutMs: options.idleTimeoutMs || 120_000,
         onOutput: (log) => { stage = outputStage(log) || stage; progress(stage, log); },
         env: { ...proxyEnv, TECTONIC_CACHE_DIR: cache, XDG_CACHE_HOME: path.join(options.runtimeRoot, "xdg-cache") },

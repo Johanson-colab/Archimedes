@@ -7,6 +7,7 @@
     { "id": "writing", "label": "Writing & delivery", "description": "Write, review and prepare research outputs." }
   ],
   "apps": {
+    "literature-review": { "category": "evidence", "defaultEnabled": true, "beta": true, "order": 15, "description": "Find papers and draft a source-linked literature review." },
     "library": { "category": "evidence", "defaultEnabled": true, "order": 10, "description": "Collect papers, annotations and supporting evidence." },
     "daily": { "category": "discovery", "defaultEnabled": true, "order": 20, "description": "Discover and follow recent papers in your field." },
     "news": { "category": "discovery", "defaultEnabled": false, "order": 60, "description": "Follow research and technology news." },

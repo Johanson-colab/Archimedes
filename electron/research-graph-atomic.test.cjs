@@ -71,6 +71,7 @@ test('a retirement failure rolls back the whole round and retry commits exactly 
         { id: 'n2', kind: 'idea', title: 'New B', content: {} },
       ],
       edges: [{ from: question.id, to: 'n1', kind: 'generates' }, { from: question.id, to: 'n2', kind: 'generates' }],
+      supersede: [{ nodeId: other.id, reason: 'Explicitly rejected' }],
     };
     const before = snapshot(project.id);
     const setStatus = store.setResearchNodeStatus;
@@ -86,9 +87,9 @@ test('a retirement failure rolls back the whole round and retry commits exactly 
     const applied = graph.applyPatch({ projectId: project.id, patch });
     assert.equal(applied.createdNodes.length, 2);
     assert.equal(applied.createdEdges.length, 2);
-    assert.equal(applied.supersededNodes.length, 2);
+    assert.equal(applied.supersededNodes.length, 1);
     assert.equal(graph.getNodeHistory(idea.id).length, 2);
-    assert.equal(store.getResearchNode(idea.id).status, 'retracted');
+    assert.equal(store.getResearchNode(idea.id).status, 'active');
     assert.equal(store.getResearchNode(other.id).status, 'retracted');
     assert.equal(graph.listGraph({ projectId: project.id, includeArchived: true }).nodes.length, 5);
     assert.equal(graph.validateGraph({ projectId: project.id }).ok, true);
