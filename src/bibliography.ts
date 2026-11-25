@@ -43,7 +43,7 @@ function splitAuthors(value: string) {
 
 // Small BibTeX interchange parser: balanced braced/quoted values and literals.
 // Macro expressions are reported instead of silently importing a wrong title.
-export function parseBibliography(input: string): { entries: BibliographyEntry[]; warnings: string[] } {
+export function parseBibliography(input: string, onCitationKey?: (key: string) => void): { entries: BibliographyEntry[]; warnings: string[] } {
   input = input.replace(/^\s*%.*$/gm, "");
   const entries: BibliographyEntry[] = [], warnings: string[] = [];
   let cursor = 0;
@@ -109,6 +109,7 @@ export function parseBibliography(input: string): { entries: BibliographyEntry[]
     if (!key) { warnings.push(`Missing citation key at ${at}`); continue; }
     cursor += key[0].length;
     if (/[\s,{}\\#%"]/.test(key[0])) { warnings.push(`Invalid citation key: ${key[0]}`); const next = input.indexOf("@", cursor); cursor = next < 0 ? input.length : next; continue; }
+    onCitationKey?.(key[0]);
     const record: Record<string, string> = {};
     let closed = false;
     try {
@@ -152,11 +153,11 @@ export function parseBibliography(input: string): { entries: BibliographyEntry[]
   return { entries, warnings };
 }
 
-export function matchBibliographyPaper(incoming: AcademicSearchResult, papers: BibliographyPaper[], { strongOnly = false }: { strongOnly?: boolean } = {}) {
+export function matchBibliographyPaper<T extends AcademicSearchResult>(incoming: AcademicSearchResult, papers: T[], { strongOnly = false }: { strongOnly?: boolean } = {}) {
   const fields = [
     ['s2_id', (value: string) => value.trim().toLowerCase()], ['arxiv_id', arxiv], ['doi', doi],
   ] as const;
-  const compatible = (paper: BibliographyPaper) => !fields.some(([field, normalize]) => incoming[field] && paper[field] && normalize(incoming[field]) !== normalize(paper[field]));
+  const compatible = (paper: T) => !fields.some(([field, normalize]) => incoming[field] && paper[field] && normalize(incoming[field]) !== normalize(paper[field]));
   for (const [field, normalize] of fields) {
     if (!incoming[field]) continue;
     const matched = papers.find(paper => paper[field] && normalize(incoming[field]) === normalize(paper[field]) && compatible(paper));
