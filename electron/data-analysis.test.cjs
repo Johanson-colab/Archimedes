@@ -14,7 +14,7 @@ before(async () => {
     const { code } = await transformWithOxc(source, file, { jsx: { runtime: "classic" } });
     Object.assign(scope, new Function(...Object.keys(scope), `${code}\nreturn {${names.join(",")}};`)(...Object.values(scope)));
   };
-  await load("data-analysis.ts", ["parseDelimited", "numericValue", "isMissing", "dateValue", "summarizeColumn", "profileDataset", "buildPlot"]);
+  await load("data-analysis.ts", ["parseDelimited", "numericValue", "isMissing", "dateValue", "summarizeColumn", "profileDataset", "buildPlot", "groupPlotPoints"]);
   scope.penguins = fs.readFileSync(path.join(__dirname, "../src/assets/data-analysis/penguins.csv"), "utf8");
   scope.weather = fs.readFileSync(path.join(__dirname, "../src/assets/data-analysis/seattle-weather.csv"), "utf8");
   await load("data-analysis-examples.ts", ["analysisExamples"]);
@@ -74,7 +74,33 @@ test("display sampling retains endpoints and unsupported numeric fields return a
   assert.equal(scope.buildPlot(data, { type: "histogram", x: 0, y: -1, group: -1 }).points.length, 0);
 });
 
-test("field inspection does not empty a valid plot; examples, pagination and bounded chat draft work", async () => {
+test("grouped line sampling preserves each series and its source rows within the display cap", () => {
+  const rows = Array.from({ length: 4000 }, (_, i) => [
+    String(Math.floor(i / 2)), String(i), i % 2 === 0 ? "Indoor" : "Outdoor",
+  ].join(","));
+  const data = scope.parseDelimited(["minute,temperature,sensor", ...rows].join("\n"), ",");
+  const config = { type: "line", x: 0, y: 1, group: 2 };
+  const plot = scope.buildPlot(data, config);
+  assert.equal(plot.valid, 4000);
+  assert.equal(plot.omittedGroups, 0);
+  assert.equal(plot.points.length, 2000);
+  for (const [sensor, firstRow] of [["Indoor", 1], ["Outdoor", 2]]) {
+    const points = plot.points.filter((point) => point.group === sensor);
+    assert.equal(points.length, 1000);
+    assert.deepEqual([points[0].x, points.at(-1).x], [0, 1999]);
+    assert.deepEqual([points[0].row, points.at(-1).row], [firstRow, firstRow + 3998]);
+  }
+
+  data.rows.push(["500.5", "11", "Spare"], ["520.5", "16", "Backup"], ["1500.5", "19", "Backup"]);
+  const sparsePlot = scope.buildPlot(data, config);
+  assert.equal(sparsePlot.valid, 4003);
+  assert.equal(sparsePlot.omittedGroups, 0);
+  assert.equal(sparsePlot.points.length, 2000);
+  assert.deepEqual(sparsePlot.points.filter((point) => point.group === "Spare" || point.group === "Backup")
+    .map(({ x, row }) => [x, row]), [[500.5, 4001], [520.5, 4002], [1500.5, 4003]]);
+});
+
+test("field inspection, plot rendering, examples, pagination and chat draft", async (t) => {
   const dom = new JSDOM('<div id="root"></div>', { url: "http://localhost" });
   const keys = ["window", "document", "HTMLElement", "Node", "IS_REACT_ACT_ENVIRONMENT"];
   const saved = Object.fromEntries(keys.map((key) => [key, global[key]]));
@@ -110,6 +136,19 @@ test("field inspection does not empty a valid plot; examples, pagination and bou
     await click(document.querySelector('[aria-label="Continue in chat"]'));
     assert.match(draft, /Explain the seasonal pattern/); assert.match(draft, /full dataset is not attached/);
     assert.match(draft, /2012-01-01/); assert.ok(!draft.includes("2015-12-31"));
+
+    await t.test("a line group with one observation remains visible", async () => {
+      const dataset = scope.parseDelimited("minute,temperature,sensor\n0,21,Indoor\n1,25,Spare\n2,22,Indoor", ",");
+      const config = { type: "line", x: 0, y: 1, group: 2 };
+      const plot = scope.buildPlot(dataset, config);
+      await React.act(async () => root.render(React.createElement(scope.DataAnalysisPlot, {
+        dataset, config, plot, dateAxis: false, t: (key) => key,
+      })));
+      assert.equal(document.querySelector("polyline")?.getAttribute("points").split(" ").length, 2);
+      const singleton = [...document.querySelectorAll("circle")].find((circle) => circle.textContent.includes("Spare"));
+      assert.ok(singleton);
+      assert.ok(Number(singleton.getAttribute("opacity")) > 0);
+    });
   } finally {
     await React.act(async () => root.unmount()); dom.window.close();
     for (const [key, value] of Object.entries(saved)) value === undefined ? delete global[key] : global[key] = value;

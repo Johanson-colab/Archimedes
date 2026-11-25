@@ -84,6 +84,40 @@ export type PlotConfig = { type: "scatter" | "bar" | "line" | "histogram"; x: nu
 export type PlotPoint = { x: number; y: number; label: string; group: string; count?: number; row?: number };
 export type PlotResult = { points: PlotPoint[]; valid: number; omittedGroups: number; correlation: number | null };
 
+export function groupPlotPoints(points: PlotPoint[]) {
+  const groups = new Map<string, PlotPoint[]>();
+  for (const point of points) {
+    const group = groups.get(point.group) ?? [];
+    group.push(point);
+    groups.set(point.group, group);
+  }
+  return groups;
+}
+
+function sampleEvenly(points: PlotPoint[], count: number) {
+  if (points.length <= count) return points;
+  return Array.from({ length: count }, (_, i) => points[Math.floor(i * (points.length - 1) / (count - 1))]);
+}
+
+function sampleLinePoints(points: PlotPoint[], limit: number) {
+  const groups = [...groupPlotPoints(points).values()];
+  // Reserve each series' endpoints, then allocate the remaining positions by group size.
+  const reserved = groups.reduce((total, group) => total + Math.min(2, group.length), 0);
+  const sampled = new Set<PlotPoint>();
+  const remainingPoints = points.length - reserved;
+  const remainingSlots = limit - reserved;
+  let seen = 0;
+  let allocated = 0;
+  for (const group of groups) {
+    const endpoints = Math.min(2, group.length);
+    seen += group.length - endpoints;
+    const next = Math.floor(seen * remainingSlots / remainingPoints);
+    for (const point of sampleEvenly(group, endpoints + next - allocated)) sampled.add(point);
+    allocated = next;
+  }
+  return points.filter((point) => sampled.has(point));
+}
+
 /** Calculations use every valid row; only the scatter/line display is bounded. */
 export function buildPlot(dataset: Dataset, config: PlotConfig): PlotResult {
   const { type, x, y, group } = config;
@@ -134,7 +168,8 @@ export function buildPlot(dataset: Dataset, config: PlotConfig): PlotResult {
   const accepted = new Set(groups.slice(0, 6));
   result.omittedGroups = Math.max(0, groups.length - accepted.size);
   const filtered = all.filter((point) => accepted.has(point.group));
-  // Even spacing retains the extent of a time series instead of showing only its first rows.
-  result.points = filtered.length > 2000 ? Array.from({ length: 2000 }, (_, i) => filtered[Math.floor(i * (filtered.length - 1) / 1999)]) : filtered;
+  const limit = 2000;
+  result.points = type === "line" && accepted.size > 1 && filtered.length > limit
+    ? sampleLinePoints(filtered, limit) : sampleEvenly(filtered, limit);
   return result;
 }
