@@ -23,7 +23,7 @@ function sameReference(paper: AcademicSearchResult, existing: AcademicSearchResu
 
 export function prepareManuscriptCitation(content: string, paper: BibliographyPaper) {
   const keys: string[] = [];
-  const { entries } = parseBibliography(content, key => keys.push(key));
+  const { entries } = parseBibliography(content, undefined, key => keys.push(key));
   const generated = exportBibliography([paper]);
   const requested = parseBibliography(generated).entries[0].citekey;
   const occupied = keys.filter(key => citationKeyIdentity(key) === citationKeyIdentity(requested));
