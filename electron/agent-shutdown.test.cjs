@@ -11,7 +11,16 @@ test("app shutdown interrupts active API work and rejects a later startup", asyn
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-agent-shutdown-")));
   store.openWorkspace(root);
   model.initializeModelConfig(path.join(root, "settings"));
-  model.saveModelConfig({ provider: "custom", baseUrl: "https://shutdown.invalid/v1", model: "fake", apiKey: "fake-not-a-credential" });
+  const environment = {
+    ARCHIMEDES_LLM_BASE_URL: "https://shutdown.invalid/v1",
+    ARCHIMEDES_LLM_MODEL: "fake",
+    ARCHIMEDES_LLM_API_KEY: "fake-not-a-credential",
+  };
+  for (const [key, value] of Object.entries(environment)) {
+    const previous = process.env[key];
+    t.after(() => { if (previous === undefined) delete process.env[key]; else process.env[key] = previous; });
+    process.env[key] = value;
+  }
   const previous = global.fetch;
   t.after(() => { global.fetch = previous; fs.rmSync(root, { recursive: true, force: true }); });
   let entered;
