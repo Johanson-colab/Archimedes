@@ -1,6 +1,7 @@
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+const { spawn } = require("node:child_process");
 
 function firstExisting(candidates, exists) {
   return candidates.find((candidate) => candidate && (candidate === "cmd.exe" || exists(candidate))) || "";
@@ -47,4 +48,41 @@ function resolveTerminalShell(options = {}) {
   return { shell, args: ["-l"] };
 }
 
-module.exports = { resolveTerminalShell };
+function cleanTerminalEnvironment(version, env = process.env) {
+  const inherited = Object.entries(env).filter(([name, value]) =>
+    typeof value === "string" && !/^(ARCHIMEDES|AXIOM)_/i.test(name));
+  return {
+    ...Object.fromEntries(inherited),
+    TERM: "xterm-256color",
+    COLORTERM: "truecolor",
+    TERM_PROGRAM: "Archimedes",
+    TERM_PROGRAM_VERSION: version,
+  };
+}
+
+function spawnTerminalCommand(command, { cwd, version, env = process.env }) {
+  const windows = process.platform === "win32";
+  const { shell, args } = windows
+    ? { shell: "cmd.exe", args: ["/d", "/s", "/c"] }
+    : resolveTerminalShell({ env });
+  return spawn(shell, [...args, ...(windows ? [] : ["-c"]), command], {
+    cwd,
+    env: cleanTerminalEnvironment(version, env),
+    detached: !windows,
+  });
+}
+
+function stopTerminalCommand(child) {
+  if (process.platform === "win32") return child.kill("SIGTERM");
+  if (!child.pid) return false;
+  try {
+    // The leader can exit while inherited stdio and its other processes stay open.
+    process.kill(-child.pid, "SIGKILL");
+    return true;
+  } catch (error) {
+    if (error.code !== "ESRCH") throw error;
+    return false;
+  }
+}
+
+module.exports = { cleanTerminalEnvironment, resolveTerminalShell, spawnTerminalCommand, stopTerminalCommand };

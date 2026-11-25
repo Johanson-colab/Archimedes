@@ -1,6 +1,10 @@
 const assert = require("node:assert/strict");
+const { spawnSync } = require("node:child_process");
+const { once } = require("node:events");
+const { createInterface } = require("node:readline");
 const test = require("node:test");
-const { resolveTerminalShell } = require("./terminal-shell.cjs");
+const { setTimeout: delay } = require("node:timers/promises");
+const { resolveTerminalShell, spawnTerminalCommand, stopTerminalCommand } = require("./terminal-shell.cjs");
 
 test("Windows prefers PowerShell 7 when it is installed", () => {
   const pwsh = "C:\\Program Files\\PowerShell\\7\\pwsh.exe";
@@ -113,4 +117,32 @@ test("Windows shell candidates use target paths for store installs and alternate
     userShell: "",
   });
   assert.equal(installed.shell, installedShell);
+});
+
+test("a shell command inherits its workspace environment without application credentials", { skip: process.platform === "win32" }, async () => {
+  const command = 'printf "%s|%s|%s|%s" "$ARCHIMEDES_LLM_API_KEY" "$AXIOM_WEB_SEARCH_API_KEY" "$ARCH_TEST_VISIBLE" "$TERM_PROGRAM"';
+  const child = spawnTerminalCommand(command, { cwd: __dirname, version: "test", env: {
+    ...process.env, SHELL: "/bin/sh", ARCHIMEDES_LLM_API_KEY: "synthetic", AXIOM_WEB_SEARCH_API_KEY: "synthetic", ARCH_TEST_VISIBLE: "visible",
+  } });
+  let output = "";
+  child.stdout.on("data", chunk => { output += chunk; });
+  assert.deepEqual(await once(child, "close"), [0, null]);
+  assert.equal(output, "||visible|Archimedes");
+});
+
+test("stopping a shell command removes its shell and background process", { skip: process.platform === "win32", timeout: 5_000 }, async (t) => {
+  const child = spawnTerminalCommand('sleep 60 & printf "%s\\n" "$!"; wait', { cwd: __dirname, version: "test", env: { ...process.env, SHELL: "/bin/sh" } });
+  t.after(() => { if (child.signalCode === null) stopTerminalCommand(child); });
+  const closed = once(child, "close");
+  const lines = createInterface({ input: child.stdout });
+  const [pid] = await once(lines, "line");
+  assert.match(pid, /^\d+$/);
+  assert.equal(stopTerminalCommand(child), true);
+  assert.deepEqual(await closed, [null, "SIGKILL"]);
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const state = spawnSync("ps", ["-o", "stat=", "-p", pid], { encoding: "utf8" });
+    if (state.status === 1 || state.stdout.trim().startsWith("Z")) return;
+    await delay(50);
+  }
+  assert.fail("Background process remained alive after stopping its process group.");
 });

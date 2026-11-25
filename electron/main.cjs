@@ -1,5 +1,4 @@
 const { app, BrowserWindow, Menu, ipcMain: electronIpcMain, dialog, nativeTheme, net, protocol, clipboard, shell, session, safeStorage, systemPreferences, Notification } = require("electron");
-const { spawn } = require("node:child_process");
 const { randomUUID } = require("node:crypto");
 const os = require("node:os");
 const fs = require("node:fs");
@@ -19,6 +18,7 @@ const { generateNativePptx } = require("./native-pptx.cjs");
 const { browserUse } = require("./agent/browser-use.cjs");
 const { loadLocalAgentEnvironment } = require("./config.cjs");
 const terminalSettings = require("./terminal-settings.cjs");
+const { cleanTerminalEnvironment, spawnTerminalCommand, stopTerminalCommand } = require("./terminal-shell.cjs");
 const journeySettings = require("./journey-settings.cjs");
 const journeySnapshots = require("./journey-snapshots.cjs");
 const workbenchSettings = require("./workbench-settings.cjs");
@@ -130,16 +130,6 @@ protocol.registerSchemesAsPrivileged([
   },
 ]);
 
-function cleanTerminalEnvironment() {
-  return Object.fromEntries(Object.entries({
-    ...process.env,
-    TERM: "xterm-256color",
-    COLORTERM: "truecolor",
-    TERM_PROGRAM: "Archimedes",
-    TERM_PROGRAM_VERSION: app.getVersion(),
-  }).filter(([, value]) => typeof value === "string"));
-}
-
 function getInteractiveTerminal(event, sessionId) {
   const session = interactiveTerminalSessions.get(sessionId);
   if (!session || session.senderId !== event.sender.id) throw new Error("Terminal session not found.");
@@ -159,7 +149,7 @@ function closeInteractiveTerminal(sessionId) {
 
 function closeAllTerminals() {
   for (const sessionId of interactiveTerminalSessions.keys()) closeInteractiveTerminal(sessionId);
-  for (const session of commandSessions.values()) session.process.kill("SIGTERM");
+  for (const session of commandSessions.values()) stopTerminalCommand(session.process);
   commandSessions.clear();
 }
 
@@ -169,7 +159,7 @@ function closeWindowTerminals(senderId) {
   }
   for (const [sessionId, session] of commandSessions) {
     if (session.senderId !== senderId) continue;
-    session.process.kill("SIGTERM");
+    stopTerminalCommand(session.process);
     commandSessions.delete(sessionId);
   }
 }
@@ -2426,9 +2416,7 @@ app.whenReady().then(async () => {
     const sessionId = randomUUID();
     const owner = store.currentStore();
     const commandRun = owner.startCommand({ command, cwd: workspace });
-    const shell = process.platform === "win32" ? "cmd.exe" : "/bin/zsh";
-    const args = process.platform === "win32" ? ["/d", "/s", "/c", command] : ["-lc", command];
-    const child = spawn(shell, args, { cwd: workspace, env: process.env });
+    const child = spawnTerminalCommand(command, { cwd: workspace, version: app.getVersion() });
     const captured = owner.captureStore();
 
     commandSessions.set(sessionId, { process: child, senderId: event.sender.id });
@@ -2472,7 +2460,7 @@ app.whenReady().then(async () => {
 
   ipcMain.handle("terminal:stop", (event, sessionId) => {
     const session = commandSessions.get(sessionId);
-    if (session?.senderId === event.sender.id) session.process.kill("SIGTERM");
+    if (session?.senderId === event.sender.id) stopTerminalCommand(session.process);
   });
 
   ipcMain.handle("journey:get-settings", () => journeySettings.journeySettings());
@@ -2617,7 +2605,7 @@ app.whenReady().then(async () => {
       cols,
       rows,
       cwd: workspace,
-      env: cleanTerminalEnvironment(),
+      env: cleanTerminalEnvironment(app.getVersion()),
     });
     const session = { process: terminalProcess, senderId: event.sender.id, sender: event.sender, ready: false, buffer: "" };
     interactiveTerminalSessions.set(sessionId, session);
