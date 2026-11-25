@@ -1,3 +1,4 @@
+import type { ManuscriptReviewFinding, ManuscriptReviewRequest } from "./manuscript-handoff";
 import { Fragment, lazy, memo, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent as ReactClipboardEvent, type ReactNode } from "react";
 import { flushSync } from "react-dom";
 import { startApprovalCountdown } from "./approval-countdown.mjs";
@@ -1506,6 +1507,7 @@ function App() {
   const [fileSelection, setFileSelection] = useState<{ file: WorkspaceFilePreview; selection: FileSelection } | null>(null);
   const [fileLoading, setFileLoading] = useState(false);
   const [fileError, setFileError] = useState("");
+  const [manuscriptReview, setManuscriptReview] = useState<ManuscriptReviewRequest | null>(null);
   const [paperOpenRequest, setPaperOpenRequest] = useState<PaperOpenRequest>(null);
   const [changeSets, setChangeSets] = useState<WorkspaceChangeSet[]>([]);
   const [papers, setPapers] = useState(initialPapers);
@@ -1598,6 +1600,9 @@ function App() {
   const fileWorkspaceVersionRef = useRef(0);
   if (executionWorkspaceRef.current !== executionWorkspace) fileWorkspaceVersionRef.current += 1;
   executionWorkspaceRef.current = executionWorkspace;
+  const manuscriptOwner = JSON.stringify([workspace, activeProjectId, activeWorkspaceId]);
+  const manuscriptOwnerRef = useRef(manuscriptOwner);
+  manuscriptOwnerRef.current = manuscriptOwner;
   const fileWorkspaceVersion = fileWorkspaceVersionRef.current;
   const fileEditorScope = getFileEditorScope(fileEditorScopes, executionWorkspace);
   const { drafts: fileDrafts, saving: fileSaving, conflicts: fileConflicts, errors: fileErrors } = fileEditorScope;
@@ -3103,6 +3108,25 @@ function App() {
     }
   }
 
+  async function openManuscriptReview(manifestPath: string) {
+    if (!activeProjectId || !activeWorkspaceId || !desktopBridge.prepareManuscriptReview) return;
+    const request = await desktopBridge.prepareManuscriptReview({ projectId: activeProjectId, workspaceId: activeWorkspaceId, manifestPath });
+    if (manuscriptOwnerRef.current !== manuscriptOwner) return;
+    if (hiddenCoreModules.has("paper-review")) await setCoreModuleEnabled("paper-review", true);
+    if (manuscriptOwnerRef.current !== manuscriptOwner) return;
+    setManuscriptReview(request);
+    setMainSection("paper-review");
+  }
+
+  async function openManuscriptRevision(selection: ManuscriptReviewFinding) {
+    if (!desktopBridge.createManuscriptRevision) return;
+    const { thread, draft } = await desktopBridge.createManuscriptRevision(selection);
+    writeComposerDraft(thread.id, { text: draft, selectionStart: draft.length, selectionEnd: draft.length, newChatMode: "create" });
+    if (manuscriptOwnerRef.current !== manuscriptOwner) return;
+    setThreads(current => [thread, ...current.filter(item => item.id !== thread.id)]);
+    await openResearchThread(thread);
+  }
+
   function askAIAboutPaper(filePath: string) {
     const absolutePath = `${executionWorkspace.replace(/[\\/]$/, "")}/${filePath.replace(/^\/+/, "")}`;
     const attachment: ContextAttachment = { id: `file:${absolutePath}`, type: "file", name: filePath.split("/").at(-1) || filePath, path: absolutePath, detail: `LaTeX paper source · ${filePath}` };
@@ -3505,7 +3529,9 @@ function App() {
     daily: <LibraryView key={`${workspace}:${activeProjectId || ""}:${dailyStartMode}`} bridge={desktopBridge} mode="daily" active={mainSection === "daily"} initialDailyMode={dailyStartMode} workspace={workspace} projectId={activeProjectId} onLibraryImported={() => setLibraryRefreshVersion((version) => version + 1)} onInternalReviewThreadsDeleted={(threadIds) => setThreads((current) => current.filter((thread) => !threadIds.includes(thread.id)))} onReproduceOpened={(id) => { setReproduceId(id); setMainSection("reproduce"); }} onOpenProject={(id) => setActiveProjectId(id)} />,
     "benchmark-radar": <BenchmarkRadarView />,
     news: <NewsView bridge={desktopBridge} projectId={activeProjectId} active={mainSection === "news"} onSendToChat={sendNoteToChat} />,
-    "paper-review": <PaperReviewView bridge={desktopBridge} workspace={executionWorkspace} projectId={activeProjectId} active={mainSection === "paper-review"} />,
+    "paper-review": <PaperReviewView key={manuscriptOwner} bridge={desktopBridge} workspace={executionWorkspace} projectId={activeProjectId} active={mainSection === "paper-review"}
+      manuscript={manuscriptReview && manuscriptReview.origin.workspace === executionWorkspace && manuscriptReview.origin.projectId === activeProjectId ? manuscriptReview : null}
+      onClearManuscript={() => setManuscriptReview(null)} onRevision={openManuscriptRevision} />,
     extensions: <ExtensionsView bridge={desktopBridge} workspace={executionWorkspace} tab={extensionsTab} onTabChange={setExtensionsTab} attachedIds={new Set(contextItems.map((item) => item.id))} onAttach={(item) => setContextItems((current) => current.some((candidate) => candidate.id === item.id) ? current : [...current, item].slice(0, 12))} />,
     reproduce: <ReproduceView bridge={desktopBridge} selectedId={reproduceId} onSelect={setReproduceId} />,
     "image-creation": <ImageCreationView active={mainSection === "image-creation"} onBrowseProceedings={() => { setDailyOpened(true); setDailyStartMode("conference"); setMainSection("daily"); }} />,
@@ -3519,7 +3545,7 @@ function App() {
       await submitPrompt(prompt, "free-chat", reasoningEffort, contextLength, [], "paper-to-slides", backend, true, mineruToken || undefined);
     }} />,
 
-    writing: <PaperWritingView bridge={desktopBridge} workspace={executionWorkspace} projectId={activeProjectId} threadId={activeThreadId} openRequest={paperOpenRequest} onRefresh={refreshWorkspaceFiles} onAskAI={askAIAboutPaper} active={mainSection === "writing"} />,
+    writing: <PaperWritingView bridge={desktopBridge} workspace={executionWorkspace} projectId={activeProjectId} threadId={activeThreadId} openRequest={paperOpenRequest} onRefresh={refreshWorkspaceFiles} onAskAI={askAIAboutPaper} onReviewManuscript={activeProjectId && activeWorkspaceId && desktopBridge.prepareManuscriptReview ? openManuscriptReview : undefined} active={mainSection === "writing"} />,
   };
   for (const entry of pluginEntries) {
     sidebarModuleContent[entry.id] = <PluginModuleView key={entry.id} entry={entry} />;

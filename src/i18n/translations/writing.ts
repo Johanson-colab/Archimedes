@@ -94,6 +94,8 @@ export const writing: Record<string, string> = {
   "Replace the chat composer with these notes": "用这些笔记替换对话输入框",
   "Requires the inconsolata TeX package.": "需要 inconsolata TeX 宏包。",
   "Requires the recommended TeX fonts, including Helvetica (phvb).": "需要 TeX 推荐字体集，包括 Helvetica（phvb）。",
+  "Review compiled manuscript": "审阅已编译稿件",
+  "Save and compile the current manuscript before reviewing it.": "审阅前请保存并重新编译当前稿件。",
   "Saved": "已保存",
   "Saving": "保存中",
   "Search conference, publisher or template": "搜索会议、出版社或模板",
