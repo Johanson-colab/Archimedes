@@ -55,7 +55,16 @@ type ManuscriptEvidenceDetails = ManuscriptEvidenceRecord & {
   rows: Array<{ seed: string; target: number | null; baseline: number | null }>;
   log: string | null;
 };
+type AnalysisOwner = { workspace: string; projectId: string };
+type AnalysisRecipe = { config: import("./data-analysis").PlotConfig; column: number; seedColumn: number | null; unit: string };
+type AnalysisEntry = { id: string; name: string; createdAt: string };
 interface ResearchDeskBridge {
+  listAnalyses?(owner: AnalysisOwner): Promise<AnalysisEntry[]>;
+  saveAnalysis?(owner: AnalysisOwner, input: { name: string; bytes: Uint8Array; recipe: AnalysisRecipe }): Promise<AnalysisEntry>;
+  loadAnalysis?(owner: AnalysisOwner, id: string): Promise<{
+    source: { name: string; state: "ready" | "missing" | "changed"; sha256: string; bytes?: Uint8Array };
+    recipe: AnalysisRecipe; summary: ReturnType<typeof import("./data-analysis").summarizeColumn>;
+  }>;
     platform?: string;
     getInitialWorkspace: () => Promise<string | null>;
     getLocalIdentity: () => Promise<LocalIdentity>;

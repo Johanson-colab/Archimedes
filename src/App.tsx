@@ -3523,7 +3523,7 @@ function App() {
     "image-creation": <ImageCreationView active={mainSection === "image-creation"} onBrowseProceedings={() => { setDailyOpened(true); setDailyStartMode("conference"); setMainSection("daily"); }} />,
     "data-charts": <DataChartsView active={mainSection === "data-charts"} />,
     "literature-review": <LiteratureReviewView key={`${workspace}:${activeProjectId || ""}`} bridge={desktopBridge} workspace={executionWorkspace} projectId={activeProjectId || ""} onLibraryImported={() => setLibraryRefreshVersion((version) => version + 1)} />,
-    "data-analysis": <DataAnalysisView onAskAI={(text) => sendNoteToChat(text, "replace")} />,
+    "data-analysis": <DataAnalysisView key={JSON.stringify([workspace, activeProjectId])} owner={activeProjectId ? { workspace, projectId: activeProjectId } : undefined} bridge={desktopBridge} onAskAI={(text) => sendNoteToChat(text, "replace")} />,
     "paper-to-slides": <PaperToSlidesView bridge={desktopBridge} workspace={executionWorkspace} busy={agentBusy} onStart={async ({ pdfPath, backend, language, length, instructions, mineruToken }) => {
       const staged = await desktopBridge.stagePaperToSlidesPdf(executionWorkspace, pdfPath);
       startNewTask();

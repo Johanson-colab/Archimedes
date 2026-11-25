@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowRight, Download, Upload, X } from "lucide-react";
 import { useUISettings } from "./i18n";
 import { Tab, Tabs } from "./Tabs";
@@ -10,7 +10,7 @@ import "./data-analysis.css";
 function initialData() { return parseDelimited(analysisExamples[0].csv, ","); }
 const PAGE_SIZE = 50;
 
-export default function DataAnalysisView({ onAskAI }: { onAskAI?: (text: string) => void }) {
+export default function DataAnalysisView({ owner, bridge, onAskAI }: { owner?: AnalysisOwner; bridge?: ResearchDeskBridge; onAskAI?: (text: string) => void }) {
   const { t } = useUISettings();
   const [dataset, setDataset] = useState<Dataset>(initialData);
   const [name, setName] = useState(analysisExamples[0].file);
@@ -26,6 +26,20 @@ export default function DataAnalysisView({ onAskAI }: { onAskAI?: (text: string)
   const inputRef = useRef<HTMLInputElement>(null);
   const chartRef = useRef<SVGSVGElement>(null);
   const fileRequest = useRef(0);
+  const [sourceBytes, setSourceBytes] = useState(() => new TextEncoder().encode(analysisExamples[0].csv));
+  const [saved, setSaved] = useState<AnalysisEntry[]>([]);
+  const [unit, setUnit] = useState("");
+  const [seedColumn, setSeedColumn] = useState<number | null>(null);
+  const [notice, setNotice] = useState("");
+  const [busy, setBusy] = useState(false);
+  const projectId = owner?.projectId, workspace = owner?.workspace;
+  useEffect(() => {
+    if (!projectId || !workspace || !bridge?.listAnalyses) return;
+    let current = true;
+    bridge.listAnalyses({ projectId, workspace }).then((items) => { if (current) setSaved(items); },
+      (reason) => { if (current) setError(String(reason)); });
+    return () => { current = false; fileRequest.current++; };
+  }, [bridge, projectId, workspace]);
   const profiles = useMemo(() => profileDataset(dataset), [dataset]);
   const numeric = profiles.filter((profile) => profile.kind === "number");
   const summary = useMemo(() => summarizeColumn(dataset.rows, column), [dataset, column]);
@@ -35,6 +49,7 @@ export default function DataAnalysisView({ onAskAI }: { onAskAI?: (text: string)
 
   function loadExample(item: AnalysisExample) {
     fileRequest.current++;
+    setSourceBytes(new TextEncoder().encode(item.csv)); setUnit(""); setSeedColumn(null); setNotice("");
     setDataset(parseDelimited(item.csv, ",")); setName(item.file); setExampleId(item.id);
     setConfig(item.presets[0].config); setColumn(item.presets[0].config.y); setPresetIndex(0);
     setPage(0); setTab("plot"); setQuestion(""); setError("");
@@ -46,15 +61,49 @@ export default function DataAnalysisView({ onAskAI }: { onAskAI?: (text: string)
     if (!/\.(csv|tsv)$/i.test(file.name)) { setError("Choose a CSV or TSV file"); return; }
     if (file.size > 10 * 1024 * 1024) { setError("File exceeds the 10 MB limit"); return; }
     try {
-      const text = await file.text();
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      const text = new TextDecoder().decode(bytes);
       if (request !== fileRequest.current) return;
       const data = parseDelimited(text, /\.tsv$/i.test(file.name) ? "\t" : ",");
       const fields = profileDataset(data), numbers = fields.filter((field) => field.kind === "number");
       const y = numbers[1]?.index ?? numbers[0]?.index ?? -1;
+      setSourceBytes(bytes); setUnit(""); setSeedColumn(null); setNotice("");
       setDataset(data); setName(file.name); setExampleId(null); setPresetIndex(-1);
       setColumn(Math.max(0, y)); setConfig({ type: numbers.length > 1 ? "scatter" : "histogram", x: numbers[0]?.index ?? 0, y, group: -1 });
       setTab(numbers.length ? "plot" : "data"); setPage(0); setQuestion(""); setError("");
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Could not read the file"); }
+  }
+
+  async function saveAnalysis() {
+    if (!owner || !bridge?.saveAnalysis) return;
+    const request = fileRequest.current;
+    setBusy(true); setError("");
+    try {
+      const item = await bridge.saveAnalysis(owner, { bytes: sourceBytes, name, recipe: { config, column, unit, seedColumn } });
+      setSaved((items) => [item, ...items.filter((other) => other.id !== item.id)]);
+      if (request === fileRequest.current) setNotice(t("Analysis saved to this project."));
+    } catch (reason) { if (request === fileRequest.current) setError(String(reason)); }
+    finally { setBusy(false); }
+  }
+
+  async function reopen(id: string) {
+    if (!owner || !bridge?.loadAnalysis || !id) return;
+    const request = ++fileRequest.current;
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const { source, recipe } = await bridge.loadAnalysis(owner, id);
+      if (request !== fileRequest.current) return;
+      if (source.state !== "ready" || !source.bytes) {
+        setError(t(source.state === "missing" ? "Saved analysis source is missing." : "Saved analysis source has changed."));
+        return;
+      }
+      const bytes = new Uint8Array(source.bytes);
+      setDataset(parseDelimited(new TextDecoder().decode(bytes), /\.tsv$/i.test(source.name) ? "\t" : ","));
+      setSourceBytes(bytes); setName(source.name); setExampleId(null); setPresetIndex(-1); setPage(0); setQuestion("");
+      setConfig(recipe.config); setColumn(recipe.column); setSeedColumn(recipe.seedColumn); setUnit(recipe.unit);
+      setNotice(t("Reopened saved analysis.") + " SHA-256 " + source.sha256.slice(0, 12));
+    } catch (reason) { if (request === fileRequest.current) setError(String(reason)); }
+    finally { setBusy(false); }
   }
 
   function updateConfig(patch: Partial<PlotConfig>) {
@@ -116,6 +165,15 @@ export default function DataAnalysisView({ onAskAI }: { onAskAI?: (text: string)
       <div className="analysis-file-title"><h1 title={name}>{name}</h1><span>{example ? t("Example dataset") : t("Local file")} <span aria-hidden="true">/</span> {dataset.rows.length.toLocaleString()} {t("rows")} <span aria-hidden="true">/</span> {dataset.headers.length} {t("fields")}</span></div>
       <div className="analysis-file-actions"><label className="analysis-example-picker"><span>{t("Examples")}</span><select aria-label={t("Example dataset")} value={exampleId ?? ""} onChange={(event) => { const item = analysisExamples.find((candidate) => candidate.id === event.target.value); if (item) loadExample(item); }}><option disabled value="">{t("Choose an example")}</option>{analysisExamples.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}</select></label><button className="analysis-button analysis-primary" onClick={() => inputRef.current?.click()}><Upload size={15} />{t("Open CSV / TSV")}</button></div>
     </header>
+    {owner && bridge?.saveAnalysis && <div className="analysis-view-toolbar" aria-label={t("Saved analyses")}>
+      <label className="analysis-example-picker"><span>{t("Metric unit")}</span><input aria-label={t("Metric unit")} value={unit} maxLength={80} onChange={(event) => setUnit(event.target.value)} /></label>
+      <label className="analysis-example-picker"><span>{t("Seed column")}</span><select value={seedColumn ?? ""} onChange={(event) => setSeedColumn(event.target.value === "" ? null : Number(event.target.value))}>
+        <option value="">{t("None")}</option>{dataset.headers.map((header, i) => <option key={i} value={i}>{header}</option>)}</select></label>
+      <button className="analysis-button" disabled={busy} onClick={saveAnalysis}>{t("Save analysis")}</button>
+      <select aria-label={t("Saved analyses")} value="" disabled={busy || !saved.length} onChange={(event) => void reopen(event.target.value)}>
+        <option value="">{t("Reopen saved analysis")}</option>{saved.map((item) => <option key={item.id} value={item.id}>{item.name} · {new Date(item.createdAt).toLocaleString()}</option>)}</select>
+      {notice && <span role="status">{notice}</span>}
+    </div>}
     <input ref={inputRef} hidden type="file" accept=".csv,.tsv,text/csv,text/tab-separated-values" onChange={(event) => { void openFile(event.target.files?.[0]); event.target.value = ""; }} />
     {error && <div className="analysis-error" role="alert">{t(error)}<button aria-label={t("Dismiss")} onClick={() => setError("")}><X size={16} /></button></div>}
     <div className="analysis-body">
