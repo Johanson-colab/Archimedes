@@ -1,5 +1,18 @@
 /// <reference types="vite/client" />
 
+type ResearchGraphNode = import("./research-graph/types").ResearchNode;
+type ResearchGraphEdge = import("./research-graph/types").ResearchEdge;
+type ResearchGraph = import("./research-graph/types").ResearchGraph;
+type ResearchGraphIssue = import("./research-graph/types").ResearchGraphIssue;
+type ResearchGraphUpdate = import("./research-graph/types").ResearchGraphUpdate;
+type ResearchGraphNodeKind = import("./research-graph/types").ResearchNodeKind;
+type ResearchGraphEdgeKind = import("./research-graph/types").ResearchEdgeKind;
+type ResearchGraphStatus = import("./research-graph/types").ResearchNodeStatus;
+type ExperimentRun = import("./research-graph/types").ExperimentRun;
+type ExperimentActivity = import("./research-graph/types").ExperimentActivity;
+type ExperimentVerdict = import("./research-graph/types").ExperimentVerdict;
+type ResearchGraphParent = { nodeId: string; revisionId?: string; kind?: ResearchGraphEdgeKind; metadata?: Record<string, unknown> };
+
 type FigureForgeConnection = { provider: string; baseUrl?: string; apiKey?: string; model?: string };
 type WorkbenchLayoutSnapshot = {
   orientation: "row" | "column";
@@ -91,13 +104,14 @@ interface ResearchDeskBridge {
     markArtifactsSeen: (threadId: string) => Promise<{ marked: number }>;
     countUnseenArtifacts: (threadId: string) => Promise<number>;
     deleteArtifact: (id: string) => Promise<{ deleted: boolean }>;
-    writeWorkspaceFile: (workspace: string, filePath: string, content: string) => Promise<WorkspaceFilePreview>;
+    writeWorkspaceFile: (workspace: string, filePath: string, content: string, expectedContent?: string) => Promise<WorkspaceFilePreview>;
     listLatexProjects: (workspace: string) => Promise<LatexProjectSummary[]>;
     createLatexProject: (workspace: string, directory?: string, template?: string) => Promise<WorkspaceFilePreview>;
     createLatexFile: (workspace: string, path: string) => Promise<WorkspaceFilePreview>;
     createLatexDirectory: (workspace: string, path: string) => Promise<LatexDirectoryResult>;
     importLatexFolder: (workspace: string) => Promise<LatexImportResult>;
     compileLatexDocument: (workspace: string, path: string, requestId?: string) => Promise<LatexCompileResult>;
+    readManuscriptSnapshot?: (workspace: string, manifestPath: string) => Promise<import("./manuscript-snapshot").ManuscriptBuildVerification>;
     onLatexCompileProgress?: (callback: (input: { workspace?: string; requestId?: string; path: string; stage: string; log?: string }) => void) => () => void;
     getResearchTurnImage: (threadId: string, turnId: string, position: number, workspace?: string) => Promise<string | null>;
     getResearchThread: (threadId: string, workspace?: string) => Promise<ResearchThreadDetail>;
@@ -107,6 +121,23 @@ interface ResearchDeskBridge {
     compactResearchThread: (threadId: string, workspace?: string) => Promise<ResearchThreadDetail>;
     exportResearchThread: (threadId: string, workspace?: string) => Promise<{ canceled: boolean; path?: string }>;
     getResearchSnapshot: () => Promise<WorkspaceSnapshot>;
+    createResearchNode: (input: { projectId: string; threadId?: string | null; kind: ResearchGraphNodeKind; status?: ResearchGraphStatus; title: string; summary?: string; content?: Record<string, unknown>; parents?: ResearchGraphParent[]; author?: string }) => Promise<ResearchGraphNode>;
+    reviseResearchNode: (input: { nodeId: string; title?: string; summary?: string; content: Record<string, unknown>; sourceTurnId?: string | null; sourceEventId?: string | null; gitCommit?: string | null; author?: string }) => Promise<ResearchGraphNode>;
+    linkResearchNodes: (input: { fromNodeId: string; toNodeId: string; kind: ResearchGraphEdgeKind; fromRevisionId?: string | null; toRevisionId?: string | null; metadata?: Record<string, unknown>; author?: string }) => Promise<ResearchGraphEdge>;
+    listResearchGraph: (input: { projectId: string; threadId?: string | null; includeArchived?: boolean }) => Promise<ResearchGraph>;
+    retryResearchGraphExtraction: (input: { threadId: string; turnId: string }) => Promise<{ ok: boolean }>;
+    getResearchNodeHistory: (nodeId: string) => Promise<import("./research-graph/types").ResearchRevision[]>;
+    archiveResearchNode: (nodeId: string, reason?: string) => Promise<ResearchGraphNode>;
+    restoreResearchNode: (nodeId: string) => Promise<ResearchGraphNode>;
+    setResearchNodeStatus: (nodeId: string, status: ResearchGraphStatus, reason?: string) => Promise<ResearchGraphNode>;
+    validateResearchGraph: (projectId: string, threadId?: string | null) => Promise<{ projectId: string; ok: boolean; issues: ResearchGraphIssue[] }>;
+    listExperimentActivities?: (input: { projectId: string; threadId: string }) => Promise<ExperimentActivity[]>;
+    listExperimentRuns: (input: { projectId?: string; threadId?: string | null; nodeId?: string }) => Promise<ExperimentRun[]>;
+    startExperimentRun: (input: { projectId: string; threadId: string; nodeId: string; command: string; workspace: string; cwd?: string }) => Promise<ExperimentRun>;
+    cancelExperimentRun: (runId: string) => Promise<ExperimentRun>;
+    readExperimentRunLog: (runId: string, maxBytes?: number) => Promise<{ path: string; size: number; text: string }>;
+    createResultFromRun: (input: { runId: string; verdict?: ExperimentVerdict; reasoning?: string; title?: string }) => Promise<ResearchGraphNode>;
+    onExperimentRunUpdate?: (callback: (run: ExperimentRun) => void) => () => void;
     createResearchProject: (input: { name: string; description?: string; workspacePath?: string }) => Promise<ResearchProject>;
     renameResearchProject: (id: string, name: string) => Promise<ResearchProject>;
     setResearchProjectWorkspace: (id: string, workspacePath: string) => Promise<ResearchProject>;
@@ -145,6 +176,9 @@ interface ResearchDeskBridge {
     saveSshServer: (input: SshServerDraft) => Promise<SshServer>;
     deleteSshServer: (id: string) => Promise<boolean>;
     testSshServer: (input: Partial<SshServerDraft>) => Promise<SshServerTest>;
+    listEnvironmentVariables: () => Promise<Array<{ name: string; shared: boolean }>>;
+    saveEnvironmentVariable: (input: { name: string; value: string; shared: boolean }) => Promise<Array<{ name: string; shared: boolean }>>;
+    removeEnvironmentVariable: (name: string) => Promise<Array<{ name: string; shared: boolean }>>;
     getWebSearchConfig: () => Promise<PublicWebSearchConfig>;
     saveWebSearchConfig: (input: { provider: WebSearchProviderId; apiKey: string }) => Promise<PublicWebSearchConfig>;
     listLibraries: (projectId?: string | null) => Promise<ResearchLibrary[]>;
@@ -155,6 +189,8 @@ interface ResearchDeskBridge {
     listLibraryPapers: (libraryId: string, query?: string) => Promise<LibraryPaper[]>;
     searchAcademicPapers: (query: string, limit?: number) => Promise<AcademicSearchResult[]>;
     discoverDailyPapers: (input?: DailyDiscoveryOptions) => Promise<DailyDiscoveryResponse>;
+    getCachedDailyPapers?: (input?: DailyDiscoveryOptions) => Promise<DailyDiscoveryResponse | null>;
+    getCachedConferencePapers?: (input: ConferenceSearchOptions) => Promise<ConferenceSearchResponse | null>;
     getDailyFigure?: (arxivId: string, options?: { thumbnail?: boolean }) => Promise<string>;
     listReproductions: () => Promise<Reproduction[]>;
     createReproduction: (input: ReproductionCreateInput) => Promise<Reproduction>;
@@ -200,6 +236,13 @@ interface ResearchDeskBridge {
       steps?: ReproductionStep[];
       step?: ReproductionRunStep;
     }) => void) => () => void;
+    cancelLiteratureSearch: (requestId: string) => Promise<{ cancelled: boolean }>;
+    searchLiterature: (input: { question: string; source: LiteratureSource; citations: boolean; requestId: string; workspace: string; projectId: string }) => Promise<LiteratureSearchRun>;
+    listLiteratureSearchHistory: (scope: { workspace: string; projectId: string }) => Promise<LiteratureSearchRun[]>;
+    saveLiteratureSearchHistory: (input: { workspace: string; projectId: string; record: LiteratureSearchRun }) => Promise<LiteratureSearchRun[]>;
+    onLiteratureSearchProgress: (callback: (data: { requestId: string; stage: string; detail: string }) => void) => () => void;
+    generateLiteratureOutline: (input: { question: string; papers: AcademicSearchResult[] }) => Promise<LiteratureOutlineSection[]>;
+    generateLiteratureReview: (input: { question: string; papers: AcademicSearchResult[]; outline?: LiteratureOutlineSection[] }) => Promise<LiteratureReviewDraft>;
     deepSearchPapers: (input: DeepPaperSearchInput) => Promise<DeepPaperSearchResponse>;
     getBenchmarkRadarData: (options?: { cachedOnly?: boolean; refresh?: boolean }) => Promise<BenchmarkRadarData>;
     searchConferencePapers: (input: ConferenceSearchOptions) => Promise<ConferenceSearchResponse>;
@@ -208,7 +251,7 @@ interface ResearchDeskBridge {
     getPaperBibliography: (paperId: string) => Promise<{ paper_id: string; citekey: string; entryType: string; updated_at: string | null }>;
     setPaperBibliography: (paperId: string, patch: { citekey?: string; entryType?: string }) => Promise<{ paper_id: string; citekey: string; entryType: string; updated_at: string | null }>;
     repairLibraryPaperMetadata: (paperId: string, patch: import("./bibliography").MetadataPatch) => Promise<LibraryPaper>;
-    updateLibraryPaper: (paperId: string, patch: { title?: string; reading_status?: ReadingStatus; starred?: boolean; notes?: string; tags?: string[] }) => Promise<LibraryPaper>;
+    updateLibraryPaper: (paperId: string, patch: { title?: string; reading_status?: ReadingStatus; starred?: boolean; notes?: string; tags?: string[] }, dataRoot?: string) => Promise<LibraryPaper>;
     removeLibraryPaper: (libraryId: string, paperId: string) => Promise<{ removed: boolean }>;
     getLibraryPaperReader: (paperId: string, workspace?: string, projectId?: string | null) => Promise<PaperReaderState>;
     getLibraryPaperChatThread: (paperId: string, workspace?: string, projectId?: string | null) => Promise<ResearchThreadDetail | null>;
@@ -229,14 +272,15 @@ interface ResearchDeskBridge {
     writeClipboardText: (text: string) => Promise<void>;
     readClipboardImage: () => Promise<ContextImage | null>;
     saveTask: (task: { prompt: string; response: string; status?: string }) => Promise<SavedTask>;
-    runAgent: (input: { prompt: string; workspace: string; threadId?: string; projectId?: string; workspaceId?: string; visibility?: "project" | "private"; mode: ResearchMode; researchSkill?: "idea-spark" | "paper-to-slides"; mineruToken?: string; reasoningEffort?: ReasoningEffort; contextLength?: ContextLength; contextItems?: ContextAttachment[]; capabilities?: { write: "ask" | "deny"; command: "ask" | "deny" }; origin?: "research" | "paper"; backend?: AgentBackendConfig["backend"]; title?: string; clientRunId?: string }) => Promise<AgentRunResult>;
+    runAgent: (input: { prompt: string; workspace: string; paperId?: string; threadId?: string; projectId?: string; workspaceId?: string; visibility?: "project" | "private"; mode: ResearchMode; researchSkill?: "idea-spark" | "paper-to-slides"; mineruToken?: string; reasoningEffort?: ReasoningEffort; contextLength?: ContextLength; contextItems?: ContextAttachment[]; capabilities?: { write: "ask" | "deny"; command: "ask" | "deny" }; origin?: "research" | "paper"; backend?: AgentBackendConfig["backend"]; remoteServerId?: string; title?: string; clientRunId?: string }) => Promise<AgentRunResult>;
     getAgentBackendConfig: () => Promise<AgentBackendConfig>;
     saveAgentBackendConfig: (input: AgentBackendConfig) => Promise<AgentBackendConfig>;
     listCodexModelCatalog: (input: AgentBackendConfig) => Promise<{ models: NativeAgentModel[]; effectiveModelId?: string }>;
+    listOpenCodeModelCatalog: (input: AgentBackendConfig & { workspace?: string }) => Promise<{ models: NativeAgentModel[] }>;
     checkAgentBackend: (input: AgentBackendConfig) => Promise<{ ready: boolean; models: NativeAgentModel[]; effectiveModelId?: string; message: string }>;
     steerNativeAgent: (threadId: string, text: string, workspace?: string) => Promise<unknown>;
     answerNativeAgentQuestion: (threadId: string, questionId: string, answers: Record<string, string[]>, workspace?: string) => Promise<unknown>;
-    claimApprovals: (threadId: string, claimed: boolean) => Promise<{ claimed: boolean }>;
+    claimApprovals: (threadId: string, claimed: boolean, workspace?: string) => Promise<{ claimed: boolean }>;
     runProactiveReply: (input: { prompt: string; context: Record<string, unknown> }) => Promise<{ text: string; model: string; provider: ModelProviderId }>;
     prepareFigurePlan: (input: { paperText: string; pdfData?: string; figureType: string; requirements: string; language: "en" | "zh"; connection?: FigureForgeConnection }) => Promise<{ plan: string; model: string; provider: string; source: "pdf" | "text" }>;
     analyzeFigureReferences: (input: { references: string[]; plan: string; model?: string; connection?: FigureForgeConnection }) => Promise<{ contract: import("./figureforge/design-contract.mjs").DesignContract; representative: number[]; imageRefs: number[] }>;
@@ -793,12 +837,15 @@ interface LatexImportResult {
 }
 
 interface LatexCompileDiagnostic {
+  messageKey?: string;
+  detail?: string;
   help?: string;
   line: number | null;
   message: string;
 }
 
 interface LatexCompileResult {
+  source_snapshot?: import("./manuscript-snapshot").ManuscriptBuildSnapshot;
   timed_out?: boolean;
   ok: boolean;
   engine: string;
@@ -1140,6 +1187,7 @@ interface ConferenceSearchOptions {
   forceRefresh?: boolean;
 }
 interface ConferenceSearchResponse {
+  abstracts_pending?: boolean;
   papers: DailyPaper[];
   total: number;
   catalog_total: number;
@@ -1854,7 +1902,7 @@ interface AgentAction {
   id: string;
   task_id: string;
   kind: "write" | "command";
-  payload: { path?: string; content?: string; command?: string; cwd?: string; managedByAgent?: boolean; editPreview?: { before: string; after: string }; externalAgent?: "codex" | "claude" | "opencode"; change?: WorkspaceFileChange; changes?: WorkspaceFileChange[] };
+  payload: { path?: string; content?: string; command?: string; cwd?: string; managedByAgent?: boolean; remoteOperation?: "ssh_remote_exec" | "ssh_remote_read" | "ssh_remote_edit"; editPreview?: { before: string; after: string }; externalAgent?: "codex" | "claude" | "opencode"; change?: WorkspaceFileChange; changes?: WorkspaceFileChange[] };
   status: "pending" | "approved" | "rejected";
   created_at: string;
   resolved_at: string | null;
@@ -1878,6 +1926,7 @@ interface NativeAgentPlan { explanation: string; steps: Array<{ step: string; st
 interface NativeAgentQuestion { id: string; questions: Array<{ id: string; header: string; question: string; isSecret?: boolean; options?: Array<{ label: string; description: string }> }> }
 
 interface AgentRunResult {
+  paperChatSaveError?: string;
   threadId: string;
   turnId: string;
   taskId: string;
@@ -1888,10 +1937,23 @@ interface AgentRunResult {
   thread: ResearchThreadDetail;
 }
 
+interface WorkspaceSnapshotScanCoverage {
+  entries: number;
+  metadataOnly: number;
+  ignoredDirectories: number;
+  entryLimitReached: boolean;
+  byteBudgetReached: boolean;
+}
+
+interface WorkspaceSnapshotCoverage {
+  before: WorkspaceSnapshotScanCoverage;
+  after: WorkspaceSnapshotScanCoverage;
+}
+
 interface ModelIncompleteFailure { code: "MODEL_RESPONSE_INCOMPLETE"; reason: string; provider: string; finishReason?: string | null }
 
 interface AgentEvent {
-  type: "status" | "tool" | "artifact" | "approval" | "assistant_delta" | "complete" | "failed" | "incomplete" | "configuration" | "interrupted" | "workspace_change" | "native_activity" | "native_usage" | "native_plan" | "native_diff" | "native_question" | "native_question_resolved" | "native_approval_resolved" | "native_steer";
+  type: "status" | "tool" | "artifact" | "approval" | "assistant_delta" | "complete" | "failed" | "incomplete" | "configuration" | "interrupted" | "workspace_change" | "native_activity" | "native_usage" | "native_plan" | "native_diff" | "native_question" | "native_question_resolved" | "native_approval_resolved" | "native_steer" | "graph_update" | "graph_update_pending" | "experiment_run";
   title: string;
   detail: string;
   threadId?: string;
@@ -1901,6 +1963,7 @@ interface AgentEvent {
   error?: ModelIncompleteFailure;
   action?: AgentAction;
   changeSet?: WorkspaceChangeSet;
+  snapshotCoverage?: WorkspaceSnapshotCoverage;
   toolCall?: { id?: string; name?: string; source: string; status: "running" | "completed" | "failed" | "interrupted"; durationMs: number };
   activity?: NativeAgentActivity;
   usage?: NativeAgentUsage | null;
@@ -1908,6 +1971,8 @@ interface AgentEvent {
   diff?: string;
   question?: NativeAgentQuestion;
   questionId?: string;
+  graph?: ResearchGraphUpdate;
+  experimentRun?: ExperimentRun;
 }
 
 interface PaperReviewInput {
@@ -2109,3 +2174,9 @@ interface BenchmarkRadarData {
   library: BenchmarkRadarRecord[];
   directions: BenchmarkRadarDirection[];
 }
+
+interface LiteratureReviewDraft { sections: Array<{ title: string; paragraphs: Array<{ text: string; sources: number[]; evidence: Array<{ source: number; quote: string }> }> }>; limitations: string; }
+
+type LiteratureSource = "openalex" | "arxiv" | "semantic-scholar" | "crossref" | "pubmed";
+interface LiteratureOutlineSection { title: string; description: string; sources: number[]; }
+interface LiteratureSearchRun { id: string; question: string; source: LiteratureSource; createdAt: string; history: Array<{ query: string; count: number; round: number; error?: boolean }>; totalCandidates: number; results: Array<{ paper: AcademicSearchResult; score: number | null; reason: string; lanes: string[] }>; edges: Array<{ from: string; to: string }>; warnings: string[]; selected?: number[]; outline?: LiteratureOutlineSection[]; draft?: LiteratureReviewDraft; draftPapers?: AcademicSearchResult[]; }

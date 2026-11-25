@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, ipcMain, dialog, nativeTheme, net, protocol, clipboard, shell, session, safeStorage, systemPreferences, Notification } = require("electron");
+const { app, BrowserWindow, Menu, ipcMain: electronIpcMain, dialog, nativeTheme, net, protocol, clipboard, shell, session, safeStorage, systemPreferences, Notification } = require("electron");
 const { spawn } = require("node:child_process");
 const { randomUUID } = require("node:crypto");
 const os = require("node:os");
@@ -61,14 +61,38 @@ const proactiveAgent = require("./proactive-agent.cjs");
 const figureForge = require("./figure-forge.cjs");
 const { getModelCapabilities, normalizeContextLength, normalizeReasoningEffort } = require("./agent/model-capabilities.cjs");
 const webSearch = require("./web-search.cjs");
+const { createEnvironmentVault, setEnvironmentVault } = require("./environment-vault.cjs");
+let environmentVault;
 const sshServers = require("./ssh-servers.cjs");
-const { discoverDailyPapers, normalizeDailyOptions, resolveArxivFigure, searchAcademicPapers } = require("./literature.cjs");
+const { resolveArxivFigure, searchAcademicPapers } = require("./literature.cjs");
 const { createDailyFigureCache } = require("./daily-figure-cache.cjs");
+const loadDailyDiscovery = require("./daily-discovery.cjs").createDailyDiscovery({
+  discover: (options, { signal }) => require("./literature.cjs").discoverDailyPapers(options, {
+    signal,
+    fetchImpl: (url, init) => {
+      const target = new URL(url);
+      if (target.protocol === "https:" && target.hostname === "api.openalex.org") {
+        const key = environmentVault?.getForService("OPENALEX_API_KEY") || process.env.OPENALEX_API_KEY;
+        if (key) target.searchParams.set("api_key", key);
+      }
+      return net.fetch(target.toString(), init);
+    },
+  }),
+});
 const { deepSearchPapers } = require("./deep-paper-search.cjs");
+const { generateLiteratureReview, generateLiteratureOutline } = require("./literature-review.cjs");
+const { searchLiterature } = require("./literature-search.cjs");
+const { createLiteratureHistory } = require("./literature-history.cjs");
+let literatureHistory;
+const activeLiteratureSearches = new Map();
 const { searchConferencePapers } = require("./conferences.cjs");
 const skillCatalog = require("./skill-catalog.cjs");
 const speech = require("./speech.cjs");
 const store = require("./store.cjs");
+const { createWorkspaceIpc, isWorkspaceDataChannel } = require("./workspace-context.cjs");
+const researchGraph = require("./research-graph/service.cjs");
+const experimentRunner = require("./research-graph/experiment-runner.cjs");
+const experimentRuns = require("./research-graph/experiment-runs.cjs");
 const workspaceFiles = require("./workspace-files.cjs");
 const latexWorkspace = require("./latex-workspace.cjs");
 const { preparePaperReader } = require("./library-reader.cjs");
@@ -82,6 +106,8 @@ const sidebarPlugins = require("./sidebar-plugins.cjs");
 const commandSessions = new Map();
 const interactiveTerminalSessions = new Map();
 const windowWorkspaces = new Map();
+const windowStartupWorkspaces = new Map();
+const windowApprovalClaims = new Map();
 const windowPreviewTokens = new Map();
 const previewTokenWorkspaces = new Map();
 const workspaceWatchers = new Map();
@@ -157,8 +183,18 @@ function stopWorkspaceWatcher(senderId) {
 }
 
 function setWindowWorkspace(senderId, workspace) {
+  if (windowWorkspaces.get(senderId) !== workspace) releaseWindowApprovalClaim(senderId);
   windowWorkspaces.set(senderId, workspace);
   return createPreviewToken(senderId, workspace);
+}
+
+function releaseWindowApprovalClaim(senderId) {
+  const claim = windowApprovalClaims.get(senderId);
+  if (!claim) return;
+  windowApprovalClaims.delete(senderId);
+  if (![...windowApprovalClaims.values()].some(({ workspace, threadId }) => workspace === claim.workspace && threadId === claim.threadId)) {
+    agent.setApprovalSurface(claim.threadId, false, claim.workspace);
+  }
 }
 
 function createPreviewToken(senderId, workspace) {
@@ -298,7 +334,7 @@ function createWindow(workspace) {
     });
     if (browserTab) hardenBrowserSession(guestContents.session);
   });
-  if (workspace) setWindowWorkspace(senderId, resolveWorkspace(workspace));
+  if (workspace) windowStartupWorkspaces.set(senderId, resolveWorkspace(workspace));
 
   const devServerUrl = process.env.VITE_DEV_SERVER_URL;
   if (devServerUrl) {
@@ -308,11 +344,13 @@ function createWindow(workspace) {
   }
 
   browserWindow.on("closed", () => {
+    releaseWindowApprovalClaim(senderId);
     closeWindowTerminals(senderId);
     stopWorkspaceWatcher(senderId);
     void presence?.leave(String(senderId));
     for (const token of windowPreviewTokens.get(senderId)?.values() ?? []) previewTokenWorkspaces.delete(token);
     windowPreviewTokens.delete(senderId);
+    windowStartupWorkspaces.delete(senderId);
     windowWorkspaces.delete(senderId);
   });
 
@@ -383,7 +421,7 @@ function readerStateForWindow(senderId, workspace, paperId, projectId = null) {
   try {
     const target = workspaceFiles.workspacePath(workspace, reader.asset.relative_path);
     if (!fs.statSync(target).isFile()) return { ...reader, asset: { ...reader.asset, status: "missing", error: "The cached PDF is no longer available." } };
-    const token = setWindowWorkspace(senderId, workspace);
+    const token = createPreviewToken(senderId, workspace);
     return { ...reader, asset: { ...reader.asset, preview_url: `archimedes-file://${token}/${encodeURIComponent(reader.asset.relative_path)}` } };
   } catch {
     return { ...reader, asset: { ...reader.asset, status: "missing", error: "The cached PDF is no longer available." } };
@@ -407,8 +445,6 @@ async function openFolderFromMenu() {
   if (!browserWindow) return;
   const workspace = await chooseFolderForWindow(browserWindow);
   if (!workspace || browserWindow.isDestroyed()) return;
-  setWindowWorkspace(browserWindow.webContents.id, workspace);
-  rememberWorkspace(workspace);
   browserWindow.webContents.send("menu:open-folder", workspace);
 }
 
@@ -633,11 +669,18 @@ if (!singleInstanceLock) {
 app.whenReady().then(async () => {
   configureAppIcon(app);
   if (!singleInstanceLock) return;
+  const ipcMain = createWorkspaceIpc({ ipcMain: electronIpcMain, store,
+    workspaceForEvent: (event, channel, args) => channel === "workspace:open"
+      ? resolveWorkspace(args[0]) : isWorkspaceDataChannel(channel) ? windowWorkspaces.get(event.sender.id) : null,
+  });
   loadLocalAgentEnvironment();
   dailyFigureCache = createDailyFigureCache({ directory: path.join(app.getPath("userData"), "Cache", "daily-figures"), resolveFigure: resolveArxivFigure });
   modelConfig.initializeModelConfig(app.getPath("userData"));
   agentBackendConfig.initialize(app.getPath("userData"));
-  webSearch.initializeWebSearch(app.getPath("userData"));
+  environmentVault = createEnvironmentVault({ directory: app.getPath("userData"), safeStorage });
+  setEnvironmentVault(environmentVault);
+  literatureHistory = createLiteratureHistory(app.getPath("userData"));
+  webSearch.initializeWebSearch(app.getPath("userData"), environmentVault);
   // Passwords and reproduction tokens share one OS keychain-backed codec; both
   // are useless if the machine cannot encrypt, so both refuse to save instead.
   const secretCodec = {
@@ -735,7 +778,7 @@ app.whenReady().then(async () => {
   });
 
   ipcMain.handle("window:initial-workspace", (event) => {
-    return windowWorkspaces.get(event.sender.id) ?? null;
+    return windowWorkspaces.get(event.sender.id) ?? windowStartupWorkspaces.get(event.sender.id) ?? null;
   });
 
   ipcMain.handle("window:set-titlebar-theme", (event, theme) => {
@@ -867,8 +910,6 @@ app.whenReady().then(async () => {
   ipcMain.handle("paper-review-app:save-settings", (_event, patch = {}) => paperReview.saveSettings(patch));
   ipcMain.handle("paper-review-app:list-venues", () => paperReview.listVenues());
   ipcMain.handle("paper-review-app:list-papers", (event, input = {}) => {
-    const resolvedWorkspace = resolveWorkspace(input?.workspace || windowWorkspaces.get(event.sender.id));
-    store.openWorkspace(resolvedWorkspace);
     return paperReview.listPapers({ projectId: String(input?.projectId || "") });
   });
   ipcMain.handle("paper-to-slides:stage", (event, input = {}) => {
@@ -886,8 +927,9 @@ app.whenReady().then(async () => {
     return result.canceled ? "" : result.filePaths[0] || "";
   });
   ipcMain.handle("paper-review-app:create", async (event, input = {}) => {
-    const resolvedWorkspace = resolveWorkspace(input?.workspace || windowWorkspaces.get(event.sender.id));
-    store.openWorkspace(resolvedWorkspace);
+    const resolvedWorkspace = (input.source?.kind || "library") === "library"
+      ? store.currentStore().workspace
+      : resolveWorkspace(input.workspace || windowWorkspaces.get(event.sender.id));
     const sender = event.sender;
     return paperReview.createRun(input, {
       workspace: resolvedWorkspace,
@@ -922,12 +964,12 @@ app.whenReady().then(async () => {
     return { filename: "SKILL.md", content: fs.readFileSync(manifest, "utf8") };
   });
 
-  ipcMain.handle("workspace:open", (event, requestedWorkspace) => {
-    const workspace = resolveWorkspace(requestedWorkspace);
-    setWindowWorkspace(event.sender.id, workspace);
-    rememberWorkspace(workspace);
-    watchWorkspace(event.sender, workspace);
-    return store.openWorkspace(workspace);
+  ipcMain.handle("workspace:open", (event) => {
+    const snapshot = store.getSnapshot();
+    rememberWorkspace(snapshot.workspace);
+    watchWorkspace(event.sender, snapshot.workspace);
+    setWindowWorkspace(event.sender.id, snapshot.workspace);
+    return snapshot;
   });
 
   ipcMain.handle("workspace:list-files", (_event, input = {}) => {
@@ -953,6 +995,10 @@ app.whenReady().then(async () => {
 
   ipcMain.handle("workspace:write-file", (event, input = {}) => {
     const workspace = resolveWorkspace(input.workspace);
+    if (input.expectedContent !== undefined &&
+      workspaceFiles.readWorkspaceFile(workspace, input.path).content !== input.expectedContent) {
+      throw new Error("The source changed on disk. Your draft is still open.");
+    }
     const file = workspaceFiles.writeWorkspaceTextFile(workspace, input.path, input.content);
     if (!event.sender.isDestroyed()) event.sender.send("workspace:files-changed", { path: file.path });
     return file;
@@ -1011,6 +1057,11 @@ app.whenReady().then(async () => {
     fetchImpl: (...args) => net.fetch(...args),
   });
 
+  ipcMain.handle("paper:build-snapshot", (_event, input = {}) => {
+    const workspace = resolveWorkspace(input.workspace);
+    return require("./manuscript-snapshot.cjs").readManuscriptSnapshot(workspace, input.manifestPath);
+  });
+
   ipcMain.handle("paper:compile", async (event, input = {}) => {
     const workspace = resolveWorkspace(input.workspace);
     const requestId = typeof input.requestId === "string" ? input.requestId.slice(0, 200) : undefined;
@@ -1025,24 +1076,58 @@ app.whenReady().then(async () => {
 
   ipcMain.handle("research-thread:get", (_event, input = {}) => {
     if (typeof input.threadId !== "string") throw new Error("A research thread ID is required.");
-    const workspace = resolveWorkspace(input.workspace);
-    store.openWorkspace(workspace);
     return store.getResearchThread(input.threadId);
   });
 
   ipcMain.handle("research-thread:attachment-image", (event, input = {}) => {
     if (typeof input.threadId !== "string" || typeof input.turnId !== "string") throw new Error("A thread and turn ID are required.");
-    const workspace = workspaceForWindow(BrowserWindow.fromWebContents(event.sender)) || resolveWorkspace(input.workspace);
-    store.openWorkspace(workspace);
     return store.getResearchTurnImage(input.threadId, input.turnId, input.position);
   });
 
   ipcMain.handle("research:snapshot", () => store.getSnapshot());
+  ipcMain.handle("research-graph:create-node", (_event, input = {}) => {
+    if (input.kind === "result") throw new Error("Results are created from completed runs.");
+    return researchGraph.createNode(input);
+  });
+  ipcMain.handle("research-graph:revise-node", (_event, input = {}) => researchGraph.reviseNode(input));
+  ipcMain.handle("research-graph:link", (_event, input = {}) => researchGraph.linkNodes(input));
+  ipcMain.handle("research-graph:list", (_event, input = {}) => researchGraph.listGraph(input));
+  ipcMain.handle("research-graph:history", (_event, input = {}) => researchGraph.getNodeHistory(input.nodeId));
+  ipcMain.handle("research-graph:archive", (_event, input = {}) => researchGraph.archiveNode(input));
+  ipcMain.handle("research-graph:restore", (_event, input = {}) => researchGraph.restoreNode(input));
+  ipcMain.handle("research-graph:set-status", (_event, input = {}) => researchGraph.setNodeStatus(input));
+  ipcMain.handle("research-graph:validate", (_event, input = {}) => researchGraph.validateGraph(input));
+  ipcMain.handle("research-graph:retry-extraction", async (event, input = {}) => {
+    if (typeof input.threadId !== "string" || typeof input.turnId !== "string") throw new Error("A research thread and turn are required.");
+    const dataWorkspace = workspaceForWindow(BrowserWindow.fromWebContents(event.sender));
+    if (!dataWorkspace) throw new Error("Open a workspace before retrying graph extraction.");
+    return agent.retryGraphExtraction({ threadId: input.threadId, turnId: input.turnId, dataWorkspace, backendConfig: agentBackendConfig.get() });
+  });
+  ipcMain.handle("experiment-activity:list", (_event, input = {}) => store.listExperimentActivities(input));
+  ipcMain.handle("experiment-run:list", (_event, input = {}) => store.listExperimentRuns(input));
+  ipcMain.handle("experiment-run:start", (event, input = {}) => {
+    if (typeof input.workspace !== "string" || !input.workspace.trim()) throw new Error("A workspace is required to start an experiment run.");
+    const workspace = resolveWorkspace(input.workspace);
+    const started = experimentRunner.startExperimentRun({
+      ...input,
+      workspace,
+      onUpdate: (run) => {
+        if (!event.sender.isDestroyed()) event.sender.send("experiment-run:update", run);
+      },
+    });
+    return started.run;
+  });
+  ipcMain.handle("experiment-run:cancel", (_event, runId) => experimentRunner.cancelExperimentRun(runId));
+  ipcMain.handle("experiment-run:log", (_event, input = {}) => experimentRuns.readExperimentRunLog(input));
+  ipcMain.handle("experiment-run:result", (_event, input = {}) => researchGraph.createResultFromRun(input));
   registerThreadCommands({ ipcMain, store, agent, modelConfig, dialog, BrowserWindow,
     dataWorkspace: (event, input) => workspaceForWindow(BrowserWindow.fromWebContents(event.sender)) || resolveWorkspace(input.workspace),
-    nativeBackend: { getConfig: () => agentBackendConfig.get(), compact: (input) => nativeAgent.compactNative(input) },
+    nativeBackend: { getConfig: () => agentBackendConfig.get(), compact: (input) => nativeAgent.compactNative({ ...input, runtimeId: store.runtimeThreadId(input.thread.id) }) },
   });
-  registerNativeAgentCommands({ ipcMain, store, native: nativeAgent,
+  registerNativeAgentCommands({ ipcMain, store, native: {
+    steerNative: (id, text) => nativeAgent.steerNative(store.runtimeThreadId(id), text),
+    answerNativeQuestion: (id, questionId, answers) => nativeAgent.answerNativeQuestion(store.runtimeThreadId(id), questionId, answers),
+  },
     dataWorkspace: (event, input) => workspaceForWindow(BrowserWindow.fromWebContents(event.sender)) || resolveWorkspace(input.workspace),
   });
 
@@ -1123,6 +1208,7 @@ app.whenReady().then(async () => {
   ipcMain.handle("agent-backend:save", (_event, input) => agentBackendConfig.save(input));
   ipcMain.handle("agent-backend:check", (_event, input) => agentBackendConfig.check(input));
   ipcMain.handle("agent-backend:codex-models", (_event, input) => agentBackendConfig.listCodexModelCatalog(input));
+  ipcMain.handle("agent-backend:opencode-models", (_event, input = {}) => agentBackendConfig.listOpenCodeModelCatalog(input, resolveWorkspace(input.workspace)));
 
   ipcMain.handle("model-config:list-models", (_event, input = {}, role) => modelConfig.listProviderModels(input, role));
 
@@ -1165,6 +1251,9 @@ app.whenReady().then(async () => {
     return sshServers.testConnection(target);
   });
 
+  ipcMain.handle("environment:list", () => environmentVault.list());
+  ipcMain.handle("environment:save", (_event, input) => environmentVault.save(input));
+  ipcMain.handle("environment:remove", (_event, name) => environmentVault.remove(name));
   ipcMain.handle("web-search:get-config", () => webSearch.getPublicWebSearchConfig());
 
   ipcMain.handle("web-search:save-config", (_event, input = {}) => webSearch.saveWebSearchConfig(input));
@@ -1202,41 +1291,17 @@ app.whenReady().then(async () => {
   ipcMain.handle("library:search-conferences", async (event, input = {}) => {
     if (!input || typeof input !== "object") throw new Error("Conference search options are required.");
     const workspace = resolveWorkspace(windowWorkspaces.get(event.sender.id));
-    store.openWorkspace(workspace);
     return searchConferencePapers(input, {
+      fetchImpl: (...args) => net.fetch(...args),
       scope: workspace,
-      readCache: (key, age) => { store.openWorkspace(workspace); return store.getDailyFeedCache(key, age); },
-      writeCache: (key, value) => { store.openWorkspace(workspace); return store.setDailyFeedCache(key, value); },
+      readCache: (key, age) => { return store.getDailyFeedCache(key, age); },
+      writeCache: (key, value) => { return store.setDailyFeedCache(key, value); },
     });
   });
 
-  ipcMain.handle("library:discover-daily", async (_event, input = {}) => {
+  ipcMain.handle("library:discover-daily", async (event, input = {}) => {
     if (!input || typeof input !== "object") throw new Error("Daily discovery options are required.");
-    const options = normalizeDailyOptions(input);
-    const cacheKey = JSON.stringify(options);
-    const cacheTtl = 20 * 60 * 1000;
-    if (!input.forceRefresh) {
-      const cached = store.getDailyFeedCache(cacheKey, cacheTtl);
-      if (cached) return { ...cached, options, cached: true, stale: false };
-    }
-
-    try {
-      const response = await discoverDailyPapers(options);
-      const saved = store.setDailyFeedCache(cacheKey, response);
-      return { ...saved, options, cached: false, stale: false };
-    } catch (error) {
-      const stale = store.getDailyFeedCache(cacheKey);
-      if (stale) {
-        return {
-          ...stale,
-          options,
-          cached: true,
-          stale: true,
-          warning: error instanceof Error ? error.message : "Live refresh failed; showing cached papers.",
-        };
-      }
-      throw error;
-    }
+    return loadDailyDiscovery(input, store.currentStore(), event.sender.id);
   });
 
   ipcMain.handle("library:daily-figure", async (_event, { arxivId, thumbnail = false } = {}) => {
@@ -1357,7 +1422,6 @@ app.whenReady().then(async () => {
     if (!record.contract) throw new Error("Generate a plan before checking it.");
     const resolvedWorkspace = resolveWorkspace(workspace || windowWorkspaces.get(event.sender.id));
     const dataWorkspace = workspaceForWindow(BrowserWindow.fromWebContents(event.sender)) || resolvedWorkspace;
-    store.openWorkspace(dataWorkspace);
     return runPreflight({
       workspace: dataWorkspace,
       repoUrl: record.contract.repo?.url || record.repo_url,
@@ -1516,7 +1580,6 @@ app.whenReady().then(async () => {
 
     const resolvedWorkspace = resolveWorkspace(workspace || windowWorkspaces.get(event.sender.id));
     const dataWorkspace = workspaceForWindow(BrowserWindow.fromWebContents(event.sender)) || resolvedWorkspace;
-    store.openWorkspace(dataWorkspace);
 
     const wantsSsh = backendKind === "ssh";
     const server = wantsSsh ? sshServers.listServers().find((entry) => entry.id === serverId) : null;
@@ -1541,6 +1604,7 @@ app.whenReady().then(async () => {
 
     // Detached on purpose: the renderer gets progress events, the main process
     // owns the run, and closing the reproduction view does not stop it.
+    const lease = store.captureStore();
     void (async () => {
       try {
         const branch = session.contract.repo?.branch || "";
@@ -1595,6 +1659,8 @@ app.whenReady().then(async () => {
         session.send({ type: "error", detail: message });
         session.send({ type: "finished", status: "failed", summary: message });
         notifyRunFinished(record, message);
+      } finally {
+        lease.release();
       }
     })();
 
@@ -1618,7 +1684,6 @@ app.whenReady().then(async () => {
     if (!paper) throw new Error("The paper for this reproduction is missing.");
     const resolvedWorkspace = resolveWorkspace(workspace || windowWorkspaces.get(event.sender.id));
     const dataWorkspace = workspaceForWindow(BrowserWindow.fromWebContents(event.sender)) || resolvedWorkspace;
-    store.openWorkspace(dataWorkspace);
     const reader = store.getPaperReader(reproduction.paper_id);
     const review = store.getPaperReview(reproduction.paper_id);
     store.updateReproduction(id, { status: "draft", error: "" });
@@ -1683,6 +1748,37 @@ app.whenReady().then(async () => {
     }
   });
 
+  const literatureScope = (input) => ({ workspace: resolveWorkspace(input?.workspace), projectId: typeof input?.projectId === "string" ? input.projectId : "" });
+  ipcMain.handle("literature-search:run", async (event, input = {}) => {
+    const scope = literatureScope(input);
+    const requestId = String(input.requestId || "").slice(0, 80);
+    if (!/^[0-9a-f-]{36}$/i.test(requestId)) throw new Error("Invalid literature search request.");
+    const requestKey = `${event.sender.id}:${requestId}`;
+    if (activeLiteratureSearches.has(requestKey)) throw new Error("This search is already running.");
+    const controller = new AbortController(); activeLiteratureSearches.set(requestKey, controller);
+    const destroyed = () => controller.abort(); event.sender.once("destroyed", destroyed);
+    try {
+      const openAlexKey = input.source === "openalex" ? environmentVault.getForService("OPENALEX_API_KEY") || process.env.OPENALEX_API_KEY || "" : "";
+      const semanticKey = input.source === "semantic-scholar" ? environmentVault.getForService("SEMANTIC_SCHOLAR_API_KEY") || process.env.SEMANTIC_SCHOLAR_API_KEY || "" : "";
+      const sourceFetch = (url, init = {}) => {
+        const target = new URL(url);
+        if (target.protocol === "https:" && target.hostname === "api.openalex.org" && openAlexKey) target.searchParams.set("api_key", openAlexKey);
+        const signal = init.signal ? AbortSignal.any([init.signal, controller.signal]) : controller.signal;
+        const headers = new Headers(init.headers);
+        if (target.protocol === "https:" && target.hostname === "api.semanticscholar.org" && semanticKey) headers.set("x-api-key", semanticKey);
+        return fetch(target.toString(), { ...init, headers, signal });
+      };
+      const record = await searchLiterature(input, { modelConfig: modelConfig.getActiveModelConfig(), fetchImpl: sourceFetch, signal: controller.signal, onProgress: progress => { if (!event.sender.isDestroyed()) event.sender.send("literature-search:progress", { requestId, ...progress }); } });
+      if (controller.signal.aborted) throw new Error("Literature search cancelled.");
+      try { literatureHistory.save(scope, record); } catch { record.warnings.push("Search completed, but local history could not be saved."); }
+      return record;
+    } finally { activeLiteratureSearches.delete(requestKey); event.sender.removeListener("destroyed", destroyed); }
+  });
+  ipcMain.handle("literature-search:cancel", (event, requestId) => { const controller = activeLiteratureSearches.get(`${event.sender.id}:${String(requestId || "")}`); if (!controller) return { cancelled: false }; controller.abort(); return { cancelled: true }; });
+  ipcMain.handle("literature-search:history", (_event, input = {}) => literatureHistory.list(literatureScope(input)));
+  ipcMain.handle("literature-search:save", (_event, input = {}) => literatureHistory.save(literatureScope(input), input.record));
+  ipcMain.handle("literature-review:outline", (_event, input) => generateLiteratureOutline(input, { modelConfig: modelConfig.getActiveModelConfig() }));
+  ipcMain.handle("literature-review:generate", (_event, input) => generateLiteratureReview(input, { modelConfig: modelConfig.getActiveModelConfig() }));
   ipcMain.handle("library:deep-search", async (_event, input = {}) => {
     if (!input || typeof input !== "object") throw new Error("Deep-search input is required.");
     return deepSearchPapers(input, { modelConfig: modelConfig.getActiveModelConfig() });
@@ -1711,7 +1807,6 @@ app.whenReady().then(async () => {
   ipcMain.handle("library:import-local-pdf", async (event, { libraryId, workspace } = {}) => {
     if (typeof libraryId !== "string") throw new Error("Choose a library before importing a paper.");
     const resolvedWorkspace = workspaceForWindow(BrowserWindow.fromWebContents(event.sender)) || resolveWorkspace(workspace);
-    store.openWorkspace(resolvedWorkspace);
     const browserWindow = BrowserWindow.fromWebContents(event.sender);
     const options = { title: "Import local paper PDF", properties: ["openFile"], filters: [{ name: "PDF", extensions: ["pdf"] }] };
     const result = browserWindow ? await dialog.showOpenDialog(browserWindow, options) : await dialog.showOpenDialog(options);
@@ -1719,8 +1814,9 @@ app.whenReady().then(async () => {
     return importLocalPaper({ workspace: resolvedWorkspace, libraryId, localPath: result.filePaths[0], store });
   });
 
-  ipcMain.handle("library:update-paper", (_event, { paperId, patch }) => {
+  ipcMain.handle("library:update-paper", (_event, { paperId, patch, dataRoot }) => {
     if (typeof paperId !== "string" || !patch || typeof patch !== "object") throw new Error("A paper and update payload are required.");
+    if (dataRoot && dataRoot !== store.currentStore().workspace) throw new Error("This paper belongs to another data folder.");
     return store.updatePaper(paperId, patch);
   });
 
@@ -1732,26 +1828,22 @@ app.whenReady().then(async () => {
   ipcMain.handle("library:get-reader", (event, { paperId, workspace, projectId } = {}) => {
     if (typeof paperId !== "string") throw new Error("A paper is required.");
     const resolvedWorkspace = resolveWorkspace(workspace || windowWorkspaces.get(event.sender.id));
-    store.openWorkspace(resolvedWorkspace);
     return readerStateForWindow(event.sender.id, resolvedWorkspace, paperId, projectId);
   });
 
   ipcMain.handle("library:get-paper-chat-thread", (_event, { paperId, workspace, projectId } = {}) => {
     if (typeof paperId !== "string") throw new Error("A paper is required.");
-    store.openWorkspace(resolveWorkspace(workspace));
     return store.getPaperChatThread(paperId, projectId);
   });
 
   ipcMain.handle("library:set-paper-chat-thread", (_event, { paperId, threadId, workspace, projectId } = {}) => {
     if (typeof paperId !== "string" || typeof threadId !== "string") throw new Error("A paper and research thread are required.");
-    store.openWorkspace(resolveWorkspace(workspace));
     return store.setPaperChatThread(paperId, threadId, projectId);
   });
 
   ipcMain.handle("library:prepare-reader", async (event, { paperId, workspace, projectId } = {}) => {
     if (typeof paperId !== "string") throw new Error("A paper is required.");
     const resolvedWorkspace = resolveWorkspace(workspace || windowWorkspaces.get(event.sender.id));
-    store.openWorkspace(resolvedWorkspace);
     const paper = store.getPaper(paperId);
     if (!paper) throw new Error("Paper not found.");
     try {
@@ -1767,7 +1859,6 @@ app.whenReady().then(async () => {
   ipcMain.handle("library:attach-reader-pdf", async (event, { paperId, workspace, projectId } = {}) => {
     if (typeof paperId !== "string") throw new Error("A paper is required.");
     const resolvedWorkspace = resolveWorkspace(workspace || windowWorkspaces.get(event.sender.id));
-    store.openWorkspace(resolvedWorkspace);
     const paper = store.getPaper(paperId);
     if (!paper) throw new Error("Paper not found.");
     const browserWindow = BrowserWindow.fromWebContents(event.sender);
@@ -1787,19 +1878,16 @@ app.whenReady().then(async () => {
 
   ipcMain.handle("library:find-passages", (_event, { paperId, query, workspace } = {}) => {
     if (typeof paperId !== "string" || typeof query !== "string") throw new Error("A paper and search phrase are required.");
-    store.openWorkspace(resolveWorkspace(workspace));
     return store.findPaperPassages(paperId, query);
   });
 
   ipcMain.handle("library:create-highlight", (_event, { paperId, input, workspace, projectId } = {}) => {
     if (typeof paperId !== "string" || !input || typeof input !== "object") throw new Error("A paper and text selection are required.");
-    store.openWorkspace(resolveWorkspace(workspace));
     return store.createPaperHighlight(paperId, input, projectId);
   });
 
   ipcMain.handle("library:delete-highlight", (_event, { id, workspace, projectId } = {}) => {
     if (typeof id !== "string") throw new Error("A highlight is required.");
-    store.openWorkspace(resolveWorkspace(workspace));
     return store.deletePaperHighlight(id, projectId);
   });
 
@@ -1818,14 +1906,12 @@ app.whenReady().then(async () => {
   ipcMain.handle("library:get-github-repository-checkout", async (event, { url, workspace } = {}) => {
     if (typeof url !== "string" || url.length > 3_000) throw new Error("A public GitHub repository URL is required.");
     const resolvedWorkspace = resolveWorkspace(workspace || windowWorkspaces.get(event.sender.id));
-    store.openWorkspace(resolvedWorkspace);
     return getRepositoryCheckout(resolvedWorkspace, url);
   });
 
   ipcMain.handle("library:clone-github-repository", async (event, { url, workspace } = {}) => {
     if (typeof url !== "string" || url.length > 3_000) throw new Error("A public GitHub repository URL is required.");
     const resolvedWorkspace = resolveWorkspace(workspace || windowWorkspaces.get(event.sender.id));
-    store.openWorkspace(resolvedWorkspace);
     return cloneRepositoryCheckout(resolvedWorkspace, url);
   });
 
@@ -1895,8 +1981,6 @@ app.whenReady().then(async () => {
     const workspace = resolveWorkspace(input.workspace);
     // Research data stays in the window's primary workspace, while the Agent
     // operates inside the project/session folder.
-    const dataWorkspace = workspaceForWindow(BrowserWindow.fromWebContents(event.sender)) || workspace;
-    store.openWorkspace(dataWorkspace);
     const contextItems = await sanitizeAgentContext(input.contextItems, workspace);
     const clientRunId = typeof input.clientRunId === "string" && input.clientRunId ? input.clientRunId : undefined;
     const configuredBackend = agentBackendConfig.get();
@@ -1904,6 +1988,14 @@ app.whenReady().then(async () => {
     if (!["api", "codex", "claude", "opencode"].includes(selectedBackend)) throw new Error("Unknown Agent backend.");
     const backend = selectedBackend === "api" ? configuredBackend : { ...configuredBackend, ...configuredBackend.profiles[selectedBackend], backend: selectedBackend };
     const externalBackend = input.origin === "research" && selectedBackend !== "api" ? backend : null;
+    let remoteServer = null;
+    if (input.remoteServerId) {
+      if (input.origin !== "research" || selectedBackend !== "codex" || !["research", "experiment-setup"].includes(mode)) throw new Error("SSH workspace is available only in Codex Research mode.");
+      if (input.researchSkill) throw new Error("Research skills are not available while an SSH workspace is selected.");
+      if (["read-only", "plan"].includes(backend.permissionMode)) throw new Error("SSH workspace needs an approval-enabled Codex permission mode.");
+      remoteServer = sshServers.listServers().find(server => server.id === input.remoteServerId);
+      if (!remoteServer) throw new Error("The selected SSH server no longer exists.");
+    }
     if (input.researchSkill != null && !["idea-spark", "paper-to-slides"].includes(input.researchSkill)) throw new Error("Unknown Research skill.");
     if (input.researchSkill === "paper-to-slides" && !["codex", "claude"].includes(selectedBackend)) throw new Error("Paper to Slides requires Codex or Claude Code.");
     if (input.researchSkill && input.origin !== "research") throw new Error("Research skills are available only in Work conversations.");
@@ -1912,8 +2004,11 @@ app.whenReady().then(async () => {
     const reasoningEffort = externalBackend ? undefined : normalizeReasoningEffort(config, input.reasoningEffort);
     const contextLength = externalBackend ? undefined : normalizeContextLength(config, input.contextLength);
     if (externalBackend && input.threadId && store.getResearchThread(input.threadId).kind === "paper") throw new Error("Paper chat uses the API harness in this version.");
-    return runWindowAgent({ sender: event.sender, native: Boolean(externalBackend), run: ({ externalSignal, emit }) => agent.runAgent({
+    const dataStore = store.currentStore();
+    const result = await runWindowAgent({ sender: event.sender, native: Boolean(externalBackend), run: ({ externalSignal, emit }) => agent.runAgent({
+      dataStore,
       externalBackend,
+      remoteServer,
       researchSkill: input.researchSkill,
       mineruToken: input.mineruToken || undefined,
       externalSignal,
@@ -1933,12 +2028,16 @@ app.whenReady().then(async () => {
       browser: (args, signal, activeThreadId) => browserUse(event.sender, activeThreadId, args, signal),
       emit: (payload) => emit({ ...payload, ...(clientRunId ? { clientRunId } : {}) }),
     }) });
+    if (input.origin === "paper" && typeof input.paperId === "string") {
+      try { dataStore.setPaperChatThread(input.paperId, result.threadId, input.projectId); }
+      catch (error) { return { ...result, paperChatSaveError: error.message || String(error) }; }
+    }
+    return result;
   });
 
   ipcMain.handle("paper-review:run", async (event, input = {}) => {
     if (typeof input.paper?.id !== "string") throw new Error("A library paper is required.");
     const dataWorkspace = workspaceForWindow(BrowserWindow.fromWebContents(event.sender)) || resolveWorkspace(input.workspace);
-    store.openWorkspace(dataWorkspace);
     const paper = store.getPaper(input.paper.id);
     if (!paper) throw new Error("Paper not found.");
     if (input.projectId && !store.canAccessProject(input.projectId, "editor")) throw new Error("You do not have permission to generate a reading in this project.");
@@ -1970,7 +2069,6 @@ app.whenReady().then(async () => {
         config, call, projectId: input.projectId, ownerId: localIdentity.localIdentity().userId, deferCheckpointCleanup: true, signal: controller.signal, emit,
       });
       if (controller.signal.aborted) throw controller.signal.reason || new Error("The reading was cancelled.");
-      store.openWorkspace(dataWorkspace);
       store.savePaperReview(paper.id, result, input.projectId);
       if (result.checkpointFile) { try { fs.unlinkSync(result.checkpointFile); } catch { /* A stale checkpoint is safe to resume. */ } }
       const { checkpointFile: ignoredCheckpoint, ...savedResult } = result;
@@ -1988,7 +2086,6 @@ app.whenReady().then(async () => {
   ipcMain.handle("paper-deep-reading:export", async (event, { paperId, workspace, projectId } = {}) => {
     if (typeof paperId !== "string") throw new Error("A paper is required.");
     const dataWorkspace = workspaceForWindow(BrowserWindow.fromWebContents(event.sender)) || resolveWorkspace(workspace);
-    store.openWorkspace(dataWorkspace);
     const saved = store.getPaperReview(paperId, projectId);
     if (!saved?.reading) throw new Error("Generate an illustrated reading before exporting.");
     const report = saved.reading;
@@ -2122,19 +2219,15 @@ app.whenReady().then(async () => {
   });
 
   ipcMain.handle("comments:list", (_event, { workspace, projectId, resourceType, resourceId, includeResolved = true } = {}) => {
-    if (workspace) store.openWorkspace(resolveWorkspace(workspace));
     return store.listComments({ projectId, resourceType, resourceId, includeResolved });
   });
   ipcMain.handle("comments:create", (_event, { workspace, projectId, resourceType, resourceId, body, parentId, anchor } = {}) => {
-    if (workspace) store.openWorkspace(resolveWorkspace(workspace));
     return store.createComment({ projectId, resourceType, resourceId, body, parentId, anchor });
   });
   ipcMain.handle("comments:resolve", (_event, { workspace, id, resolved = true } = {}) => {
-    if (workspace) store.openWorkspace(resolveWorkspace(workspace));
     return store.setCommentResolved(id, resolved);
   });
   ipcMain.handle("comments:delete", (_event, { workspace, id } = {}) => {
-    if (workspace) store.openWorkspace(resolveWorkspace(workspace));
     return store.deleteComment(id);
   });
 
@@ -2156,7 +2249,6 @@ app.whenReady().then(async () => {
     if (typeof paperId !== "string" || !paperId) throw new Error("A paper ID is required to restore an evidence review.");
     const resolvedWorkspace = resolveWorkspace(workspace || windowWorkspaces.get(event.sender.id));
     const dataWorkspace = workspaceForWindow(BrowserWindow.fromWebContents(event.sender)) || resolvedWorkspace;
-    store.openWorkspace(dataWorkspace);
     const saved = store.getPaperReview(paperId, projectId);
     if (!saved?.reading) return saved;
     try {
@@ -2172,7 +2264,6 @@ app.whenReady().then(async () => {
     }
     const workspace = resolveWorkspace(input.workspace);
     const dataWorkspace = workspaceForWindow(BrowserWindow.fromWebContents(event.sender)) || workspace;
-    store.openWorkspace(dataWorkspace);
     const requestedSourceMode = input.sourceMode === "paper" ? "paper" : "review";
     const review = store.getPaperReview(input.paper.id, input.projectId);
     if (requestedSourceMode === "review" && !review) {
@@ -2246,7 +2337,6 @@ app.whenReady().then(async () => {
     if (typeof paperId !== "string" || !paperId) throw new Error("A paper ID is required to restore a presentation.");
     const resolvedWorkspace = resolveWorkspace(workspace || windowWorkspaces.get(event.sender.id));
     const dataWorkspace = workspaceForWindow(BrowserWindow.fromWebContents(event.sender)) || resolvedWorkspace;
-    store.openWorkspace(dataWorkspace);
     const saved = store.getPaperPresentation(paperId, projectId);
     if (!saved?.artifact || !["pptd", "pptx"].includes(saved.artifact.kind)) return saved;
     try {
@@ -2263,7 +2353,6 @@ app.whenReady().then(async () => {
     if (typeof paperId !== "string" || !paperId) throw new Error("A paper ID is required to locate a presentation.");
     const resolvedWorkspace = resolveWorkspace(workspace || windowWorkspaces.get(event.sender.id));
     const dataWorkspace = workspaceForWindow(BrowserWindow.fromWebContents(event.sender)) || resolvedWorkspace;
-    store.openWorkspace(dataWorkspace);
     const artifact = store.getPaperPresentation(paperId, projectId)?.artifact;
     if (!artifact || !["pptd", "pptx"].includes(artifact.kind)) throw new Error("This paper has no saved presentation.");
     const pptxPath = workspaceFiles.workspacePath(dataWorkspace, artifact.pptx_path);
@@ -2272,8 +2361,6 @@ app.whenReady().then(async () => {
   });
 
   ipcMain.handle("paper-review:cleanup-internal-runs", (event, { workspace } = {}) => {
-    const resolvedWorkspace = resolveWorkspace(workspace || windowWorkspaces.get(event.sender.id));
-    store.openWorkspace(resolvedWorkspace);
     return store.deleteInternalPaperReviewThreads();
   });
 
@@ -2312,14 +2399,26 @@ app.whenReady().then(async () => {
     return action;
   });
 
-  ipcMain.handle("agent:claim-approvals", (_event, threadId, claimed) => {
+  ipcMain.handle("agent:claim-approvals", (event, threadId, claimed, requestedWorkspace) => {
     if (typeof threadId !== "string" || !threadId) throw new Error("A research thread ID is required.");
-    return { claimed: agent.setApprovalSurface(threadId, Boolean(claimed)) };
+    const senderId = event.sender.id;
+    const workspace = windowWorkspaces.get(senderId);
+    if (!workspace || (requestedWorkspace && requestedWorkspace !== workspace)) return { claimed: false };
+    const existing = windowApprovalClaims.get(senderId);
+    if (existing?.threadId === threadId) {
+      if (!claimed) releaseWindowApprovalClaim(senderId);
+      return { claimed: Boolean(claimed) };
+    }
+    if (!claimed) return { claimed: false };
+    releaseWindowApprovalClaim(senderId);
+    windowApprovalClaims.set(senderId, { workspace, threadId });
+    return { claimed: agent.setApprovalSurface(threadId, true, workspace) };
   });
 
-  ipcMain.handle("agent:interrupt", (_event, threadId) => {
+  ipcMain.handle("agent:interrupt", (event, threadId) => {
     if (typeof threadId !== "string") throw new Error("A research thread ID is required.");
-    return { interrupted: agent.interruptAgent(threadId) };
+    const workspace = windowWorkspaces.get(event.sender.id);
+    return { interrupted: Boolean(workspace && agent.interruptAgent(threadId, workspace)) };
   });
 
   ipcMain.handle("terminal:run", (event, { command, cwd, actionId }) => {
@@ -2328,20 +2427,18 @@ app.whenReady().then(async () => {
     }
 
     const workspace = resolveWorkspace(cwd);
-    store.openWorkspace(workspace);
     const beforeSnapshot = typeof actionId === "string" ? workspaceFiles.snapshotWorkspace(workspace) : null;
     const sessionId = randomUUID();
-    const commandRun = store.startCommand({ command, cwd: workspace });
+    const owner = store.currentStore();
+    const commandRun = owner.startCommand({ command, cwd: workspace });
     const shell = process.platform === "win32" ? "cmd.exe" : "/bin/zsh";
     const args = process.platform === "win32" ? ["/d", "/s", "/c", command] : ["-lc", command];
-    const child = spawn(shell, args, {
-      cwd: workspace,
-      env: process.env,
-    });
+    const child = spawn(shell, args, { cwd: workspace, env: process.env });
+    const captured = owner.captureStore();
 
     commandSessions.set(sessionId, { process: child, senderId: event.sender.id });
     const send = (data) => {
-      store.appendCommandOutput(commandRun.id, data);
+      owner.appendCommandOutput(commandRun.id, data);
       if (!event.sender.isDestroyed()) {
         event.sender.send("terminal:data", { sessionId, commandRunId: commandRun.id, data });
       }
@@ -2350,26 +2447,30 @@ app.whenReady().then(async () => {
     child.stderr.on("data", (chunk) => send(chunk.toString()));
     child.on("error", (error) => send(`\n[process error] ${error.message}\n`));
     child.on("close", (code) => {
-      send(`\n[process exited with code ${code ?? "unknown"}]\n`);
-      store.finishCommand(commandRun.id, code, code === 0 ? "completed" : "failed");
-      if (beforeSnapshot && typeof actionId === "string") {
-        const changes = workspaceFiles.compareWorkspaceSnapshots(beforeSnapshot, workspaceFiles.snapshotWorkspace(workspace));
-        if (changes.length) {
-          const action = store.updateActionPayload(actionId, { changes });
-          if (!event.sender.isDestroyed()) {
-            event.sender.send("workspace:change-set", {
-              id: action.id,
-              actionId: action.id,
-              taskId: action.task_id,
-              threadId: store.getResearchThreadIdForTask(action.task_id),
-              kind: action.kind,
-              changes,
-              createdAt: action.created_at,
-            });
+      try {
+        send(`\n[process exited with code ${code ?? "unknown"}]\n`);
+        owner.finishCommand(commandRun.id, code, code === 0 ? "completed" : "failed");
+        if (beforeSnapshot && typeof actionId === "string") {
+          const changes = workspaceFiles.compareWorkspaceSnapshots(beforeSnapshot, workspaceFiles.snapshotWorkspace(workspace));
+          if (changes.length) {
+            const action = owner.updateActionPayload(actionId, { changes });
+            if (!event.sender.isDestroyed()) {
+              event.sender.send("workspace:change-set", {
+                id: action.id,
+                actionId: action.id,
+                taskId: action.task_id,
+                threadId: owner.getResearchThreadIdForTask(action.task_id),
+                kind: action.kind,
+                changes,
+                createdAt: action.created_at,
+              });
+            }
           }
         }
+      } finally {
+        commandSessions.delete(sessionId);
+        captured.release();
       }
-      commandSessions.delete(sessionId);
     });
     return { sessionId, commandRunId: commandRun.id, workspace };
   });
@@ -2587,9 +2688,11 @@ app.on("activate", () => {
   if (BrowserWindow.getAllWindows().length === 0) createWindow(startupWorkspace());
 });
 
-app.on("before-quit", () => {
+app.on("will-quit", () => {
   closeAllNativeClients();
   closeAllTerminals();
+  experimentRunner.shutdownExperimentRuns();
   collaborationServer?.close?.();
   void presence?.closeAll();
+  store.closeAllWorkspaces();
 });

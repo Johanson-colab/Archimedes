@@ -60,7 +60,7 @@ const providers: Array<{
   { id: "custom", name: "Custom", caption: "Any OpenAI-compatible endpoint", baseUrl: "", models: [] },
 ];
 
-export default function ModelSettingsModal({ bridge, open, onClose, onSaved, embedded = false, role = "agent", executionPreferences }: { bridge: ResearchDeskBridge; open: boolean; onClose: () => void; onSaved: (config: PublicModelConfig) => void; embedded?: boolean; role?: ModelRole; executionPreferences?: ModelExecutionPreferences }) {
+export default function ModelSettingsModal({ bridge, open, onClose, onSaved, embedded = false, role = "agent", executionPreferences, workspace }: { bridge: ResearchDeskBridge; open: boolean; onClose: () => void; onSaved: (config: PublicModelConfig) => void; embedded?: boolean; role?: ModelRole; executionPreferences?: ModelExecutionPreferences; workspace?: string }) {
   const { t } = useUISettings();
   const proactiveRole = role === "proactive";
   const [settingsPage, setSettingsPage] = useState("api");
@@ -311,7 +311,7 @@ export default function ModelSettingsModal({ bridge, open, onClose, onSaved, emb
       </footer>
       </div>
       {!proactiveRole && <div className="model-settings-panel model-settings-panel-agents" id={`${panelId}-agents`} role="tabpanel" aria-labelledby={`${panelId}-agents-tab`} hidden={settingsPage !== "agents"}>
-        <AgentBackendSettings bridge={bridge} onBackendChange={setActiveBackend} />
+        <AgentBackendSettings bridge={bridge} onBackendChange={setActiveBackend} workspace={workspace} />
       </div>}
       </div>
     </>;

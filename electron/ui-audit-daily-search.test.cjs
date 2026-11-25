@@ -14,7 +14,7 @@ test("clearing the search box restores the live feed without a button", () => {
   // Trending and the range control stay locked behind an explicit button.
   assert.match(library, /function changeQuery\(value: string\) \{/);
   assert.match(library, /if \(!value\.trim\(\) && submittedQuery\) clearSearch\(\);/);
-  assert.equal((library.match(/onChange=\{\(event\) => changeQuery\(event\.target\.value\)\}/g) || []).length, 2);
+  assert.equal((library.match(/onChange=\{\(event\) => changeQuery\(event\.target\.value\)\}/g) || []).length, 1);
   assert.doesNotMatch(library, /daily-clear-search/);
   assert.doesNotMatch(library, />Clear search</);
   assert.doesNotMatch(css, /\.daily-clear-search/);
@@ -59,18 +59,12 @@ test("a daily row opens a large paper preview without losing its inline actions"
   assert.match(css, /\.daily-paper-row \{[^}]*cursor: pointer/);
 });
 
-test("quick and deep search share one send button and search surface", () => {
-  const sendButtons = library.match(/className="daily-search-send"/g) || [];
-  assert.equal(sendButtons.length, 1);
-  assert.match(library, /title=\{searchKind === "deep" \? "Deep search" : "Search"\}/);
-  assert.doesNotMatch(library, /daily-search-input-row .*primary-button/);
-  assert.match(css, /\.daily-search-panel\.deep \{ padding: 9px; \}/);
-  assert.match(css, /\.daily-search-panel\.deep \.daily-search-kind button\.active \{ color: #235b45; \}/);
-  // The send arrow sits inside the field, mirroring the main chat composer.
-  assert.match(css, /\.daily-search-send \{[^}]*position: absolute; right: 4px; bottom: 4px;[^}]*width: 30px; height: 30px;[^}]*color: var\(--text-muted\)[^}]*background: transparent/);
-  assert.match(css, /\.daily-search-send:hover:not\(:disabled\) \{ color: var\(--accent\); \}/);
-  assert.match(css, /\.daily-search-input-row input, \.daily-search-input-row textarea \{[^}]*padding: 10px 44px 10px 11px/);
-  assert.match(css, /\.daily-search-input-row textarea \{[^}]*padding-bottom: 40px/);
+test("daily papers exposes one keyword search while literature review keeps its search", () => {
+  assert.equal((library.match(/className="daily-search-send"/g) || []).length, 1);
+  assert.doesNotMatch(library, /deepSearchPapers|DeepSearchResults|daily-search-kind/);
+  assert.match(library, /query: submittedQuery/);
+  assert.match(read("src", "LiteratureReviewView.tsx"), /bridge\.searchLiterature/);
+  assert.match(css, /\.daily-search-send \{[^}]*position: absolute/);
 });
 
 test("the open-paper link sits on the row surface instead of an accent chip", () => {

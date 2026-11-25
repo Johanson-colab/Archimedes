@@ -224,17 +224,21 @@ test("switching source files during an in-flight save retains and saves the fina
   assert.equal(document.querySelector('.paper-save-state').textContent, "Saved");
 });
 
-test("the actual preload and compile handler preserve owner ids and legacy two-argument calls", async () => {
+test("the actual preload preserves compile ownership and rejects writing over newer source", async (t) => {
   const vm = require("node:vm");
   const handlers = new Map(), listeners = new Map(), compilerCalls = [];
   let api;
   const main = fs.readFileSync(path.join(__dirname, "main.cjs"), "utf8");
+  const writeBegin = main.indexOf('  ipcMain.handle("workspace:write-file",');
+  const writeEnd = main.indexOf('  ipcMain.handle("artifacts:list",', writeBegin);
+  assert.ok(writeBegin >= 0 && writeEnd > writeBegin);
   const begin = main.indexOf('  ipcMain.handle("paper:compile",');
   const end = main.indexOf('  ipcMain.handle("research-thread:get",', begin);
   assert.ok(begin >= 0 && end > begin, "reassess the handler probe if its source boundaries change");
   const sender = { isDestroyed: () => false, send: (channel, payload) => listeners.get(channel)?.({}, payload) };
-  vm.runInNewContext(main.slice(begin, end), {
+  vm.runInNewContext(main.slice(writeBegin, writeEnd) + main.slice(begin, end), {
     ipcMain: { handle: (name, callback) => handlers.set(name, callback) }, resolveWorkspace: root => root,
+    workspaceFiles: require("./workspace-files.cjs"),
     managedPaperCompiler: async (root, name, progress) => { compilerCalls.push({ root, name }); progress("Compiling", "Fake compiler output"); return { ok: false, diagnostics: [], log: "fake" }; },
   });
   const ipcRenderer = {
@@ -253,6 +257,17 @@ test("the actual preload and compile handler preserve owner ids and legacy two-a
   assert.equal(progress[1].workspace, "/review/b"); assert.equal(progress[1].requestId, undefined);
   assert.deepEqual(compilerCalls, [{ root: "/review/a", name: "paper/main.tex" }, { root: "/review/b", name: "paper/main.tex" }]);
   unsubscribe(); assert.equal(listeners.size, 0);
+
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-writing-conflict-"));
+  t.after(() => fs.rmSync(workspace, { recursive: true, force: true }));
+  await api.writeWorkspaceFile(workspace, "paper/main.tex", "External editor version");
+  assert.throws(
+    () => api.writeWorkspaceFile(workspace, "paper/main.tex", "Unsaved draft", "Original version"),
+    /The source changed on disk/,
+  );
+  assert.equal(fs.readFileSync(path.join(workspace, "paper/main.tex"), "utf8"), "External editor version");
+  const saved = await api.writeWorkspaceFile(workspace, "paper/main.tex", "Merged draft", "External editor version");
+  assert.equal(saved.content, "Merged draft");
 });
 
 test('Writing opens existing manuscripts before templates and restores the chosen document after remount', async t => {
@@ -658,8 +673,8 @@ test("preview addresses stay with the execution folder that produced the manuscr
   const main = fs.readFileSync(path.join(__dirname, "main.cjs"), "utf8");
   const body = main.slice(main.indexOf("function setWindowWorkspace("), main.indexOf("function workspaceStatePath("));
   const tokens = new Map();
-  const api = new Function("randomUUID", "windowWorkspaces", "windowPreviewTokens", "previewTokenWorkspaces",
-    body + "\nreturn {setWindowWorkspace, createPreviewToken};")(require("node:crypto").randomUUID, new Map(), new Map(), tokens);
+  const api = new Function("randomUUID", "windowWorkspaces", "windowPreviewTokens", "previewTokenWorkspaces", "windowApprovalClaims",
+    body + "\nreturn {setWindowWorkspace, createPreviewToken};")(require("node:crypto").randomUUID, new Map(), new Map(), tokens, new Map());
   api.setWindowWorkspace(1, "/data");
   const first = api.createPreviewToken(1, "/project-a");
   const second = api.createPreviewToken(1, "/project-b");

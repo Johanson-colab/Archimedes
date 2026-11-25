@@ -5,6 +5,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { assertJsonSize, OUTBOUND_PROTOCOL_LIMIT } = require("./codex-limits.cjs");
 const clients = new Set();
+const INBOUND_PROTOCOL_LIMIT = 8_000_000;
 
 function executableCandidates(binary = "codex") {
   if (binary !== "codex") {
@@ -29,6 +30,7 @@ class CodexClient extends EventEmitter {
     this.nextId = 0;
     this.closed = false;
     this.buffer = "";
+    this.bufferBytes = 0;
   }
 
   async start() {
@@ -61,12 +63,22 @@ class CodexClient extends EventEmitter {
 
   read(chunk) {
     if (this.closed) return;
-    this.buffer += chunk;
-    if (this.buffer.length > 8_000_000) return this.fail(new Error("Codex sent an oversized protocol message."));
-    let index;
-    while ((index = this.buffer.indexOf("\n")) >= 0) {
-      const line = this.buffer.slice(0, index);
-      this.buffer = this.buffer.slice(index + 1);
+    let offset = 0;
+    while (offset < chunk.length && !this.closed) {
+      const index = chunk.indexOf("\n", offset);
+      const part = chunk.slice(offset, index < 0 ? chunk.length : index);
+      const bytes = this.bufferBytes + Buffer.byteLength(part, 'utf8');
+      if (bytes > INBOUND_PROTOCOL_LIMIT) {
+        const methods = [...new Set([...this.pending.values()].map(entry => entry.method))].join(', ');
+        return this.fail(new Error(`Codex sent an oversized protocol message${methods ? ` while waiting for ${methods}` : ''}.`));
+      }
+      this.buffer += part;
+      this.bufferBytes = bytes;
+      if (index < 0) return;
+      const line = this.buffer;
+      this.buffer = "";
+      this.bufferBytes = 0;
+      offset = index + 1;
       if (!line.trim()) continue;
       let message;
       try { message = JSON.parse(line); } catch { this.fail(new Error("Codex sent invalid JSON.")); return; }
@@ -112,6 +124,8 @@ class CodexClient extends EventEmitter {
     clients.delete(this);
     for (const pending of this.pending.values()) { clearTimeout(pending.timer); pending.reject(error); }
     this.pending.clear();
+    this.buffer = "";
+    this.bufferBytes = 0;
     this.emit("closed", error);
     this.terminate();
   }

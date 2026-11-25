@@ -21,7 +21,7 @@ export default function BibliographyDialog({ bridge, library, onClose, onChanged
   const alive = useRef(true);
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
   const parsed = useMemo(() => parseBibliography(input), [input]);
-  const preview = useMemo(() => parsed.entries.map((entry, index) => {
+  const matches = useMemo(() => parsed.entries.map((entry, index) => {
     const existing = matchBibliographyPaper(entry.paper, targetPapers, { strongOnly: true })
       || matchBibliographyPaper(entry.paper, projectPapers, { strongOnly: true })
       || matchBibliographyPaper(entry.paper, known, { strongOnly: true })
@@ -29,10 +29,19 @@ export default function BibliographyDialog({ bridge, library, onClose, onChanged
       || matchBibliographyPaper(entry.paper, projectPapers)
       || matchBibliographyPaper(entry.paper, known);
     const duplicate = parsed.entries.findIndex((candidate) => matchBibliographyPaper(entry.paper, [candidate.paper as BibliographyPaper])) < index;
-    const keyIdentity = citationKeyIdentity(entry.citekey);
-    const keyConflict = targetPapers.some((paper) => paper.citekey && citationKeyIdentity(paper.citekey) === keyIdentity && paper.id !== existing?.id) || parsed.entries.some((candidate, candidateIndex) => candidateIndex < index && citationKeyIdentity(candidate.citekey) === keyIdentity && !matchBibliographyPaper(entry.paper, [candidate.paper as BibliographyPaper]));
-    return { entry, existing, duplicate, keyConflict, differences: existing ? metadataDifferences(entry.paper, existing) : {} };
+    return { entry, existing, duplicate, differences: existing ? metadataDifferences(entry.paper, existing) : {} };
   }), [parsed.entries, known, targetPapers, projectPapers]);
+  const preview = useMemo(() => {
+    const pendingKeys = new Set<string>();
+    return matches.map((row, index) => {
+      const updateKey = (repairs[index] || []).includes("citekey");
+      const key = citationKeyIdentity(!updateKey && row.existing?.citekey ? row.existing.citekey : row.entry.citekey);
+      const keyConflict = pendingKeys.has(key) || targetPapers.some((paper) =>
+        paper.id !== row.existing?.id && paper.citekey && citationKeyIdentity(paper.citekey) === key);
+      if (selected.has(index) && !done.has(index) && !row.duplicate && !keyConflict) pendingKeys.add(key);
+      return { ...row, keyConflict };
+    });
+  }, [matches, repairs, selected, done, targetPapers]);
   useEffect(() => {
     let active = true;
     void (async () => {
@@ -53,21 +62,25 @@ export default function BibliographyDialog({ bridge, library, onClose, onChanged
     setSelected(new Set(parseBibliography(value).entries.map((_, index) => index)));
   }
   async function apply() {
-    setBusy(true); setError("");
+    setBusy(true); setError(""); setExportText("");
     try {
       for (const [index, row] of preview.entries()) {
         if (!alive.current) break;
         if (!selected.has(index) || done.has(index) || row.duplicate || row.keyConflict) continue;
-        let paper = await bridge.addLibraryPaper(library.id, row.existing || row.entry.paper) as BibliographyPaper;
-        if (!alive.current) return;
         const fields = repairs[index] || [];
+        const reference = {
+          ...(row.existing || row.entry.paper),
+          id: fields.includes("citekey") ? row.existing?.id : undefined,
+          source: "bibtex",
+          citekey: row.entry.citekey,
+          entry_type: row.entry.entryType,
+        };
+        const paper = await bridge.addLibraryPaper(library.id, reference);
+        if (!alive.current) return;
         if (row.existing && fields.length) {
           const patch = Object.fromEntries(fields.filter((field) => field in row.differences).map((field) => [field, row.differences[field as keyof MetadataPatch]]));
-          if (Object.keys(patch).length) paper = await (bridge as BibliographyBridge).repairLibraryPaperMetadata(paper.id, patch);
+          if (Object.keys(patch).length) await (bridge as BibliographyBridge).repairLibraryPaperMetadata(paper.id, patch);
         }
-        // Repeat imports cannot replace a user's citation key or entry type.
-        if (!alive.current) return;
-        if (!paper.citekey || fields.includes("citekey")) await (bridge as BibliographyBridge).setPaperBibliography(paper.id, { citekey: row.entry.citekey, entryType: row.entry.entryType });
         setDone((current) => new Set(current).add(index));
       }
       if (!alive.current) return;
@@ -78,7 +91,11 @@ export default function BibliographyDialog({ bridge, library, onClose, onChanged
       setTargetPapers(refreshed);
       setProjectPapers(current => [...new Map([...current, ...refreshed].map(paper => [paper.id, paper])).values()]);
       setKnown((current) => [...new Map([...current, ...refreshed].map((paper) => [paper.id, paper])).values()]);
-    } catch (cause) { setError(String(cause)); }
+    } catch (cause) {
+      const message = String(cause);
+      const keyConflict = "Citation key conflict: edit the source before importing";
+      setError(message.includes(keyConflict) ? t(keyConflict) : message);
+    }
     finally { setBusy(false); }
   }
   function download() {

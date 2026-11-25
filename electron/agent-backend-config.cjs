@@ -1,6 +1,8 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { CodexClient } = require("./agent/codex-client.cjs");
+const { execFile } = require("node:child_process");
+const { nativeExecutable } = require("./agent/native-process.cjs");
 const { listNativeModels, resolveNativeModel } = require("./agent/codex-models.cjs");
 let configPath;
 
@@ -58,6 +60,28 @@ async function listCodexModelCatalog(input = {}, Client = CodexClient) {
     return { models, effectiveModelId: effectiveModel?.id };
   } finally { client.close(); }
 }
+function parseOpenCodeModels(output) {
+  const ids = new Set();
+  for (const line of String(output || "").split(/\r?\n/)) {
+    const id = line.trim();
+    if (id.length <= 160 && /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.:/-]+$/.test(id)) ids.add(id);
+    if (ids.size >= 5000) break;
+  }
+  return [...ids].map((id) => ({ id, label: id, efforts: [] }));
+}
+async function listOpenCodeModelCatalog(input = {}, workspace) {
+  const config = normalize({ ...input, backend: "opencode" });
+  const binary = nativeExecutable("opencode", config.binary);
+  const env = { ...process.env };
+  delete env.CODEX_THREAD_ID; delete env.CLAUDECODE; delete env.CLAUDE_CODE_ENTRYPOINT;
+  const output = await new Promise((resolve, reject) => execFile(binary, ["models"], { cwd: workspace, env, timeout: 20_000, maxBuffer: 4 * 1024 * 1024, windowsHide: true }, (error, stdout) => {
+    if (error) reject(new Error("Could not load the OpenCode model catalog. Check the CLI and try again."));
+    else resolve(stdout);
+  }));
+  const models = parseOpenCodeModels(output);
+  if (!models.length) throw new Error("OpenCode did not return any models. Check its configuration and try again.");
+  return { models };
+}
 async function check(input = get(), Client = CodexClient) {
   const config = normalize(input);
   if (["claude", "opencode"].includes(config.backend)) return require("./agent/external-backend.cjs").checkNative(config);
@@ -71,4 +95,4 @@ async function check(input = get(), Client = CodexClient) {
     return { ready: true, models, effectiveModelId: effectiveModel?.id, message: "Codex is connected. Model access is verified only when a turn succeeds." };
   } finally { client.close(); }
 }
-module.exports = { initialize, get, save, check, listCodexModelCatalog, normalize };
+module.exports = { initialize, get, save, check, listCodexModelCatalog, listOpenCodeModelCatalog, parseOpenCodeModels, normalize };

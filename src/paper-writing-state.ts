@@ -110,7 +110,7 @@ export function saveWritingDocument(
     document.saveState = "saving";
     changed();
     try {
-      const saved = await write(document.workspace, document.file.path, content);
+      const saved = await write(document.workspace, document.file.path, content, document.savedDraft);
       document.file = { ...saved, content };
       document.savedDraft = content;
       document.version += 1;
@@ -118,7 +118,8 @@ export function saveWritingDocument(
       document.error = "";
     } catch (error) {
       document.saveState = "unsaved";
-      document.error = error instanceof Error ? error.message : String(error);
+      const message = error instanceof Error ? error.message : String(error);
+      document.error = message.replace(/^Error invoking remote method '[^']+':\s*(?:Error:\s*)?/, "");
       throw error;
     } finally {
       changed();

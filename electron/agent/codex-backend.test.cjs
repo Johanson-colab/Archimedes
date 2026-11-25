@@ -69,6 +69,27 @@ test("invalid and oversized protocol input fails closed", async () => {
   const other = new CodexClient();
   other.read("x".repeat(8_000_001));
   assert.equal(other.closed, true);
+  assert.equal(other.buffer, "");
+});
+
+test("inbound limits apply to each UTF-8 frame, not a batch of valid messages", () => {
+  const client = new CodexClient();
+  let seen = 0;
+  client.on('message', () => { seen++; });
+  const line = JSON.stringify({ method: 'fixture', params: { text: 'x'.repeat(4_100_000) } }) + '\n';
+  client.read(line + line);
+  assert.equal(client.closed, false);
+  assert.equal(seen, 2);
+  assert.equal(client.bufferBytes, 0);
+  client.read('{"method":"split",');
+  client.read('"params":{}}\n');
+  assert.equal(seen, 3);
+  client.close();
+  const unicode = new CodexClient();
+  unicode.read('中'.repeat(2_700_000));
+  assert.equal(unicode.closed, true);
+  assert.equal(unicode.buffer, '');
+  assert.equal(unicode.bufferBytes, 0);
 });
 
 test("only identical successful local history can resume; forks, undo and dirty delivery cannot", () => {
@@ -265,4 +286,38 @@ test("outbound JSON byte counts match actual escaping, surrogate and nested repr
     assert.equal(assertJsonSize(value), bytes);
     assert.throws(() => assertJsonSize(value, bytes - 1), /size limit/);
   }
+});
+
+test("Codex exposes live experiment tools and dispatches requests during the turn", async () => {
+  let client;
+  class DynamicClient extends EventEmitter {
+    constructor() { super(); this.requests = []; this.replies = []; this.closed = false; client = this; }
+    async start() { return this; }
+    async request(method, params) {
+      this.requests.push({ method, params });
+      if (method === "account/read") return { account: { type: "chatgpt" } };
+      if (method === "thread/start") return { thread: { id: "native-thread" } };
+      if (method === "turn/start") {
+        setImmediate(() => this.emit("message", { id: 81, method: "item/tool/call", params: { threadId: "native-thread", turnId: "native-turn", callId: "call-1", namespace: null, tool: "create_experiment", arguments: { idea: "Idea", title: "Experiment" } } }));
+        return { turn: { id: "native-turn" } };
+      }
+      return {};
+    }
+    respond(id, result) {
+      this.replies.push({ id, result });
+      this.emit("message", { method: "item/agentMessage/delta", params: { threadId: "native-thread", turnId: "native-turn", itemId: "answer", delta: "done" } });
+      this.emit("message", { method: "turn/completed", params: { threadId: "native-thread", turn: { id: "native-turn", status: "completed" } } });
+    }
+    unsupported(id) { this.replies.push({ id, denied: true }); }
+    close() { this.closed = true; }
+  }
+  const args = input(DynamicClient);
+  args.turn.mode = "research";
+  args.experimentBridgeInstructions = "Use live experiment tools.";
+  args.experimentDynamicTools = [{ type: "function", name: "create_experiment", description: "Create experiment", inputSchema: { type: "object" } }];
+  args.invokeExperimentTool = async (name, payload) => { assert.equal(name, "create_experiment"); assert.equal(payload.idea, "Idea"); return { experiment_id: "e1" }; };
+  assert.equal(await runCodex(args), "done");
+  assert.equal(client.requests.find((entry) => entry.method === "thread/start").params.dynamicTools[0].name, "create_experiment");
+  assert.deepEqual(client.replies[0].result, { success: true, contentItems: [{ type: "inputText", text: '{"experiment_id":"e1"}' }] });
+  assert.match(client.requests.find((entry) => entry.method === "turn/start").params.input[0].text, /Use live experiment tools/);
 });

@@ -30,7 +30,7 @@ test("fork persists a separate history with remapped events, visibility and comp
   const fork = store.forkResearchThread(thread.id);
   assert.notEqual(fork.id, thread.id);
   assert.equal(fork.visibility, "private");
-  assert.equal(fork.workspace_path, root);
+  assert.equal(fork.workspace_path, fs.realpathSync(root));
   assert.equal(fork.turns.length, 2);
   assert.ok(fork.turns.every((turn) => turn.task_id === null));
   assert.notEqual(fork.turns[0].id, first.id);
@@ -131,7 +131,7 @@ test("main Work native compaction bypasses the API summary and preserves visible
     modelConfig: { getActiveModelConfig: () => { throw new Error("API must not be read"); } },
     dataWorkspace: () => root,
     nativeBackend: { getConfig: () => ({ backend: "codex" }), compact: async ({ thread: current, workspace }) => {
-      assert.equal(current.id, thread.id); assert.equal(workspace, root); compacted++;
+      assert.equal(current.id, thread.id); assert.equal(workspace, fs.realpathSync(root)); compacted++;
     } },
   });
   const result = await handlers.get("research-thread:compact")({}, { threadId: thread.id });

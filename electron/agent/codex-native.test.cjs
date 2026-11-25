@@ -21,7 +21,7 @@ function fixture(scenario, overrides = {}) {
       if (method === 'account/read') return { account: {} };
       if (method === 'config/read') return { config: { model: 'm' } };
       if (method === 'model/list') return { data: [{ id: 'm', model: 'm', displayName: 'Model', isDefault: true, supportedReasoningEfforts: [{ reasoningEffort: 'high' }], defaultReasoningEffort: 'high' }] };
-      if (method === 'thread/start' || method === 'thread/resume') return { thread: { id: 'native-thread' } };
+      if (method === 'thread/start' || method === 'thread/resume') return { thread: { id: 'native-thread', ephemeral: params.ephemeral === true && !scenario.unsupportedEphemeral } };
       if (method === 'turn/start' || method === 'thread/compact/start') {
         setImmediate(() => scenario(peer));
         return { turn: { id: 'native-turn' } };
@@ -43,6 +43,17 @@ function complete(peer, text = 'Answer') {
   peer.send('item/completed', { item: { id: 'final', type: 'agentMessage', phase: 'final_answer', text } });
   peer.send('turn/completed', { turn: { id: 'native-turn', status: 'completed' } });
 }
+
+test('temporary Codex tasks request an ephemeral thread and reject an unconfirmed session before sending the prompt', async () => {
+  const f = fixture(p => complete(p), { ephemeral: true });
+  await backend.runCodex(f.args);
+  assert.equal(f.peer().calls.find(x => x.method === 'thread/start').params.ephemeral, true);
+  const unsupported = () => {};
+  unsupported.unsupportedEphemeral = true;
+  const older = fixture(unsupported, { ephemeral: true });
+  await assert.rejects(backend.runCodex(older.args), /did not confirm a temporary session/);
+  assert.equal(older.peer().calls.some(x => x.method === 'turn/start'), false);
+});
 
 test('native setup omits API instructions and resumes native history without reimport', async () => {
   const f = fixture(p => complete(p));
@@ -207,14 +218,26 @@ test('native compaction resumes identical binding, records native context comple
   const result = await backend.compactNative(f.args);
   assert.equal(result.compacted, true);
   assert.equal(f.peer().calls.filter(c => c.method === 'thread/resume').length, 1);
+  assert.equal(f.peer().calls.find(c => c.method === 'thread/resume').params.excludeTurns, true);
   assert.equal(f.peer().calls.filter(c => c.method === 'thread/compact/start').length, 1);
   assert.equal(f.peer().calls.some(c => c.method === 'turn/start'), false);
   assert.equal(f.peer().closed, true);
   assert.equal(f.saves.at(-1).last_turn_id, 'prior');
   const dirty = fixture(p => complete(p));
-  await assert.rejects(backend.compactNative(dirty.args), /completed|binding|continuity/i);
+  await assert.rejects(backend.compactNative(dirty.args), /no native Codex session/i);
   const failed = fixture(p => p.send('turn/completed', { turn: { id: 'native-turn', status: 'failed' } }), { thread: f.args.thread, bindings: f.args.bindings });
   await assert.rejects(backend.compactNative(failed.args), /failed/); assert.equal(failed.peer().closed, true);
+});
+
+test('compaction identifies the mismatched binding field before starting a native process', async () => {
+  const f = fixture(p => complete(p));
+  f.args.thread.turns = [{ id: 'prior' }];
+  const binding = { native_thread_id: 'native-thread', workspace: fs.realpathSync(os.tmpdir()), model: '', last_turn_id: 'prior', backend: 'codex' };
+  for (const [change, expected] of [[{ model: 'previous-model' }, /selected model.*previous-model/], [{ workspace: '/different' }, /working directory differs/], [{ last_turn_id: null }, /did not confirm completion/], [{ last_turn_id: 'other' }, /local conversation has changed/]]) {
+    f.args.bindings.get = () => ({ ...binding, ...change });
+    await assert.rejects(backend.compactNative(f.args), expected);
+    assert.equal(f.peer(), undefined);
+  }
 });
 
 test('final-answer phase takes precedence over partial messages and resolved native questions expire', async () => {
@@ -420,4 +443,32 @@ test('paper reading attaches the bundled skill to the native Codex turn', async 
   assert.equal(skill.name, 'paper-deep-reading');
   assert.ok(fs.existsSync(skill.path));
   assert.equal(f.peer().calls.find(c => c.method === 'thread/start').params.sandbox, 'read-only');
+});
+
+test('shared variables reach native Codex turns but not ephemeral extraction', async t => {
+  const { setEnvironmentVault } = require('../environment-vault.cjs');
+  setEnvironmentVault({ shared: () => ({ HF_TOKEN: 'synthetic-test-token' }) }); t.after(() => setEnvironmentVault(null));
+  const normal = fixture(p => complete(p)); await backend.runCodex(normal.args);
+  assert.equal(normal.peer().options.env.HF_TOKEN, 'synthetic-test-token');
+  const extraction = fixture(p => complete(p), { ephemeral: true }); await backend.runCodex(extraction.args);
+  assert.equal(extraction.peer().options.env, undefined);
+});
+
+test('copied workspaces cannot start overlapping turns on one native Codex binding', async () => {
+  const binding = { workspace: fs.realpathSync(os.tmpdir()), model: '', native_thread_id: 'native-thread', last_turn_id: 'prior' };
+  const options = {
+    thread: { id: 'same-local-thread', turns: [{ id: 'prior' }] },
+    bindings: { get: () => ({ ...binding }), save() {} },
+  };
+  let started;
+  const ready = new Promise(resolve => { started = resolve; });
+  const original = fixture(started, { ...options, runtimeId: 'first/same-local-thread' });
+  const copy = fixture(complete, { ...options, runtimeId: 'copy/same-local-thread' });
+  const first = backend.runCodex(original.args);
+  await assert.rejects(backend.runCodex(copy.args), { message: /Another workspace is using this Codex conversation/, backend: 'codex' });
+  assert.equal(copy.peer(), undefined);
+  complete(await ready);
+  await first;
+  assert.equal(await backend.runCodex(copy.args), 'Answer');
+  assert.equal(copy.peer().calls.filter(call => call.method === 'thread/resume').length, 1);
 });

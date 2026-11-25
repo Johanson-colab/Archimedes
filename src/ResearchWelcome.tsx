@@ -1,7 +1,7 @@
 import { ArrowUpRight } from "lucide-react";
 import { useUISettings } from "./i18n";
 
-export type ResearchWelcomeAction = "idea" | "literature" | "replication" | "illustration";
+export type ResearchWelcomeAction = "idea" | "literature" | "writing" | "illustration";
 
 const workflows: Array<{
   id: ResearchWelcomeAction;
@@ -22,10 +22,10 @@ const workflows: Array<{
     image: `${import.meta.env.BASE_URL}welcome/literature-research.jpg`,
   },
   {
-    id: "replication",
-    title: "Reproduce a paper",
-    description: "Set up a faithful baseline.",
-    image: `${import.meta.env.BASE_URL}welcome/paper-replication.jpg`,
+    id: "writing",
+    title: "Create a paper",
+    description: "Draft and refine your manuscript.",
+    image: `${import.meta.env.BASE_URL}welcome/paper-writing.jpg`,
   },
   {
     id: "illustration",

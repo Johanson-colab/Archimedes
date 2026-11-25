@@ -80,27 +80,27 @@ function createLibrarySync({ store, api } = {}) {
         const remotePapers = await api.listPapers(cloudLibrary.id);
         for (const remotePaper of remotePapers) {
           const localPaper = store.syncPaperFromCloud(localLibrary.id, remotePaper);
+          const remotePaperId = String(remotePaper.id || "").trim();
+          if (!remotePaperId) continue;
           const localUpdated = Date.parse(localPaper.state_updated_at || "") || 0;
           const remoteUpdated = Date.parse(remotePaper.state_updated_at || "") || 0;
-          if (localPaper.cloud_paper_id) {
-            const stateDiffers = localPaper.reading_status !== remotePaper.reading_status
-              || localPaper.starred !== remotePaper.starred
-              || localPaper.notes !== remotePaper.notes
-              || JSON.stringify(localPaper.tags) !== JSON.stringify(remotePaper.tags || []);
-            if (localUpdated > remoteUpdated && stateDiffers) {
-              try {
-                await api.updatePaperState(localPaper.cloud_paper_id, {
-                  reading_status: localPaper.reading_status,
-                  starred: localPaper.starred,
-                  notes: localPaper.notes,
-                  tags: localPaper.tags,
-                });
-              } catch (error) {
-                warnings.push(`${localPaper.title}: ${error instanceof Error ? error.message : String(error)}`);
-              }
-            } else {
-              store.applyCloudPaperState(localPaper.id, remotePaper);
+          const stateDiffers = localPaper.reading_status !== remotePaper.reading_status
+            || localPaper.starred !== remotePaper.starred
+            || localPaper.notes !== remotePaper.notes
+            || JSON.stringify(localPaper.tags) !== JSON.stringify(remotePaper.tags || []);
+          if (localUpdated > remoteUpdated && stateDiffers) {
+            try {
+              await api.updatePaperState(remotePaperId, {
+                reading_status: localPaper.reading_status,
+                starred: localPaper.starred,
+                notes: localPaper.notes,
+                tags: localPaper.tags,
+              });
+            } catch (error) {
+              warnings.push(`${localPaper.title}: ${error instanceof Error ? error.message : String(error)}`);
             }
+          } else {
+            store.applyCloudPaperState(localPaper.id, remotePaper);
           }
         }
       } catch (error) {

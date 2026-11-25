@@ -1,3 +1,4 @@
+const { getSharedEnvironment } = require("../environment-vault.cjs");
 const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
@@ -5,6 +6,7 @@ const { randomUUID } = require('node:crypto');
 const codex = require('./codex-backend.cjs');
 const { closeAllCodexClients } = require('./codex-client.cjs');
 const { NativeProcess, closeAllExternalClients } = require('./native-process.cjs');
+const { NativeSessionBusyError } = require('./native-session-busy.cjs');
 const { claudeLaunch, initializeClaude, claudePrompt, handleClaude } = require('./claude-backend.cjs');
 const { opencodeLaunch, initializeOpenCode, openCodeModels, configureOpenCode, openCodePrompt, handleOpenCode } = require('./opencode-backend.cjs');
 const { prepareResearchSkill, skillReadActivity } = require('./research-skills.cjs');
@@ -27,7 +29,7 @@ function boundedText(value, max) {
   return '';
 }
 async function runExternal(options) {
-  const { config, workspace, thread, turn, contextItems = [], researchSkill, mineruToken, bindings, emit = () => {}, recordEvent = () => {}, approve = async () => false, signal = new AbortController().signal, Client = NativeProcess, timeoutMs = 30 * 60_000 } = options;
+  const { config, workspace, thread, turn, contextItems = [], researchSkill, mineruToken, experimentBridgeInstructions = "", bindings, emit = () => {}, recordEvent = () => {}, approve = async () => false, signal = new AbortController().signal, Client = NativeProcess, timeoutMs = 30 * 60_000, runtimeId = thread.id } = options;
   assertPolicy(config);
   const backend = config.backend, title = backend === 'claude' ? 'Claude Code' : 'OpenCode';
   const root = fs.realpathSync(workspace);
@@ -36,16 +38,20 @@ async function runExternal(options) {
   const previousTurnId = (thread.turns || []).filter(t => t.id !== turn.id).at(-1)?.id || null;
   const binding = bindings.get();
   const resume = canResumeExternal(binding, { backend, workspace: root, model: config.model, previousTurnId });
-  if (thread.id && active.has(thread.id)) throw new Error('This chat already has an active native turn.');
+  if (runtimeId && active.has(runtimeId)) throw new Error('This chat already has an active native turn.');
+  if (resume && Array.from(active.values()).some(run => run.backend === backend && run.bindingId === binding.native_thread_id)) {
+    throw new NativeSessionBusyError(backend);
+  }
   if (signal.aborted) throw new Error(`${title} turn interrupted before skill setup.`);
   const skill = prepareResearchSkill({ workspace: root, backend, thread, requested: researchSkill, emit, recordEvent });
   // ACP has no developer-instructions field. Native skill discovery is paired
   // with an explicit per-turn workflow request; no user config is overwritten.
-  const prompt = (backend === 'opencode' && skill ? `${skill.instructions}\n\nUser request:\n` : '') + codex.userPrompt(thread, turn, resume, attachments);
+  const prompt = (backend === 'opencode' && skill ? `${skill.instructions}\n\nUser request:\n` : '') + codex.userPrompt(thread, turn, resume, attachments, experimentBridgeInstructions);
   const input = backend === 'claude' ? claudePrompt(prompt, contextItems) : openCodePrompt(prompt, contextItems);
   if (Buffer.byteLength(JSON.stringify(input)) > 8 * 1024 * 1024 - 1000) throw new Error('Native attachments exceed the protocol limit. No request was sent.');
   const launch = backend === 'claude' ? claudeLaunch({ config, root, resume, binding, skill }) : opencodeLaunch({ config, root });
-  const client = new Client({ ...launch, ...(mineruToken ? { env: { MINERU_API_TOKEN: mineruToken } } : {}) });
+  const launchEnv = { ...(turn.task_id === "research-graph-extraction" ? {} : getSharedEnvironment()), ...(mineruToken ? { MINERU_API_TOKEN: mineruToken } : {}) };
+  const client = new Client({ ...launch, ...(Object.keys(launchEnv).length ? { env: launchEnv } : {}) });
   let response = '', streamed = false, settled = false, sent = false, resultStatus = 'failed';
   const approvals = new Map(), resolved = new Set(), items = new Map();
   const pendingActivities = new Set(), persistedActivities = new Set();
@@ -111,7 +117,7 @@ async function runExternal(options) {
     finally { approvals.delete(id); resolved.add(id); }
   }
   const session = {
-    backend, client, delivered: false, sessionId: launch.sessionId, append, activity, permission, finish,
+    backend, client, bindingId: resume ? binding.native_thread_id : null, delivered: false, sessionId: launch.sessionId, append, activity, permission, finish,
     hasStream: () => streamed,
     cancelApproval: id => {
       if (resolved.size >= 512 && !resolved.has(id)) throw new Error(`${title} exceeded the native request limit.`);
@@ -121,7 +127,7 @@ async function runExternal(options) {
     usage(value) { const n = v => Number.isFinite(v) && v >= 0 ? v : 0; const usage = { inputTokens: n(value.inputTokens), cachedInputTokens: n(value.cachedInputTokens), outputTokens: n(value.outputTokens), totalTokens: n(value.inputTokens) + n(value.outputTokens), modelContextWindow: null }; emit({ type: 'native_usage', title: `${title} context`, detail: 'Native token usage; context capacity unavailable', usage }); recordEvent({ type: 'native_usage', payload: { usage } }); },
     plan(entries) { const plan = { explanation: '', steps: (entries || []).slice(0, 100).map(e => ({ step: clip(e.content), status: e.status === 'in_progress' ? 'inProgress' : e.status })) }; emit({ type: 'native_plan', title: `${title} plan`, detail: 'Native plan', plan }); recordEvent({ type: 'native_plan', payload: { plan } }); },
   };
-  if (thread.id) active.set(thread.id, session);
+  if (runtimeId) active.set(runtimeId, session);
   const onAbort = () => { resultStatus = 'interrupted'; finish(new Error(`${title} turn interrupted. Check partial changes before continuing. No request was replayed.`)); client.close(); };
   const timer = setTimeout(() => { finish(new Error(`${title} turn timed out. No request was replayed.`)); client.close(); }, timeoutMs);
   signal.addEventListener('abort', onAbort, { once: true });
@@ -149,6 +155,7 @@ async function runExternal(options) {
       await configureOpenCode(client, config, created, session.sessionId);
     }
     if (!session.sessionId || settled || signal.aborted) throw new Error(`${title} ended before starting. No request was sent.`);
+    session.bindingId = session.sessionId;
     bindings.save({ backend, native_thread_id: session.sessionId, workspace: root, model: config.model || '', last_turn_id: null });
     emit({ type: 'status', title: `${title} backend`, detail: `${resume ? 'Resuming' : 'Starting'} native harness · native configured permissions and one-time approvals` });
     const reset = { type: 'native_usage', title: `${title} context`, detail: 'Context capacity unavailable', usage: null }; emit(reset); recordEvent({ type: 'native_usage', payload: { usage: null } });
@@ -171,7 +178,7 @@ async function runExternal(options) {
     settled = true; clearTimeout(timer); signal.removeEventListener('abort', onAbort);
     for (const controller of approvals.values()) controller.abort(); approvals.clear();
     try { completeActivities(); } finally {
-      if (thread.id && active.get(thread.id) === session) active.delete(thread.id);
+      if (runtimeId && active.get(runtimeId) === session) active.delete(runtimeId);
       client.close();
     }
   }

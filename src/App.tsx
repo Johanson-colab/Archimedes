@@ -1,4 +1,6 @@
 import { Fragment, lazy, memo, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent as ReactClipboardEvent, type ReactNode } from "react";
+import { flushSync } from "react-dom";
+import { startApprovalCountdown } from "./approval-countdown.mjs";
 import ReactMarkdown from "react-markdown";
 import { WorkspaceMarkdownLink, WorkspaceMarkdownProvider, workspaceMarkdownUrlTransform } from "./WorkspaceMarkdownLink";
 import remarkGfm from "remark-gfm";
@@ -53,8 +55,8 @@ import BrowserView from "./BrowserView";
 import { DEFAULT_WORKBENCH_PREFERENCES, activeWorkbenchPaneTabs, normalizeWorkbenchPreferences, selectWorkbenchTab, type WorkbenchTabId, type WorkbenchTabPreferences } from "./workbench-tabs";
 import ArtifactsPanel from "./ArtifactsPanel";
 import ChatActivityTimeline from "./ChatActivityTimeline";
-import NativeAgentPanel, { NativeContextUsage, NativeQuestionCard } from "./NativeAgentPanel";
-import { mergeNativeEvent, nativeTurnEvents, nativeUsage, updateNativeQuestions } from "./native-agent-state";
+import NativeAgentPanel, { NativeContextUsage, NativeQuestionCard, NativeSessionBusyNotice } from "./NativeAgentPanel";
+import { mergeNativeEvent, nativeTurnEvents, nativeUsage, updateNativeQuestions, type NativeSessionBackend } from "./native-agent-state";
 import HarnessPicker from "./HarnessPicker";
 import NewChatModePicker, { draftForNewChatMode, RESEARCH_EXAMPLE, type NewChatMode } from "./NewChatModePicker";
 import JourneyView from "./JourneyView";
@@ -77,6 +79,7 @@ import { shortcutMatches } from "./file-text-size";
 import { previewLibraryBridge } from "./library-preview";
 import AgentLayer from "./AgentLayer";
 import ResearchPathPanel from "./ResearchPathPanel";
+import ResearchGraphPanel from "./research-graph/ResearchGraphPanel";
 import ProactiveAgentPanel from "./ProactiveAgentPanel";
 import ProactiveSettingsPanel from "./ProactiveSettingsPanel";
 import { researchStages, stageForMode, type ResearchStage, type ResearchStageId } from "./research-path";
@@ -149,6 +152,7 @@ import {
   Save,
   Scissors,
   Search,
+  Server,
   Settings,
   Share2,
   Shield,
@@ -182,10 +186,11 @@ type Message = {
 type TimelineEvent = {
   title: string;
   detail: string;
+  snapshotCoverage?: WorkspaceSnapshotCoverage;
   state: "done" | "active" | "waiting";
 };
 
-type PendingAction = AgentAction & { source: "agent" | "manual" };
+type PendingAction = AgentAction & { source: "agent" | "manual"; ownerThreadId?: string | null };
 type Modal = "file" | null;
 type ResearchMode = NewChatMode | "free-chat" | "idea-spark" | "experiment-setup" | "paper-generation" | "paper-review" | "deep-research";
 type ReasoningEffort = "low" | "medium" | "high";
@@ -931,6 +936,7 @@ const previewBridge = {
   saveAgentBackendConfig: async () => { throw new Error("External Agent backends require the desktop app."); },
   checkAgentBackend: async () => { throw new Error("Codex detection requires the desktop app."); },
   listCodexModelCatalog: async () => { throw new Error("Codex detection requires the desktop app."); },
+  listOpenCodeModelCatalog: async () => { throw new Error("OpenCode detection requires the desktop app."); },
   steerNativeAgent: async () => { throw new Error("Native steering requires the desktop app."); },
   answerNativeAgentQuestion: async () => { throw new Error("Native questions require the desktop app."); },
   getModelCapabilities: async () => previewModelCapabilities,
@@ -939,6 +945,16 @@ const previewBridge = {
   testModelConfig: async ({ model }: ModelConfigInput) => ({ ok: true, latencyMs: 184, resolvedModel: model }),
   transcribeSpeech: async () => ({ text: "Voice input transcription preview." }),
   requestMicrophoneAccess: async () => true,
+  listEnvironmentVariables: async () => [],
+  saveEnvironmentVariable: async () => { throw new Error("Environment variables require the desktop app."); },
+  removeEnvironmentVariable: async () => { throw new Error("Environment variables require the desktop app."); },
+  cancelLiteratureSearch: async () => ({ cancelled: false }),
+  searchLiterature: async () => { throw new Error("Literature search requires the desktop app."); },
+  listLiteratureSearchHistory: async () => [],
+  saveLiteratureSearchHistory: async () => { throw new Error("Literature search history requires the desktop app."); },
+  onLiteratureSearchProgress: () => () => {},
+  generateLiteratureOutline: async () => { throw new Error("Literature outline requires the desktop app."); },
+  generateLiteratureReview: async () => { throw new Error("Literature review generation requires the desktop app."); },
   getWebSearchConfig: async () => ({ provider: "brave" as const, hasApiKey: false }),
   saveWebSearchConfig: async () => ({ provider: "brave" as const, hasApiKey: true }),
   readClipboardText: async () => "",
@@ -1221,6 +1237,7 @@ const FileCodeEditor = lazy(() => import("./FileCodeEditor"));
 const LibraryView = lazy(() => import("./LibraryView"));
 const DataChartsView = lazy(() => import("./DataChartsView"));
 const DataAnalysisView = lazy(() => import("./DataAnalysisView"));
+const LiteratureReviewView = lazy(() => import("./LiteratureReviewView"));
 const PaperToSlidesView = lazy(() => import("./PaperToSlidesView"));
 const ImageCreationView = lazy(() => import("./ImageCreationView"));
 const BenchmarkRadarView = lazy(() => import("./BenchmarkRadarView"));
@@ -1372,6 +1389,8 @@ function App() {
   const [imageCreationOpened, setImageCreationOpened] = useState(false);
   const [dataChartsOpened, setDataChartsOpened] = useState(false);
   const [dataAnalysisOpened, setDataAnalysisOpened] = useState(false);
+  const [literatureReviewOpened, setLiteratureReviewOpened] = useState(false);
+  const [dailyOpened, setDailyOpened] = useState(false);
   const [dailyStartMode, setDailyStartMode] = useState<DailyDiscoveryMode | "conference">("latest");
   const [libraryRefreshVersion, setLibraryRefreshVersion] = useState(0);
   const [messages, setMessages] = useState<Message[]>(initialMessages);
@@ -1382,6 +1401,9 @@ function App() {
   const [trajectoryEvents, setTrajectoryEvents] = useState<ResearchEvent[]>([]);
   const [workspace, setWorkspace] = useState(DEFAULT_WORKSPACE);
   const [workspaceReady, setWorkspaceReady] = useState(false);
+  const [workspaceOpenError, setWorkspaceOpenError] = useState("");
+  const [workspaceOpening, setWorkspaceOpening] = useState(false);
+  const workspaceOpeningRef = useRef(false);
   const [projects, setProjects] = useState<ResearchProject[]>([]);
   const [archivedProjects, setArchivedProjects] = useState<ResearchProject[]>([]);
   const [threads, setThreads] = useState<ResearchThread[]>([]);
@@ -1406,6 +1428,7 @@ function App() {
   useEffect(() => { setCommentsOpen(false); }, [activeThreadId]);
   const [runningThreadId, setRunningThreadId] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
+  const pendingActionDecisionRef = useRef<string | null>(null);
   const [workbenchOpen, setWorkbenchOpen] = useState(false);
   const [workbenchPreferences, setWorkbenchPreferences] = useState<WorkbenchTabPreferences>(DEFAULT_WORKBENCH_PREFERENCES);
   const workbenchLayout = workbenchPreferences.layout;
@@ -1444,12 +1467,20 @@ function App() {
   const [selectedStage, setSelectedStage] = useState<ResearchStageId | null>(null);
   const [journeyNotice, setJourneyNotice] = useState("");
   const [researchPanelOpen, setResearchPanelOpen] = useState(readResearchPanelOpen);
+  const [researchGraphAvailable, setResearchGraphAvailable] = useState(false);
+  const [graphVersion, setGraphVersion] = useState(0);
+  const [graphPending, setGraphPending] = useState<Record<string, boolean>>({});
+  const [graphUpdate, setGraphUpdate] = useState<ResearchGraphUpdate | null>(null);
   const [pinnedPathThreadId, setPinnedPathThreadId] = useState<string | null>(readPinnedPathThreadId);
   const [proactiveNotice, setProactiveNotice] = useState("");
   const [reasoningEffort, setReasoningEffort] = useState<ReasoningEffort>(readReasoningEffort);
   const [contextLength, setContextLength] = useState<ContextLength>(readContextLength);
   const [modelCapabilities, setModelCapabilities] = useState<ModelCapabilities>(previewModelCapabilities);
   const [nativeBackend, setNativeBackend] = useState<AgentBackendConfig | null>(null);
+  const [remoteServers, setRemoteServers] = useState<SshServer[]>([]);
+  const [remoteServerId, setRemoteServerId] = useState("");
+  const refreshRemoteServers = useCallback(() => { void desktopBridge.listSshServers().then(setRemoteServers).catch(() => setRemoteServers([])); }, []);
+  useEffect(() => { refreshRemoteServers(); }, [refreshRemoteServers]);
   const [boundHarness, setBoundHarness] = useState<AgentBackendConfig["backend"] | null>(null);
   const selectedHarness = boundHarness || nativeBackend?.backend || "api";
   const selectedNativeBackend = selectedHarness !== "api"
@@ -1495,7 +1526,7 @@ function App() {
   const fileEditorScopesRef = useRef<FileEditorScopes>({});
   const noteValuesRef = useRef<Record<string, string>>({});
   const noteKeyRef = useRef("draft");
-  const pendingAssistantDeltasRef = useRef(new Map<string, { delta: string; threadId?: string }>());
+  const pendingAssistantDeltasRef = useRef(new Map<string, string>());
   const assistantDeltaFrameRef = useRef<number | null>(null);
   const mainWorkspaceRef = useRef<HTMLDivElement | null>(null);
   const conversationScrollPositionsRef = useRef(new Map<string, number>());
@@ -1540,10 +1571,10 @@ function App() {
   // the only one whose prompts can actually be answered. Claiming it here lets
   // the agent veto a write instead of waiting for a prompt nobody can see.
   useEffect(() => {
-    if (!activeThreadId || typeof desktopBridge?.claimApprovals !== "function") return;
-    void desktopBridge.claimApprovals(activeThreadId, true).catch(() => {});
-    return () => { void desktopBridge.claimApprovals(activeThreadId, false).catch(() => {}); };
-  }, [activeThreadId]);
+    if (!workspace || !activeThreadId || typeof desktopBridge?.claimApprovals !== "function") return;
+    void desktopBridge.claimApprovals(activeThreadId, true, workspace).catch(() => {});
+    return () => { void desktopBridge.claimApprovals(activeThreadId, false, workspace).catch(() => {}); };
+  }, [activeThreadId, workspace]);
   useEffect(() => {
     if (!activeProjectId || !authState?.user || typeof desktopBridge?.joinProjectPresence !== "function") {
       setPresenceMembers([]);
@@ -1588,6 +1619,8 @@ function App() {
   const pathProject = projects.find((project) => project.id === (pathThread?.project_id ?? activeProjectId)) ?? null;
   const pathIsPinned = Boolean(pinnedPathThreadId);
   const pathThreadInactive = Boolean(pinnedPathThreadId && !pathThreadIsActive);
+  const pathMode = pathThreadIsActive ? researchMode : (pathThread?.mode ?? researchMode);
+  const showResearchGraph = pathMode === "research" || pathMode === "idea-spark" || pathMode === "experiment-setup";
   const proactive = useProactiveAgent({
     messages,
     thread: activeThread ? { id: activeThread.id, title: activeThread.title, status: activeThread.status } : null,
@@ -2034,10 +2067,11 @@ function App() {
   function activateSidebarEntry(entry: SidebarEntry) {
     if (entry.disabled) return;
     const section = entry.destination.section;
-    if (section === "daily") setDailyStartMode("latest");
+    if (section === "daily") setDailyOpened(true);
     if (section === "image-creation") setImageCreationOpened(true);
     if (section === "data-charts") setDataChartsOpened(true);
     if (section === "data-analysis") setDataAnalysisOpened(true);
+    if (section === "literature-review") setLiteratureReviewOpened(true);
     setMainSection(section);
   }
 
@@ -2113,15 +2147,18 @@ function App() {
     if (!pending.length) return;
     setMessages((current) => {
       let next = current;
-      for (const [streamId, update] of pending) {
+      for (const [turnId, delta] of pending) {
+        // IPC delivery can leave a delta behind the saved response for this turn.
+        if (next.some((message) => message.id === `${turnId}:assistant`)) continue;
+        const streamId = `${turnId}:stream`;
         const index = next.findIndex((message) => message.id === streamId);
         if (index < 0) {
           if (next === current) next = [...current];
-          next.push({ id: streamId, role: "assistant", text: update.delta });
+          next.push({ id: streamId, role: "assistant", text: delta });
           continue;
         }
         if (next === current) next = [...current];
-        next[index] = { ...next[index], text: `${next[index].text}${update.delta}` };
+        next[index] = { ...next[index], text: `${next[index].text}${delta}` };
       }
       return next;
     });
@@ -2129,12 +2166,8 @@ function App() {
 
   function queueAssistantDelta(event: AgentEvent) {
     if (!event.turnId || !event.delta) return;
-    const streamId = `${event.turnId}:stream`;
-    const existing = pendingAssistantDeltasRef.current.get(streamId);
-    pendingAssistantDeltasRef.current.set(streamId, {
-      delta: `${existing?.delta ?? ""}${event.delta}`,
-      threadId: event.threadId,
-    });
+    const existing = pendingAssistantDeltasRef.current.get(event.turnId) ?? "";
+    pendingAssistantDeltasRef.current.set(event.turnId, `${existing}${event.delta}`);
     if (assistantDeltaFrameRef.current === null) {
       assistantDeltaFrameRef.current = requestAnimationFrame(flushAssistantDeltas);
     }
@@ -2173,7 +2206,17 @@ function App() {
   useEffect(() => {
     const unsubscribe = desktopBridge.onAgentEvent((event) => {
       if (event.clientRunId?.startsWith("side-chat:") || event.clientRunId?.startsWith("paper-chat:")) return;
-      if (event.threadId) {
+      const isGraphEvent = event.type === "graph_update" || event.type === "graph_update_pending";
+      if (isGraphEvent && event.threadId && event.turnId) {
+        const key = `${event.threadId}:${event.turnId}`;
+        setGraphPending((current) => {
+          const next = { ...current };
+          if (event.type === "graph_update_pending") next[key] = true;
+          else delete next[key];
+          return next;
+        });
+      }
+      if (event.threadId && !isGraphEvent) {
         setRunningThreadId(event.threadId);
         if (!activeThreadIdRef.current) {
           activeThreadIdRef.current = event.threadId;
@@ -2198,6 +2241,17 @@ function App() {
         }
       }
       if (event.type === "artifact") setArtifactsVersion((current) => current + 1);
+      if (event.experimentRun) setGraphVersion((current) => current + 1);
+      if (event.type === "graph_update") {
+        setGraphVersion((current) => current + 1);
+        if (event.graph) setGraphUpdate(event.graph);
+        if (!event.graph || event.graph.nodeCount + event.graph.edgeCount + (event.graph.superseded?.length ?? 0) === 0) {
+          if (!event.threadId || activeThreadIdRef.current === event.threadId) {
+            setEvents((current) => current.filter((item) => item.title !== event.title));
+          }
+          return;
+        }
+      }
       if (event.type === "workspace_change" && event.changeSet) {
         if (!event.threadId || activeThreadIdRef.current === event.threadId) setChangeSets((current) => upsertChangeSet(current, event.changeSet!));
         return;
@@ -2220,11 +2274,12 @@ function App() {
         setPendingAction((current) => current && (!event.threadId || activeThreadIdRef.current === event.threadId) ? null : current);
       }
       if (event.type === "approval" && event.action && (!event.threadId || activeThreadIdRef.current === event.threadId)) {
-        setPendingAction({ ...event.action, source: "agent" });
+        setPendingAction({ ...event.action, source: "agent", ownerThreadId: event.threadId });
         if (event.threadId) setThreads((current) => current.map((thread) => thread.id === event.threadId ? { ...thread, pending_actions: (thread.pending_actions ?? 0) + 1 } : thread));
       }
-      const state = event.type === "complete" || event.type === "artifact" || event.toolCall?.status === "completed" ? "done" : event.type === "configuration" || event.type === "failed" || event.type === "incomplete" || event.type === "interrupted" || event.toolCall?.status === "failed" || event.toolCall?.status === "interrupted" ? "waiting" : "active";
-      setEvents((current) => [...current.filter((item) => item.title !== event.title), { title: event.title, detail: event.detail, state }]);
+      if (isGraphEvent && event.threadId && activeThreadIdRef.current !== event.threadId) return;
+      const state = event.type === "complete" || event.type === "artifact" || event.type === "graph_update" || event.snapshotCoverage || event.toolCall?.status === "completed" ? "done" : event.type === "configuration" || event.type === "failed" || event.type === "incomplete" || event.type === "interrupted" || event.toolCall?.status === "failed" || event.toolCall?.status === "interrupted" ? "waiting" : "active";
+      setEvents((current) => [...current.filter((item) => item.title !== event.title), { title: event.title, detail: event.detail, snapshotCoverage: event.snapshotCoverage, state }]);
     });
     return unsubscribe;
   }, []);
@@ -2276,34 +2331,39 @@ function App() {
   }, [activeProjectId, agentBusy]);
 
   async function chooseWorkspace() {
-    if (agentBusy || sideBusy || commandLockRef.current) return;
+    if (agentBusy || sideBusy || commandLockRef.current || workspaceOpeningRef.current) return;
     const selected = await desktopBridge.chooseWorkspace();
     if (selected) await loadWorkspace(selected);
   }
 
   async function loadWorkspace(workspacePath: string) {
-    if (agentBusy || sideBusy || commandLockRef.current) return;
+    if (workspaceOpeningRef.current || agentBusy || sideBusy || commandLockRef.current) return;
     if (hasDirtyFileEditorScopes(fileEditorScopesRef.current) && !(await confirm({ title: "Discard unsaved changes?", description: "Artifact changes that have not been saved will be lost.", confirmLabel: "Discard changes", destructive: true }))) return;
-    clearPendingAssistantDeltas();
-    setWorkspaceReady(false);
-    const snapshot = await desktopBridge.openWorkspace(workspacePath);
-    setSideThread(null);
-    setWorkspace(snapshot.workspace);
-    setProjects(snapshot.projects ?? []);
-    setArchivedProjects(snapshot.archivedProjects ?? []);
-    setThreads(snapshot.threads);
-    setArchivedThreads(snapshot.archivedThreads ?? []);
-    setWorkspaces(snapshot.workspaces ?? []);
-    const nextTree = await desktopBridge.listWorkspaceFiles(snapshot.workspace);
-    setFileTree(nextTree);
-    setLoadingDirectories(new Set());
-    openFilesRef.current = [];
-    setOpenFiles([]);
-    setSelectedFilePath(null);
-    setSelectedFile(null);
-    setFileError("");
-    replaceFileEditorScopes({});
-    setWorkspaceReady(true);
+    if (workspaceOpeningRef.current) return;
+    workspaceOpeningRef.current = true;
+    setWorkspaceOpening(true);
+    try {
+      await openDataWorkspace(workspacePath);
+    } finally {
+      workspaceOpeningRef.current = false;
+      setWorkspaceOpening(false);
+    }
+  }
+
+  async function openDataWorkspace(workspacePath: string) {
+    const errorMessage = (error: unknown) => (error instanceof Error ? error.message : String(error))
+      .replace(/^Error invoking remote method '[^']+':\s*/i, "").replace(/^Error:\s*/i, "");
+    const snapshot = await desktopBridge.openWorkspace(workspacePath).catch(error => {
+      setWorkspaceOpenError(errorMessage(error));
+      return null;
+    });
+    if (!snapshot) return;
+    flushSync(() => setWorkspaceReady(false));
+    const readErrors: string[] = [];
+    const nextTree = await desktopBridge.listWorkspaceFiles(snapshot.workspace).catch(error => {
+      readErrors.push(errorMessage(error));
+      return { entries: [], count: 0, truncated: false };
+    });
 
     // Reopen the project the user was last looking at. Falling back to the most
     // recent thread alone lands people in whichever project they last chatted
@@ -2329,34 +2389,48 @@ function App() {
       ? snapshot.threads.find((candidate) => candidate.project_id === restoreProjectId) ?? null
       : snapshot.threads[0] ?? null;
 
-    if (restoreThread) {
-      const thread = await desktopBridge.getResearchThread(restoreThread.id, snapshot.workspace);
-      setMessages(thread.messages.length ? thread.messages : initialMessages);
-      setTrajectoryEvents(thread.events ?? []);
+    const thread = restoreThread ? await desktopBridge.getResearchThread(restoreThread.id, snapshot.workspace).catch(error => {
+      readErrors.push(errorMessage(error));
+      return null;
+    }) : null;
+    flushSync(() => {
+      clearPendingAssistantDeltas();
+      setSideThread(null);
+      setWorkspace(snapshot.workspace);
+      setProjects(snapshot.projects ?? []);
+      setArchivedProjects(snapshot.archivedProjects ?? []);
+      setThreads(snapshot.threads);
+      setArchivedThreads(snapshot.archivedThreads ?? []);
+      setWorkspaces(snapshot.workspaces ?? []);
+      if (snapshot.workspace !== workspace) {
+        setContextItems([]);
+        setComposerRequest(null);
+      }
+      setFileTree(nextTree);
+      setLoadingDirectories(new Set());
+      openFilesRef.current = [];
+      setOpenFiles([]);
+      setSelectedFilePath(null);
+      setSelectedFile(null);
+      setFileError("");
+      replaceFileEditorScopes({});
+      setMessages(thread?.messages.length ? thread.messages : initialMessages);
+      setTrajectoryEvents(thread?.events ?? []);
       setEvents([]);
-      setActiveThreadId(thread.id);
-      setBoundHarness(thread.harness ?? null);
-      setActiveProjectId(thread.project_id);
-      if (thread.workspace_id) setActiveWorkspaceId(thread.workspace_id);
-      setResearchMode(chatModeFromThread(thread.mode, thread.events));
-      setChangeSets(thread.changeSets ?? []);
-    } else {
-      setMessages(initialMessages);
-      setTrajectoryEvents([]);
-      setEvents([]);
-      setActiveThreadId(null);
-      setBoundHarness(null);
-      const nextProjectId = restoreProjectId ?? snapshot.projects?.[0]?.id ?? null;
+      setActiveThreadId(thread?.id ?? null);
+      setBoundHarness(thread?.harness ?? null);
+      const nextProjectId = thread?.project_id ?? restoreProjectId ?? snapshot.projects?.[0]?.id ?? null;
       setActiveProjectId(nextProjectId);
       const nextWorkspace = (snapshot.workspaces ?? []).find((entry) => entry.project_id === nextProjectId && entry.is_default)
         ?? (snapshot.workspaces ?? []).find((entry) => entry.project_id === nextProjectId);
-      setActiveWorkspaceId(nextWorkspace?.id ?? null);
-      setChangeSets([]);
-    }
-
-    const action = snapshot.actions.find((candidate) => candidate.status === "pending");
-    setPendingAction(action ? { ...action, source: "agent" } : null);
-
+      setActiveWorkspaceId(thread?.workspace_id ?? nextWorkspace?.id ?? null);
+      if (thread) setResearchMode(thread.mode === "experiment-setup" ? "experiment-setup" : chatModeFromThread(thread.mode, thread.events));
+      setChangeSets(thread?.changeSets ?? []);
+      const action = snapshot.actions.find((candidate) => candidate.status === "pending");
+      setPendingAction(action ? { ...action, source: "agent", ownerThreadId: thread?.turns.some(turn => turn.task_id === action.task_id) ? thread.id : null } : null);
+      setWorkspaceOpenError(readErrors.join("\n"));
+      setWorkspaceReady(true);
+    });
   }
 
   function replaceFileEditorScopes(next: FileEditorScopes) {
@@ -2465,7 +2539,8 @@ function App() {
   }
 
   function startNewTask(projectId = activeProjectId, workspaceId = activeWorkspaceId) {
-    if (agentBusy) return;
+    if (agentBusy || workspaceOpeningRef.current) return;
+    setRemoteServerId("");
     writeComposerDraft(`new:${projectId ?? "none"}:${executionWorkspace}`, null);
     setMainSection("chat");
     clearPendingAssistantDeltas();
@@ -2546,10 +2621,13 @@ function App() {
   }
 
   async function openResearchThread(threadSummary: ResearchThread) {
+    if (workspaceOpeningRef.current) return;
+    setRemoteServerId("");
     if (sideThread?.id === threadSummary.id) {
       if (sideBusy) return;
       setSideThread(null);
     }
+    if (activeThreadIdRef.current !== threadSummary.id) setPendingAction(null);
     clearPendingAssistantDeltas();
     setMainSection("chat");
     activeThreadIdRef.current = threadSummary.id;
@@ -2571,7 +2649,7 @@ function App() {
       setMessages(thread.messages.length ? thread.messages : initialMessages);
       setTrajectoryEvents(thread.events ?? []);
       setEvents([]);
-      setResearchMode(chatModeFromThread(thread.mode, thread.events));
+      setResearchMode(thread.mode === "experiment-setup" ? "experiment-setup" : chatModeFromThread(thread.mode, thread.events));
       setChangeSets(thread.changeSets ?? []);
       const action = thread.turns.map((turn) => turn.task_id).filter(Boolean);
       setPendingAction((current) => current && action.includes(current.task_id) ? current : null);
@@ -2859,7 +2937,7 @@ function App() {
     const question = draft.trim();
     const submittedContext = submittedContextOverride ?? contextItems;
     const hasPastedImage = submittedContext.some((item) => item.type === "image");
-    if ((!question && !hasPastedImage) || agentBusy || commandLockRef.current) return false;
+    if ((!question && !hasPastedImage) || agentBusy || commandLockRef.current || workspaceOpeningRef.current) return false;
     const requestPrompt = question || "Please analyze the attached image.";
     const submittedThreadId = forceNew ? null : activeThreadIdRef.current;
 
@@ -2876,7 +2954,7 @@ function App() {
     setEvents(selectedNativeBackend ? [] : [{ title: "Evidence synthesis", detail: "Reading workspace and knowledge context", state: "active" }]);
 
     try {
-      const result = await desktopBridge.runAgent({ prompt: requestPrompt, workspace: executionWorkspace, threadId: forceNew ? undefined : activeThreadId || undefined, projectId: activeProjectId || undefined, workspaceId: activeWorkspace?.id, visibility: threadVisibility, mode: requestedMode, researchSkill, mineruToken, reasoningEffort: requestedReasoningEffort, contextLength: requestedContextLength, contextItems: submittedContext, capabilities: { write: "ask", command: "ask" }, origin: "research", backend: backendOverride || selectedHarness });
+      const result = await desktopBridge.runAgent({ prompt: requestPrompt, workspace: executionWorkspace, threadId: forceNew ? undefined : activeThreadId || undefined, projectId: activeProjectId || undefined, workspaceId: activeWorkspace?.id, visibility: threadVisibility, mode: requestedMode, researchSkill, mineruToken, reasoningEffort: requestedReasoningEffort, contextLength: requestedContextLength, contextItems: submittedContext, capabilities: { write: "ask", command: "ask" }, origin: "research", backend: backendOverride || selectedHarness, ...(remoteServerId && !researchSkill && (backendOverride || selectedHarness) === "codex" && ["research", "experiment-setup"].includes(requestedMode) ? { remoteServerId } : {}) });
       setThreads((current) => [result.thread, ...current.filter((thread) => thread.id !== result.threadId)]);
       setNativeStream((current) => current.threadId === result.threadId ? { threadId: "", events: [] } : current);
       setNativeQuestions((current) => current.filter((item) => item.threadId !== result.threadId));
@@ -2905,7 +2983,7 @@ function App() {
         setChangeSets(result.thread.changeSets ?? []);
         setEvents((current) => current.map((event) => event.title === "Evidence synthesis" ? { ...event, detail: "Turn saved to this research session", state: "done" } : event));
         const proposedAction = result.actions.find((action) => action.status === "pending");
-        if (proposedAction) setPendingAction({ ...proposedAction, source: "agent" });
+        if (proposedAction) setPendingAction({ ...proposedAction, source: "agent", ownerThreadId: result.threadId });
       }
       setContextItems((current) => current.filter((item) => !submittedContext.some((submitted) => submitted.id === item.id)));
       return true;
@@ -3205,12 +3283,13 @@ function App() {
     setThreads((current) => current.map((thread) => thread.id === threadId ? { ...thread, pending_actions: Math.max(0, (thread.pending_actions ?? 0) - 1) } : thread));
   }
 
-  async function approvePendingAction() {
+  async function approvePendingAction(expectedActionId?: string) {
     const action = pendingAction;
-    if (!action) return;
+    if (!action || (expectedActionId && action.id !== expectedActionId) || (action.ownerThreadId && activeThreadIdRef.current !== action.ownerThreadId) || pendingActionDecisionRef.current === action.id) return;
+    pendingActionDecisionRef.current = action.id;
     try {
       if (action.source === "agent") await desktopBridge.approveAgentAction(action.id);
-      setPendingAction(null);
+      setPendingAction(current => current?.id === action.id ? null : current);
       clearThreadPendingAction();
       if (action.kind === "command" && action.payload.command && !action.payload.externalAgent && !action.payload.managedByAgent) {
         await runCommand(action.payload.command, action.id);
@@ -3220,7 +3299,7 @@ function App() {
     } catch (error) {
       if (String(error).includes("file changed while awaiting approval")) { setPendingAction(null); clearThreadPendingAction(); }
       setMessages((current) => [...current, { id: crypto.randomUUID(), role: "assistant", text: `Could not approve this action: ${String(error)}` }]);
-    }
+    } finally { if (pendingActionDecisionRef.current === action.id) pendingActionDecisionRef.current = null; }
   }
 
   function reviewPendingAction() {
@@ -3229,12 +3308,15 @@ function App() {
     });
   }
 
-  async function rejectPendingAction() {
+  async function rejectPendingAction(expectedActionId?: string) {
     const action = pendingAction;
-    if (!action) return;
-    if (action.source === "agent") await desktopBridge.rejectAgentAction(action.id);
-    setPendingAction(null);
-    clearThreadPendingAction();
+    if (!action || (expectedActionId && action.id !== expectedActionId) || (action.ownerThreadId && activeThreadIdRef.current !== action.ownerThreadId) || pendingActionDecisionRef.current === action.id) return;
+    pendingActionDecisionRef.current = action.id;
+    try {
+      if (action.source === "agent") await desktopBridge.rejectAgentAction(action.id);
+      setPendingAction(current => current?.id === action.id ? null : current);
+      clearThreadPendingAction();
+    } finally { if (pendingActionDecisionRef.current === action.id) pendingActionDecisionRef.current = null; }
   }
 
   function openWelcomeWorkflow(action: ResearchWelcomeAction) {
@@ -3242,11 +3324,12 @@ function App() {
       setResearchMode("idea-spark");
       return;
     }
-    if (action === "replication") {
-      setMainSection("reproduce");
+    if (action === "writing") {
+      setMainSection("writing");
       return;
     }
     if (action === "literature") {
+      setDailyOpened(true);
       setDailyStartMode("latest");
       setMainSection("daily");
       return;
@@ -3419,14 +3502,15 @@ function App() {
   // comes from the module registry, not from scattered conditions.
   const sidebarModuleContent: Record<string, ReactNode> = {
     library: <LibraryView key={workspace} bridge={desktopBridge} mode="library" active={mainSection === "library"} workspace={workspace} projectId={activeProjectId} libraryRefreshVersion={libraryRefreshVersion} onInternalReviewThreadsDeleted={(threadIds) => setThreads((current) => current.filter((thread) => !threadIds.includes(thread.id)))} onReproduceOpened={(id) => { setReproduceId(id); setMainSection("reproduce"); }} onOpenProject={(id) => setActiveProjectId(id)} />,
-    daily: <LibraryView key={dailyStartMode} bridge={desktopBridge} mode="daily" active={mainSection === "daily"} initialDailyMode={dailyStartMode} workspace={workspace} projectId={activeProjectId} onLibraryImported={() => setLibraryRefreshVersion((version) => version + 1)} onInternalReviewThreadsDeleted={(threadIds) => setThreads((current) => current.filter((thread) => !threadIds.includes(thread.id)))} onReproduceOpened={(id) => { setReproduceId(id); setMainSection("reproduce"); }} onOpenProject={(id) => setActiveProjectId(id)} />,
+    daily: <LibraryView key={`${workspace}:${activeProjectId || ""}:${dailyStartMode}`} bridge={desktopBridge} mode="daily" active={mainSection === "daily"} initialDailyMode={dailyStartMode} workspace={workspace} projectId={activeProjectId} onLibraryImported={() => setLibraryRefreshVersion((version) => version + 1)} onInternalReviewThreadsDeleted={(threadIds) => setThreads((current) => current.filter((thread) => !threadIds.includes(thread.id)))} onReproduceOpened={(id) => { setReproduceId(id); setMainSection("reproduce"); }} onOpenProject={(id) => setActiveProjectId(id)} />,
     "benchmark-radar": <BenchmarkRadarView />,
     news: <NewsView bridge={desktopBridge} projectId={activeProjectId} active={mainSection === "news"} onSendToChat={sendNoteToChat} />,
     "paper-review": <PaperReviewView bridge={desktopBridge} workspace={executionWorkspace} projectId={activeProjectId} active={mainSection === "paper-review"} />,
     extensions: <ExtensionsView bridge={desktopBridge} workspace={executionWorkspace} tab={extensionsTab} onTabChange={setExtensionsTab} attachedIds={new Set(contextItems.map((item) => item.id))} onAttach={(item) => setContextItems((current) => current.some((candidate) => candidate.id === item.id) ? current : [...current, item].slice(0, 12))} />,
     reproduce: <ReproduceView bridge={desktopBridge} selectedId={reproduceId} onSelect={setReproduceId} />,
-    "image-creation": <ImageCreationView active={mainSection === "image-creation"} onBrowseProceedings={() => { setDailyStartMode("conference"); setMainSection("daily"); }} />,
+    "image-creation": <ImageCreationView active={mainSection === "image-creation"} onBrowseProceedings={() => { setDailyOpened(true); setDailyStartMode("conference"); setMainSection("daily"); }} />,
     "data-charts": <DataChartsView active={mainSection === "data-charts"} />,
+    "literature-review": <LiteratureReviewView key={`${workspace}:${activeProjectId || ""}`} bridge={desktopBridge} workspace={executionWorkspace} projectId={activeProjectId || ""} onLibraryImported={() => setLibraryRefreshVersion((version) => version + 1)} />,
     "data-analysis": <DataAnalysisView onAskAI={(text) => sendNoteToChat(text, "replace")} />,
     "paper-to-slides": <PaperToSlidesView bridge={desktopBridge} workspace={executionWorkspace} busy={agentBusy} onStart={async ({ pdfPath, backend, language, length, instructions, mineruToken }) => {
       const staged = await desktopBridge.stagePaperToSlidesPdf(executionWorkspace, pdfPath);
@@ -3440,7 +3524,7 @@ function App() {
   for (const entry of pluginEntries) {
     sidebarModuleContent[entry.id] = <PluginModuleView key={entry.id} entry={entry} />;
   }
-  const sidebarModuleOpen: Partial<Record<string, boolean>> = { "image-creation": imageCreationOpened, "data-charts": dataChartsOpened, "data-analysis": dataAnalysisOpened };
+  const sidebarModuleOpen: Partial<Record<string, boolean>> = { daily: dailyOpened || mainSection === "daily", "image-creation": imageCreationOpened, "data-charts": dataChartsOpened, "data-analysis": dataAnalysisOpened, "literature-review": literatureReviewOpened };
 
   return (
     <main className={`codex-shell theme-${theme}${sidebarHidden ? " sidebar-hidden" : ""}`} style={{ "--sidebar-width": `${sidebarWidth}px` } as React.CSSProperties}>
@@ -3540,17 +3624,15 @@ function App() {
               {presenceMembers.slice(0, 4).map((member) => <span className="presence-avatar" key={member.key} title={member.displayName}>{member.displayName.slice(0, 1).toUpperCase()}</span>)}
               {presenceMembers.length > 4 && <span className="presence-avatar more">+{presenceMembers.length - 4}</span>}
             </div>}
-            {activeThreadId && sessionTools.showSnapshots && <button className="quiet-icon-button" onClick={() => void openThreadShare()} title={t("Share session snapshot")} aria-label={t("Share session snapshot")}><Share2 size={15} /></button>}
-            {activeThreadId && sessionTools.showComments && <button className={commentsOpen ? "quiet-icon-button active" : "quiet-icon-button"} onClick={() => { setMainSection("chat"); setCommentsOpen((open) => !open); }} aria-pressed={commentsOpen} title={t("Session comments")} aria-label={t("Session comments")}><MessageCircleReply size={15} /></button>}
-            <button
+            {mainSection === "chat" && researchGraphAvailable && <button
               className={researchPanelOpen ? "quiet-icon-button dock-toggle open" : "quiet-icon-button dock-toggle"}
-              onClick={() => setResearchPanelOpen((open) => !open)}
+              onClick={() => { if (!activeThreadId && !pathIsPinned) setResearchMode("research"); setResearchPanelOpen((open) => !open); }}
               title={researchPanelOpen ? t("Hide Research path") : t("Show Research path")}
               aria-label={researchPanelOpen ? t("Hide Research path") : t("Show Research path")}
               aria-pressed={researchPanelOpen}
-            >
-              <Route size={16} />
-            </button>
+            ><Route size={16} /></button>}
+            {activeThreadId && sessionTools.showSnapshots && <button className="quiet-icon-button" onClick={() => void openThreadShare()} title={t("Share session snapshot")} aria-label={t("Share session snapshot")}><Share2 size={15} /></button>}
+            {activeThreadId && sessionTools.showComments && <button className={commentsOpen ? "quiet-icon-button active" : "quiet-icon-button"} onClick={() => { setMainSection("chat"); setCommentsOpen((open) => !open); }} aria-pressed={commentsOpen} title={t("Session comments")} aria-label={t("Session comments")}><MessageCircleReply size={15} /></button>}
             <button
               className={proactive.open ? "quiet-icon-button dock-toggle open" : "quiet-icon-button dock-toggle"}
               onClick={toggleProactiveDock}
@@ -3580,6 +3662,11 @@ function App() {
               events={events}
               trajectoryEvents={combinedTrajectoryEvents}
               nativeBackend={selectedNativeBackend}
+              remoteServers={remoteServers}
+              remoteServerId={remoteServerId}
+              onRemoteServerChange={setRemoteServerId}
+              onRefreshRemoteServers={refreshRemoteServers}
+              onOpenSshSettings={() => { setSettingsSection("ssh"); setSettingsOpen(true); }}
               harnessBound={Boolean(boundHarness)}
               onHarnessChange={async (backend) => {
                 if (agentBusy) throw new Error(t("Stop the running turn before using this command."));
@@ -3608,14 +3695,20 @@ function App() {
               canInterrupt={Boolean(runningThreadId) && !interrupting}
               researchMode={researchMode}
               onResearchMode={setResearchMode}
+              researchGraphOpen={researchPanelOpen}
+              onResearchGraphAvailability={setResearchGraphAvailable}
+              onToggleResearchGraph={(newSession) => {
+                if (newSession && !pathIsPinned) setResearchMode("research");
+                setResearchPanelOpen((open) => !open);
+              }}
               reasoningEffort={reasoningEffort}
               contextLength={contextLength}
               modelCapabilities={modelCapabilities}
               contextItems={contextItems}
               onAddContext={(added) => setContextItems((current) => [...current, ...added.filter((item) => !current.some((candidate) => candidate.id === item.id))].slice(0, 12))}
               onRemoveContext={(id) => setContextItems((current) => current.filter((item) => item.id !== id))}
-              onApprove={() => void approvePendingAction()}
-              onReject={() => void rejectPendingAction()}
+              onApprove={(id) => void approvePendingAction(id)}
+              onReject={(id) => void rejectPendingAction(id)}
               onOpenFile={openChangedFile}
               showWelcome={activeThreadId === null && messages.length === 1 && messages[0]?.id === "welcome" && !agentBusy}
               onWelcomeAction={openWelcomeWorkflow}
@@ -3661,7 +3754,24 @@ function App() {
             onOpenSettings={() => { setSettingsSection("proactive"); setSettingsOpen(true); }}
             onCollapse={() => proactive.setOpen(false)}
           />}
-          research={<ResearchPathPanel
+          research={showResearchGraph ? <ResearchGraphPanel
+            projectId={pathProject?.id ?? activeProjectId ?? null}
+            threadId={pathThread?.id ?? null}
+            projectName={pathProject?.name ?? t("No project")}
+            threadTitle={pathThread?.title ?? t("No active session")}
+            hasThread={Boolean(pathThread)}
+            mode={pathMode}
+            workspace={workspace}
+            extractionPending={Boolean(pathThread && Object.keys(graphPending).some((key) => key.startsWith(`${pathThread.id}:`)))}
+            turnRunning={Boolean(pathThreadIsActive && agentBusy)}
+            version={graphVersion}
+            update={graphUpdate}
+            pinned={pathIsPinned}
+            threadInactive={pathThreadInactive}
+            onTogglePin={togglePathPin}
+            onOpenThread={openPathThread}
+            onCollapse={() => setResearchPanelOpen(false)}
+          /> : <ResearchPathPanel
             stages={researchStages}
             activeStage={pathStage}
             acceptedStages={pathAcceptedStages}
@@ -3802,6 +3912,11 @@ function App() {
         onClose={() => setModal(null)}
         onCreateFile={() => void createFile()}
       />
+      <Dialog open={Boolean(workspaceOpenError)} onClose={() => setWorkspaceOpenError("")} role="alertdialog" size="compact" ariaLabelledBy="workspace-open-error-heading" ariaDescribedBy="workspace-open-error-message">
+        <header className="app-dialog-header"><h2 id="workspace-open-error-heading">{t("Unable to open workspace")}</h2></header>
+        <div className="app-dialog-body" id="workspace-open-error-message">{t(workspaceOpenError)}</div>
+        <footer className="app-dialog-footer"><button className="primary-button" onClick={() => setWorkspaceOpenError("")}>{t("Close")}</button></footer>
+      </Dialog>
       <TerminalSettingsModal open={terminalSettingsOpen && terminalSettingsMode === "onboarding"} mode="onboarding" settings={terminalSettings} workspace={executionWorkspace} onClose={closeTerminalSettings} onSave={saveTerminalSettings} onOpenExternal={openExternalTerminal} />
       <AuthModal
         open={authModalOpen}
@@ -3831,6 +3946,7 @@ function App() {
         onModelSaved={setActiveModelConfig}
         executionPreferences={{ reasoningEffort, contextLength, capabilities: modelCapabilities, onReasoningEffort: setReasoningEffort, onContextLength: setContextLength }}
         workspace={workspace}
+        modelWorkspace={executionWorkspace}
         workspaceReady={workspaceReady}
         agentBusy={agentBusy}
         onChooseWorkspace={() => void chooseWorkspace()}
@@ -3907,6 +4023,9 @@ function App() {
       />
       <CommandPalette open={paletteOpen} commands={paletteCommands} onClose={() => setPaletteOpen(false)} />
       <ProjectRemoveModal project={projectToRemove} onClose={() => setProjectToRemove(null)} onRemove={() => projectToRemove && void removeProject(projectToRemove)} />
+      <Dialog open={workspaceOpening} blocking size="compact" className="workspace-opening-dialog" ariaLabel={t("Opening workspace")}>
+        <div role="status"><LoaderCircle className="spin" size={16} />{t("Opening workspace")}</div>
+      </Dialog>
     </main>
   );
 }
@@ -3925,8 +4044,8 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
   changeSets: WorkspaceChangeSet[];
   welcomeVisible: boolean;
   onWelcomeAction: (action: ResearchWelcomeAction) => void;
-  onApprove: () => void;
-  onReject: () => void;
+  onApprove: (expectedActionId?: string) => void;
+  onReject: (expectedActionId?: string) => void;
   onOpenFile: (filePath: string) => void;
   initialScrollTop: number | null;
   onScrollTop: (top: number) => void;
@@ -3935,23 +4054,13 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
   const [autoRunIn, setAutoRunIn] = useState<number | null>(null);
   const approveRef = useRef(onApprove);
   useEffect(() => { approveRef.current = onApprove; }, [onApprove]);
-  const autoRunId = pendingAction?.kind === "command" && pendingAction.payload.managedByAgent ? pendingAction.id : null;
+  const autoRunId = pendingAction?.kind === "command" && (pendingAction.payload.managedByAgent || (agentBusy && pendingAction.ownerThreadId && pendingAction.payload.remoteOperation === "ssh_remote_exec")) ? pendingAction.id : null;
   useEffect(() => {
     if (!autoRunId) {
       setAutoRunIn(null);
       return;
     }
-    const started = Date.now();
-    setAutoRunIn(10);
-    const timer = window.setInterval(() => {
-      const remaining = Math.max(0, 10 - Math.floor((Date.now() - started) / 1000));
-      setAutoRunIn(remaining);
-      if (remaining <= 0) {
-        window.clearInterval(timer);
-        approveRef.current();
-      }
-    }, 200);
-    return () => window.clearInterval(timer);
+    return startApprovalCountdown(setAutoRunIn, () => approveRef.current(autoRunId));
   }, [autoRunId]);
   const [historyStart, setHistoryStart] = useState(() => Math.max(0, messages.length - INITIAL_VISIBLE_MESSAGE_COUNT));
   const historyExpandedRef = useRef(false);
@@ -3975,14 +4084,20 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
   });
   const hasCommentaryAtTail = lastNativeActivity?.kind === "commentary" && Boolean(lastNativeActivity.output || lastNativeActivity.detail);
   const thinking = agentBusy && !hasStreamingText && !hasRunningNativeTool && !hasCommentaryAtTail && !pendingAction;
-  const nativeEventsByTurn = useMemo(() => {
-    const grouped = new Map<string, ResearchEvent[]>();
+  const { nativeEventsByTurn, nativeBusyTurns } = useMemo(() => {
+    const activity = new Map<string, ResearchEvent[]>();
+    const busy = new Map<string, NativeSessionBackend>();
     for (const event of trajectoryEvents) {
+      if (event.type === "native_session_busy") {
+        const backend = (event.payload as { backend?: unknown } | null)?.backend;
+        if (backend === "codex" || backend === "claude" || backend === "opencode") busy.set(event.turn_id, backend);
+        continue;
+      }
       if (!event.type.startsWith("native_")) continue;
-      const turn = grouped.get(event.turn_id) ?? [];
-      turn.push(event); grouped.set(event.turn_id, turn);
+      const turn = activity.get(event.turn_id) ?? [];
+      turn.push(event); activity.set(event.turn_id, turn);
     }
-    return grouped;
+    return { nativeEventsByTurn: activity, nativeBusyTurns: busy };
   }, [trajectoryEvents]);
   const changeSetsByTurn = useMemo(() => {
     const grouped = new Map<string, WorkspaceChangeSet[]>();
@@ -4059,7 +4174,7 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
           Show {Math.min(HISTORY_MESSAGE_PAGE_SIZE, historyStart)} earlier {Math.min(HISTORY_MESSAGE_PAGE_SIZE, historyStart) === 1 ? "message" : "messages"}
         </button>}
         {visibleMessages.slice(0, lastUserIndex + 1).map((message, index) => <div key={message.id}>
-          <ConversationMessage message={message} streaming={agentBusy && message.id.endsWith(":stream")} />
+          <ConversationMessage message={message} streaming={agentBusy && message.id.endsWith(":stream")} busyBackend={message.turn_id ? nativeBusyTurns.get(message.turn_id) : undefined} />
           {message.role === "user" && index < lastUserIndex && message.turn_id && nativeEventsByTurn.has(message.turn_id) && <NativeAgentPanel events={nativeEventsByTurn.get(message.turn_id)!} busy={false} />}
           {message.turn_id && message.turn_id !== currentTurnId && lastTurnMessageIndex.get(message.turn_id) === index && (changeSetsByTurn.get(message.turn_id) ?? []).map((changeSet) => <WorkspaceChangesCard key={changeSet.id} changeSet={changeSet} onOpenFile={onOpenFile} />)}
         </div>)}
@@ -4067,7 +4182,7 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
         {visibleMessages.slice(lastUserIndex + 1).map((message, offset) => {
           const index = lastUserIndex + 1 + offset;
           return <div key={message.id}>
-            <ConversationMessage message={message} streaming={agentBusy && message.id.endsWith(":stream")} />
+            <ConversationMessage message={message} streaming={agentBusy && message.id.endsWith(":stream")} busyBackend={message.turn_id ? nativeBusyTurns.get(message.turn_id) : undefined} />
             {message.turn_id && message.turn_id !== currentTurnId && lastTurnMessageIndex.get(message.turn_id) === index && (changeSetsByTurn.get(message.turn_id) ?? []).map((changeSet) => <WorkspaceChangesCard key={changeSet.id} changeSet={changeSet} onOpenFile={onOpenFile} />)}
           </div>;
         })}
@@ -4085,9 +4200,9 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
               <strong>{t("After")}</strong><pre>{pendingAction.payload.editPreview.after}</pre>
             </details>}
             <div className="approval-actions">
-              {autoRunIn !== null && <span className="approval-countdown">{t("Auto-run in {seconds}s", { seconds: autoRunIn })}</span>}
-              <button className="approval-dismiss" onClick={onReject}>Dismiss</button>
-              <button className="approval-apply" onClick={onApprove}>{pendingAction.kind === "write" ? "Apply" : "Run"}</button>
+              {autoRunId && autoRunIn !== null && <span className="approval-countdown">{t("Auto-run in {seconds}s", { seconds: autoRunIn })}</span>}
+              <button className="approval-dismiss" onClick={() => onReject(pendingAction.id)}>Dismiss</button>
+              <button className="approval-apply" onClick={() => onApprove(pendingAction.id)}>{pendingAction.kind === "write" ? "Apply" : "Run"}</button>
             </div>
           </div>
         </section>}
@@ -4105,7 +4220,7 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
   </div>;
 });
 
-function ConversationView({ messages, events, trajectoryEvents, nativeBackend, harnessBound, onHarnessChange, nativeQuestions, onNativeAnswer, onNativeSteer, workspace, projectId, agentBusy, interrupting, canInterrupt, pendingAction, changeSets, researchMode, reasoningEffort, contextLength, modelCapabilities, contextItems, onOpenWorkspaceSettings, onCommand, contextSummary, compactedThroughTurnId, onSubmit, onInterrupt, onResearchMode, onAddContext, onRemoveContext, onApprove, onReject, onOpenFile, showWelcome, onWelcomeAction, composerRequest, draftKey, currentFile, currentSelection, onComposerRequestApplied, initialScrollTop, onScrollTop, commentScope, addingComment, commentsShowResolved, onExitComments }: {
+function ConversationView({ messages, events, trajectoryEvents, remoteServers, remoteServerId, onRemoteServerChange, onRefreshRemoteServers, onOpenSshSettings, nativeBackend, harnessBound, onHarnessChange, nativeQuestions, onNativeAnswer, onNativeSteer, workspace, projectId, agentBusy, interrupting, canInterrupt, pendingAction, changeSets, researchMode, researchGraphOpen, onToggleResearchGraph, onResearchGraphAvailability, reasoningEffort, contextLength, modelCapabilities, contextItems, onOpenWorkspaceSettings, onCommand, contextSummary, compactedThroughTurnId, onSubmit, onInterrupt, onResearchMode, onAddContext, onRemoveContext, onApprove, onReject, onOpenFile, showWelcome, onWelcomeAction, composerRequest, draftKey, currentFile, currentSelection, onComposerRequestApplied, initialScrollTop, onScrollTop, commentScope, addingComment, commentsShowResolved, onExitComments }: {
   commentScope: SessionCommentsScope | null;
   addingComment: boolean;
   commentsShowResolved: boolean;
@@ -4114,6 +4229,11 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
   events: TimelineEvent[];
   trajectoryEvents: ResearchEvent[];
   nativeBackend: AgentBackendConfig | null;
+  remoteServers: SshServer[];
+  remoteServerId: string;
+  onRemoteServerChange: (id: string) => void;
+  onRefreshRemoteServers: () => void;
+  onOpenSshSettings: () => void;
   harnessBound: boolean;
   onHarnessChange: (backend: AgentBackendConfig["backend"]) => Promise<void>;
   nativeQuestions: NativeAgentQuestion[];
@@ -4127,6 +4247,9 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
   pendingAction: PendingAction | null;
   changeSets: WorkspaceChangeSet[];
   researchMode: ResearchMode;
+  researchGraphOpen: boolean;
+  onToggleResearchGraph: (newSession: boolean) => void;
+  onResearchGraphAvailability: (available: boolean) => void;
   reasoningEffort: ReasoningEffort;
   contextLength: ContextLength;
   modelCapabilities: ModelCapabilities;
@@ -4140,8 +4263,8 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
   onResearchMode: (mode: ResearchMode) => void;
   onAddContext: (items: ContextAttachment[]) => void;
   onRemoveContext: (id: string) => void;
-  onApprove: () => void;
-  onReject: () => void;
+  onApprove: (expectedActionId?: string) => void;
+  onReject: (expectedActionId?: string) => void;
   onOpenFile: (filePath: string) => void;
   showWelcome: boolean;
   onWelcomeAction: (action: ResearchWelcomeAction) => void;
@@ -4157,6 +4280,7 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
   const activeMode = researchModes.find((mode) => mode.id === researchMode) ?? researchModes[0];
   const shortcutModifier = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform) ? "⌘" : "Ctrl+";
   const [contextUsageOpen, setContextUsageOpen] = useState(false);
+  const [sshWorkspaceOpen, setSshWorkspaceOpen] = useState(false);
   const [draggingFiles, setDraggingFiles] = useState(false);
   const [composerMenu, setComposerMenu] = useState<{ x: number; y: number } | null>(null);
   const [composerError, setComposerError] = useState("");
@@ -4176,6 +4300,7 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
   const [contextPickerRequest, setContextPickerRequest] = useState(0);
   const previousBusyRef = useRef(agentBusy);
   const contextUsageTriggerRef = useRef<HTMLButtonElement>(null);
+  const sshWorkspaceTriggerRef = useRef<HTMLButtonElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const composerBoxRef = useRef<HTMLDivElement>(null);
   const appliedComposerRequestRef = useRef<string | null>(null);
@@ -4183,8 +4308,8 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
   // handlers stable without retaining stale closures from the parent render.
   const historyHandlersRef = useRef({ onApprove, onReject, onOpenFile, onWelcomeAction });
   historyHandlersRef.current = { onApprove, onReject, onOpenFile, onWelcomeAction };
-  const approveHistoryAction = useCallback(() => historyHandlersRef.current.onApprove(), []);
-  const rejectHistoryAction = useCallback(() => historyHandlersRef.current.onReject(), []);
+  const approveHistoryAction = useCallback((id?: string) => historyHandlersRef.current.onApprove(id), []);
+  const rejectHistoryAction = useCallback((id?: string) => historyHandlersRef.current.onReject(id), []);
   const openHistoryFile = useCallback((path: string) => historyHandlersRef.current.onOpenFile(path), []);
   const [welcomeDismissed, setWelcomeDismissed] = useState(false);
   const [newChatMode, setNewChatMode] = useState<NewChatMode>(storedDraftRef.current?.newChatMode ?? "standard");
@@ -4250,6 +4375,12 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
   }, [prompt]);
 
   const predictedMode: NewChatMode = showWelcome ? newChatMode : chatModeFromThread(researchMode, trajectoryEvents);
+  useEffect(() => {
+    if (nativeBackend?.backend !== "codex" || (predictedMode !== "research" && (showWelcome || researchMode !== "experiment-setup"))) onRemoteServerChange("");
+  }, [nativeBackend?.backend, predictedMode, researchMode, showWelcome, onRemoteServerChange]);
+  useEffect(() => {
+    onResearchGraphAvailability(predictedMode === "research" || (!showWelcome && researchMode === "experiment-setup"));
+  }, [onResearchGraphAvailability, predictedMode, researchMode, showWelcome]);
   useEffect(() => {
     if (showWelcome) setPendingResearchSkill(null);
   }, [showWelcome]);
@@ -4545,6 +4676,7 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
       : undefined;
     if (command) { await runSlashCommand(command); return; }
     if (pendingResearchSkill && !prompt.trim()) { setComposerError(t("Add a research direction for Idea Spark.")); return; }
+    if (pendingResearchSkill && remoteServerId) { setComposerError(t("Switch to Local before using Idea Spark.")); return; }
     if (!prompt.trim() && !contextItems.some((item) => item.type === "image")) return;
     if (agentBusy) {
       if (nativeBackend) {
@@ -4563,7 +4695,11 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
     }
     const draft = prompt;
     const submittedContext = contextItems;
-    const submittedMode: ResearchMode = pendingResearchSkill ? "research" : predictedMode;
+    const submittedMode: ResearchMode = pendingResearchSkill
+      ? "research"
+      : researchMode === "experiment-setup"
+        ? "experiment-setup"
+        : predictedMode;
     rememberPrompt(draft);
     setPrompt("");
     setComposerError("");
@@ -4610,9 +4746,10 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
 
     <div className="conversation-composer-wrap" data-ui="research-composer">
       {showWelcome && <NewChatModePicker value={newChatMode} onChange={(mode) => {
-        setNewChatMode(mode);
-        setPrompt((current) => draftForNewChatMode(current, mode));
-      }} />}
+          if (mode !== "research" && researchGraphOpen) onToggleResearchGraph(false);
+          setNewChatMode(mode);
+          setPrompt((current) => draftForNewChatMode(current, mode));
+        }} />}
       {nativeQuestions.length > 0 && <div className="native-question-stack">{nativeQuestions.map((question) => <NativeQuestionCard key={question.id} question={question} onAnswer={onNativeAnswer} />)}</div>}
       <div
         ref={composerBoxRef}
@@ -4722,6 +4859,20 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
           >
             <Folder size={13} aria-hidden="true" /><span>{workspacePathName(workspace, t("No workspace"))}</span>
           </button>
+          {nativeBackend?.backend === "codex" && (predictedMode === "research" || (!showWelcome && researchMode === "experiment-setup")) && <>
+            <button ref={sshWorkspaceTriggerRef} type="button" className={`composer-tool ssh-workspace-trigger${remoteServerId ? " selected" : ""}`} disabled={agentBusy} aria-label={remoteServerId ? `${t("SSH workspace")}: ${remoteServers.find(server => server.id === remoteServerId)?.name || remoteServerId}` : t("SSH workspace")} aria-haspopup="menu" aria-expanded={sshWorkspaceOpen} title={remoteServerId ? `${t("SSH workspace")}: ${remoteServers.find(server => server.id === remoteServerId)?.name || remoteServerId}` : t("SSH workspace")} onClick={() => { onRefreshRemoteServers(); setSshWorkspaceOpen(open => !open); }}>
+              <Server size={15} aria-hidden="true" />
+              {remoteServerId && <span className="ssh-workspace-indicator" aria-hidden="true" />}
+            </button>
+            <MenuSurface open={sshWorkspaceOpen} onClose={() => setSshWorkspaceOpen(false)} anchorRef={sshWorkspaceTriggerRef} placement="top-start" width={300} ariaLabel={t("SSH workspace")}>
+              <MenuLabel>{t("SSH workspace")}</MenuLabel>
+              <MenuItem icon={<Laptop size={15} />} checked={!remoteServerId} onClick={() => { onRemoteServerChange(""); setSshWorkspaceOpen(false); }}>{t("Local")}</MenuItem>
+              {remoteServers.map(server => <MenuItem key={server.id} icon={<Server size={15} />} checked={server.id === remoteServerId} className="ssh-workspace-menu-item" onClick={() => { onRemoteServerChange(server.id); setSshWorkspaceOpen(false); }}><span>{server.name}</span><small>{server.user}@{server.host}:{server.port} · {server.workspace}</small></MenuItem>)}
+              {remoteServerId && (nativeBackend.permissionMode === "read-only" || nativeBackend.permissionMode === "plan") && <MenuLabel>{t("Choose an approval-enabled Codex permission mode in Models before using SSH.")}</MenuLabel>}
+              <MenuDivider />
+              <MenuItem icon={<Settings size={15} />} onClick={() => { setSshWorkspaceOpen(false); onOpenSshSettings(); }}>{t("Manage servers")}</MenuItem>
+            </MenuSurface>
+          </>}
           {nativeBackend ? (reportedNativeUsage?.modelContextWindow ? <NativeContextUsage usage={reportedNativeUsage} /> : null) : <div className="context-usage-control">
             <button
               ref={contextUsageTriggerRef}
@@ -4783,14 +4934,16 @@ function ConversationView({ messages, events, trajectoryEvents, nativeBackend, h
   </div>;
 }
 
-const ConversationMessage = memo(function ConversationMessage({ message, streaming }: { message: Message; streaming: boolean }) {
+const ConversationMessage = memo(function ConversationMessage({ message, streaming, busyBackend }: { message: Message; streaming: boolean; busyBackend?: NativeSessionBackend }) {
   return <article className={`conversation-message ${message.role}`} data-session-message-id={message.id} data-turn-id={message.role === "user" ? message.id : undefined}>
     <div className="conversation-message-content">
     {message.role === "user" && Boolean(message.attachments?.length) && <div className="message-attachments">{message.attachments?.map((attachment) => <MessageAttachmentView key={attachment.position} attachment={attachment} turnId={message.turn_id} />)}</div>}
     <div className="conversation-message-copy">
       <div className="conversation-message-role">{message.role === "assistant" ? "Archimedes" : "You"}</div>
       {message.role === "assistant"
-        ? streaming ? <StreamingMarkdownMessage content={message.text} /> : <MarkdownMessage content={message.text} />
+        ? streaming ? <StreamingMarkdownMessage content={message.text} /> : busyBackend
+          ? <NativeSessionBusyNotice backend={busyBackend} />
+          : <MarkdownMessage content={message.text} />
         : <p>{message.text}</p>}
       {Boolean(message.sources?.length) && <div className="conversation-sources" aria-label="Sources read by Archimedes">
         {message.sources?.map((source, index) => <a key={`${source.url}:${source.startPage}:${index}`} href={source.startPage ? `${source.url}#page=${source.startPage}` : source.url} target="_blank" rel="noreferrer" title={[source.title, source.url, source.query && `Query: ${source.query}`, source.excerpt, source.retrievedAt && `Read: ${source.retrievedAt}`].filter(Boolean).join("\n\n")}>

@@ -10,7 +10,7 @@
  */
 
 const { spawn } = require("node:child_process");
-const fsp = require("node:fs/promises");
+const structuredPaths = require("./structured-paths.cjs");
 const path = require("node:path");
 const { isOutputPath } = require("./paths.cjs");
 const { envFileContent, envPrelude } = require("./env-file.cjs");
@@ -37,11 +37,6 @@ const NODE_PROBE = [
   "r.on('error',()=>{console.log(0);process.exit(0)});",
   "r.setTimeout(8000,()=>{console.log(0);process.exit(0)});",
 ].join("");
-
-function isWithin(root, target) {
-  const relative = path.relative(root, target);
-  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
-}
 
 /**
  * Docker images are chosen from what the contract says the paper needs, never
@@ -195,26 +190,9 @@ function createDockerBackend({ checkoutDir, environment = {}, name, secrets = {}
 
     writeFile,
 
-    /** Writes a file inside the checkout. Used by the structured write/edit actions. */
-    async writeRepoFile(relativePath, content) {
-      const target = path.resolve(checkoutDir, String(relativePath || ""));
-      if (!isWithin(checkoutDir, target)) throw new Error("The path is outside the checkout.");
-      if (target.split(path.sep).includes(".git")) throw new Error("Refusing to write inside .git.");
-      await fsp.mkdir(path.dirname(target), { recursive: true });
-      await fsp.writeFile(target, String(content ?? ""), "utf8");
-      return { path: String(relativePath || ""), bytes: Buffer.byteLength(String(content ?? ""), "utf8") };
-    },
-
-    async readFile(relativePath) {
-      const target = path.resolve(checkoutDir, String(relativePath || ""));
-      if (!isWithin(checkoutDir, target)) throw new Error("The checked path is outside the checkout.");
-      try {
-        return await fsp.readFile(target, "utf8");
-      } catch (error) {
-        if (error?.code === "ENOENT" || error?.code === "EISDIR") return null;
-        throw error;
-      }
-    },
+    /** Structured checkout edits do not follow symbolic links. */
+    writeRepoFile: (relativePath, content) => structuredPaths.writeRepoFile(checkoutDir, relativePath, content),
+    readFile: relativePath => structuredPaths.readRepoFile(checkoutDir, relativePath),
 
     async dispose() {
       if (!prepared) return;
