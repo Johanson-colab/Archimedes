@@ -105,34 +105,42 @@ type UISettings = {
 
 const UISettingsContext = createContext<UISettings | null>(null);
 
+// User interface preferences are optional when browser storage is blocked or full.
+export const displayPreferenceStorage = {
+  getItem(key: string): string | null {
+    try { return window.localStorage.getItem(key); } catch { return null; }
+  },
+  setItem(key: string, value: string) {
+    try { window.localStorage.setItem(key, value); } catch { /* Keep the in-memory preference. */ }
+  },
+  removeItem(key: string) {
+    try { window.localStorage.removeItem(key); } catch { /* Keep the in-memory preference. */ }
+  },
+};
+
 function readLanguage(): Language {
-  if (typeof window === "undefined") return "en";
-  return window.localStorage.getItem(LANGUAGE_STORAGE_KEY) === "zh" ? "zh" : "en";
+  return displayPreferenceStorage.getItem(LANGUAGE_STORAGE_KEY) === "zh" ? "zh" : "en";
 }
 
 function readTextSize(): TextSize {
-  if (typeof window === "undefined") return "default";
-  const stored = window.localStorage.getItem(TEXT_SIZE_STORAGE_KEY);
+  const stored = displayPreferenceStorage.getItem(TEXT_SIZE_STORAGE_KEY);
   return stored === "smaller" || stored === "small" || stored === "large" || stored === "larger" ? stored : "default";
 }
 
 function readInterfaceFont(): InterfaceFont {
-  if (typeof window === "undefined") return "geist";
-  return window.localStorage.getItem(INTERFACE_FONT_STORAGE_KEY) === "system" ? "system" : "geist";
+  return displayPreferenceStorage.getItem(INTERFACE_FONT_STORAGE_KEY) === "system" ? "system" : "geist";
 }
 
 function readMonoFont(): MonoFont {
-  if (typeof window === "undefined") return "geist-mono";
-  return window.localStorage.getItem(MONO_FONT_STORAGE_KEY) === "system" ? "system" : "geist-mono";
+  return displayPreferenceStorage.getItem(MONO_FONT_STORAGE_KEY) === "system" ? "system" : "geist-mono";
 }
 
 function readFileIconStyle(): FileIconStyle {
-  if (typeof window === "undefined") return "opencode";
-  const stored = window.localStorage.getItem(FILE_ICON_STYLE_STORAGE_KEY);
-  if (window.localStorage.getItem(FILE_ICON_STYLE_VERSION_KEY) !== "3") {
-    window.localStorage.setItem(FILE_ICON_STYLE_VERSION_KEY, "3");
+  const stored = displayPreferenceStorage.getItem(FILE_ICON_STYLE_STORAGE_KEY);
+  if (displayPreferenceStorage.getItem(FILE_ICON_STYLE_VERSION_KEY) !== "3") {
+    displayPreferenceStorage.setItem(FILE_ICON_STYLE_VERSION_KEY, "3");
     if (!stored || stored === "city-lights" || stored === "badges") {
-      window.localStorage.setItem(FILE_ICON_STYLE_STORAGE_KEY, "opencode");
+      displayPreferenceStorage.setItem(FILE_ICON_STYLE_STORAGE_KEY, "opencode");
       return "opencode";
     }
   }
@@ -140,22 +148,19 @@ function readFileIconStyle(): FileIconStyle {
 }
 
 function readChatVerbosity(): ChatVerbosity {
-  if (typeof window === "undefined") return "medium";
-  const stored = window.localStorage.getItem(CHAT_VERBOSITY_STORAGE_KEY);
+  const stored = displayPreferenceStorage.getItem(CHAT_VERBOSITY_STORAGE_KEY);
   return stored === "low" || stored === "high" ? stored : "medium";
 }
 
 function readFileTextSize() {
-  if (typeof window === "undefined") return FILE_TEXT_SIZE_DEFAULT;
-  const stored = window.localStorage.getItem(FILE_TEXT_SIZE_STORAGE_KEY);
+  const stored = displayPreferenceStorage.getItem(FILE_TEXT_SIZE_STORAGE_KEY);
   if (stored === null) return FILE_TEXT_SIZE_DEFAULT;
   return clampFileTextSize(Number(stored));
 }
 
 function readFileTextShortcuts(): FileTextShortcuts {
-  if (typeof window === "undefined") return DEFAULT_FILE_TEXT_SHORTCUTS;
   try {
-    const stored = JSON.parse(window.localStorage.getItem(FILE_TEXT_SHORTCUTS_STORAGE_KEY) ?? "null") as Partial<FileTextShortcuts> | null;
+    const stored = JSON.parse(displayPreferenceStorage.getItem(FILE_TEXT_SHORTCUTS_STORAGE_KEY) ?? "null") as Partial<FileTextShortcuts> | null;
     return {
       increase: typeof stored?.increase === "string" ? stored.increase : DEFAULT_FILE_TEXT_SHORTCUTS.increase,
       decrease: typeof stored?.decrease === "string" ? stored.decrease : DEFAULT_FILE_TEXT_SHORTCUTS.decrease,
@@ -177,12 +182,12 @@ export function UISettingsProvider({ children }: { children: React.ReactNode }) 
   const [fileTextShortcuts, setFileTextShortcutsState] = useState<FileTextShortcuts>(readFileTextShortcuts);
 
   useEffect(() => {
-    window.localStorage.setItem(LANGUAGE_STORAGE_KEY, language);
+    displayPreferenceStorage.setItem(LANGUAGE_STORAGE_KEY, language);
     document.documentElement.lang = language === "zh" ? "zh-CN" : "en";
   }, [language]);
 
   useEffect(() => {
-    window.localStorage.setItem(TEXT_SIZE_STORAGE_KEY, textSize);
+    displayPreferenceStorage.setItem(TEXT_SIZE_STORAGE_KEY, textSize);
     const root = document.documentElement;
     root.dataset.textSize = textSize;
     if (typeof window.researchDesk?.setUiZoom === "function") {
@@ -196,31 +201,31 @@ export function UISettingsProvider({ children }: { children: React.ReactNode }) 
   }, [textSize]);
 
   useEffect(() => {
-    window.localStorage.setItem(INTERFACE_FONT_STORAGE_KEY, interfaceFont);
+    displayPreferenceStorage.setItem(INTERFACE_FONT_STORAGE_KEY, interfaceFont);
     document.documentElement.dataset.interfaceFont = interfaceFont;
   }, [interfaceFont]);
 
   useEffect(() => {
-    window.localStorage.setItem(MONO_FONT_STORAGE_KEY, monoFont);
+    displayPreferenceStorage.setItem(MONO_FONT_STORAGE_KEY, monoFont);
     document.documentElement.dataset.monoFont = monoFont;
   }, [monoFont]);
 
   useEffect(() => {
-    window.localStorage.setItem(FILE_ICON_STYLE_STORAGE_KEY, fileIconStyle);
+    displayPreferenceStorage.setItem(FILE_ICON_STYLE_STORAGE_KEY, fileIconStyle);
     document.documentElement.dataset.fileIcons = fileIconStyle;
   }, [fileIconStyle]);
 
   useEffect(() => {
-    window.localStorage.setItem(CHAT_VERBOSITY_STORAGE_KEY, chatVerbosity);
+    displayPreferenceStorage.setItem(CHAT_VERBOSITY_STORAGE_KEY, chatVerbosity);
     document.documentElement.dataset.chatVerbosity = chatVerbosity;
   }, [chatVerbosity]);
 
   useEffect(() => {
-    window.localStorage.setItem(FILE_TEXT_SIZE_STORAGE_KEY, String(fileTextSize));
+    displayPreferenceStorage.setItem(FILE_TEXT_SIZE_STORAGE_KEY, String(fileTextSize));
   }, [fileTextSize]);
 
   useEffect(() => {
-    window.localStorage.setItem(FILE_TEXT_SHORTCUTS_STORAGE_KEY, JSON.stringify(fileTextShortcuts));
+    displayPreferenceStorage.setItem(FILE_TEXT_SHORTCUTS_STORAGE_KEY, JSON.stringify(fileTextShortcuts));
   }, [fileTextShortcuts]);
 
   const setFileTextSize = useCallback((size: number) => setFileTextSizeState(clampFileTextSize(size)), []);

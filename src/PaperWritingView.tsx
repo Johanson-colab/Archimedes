@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { AlertTriangle, ArrowDown, ArrowUp, Check, ChevronDown, ChevronRight, CircleDot, Cloud, FileCode2, FileImage, FilePlus2, FileText, Folder, FolderOpen, FolderPlus, FolderUp, LoaderCircle, MessageCircle, PanelLeftClose, PanelLeftOpen, Play, RefreshCw, Search, X } from "lucide-react";
-import { useUISettings } from "./i18n";
+import { displayPreferenceStorage, useUISettings } from "./i18n";
 import SharedNoteEditor from "./SharedNoteEditor";
 import PaperTemplateLibrary, { paperTemplates } from "./PaperTemplateLibrary";
 import { Dialog } from "./Dialog";
@@ -35,14 +35,30 @@ function browserTrackFor(width: number) {
 }
 
 function readStoredNumber(key: string, fallback: number, min: number, max: number) {
-  if (typeof window === "undefined") return fallback;
-  const stored = Number(window.localStorage.getItem(key));
+  const stored = Number(displayPreferenceStorage.getItem(key));
   return Number.isFinite(stored) && stored > 0 ? clampSetting(stored, min, max) : fallback;
 }
 
-function readStoredFlag(key: string) {
-  if (typeof window === "undefined") return false;
-  return window.localStorage.getItem(key) === "true";
+function useStoredPaneSize(key: string, value: number) {
+  const latest = useRef(value);
+  const pending = useRef<number | undefined>(undefined);
+
+  useEffect(() => {
+    if (latest.current === value) return;
+    latest.current = value;
+    window.clearTimeout(pending.current);
+    pending.current = window.setTimeout(() => {
+      pending.current = undefined;
+      displayPreferenceStorage.setItem(key, String(value));
+    }, 200);
+  }, [key, value]);
+
+  useEffect(() => () => {
+    if (pending.current === undefined) return;
+    window.clearTimeout(pending.current);
+    pending.current = undefined;
+    displayPreferenceStorage.setItem(key, String(latest.current));
+  }, [key]);
 }
 
 function lineStart(content: string, line: number) {
@@ -172,7 +188,7 @@ export default function PaperWritingView({ bridge, workspace, projectId, openReq
   const [templateId, setTemplateId] = useState(paperTemplates[0]?.id ?? "");
   const [browserWidth, setBrowserWidth] = useState(() => readStoredNumber("archimedes-paper-browser-width", BROWSER_DEFAULT_WIDTH, BROWSER_MIN_WIDTH, BROWSER_MAX_WIDTH));
   const [previewSplit, setPreviewSplit] = useState(() => readStoredNumber("archimedes-paper-split", PREVIEW_SPLIT_DEFAULT, PREVIEW_SPLIT_MIN, PREVIEW_SPLIT_MAX));
-  const [browserCollapsed, setBrowserCollapsed] = useState(() => readStoredFlag("archimedes-paper-browser-collapsed"));
+  const [browserCollapsed, setBrowserCollapsed] = useState(() => displayPreferenceStorage.getItem("archimedes-paper-browser-collapsed") === "true");
   const [widePanes, setWidePanes] = useState(() => typeof window === "undefined" || window.matchMedia("(min-width: 861px)").matches);
   const [paneWidth, setPaneWidth] = useState(0);
   const [importing, setImporting] = useState(false);
@@ -292,9 +308,11 @@ export default function PaperWritingView({ bridge, workspace, projectId, openReq
   }, [compileState]);
 
   useEffect(() => { if (openRequest?.path) void activateProject(openRequest.path); }, [activateProject, openRequest?.path, openRequest?.token]);
-  useEffect(() => { window.localStorage.setItem("archimedes-paper-browser-width", String(browserWidth)); }, [browserWidth]);
-  useEffect(() => { window.localStorage.setItem("archimedes-paper-split", String(previewSplit)); }, [previewSplit]);
-  useEffect(() => { window.localStorage.setItem("archimedes-paper-browser-collapsed", String(browserCollapsed)); }, [browserCollapsed]);
+  useStoredPaneSize("archimedes-paper-browser-width", browserWidth);
+  useStoredPaneSize("archimedes-paper-split", previewSplit);
+  useEffect(() => {
+    displayPreferenceStorage.setItem("archimedes-paper-browser-collapsed", String(browserCollapsed));
+  }, [browserCollapsed]);
   useEffect(() => () => document.body.classList.remove("paper-pane-resizing"), []);
   useEffect(() => {
     const query = window.matchMedia("(min-width: 861px)");
