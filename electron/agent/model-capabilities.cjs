@@ -1,3 +1,4 @@
+const { isOfficialOpenAI, openAIWorkModel } = require("./openai-work-models.cjs");
 const THINKING_EFFORTS = ["low", "medium", "high"];
 const CONTEXT_LENGTHS = ["standard", "extra-long"];
 const STANDARD_CONTEXT_CHARS = 500_000;
@@ -32,6 +33,7 @@ function normalizedConfig(config = {}) {
 
 function isNativeThinkingModel(config = {}) {
   const { provider, model } = normalizedConfig(config);
+  if (isOfficialOpenAI(config)) return Boolean(openAIWorkModel(model)?.efforts.length);
   if (provider === "openai" || provider === "gemini") return true;
   if (provider === "openrouter") return /^(openai\/)?(gpt-[56]|o[134])/.test(model);
   return provider === "custom" && /^(gpt-[56]|o[134])/.test(model);
@@ -46,14 +48,20 @@ function supportsExtraLongContext(config = {}) {
 
 function getModelCapabilities(config = {}) {
   const explicit = config.capabilities && typeof config.capabilities === "object" ? config.capabilities : {};
-  const nativeThinking = explicit.nativeThinking === undefined ? isNativeThinkingModel(config) : Boolean(explicit.nativeThinking);
+  const official = isOfficialOpenAI(config);
+  const officialEfforts = official ? openAIWorkModel(config.model)?.efforts ?? [] : null;
+  const nativeThinking = official
+    ? officialEfforts.length > 0 && explicit.nativeThinking !== false
+    : explicit.nativeThinking === undefined ? isNativeThinkingModel(config) : Boolean(explicit.nativeThinking);
+  const configuredEfforts = Array.isArray(explicit.thinkingEfforts) ? explicit.thinkingEfforts : THINKING_EFFORTS;
+  const thinkingEfforts = nativeThinking ? configuredEfforts.filter(value => !official || officialEfforts.includes(value)) : [];
   const extraLongContext = explicit.extraLongContext === undefined ? supportsExtraLongContext(config) : Boolean(explicit.extraLongContext);
   const contextWindowTokens = tokenCount(config.contextWindowTokens);
   // The conversation and composer share a character estimate. The provider
   // applies its own tokenizer when it receives the actual request.
   const windowCharacters = estimateTokenCharacters(contextWindowTokens);
   return {
-    thinkingEfforts: Array.isArray(explicit.thinkingEfforts) ? explicit.thinkingEfforts : (nativeThinking ? THINKING_EFFORTS : []),
+    thinkingEfforts,
     contextLengths: Array.isArray(explicit.contextLengths) ? explicit.contextLengths : (extraLongContext ? CONTEXT_LENGTHS : ["standard"]),
     nativeThinking,
     supportsVision: Boolean(explicit.supportsVision),

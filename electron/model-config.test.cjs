@@ -145,3 +145,19 @@ test("Anthropic model listing and connection test use native API paths", async (
     assert.equal(JSON.parse(calls[1].request.body).max_tokens, 32);
   } finally { global.fetch = originalFetch; }
 });
+
+test("official Work catalog and connection use the model profile while image discovery stays available", async t => {
+  const input = { provider: "openai", baseUrl: "https://api.openai.com/v1", model: "gpt-6.2-sol", apiKey: "fixture" };
+  const ids = ["gpt-6.2-sol", "gpt-image-2", "gpt-realtime", "gpt-4o-mini"];
+  const requests = [];
+  t.mock.method(global, "fetch", async (url, options) => {
+    requests.push(url);
+    if (url.endsWith("/models")) return Response.json({ data: ids.map(id => ({ id })) });
+    assert.equal(JSON.parse(options.body).store, false);
+    return Response.json({ model: "resolved-fixture", status: "completed", output: [{ type: "message", content: [{ type: "output_text", text: "OK" }] }] });
+  });
+  assert.deepEqual((await listProviderModels({ ...input, purpose: "work" })).models, ["gpt-4o-mini", "gpt-6.2-sol"]);
+  assert.equal((await listProviderModels(input)).models.length, ids.length);
+  assert.equal((await testModelConfig(input)).resolvedModel, "resolved-fixture");
+  assert.equal(requests.at(-1), input.baseUrl + "/responses");
+});

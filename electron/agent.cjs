@@ -8,6 +8,8 @@ const { searchWeb } = require("./web-search.cjs");
 const { prepareConversation } = require("./agent/context.cjs");
 const { workspaceInstructions } = require("./thread-commands.cjs");
 const { hasApprovalSurface: hasClaimedSurface, resolveApproval, setApprovalSurface: claimApprovalSurface, waitForApproval } = require("./agent/approval-manager.cjs");
+const { completeResponses, responsesRequest } = require("./agent/openai-responses.cjs");
+const { isOfficialOpenAI, openAIWorkModel } = require("./agent/openai-work-models.cjs");
 const { StreamContentGuard, normalizeAssistantMessage } = require("./agent/model-response.cjs");
 const { ModelIncompleteError, assertModelCompletion } = require("./agent/model-completion.cjs");
 const { completeAnthropic, toAnthropicRequest } = require("./agent/anthropic.cjs");
@@ -821,7 +823,7 @@ async function executeBuiltInTool({ root, taskId, threadId, turnId, call, emit, 
         const bounded = boundModelContext(config, messages, contextCharacterLimit(config, "standard"), completionOptions);
         if (bounded.removed || bounded.clipped) workerRecord({ type: "active_context_bounded", payload: bounded });
         const message = await complete(config, messages, completionOptions);
-        messages.push({ role: "assistant", content: message.content || "", tool_calls: message.tool_calls });
+        messages.push(assistantHistoryMessage(message));
         if (!message.tool_calls.length) { response = message.content || ""; break; }
         for (const child of message.tool_calls) {
           try {
@@ -1321,6 +1323,19 @@ function applyDelta(accumulator, delta, onTextDelta) {
   }
 }
 
+function assistantHistoryMessage(message) {
+  return { role: "assistant", content: message.content || "", tool_calls: message.tool_calls,
+    ...(message.responseItems ? { responseItems: message.responseItems } : {}) };
+}
+
+function officialResponseOptions(config, { allowTools = true, availableTools = tools, reasoningEffort, maxOutputTokens, allowLargeOutput, responseFormat }) {
+  const profile = isOfficialOpenAI(config) ? openAIWorkModel(config.model) : null;
+  if (profile?.endpoint !== "responses") return null;
+  const effort = config.capabilities?.nativeThinking === false ? undefined : normalizeModelReasoningEffort(config, reasoningEffort);
+  return { profile, tools: allowTools ? availableTools : [], effort, responseFormat,
+    tokenLimit: outputTokenLimit(config, { maxOutputTokens, allowTools, allowLargeOutput }) };
+}
+
 function openAiRequest(config, messages, { allowTools = true, availableTools = tools, reasoningEffort, maxOutputTokens, allowLargeOutput = false, responseFormat } = {}) {
   const tokenLimit = outputTokenLimit(config, { maxOutputTokens, allowTools, allowLargeOutput });
   const request = { model: config.model, messages, stream: true, ...openAiReasoningOptions(config, reasoningEffort) };
@@ -1338,6 +1353,11 @@ function modelContextSize(config, messages, options) {
       ? { ...part, image_url: { ...part.image_url, url: "data:image/png;base64,AA==" } }
       : part) }
     : message);
+  const official = officialResponseOptions(config, options);
+  if (official) {
+    const request = responsesRequest(config, official.profile, textMessages, official);
+    return JSON.stringify(request).length + estimateTokenCharacters(official.tokenLimit);
+  }
   const anthropic = config.provider === "anthropic";
   const request = anthropic ? toAnthropicRequest(config, textMessages, options) : openAiRequest(config, textMessages, options);
   if (!anthropic) {
@@ -1367,7 +1387,10 @@ function failIfModelSessionHeaderRequired(detail, config) {
 
 async function complete(config, messages, { signal, onTextDelta = () => {}, allowTools = true, availableTools = tools, reasoningEffort, maxOutputTokens, allowLargeOutput = false, requireComplete = false, responseFormat, sessionId = "archimedes-internal" } = {}) {
   if (config.provider === "anthropic") return completeAnthropic(config, messages, { signal, onTextDelta, allowTools, availableTools, maxOutputTokens, allowLargeOutput, requireComplete, sessionId });
-  const request = openAiRequest(config, messages, { allowTools, availableTools, reasoningEffort, maxOutputTokens, allowLargeOutput, responseFormat });
+  const options = { allowTools, availableTools, reasoningEffort, maxOutputTokens, allowLargeOutput, responseFormat };
+  const official = officialResponseOptions(config, options);
+  if (official) return completeResponses(config, official.profile, messages, { ...official, signal, sessionId, onTextDelta });
+  const request = openAiRequest(config, messages, options);
   const tokenLimit = request.max_tokens;
   const requestCompletion = (body) => fetchModelWithRetry(`${config.baseUrl}/chat/completions`, {
     method: "POST",
@@ -1412,8 +1435,8 @@ async function complete(config, messages, { signal, onTextDelta = () => {}, allo
       request.max_completion_tokens = tokenLimit;
       continue;
     }
-    const hasNativeReasoning = Object.hasOwn(request, "reasoning_effort") || Object.hasOwn(request, "reasoning");
-    if (hasNativeReasoning && [400, 422].includes(response.status)) {
+    const hasNativeReasoning = (Object.hasOwn(request, "reasoning_effort") && request.reasoning_effort !== "none") || Object.hasOwn(request, "reasoning");
+    if (hasNativeReasoning && [400, 422].includes(response.status) && /(?:unsupported|unknown|unrecognized) (?:parameter|field)[: ]+['"]?reasoning(?:_effort)?\b|reasoning(?:_effort)?['"]? (?:parameter )?(?:is )?not supported/i.test(detail)) {
       delete request.reasoning_effort;
       delete request.reasoning;
       continue;
@@ -1754,7 +1777,7 @@ async function runAgentInStore({ prompt, workspace, threadId, projectId, workspa
         emitTurn({ type: "status", title: "Context adjusted", detail: "Context was reduced to fit the active budget. Saved turns and events remain available." });
       }
       const message = await complete(config, messages, completionOptions);
-      messages.push({ role: "assistant", content: message.content || "", tool_calls: message.tool_calls });
+      messages.push(assistantHistoryMessage(message));
       recordEvent({ type: "assistant_step", payload: { content: message.content || "", tool_calls: message.tool_calls, protocol: message.protocol, model: config.model, provider: config.provider } });
       if (!message.tool_calls.length) {
         const response = message.content || "The research turn completed without a final text response.";

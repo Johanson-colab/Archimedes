@@ -1,6 +1,8 @@
 const { buildModelRequestOptions, formatConnectionError, sanitizeHeaders, sanitizeSessionHeader } = require("./model-request-headers.cjs");
 const { readModelResponseJson } = require("./model-response-json.cjs");
 const modelRegistry = require("./model-registry.cjs");
+const { completeResponses } = require("./agent/openai-responses.cjs");
+const { isOfficialOpenAI, openAIWorkModel } = require("./agent/openai-work-models.cjs");
 
 const OPENCODE_GO_BASE_URL = "https://opencode.ai/inference/go/openai/v1";
 const OPENCODE_GO_SESSION_HEADER = { name: "x-opencode-session", strategy: "thread" };
@@ -161,7 +163,8 @@ async function listProviderModels(input = {}, role = "agent") {
     });
     const response = await fetch(modelListUrl(provider, baseUrl), { ...requestOptions, signal: controller.signal });
     if (!response.ok) throw new Error(`Model catalog request failed (${response.status}).`);
-    const models = extractModelIds(await readModelResponseJson(response));
+    const ids = extractModelIds(await readModelResponseJson(response));
+    const models = input.purpose === "work" && isOfficialOpenAI({ provider, baseUrl }) ? ids.filter(openAIWorkModel) : ids;
     if (!models.length) throw new Error("The provider returned no compatible chat models.");
     return { models, source: "live" };
   } catch (error) {
@@ -273,6 +276,13 @@ async function testModelConfig(input = null, role = "agent") {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 25_000);
   try {
+    const profile = isOfficialOpenAI(candidate) ? openAIWorkModel(candidate.model) : null;
+    if (profile?.endpoint === "responses") {
+      const result = await completeResponses(candidate, { ...profile, stream: false }, [{ role: "user", content: "Reply with OK." }], {
+        signal: controller.signal, sessionId: "archimedes-connection-test", tools: [], effort: profile.efforts[0], onTextDelta: () => {},
+      });
+      return { ok: true, latencyMs: Date.now() - startedAt, resolvedModel: result.resolvedModel };
+    }
     const anthropic = candidate.provider === "anthropic";
     const requestOptions = buildModelRequestOptions(candidate, "archimedes-connection-test", {
       anthropic,
