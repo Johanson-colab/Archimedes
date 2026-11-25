@@ -2,13 +2,13 @@
 // Keys stay sorted so concurrent changes do not collide.
 
 export const researchGraph: Record<string, string> = {
-  "An earlier graph extraction failed. Try again.": "之前有一轮图谱提取失败，请重试。",
   "Activity completed": "已完成",
   "Activity failed": "失败",
   "Activity note": "记录",
   "Activity started": "已开始",
   "Agent-reported": "Agent 报告",
   "All activity": "全部活动",
+  "An earlier graph extraction failed. Try again.": "之前有一轮图谱提取失败，请重试。",
   "cites": "引用",
   "Code snapshot": "代码快照",
   "Collapse graph": "收起研究图",

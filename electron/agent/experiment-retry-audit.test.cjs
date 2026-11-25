@@ -13,7 +13,7 @@ const { createExperimentBridge } = require("./experiment-bridge.cjs");
 const exec = promisify(execFile);
 
 test("mailbox bridge retains one experiment through numerical failure, repair, rerun and reopen", { skip: process.platform === "win32" }, async () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-retry-audit-"));
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-retry-audit-")));
   const idle = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-retry-idle-"));
   let bridge;
   let thread;
