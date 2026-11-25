@@ -93,6 +93,7 @@ export const agent: Record<string, string> = {
   "Reply to Proactive agent…": "回复主动助手…",
   "Repository": "仓库",
   "Requires a vision-capable model": "需要支持视觉的模型",
+  "Return to the source manuscript conversation to apply this suggestion.": "请返回该稿件的原始对话，再应用这条建议。",
   "Review the current context": "审阅当前上下文",
   "Rhythm": "节奏",
   "Run one full observation now: current view, selection, recent answers, and activity. Nothing continues in the background.": "立即做一次完整观察：当前视图、选区、最近回答和活跃度；不会在后台继续运行。",

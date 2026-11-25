@@ -104,15 +104,15 @@ interface ResearchDeskBridge {
     markArtifactsSeen: (threadId: string) => Promise<{ marked: number }>;
     countUnseenArtifacts: (threadId: string) => Promise<number>;
     deleteArtifact: (id: string) => Promise<{ deleted: boolean }>;
-    writeWorkspaceFile: (workspace: string, filePath: string, content: string) => Promise<WorkspaceFilePreview>;
+    writeWorkspaceFile: (workspace: string, filePath: string, content: string, expectedContent?: string) => Promise<WorkspaceFilePreview>;
     listLatexProjects: (workspace: string) => Promise<LatexProjectSummary[]>;
     createLatexProject: (workspace: string, directory?: string, template?: string) => Promise<WorkspaceFilePreview>;
     createLatexFile: (workspace: string, path: string) => Promise<WorkspaceFilePreview>;
     createLatexDirectory: (workspace: string, path: string) => Promise<LatexDirectoryResult>;
     importLatexFolder: (workspace: string) => Promise<LatexImportResult>;
-    compileLatexDocument: (workspace: string, path: string) => Promise<LatexCompileResult>;
+    compileLatexDocument: (workspace: string, path: string, requestId?: string) => Promise<LatexCompileResult>;
     readManuscriptSnapshot?: (workspace: string, manifestPath: string) => Promise<import("./manuscript-snapshot").ManuscriptBuildVerification>;
-    onLatexCompileProgress?: (callback: (input: { path: string; stage: string; log?: string }) => void) => () => void;
+    onLatexCompileProgress?: (callback: (input: { workspace?: string; requestId?: string; path: string; stage: string; log?: string }) => void) => () => void;
     getResearchTurnImage: (threadId: string, turnId: string, position: number, workspace?: string) => Promise<string | null>;
     getResearchThread: (threadId: string, workspace?: string) => Promise<ResearchThreadDetail>;
     createResearchThread: (input: { projectId?: string; workspacePath?: string; workspaceId?: string; mode?: ResearchMode; visibility?: "project" | "private"; title?: string }) => Promise<ResearchThreadDetail>;
