@@ -1507,7 +1507,7 @@ async function runAgent(options) {
   finally { captured.release(); }
 }
 
-async function runAgentInStore({ prompt, workspace, threadId, projectId, workspaceId, visibility = "project", mode = "standard", researchSkill, mineruToken, reasoningEffort = "medium", contextLength = "standard", contextItems = [], capabilities, origin, title, emit = () => {}, browser, transient = false, externalBackend = null, externalSignal, toolRegistry = defaultToolRegistry, autoBuildGraph = true, remoteServer = null, dataStore }) {
+async function runAgentInStore({ prompt, workspace, threadId, projectId, workspaceId, visibility = "project", mode = "standard", researchSkill, mineruToken, reasoningEffort = "medium", contextLength = "standard", contextItems = [], capabilities, origin, title, emit = () => {}, browser, transient = false, externalBackend = null, apiConfig, externalSignal, toolRegistry = defaultToolRegistry, autoBuildGraph = true, remoteServer = null, dataStore }) {
   const store = dataStore;
   if (externalBackend && (transient || origin !== "research" || capabilities?.write !== "ask" || capabilities?.command !== "ask")) throw new Error("The native backend is available only for main Work conversations with an approval surface.");
   const transientThread = {
@@ -1522,7 +1522,7 @@ async function runAgentInStore({ prompt, workspace, threadId, projectId, workspa
   const turn = transient
     ? { id: randomUUID(), thread_id: thread.id, task_id: task.id, mode, user_message: prompt, assistant_message: "", status: "running", created_at: new Date().toISOString(), completed_at: null }
     : store.startResearchTurn({ threadId: thread.id, taskId: task.id, prompt, mode, contextItems });
-  const config = externalBackend ? null : getActiveModelConfig();
+  const config = externalBackend ? null : apiConfig || getActiveModelConfig();
   const resolvedReasoningEffort = externalBackend ? null : normalizeModelReasoningEffort(config, reasoningEffort);
   const resolvedContextLength = externalBackend ? null : normalizeContextLength(config, contextLength);
   const policy = externalBackend ? null : reasoningPolicy(resolvedReasoningEffort, mode);
@@ -1755,7 +1755,7 @@ async function runAgentInStore({ prompt, workspace, threadId, projectId, workspa
       }
       const message = await complete(config, messages, completionOptions);
       messages.push({ role: "assistant", content: message.content || "", tool_calls: message.tool_calls });
-      recordEvent({ type: "assistant_step", payload: { content: message.content || "", tool_calls: message.tool_calls, protocol: message.protocol } });
+      recordEvent({ type: "assistant_step", payload: { content: message.content || "", tool_calls: message.tool_calls, protocol: message.protocol, model: config.model, provider: config.provider } });
       if (!message.tool_calls.length) {
         const response = message.content || "The research turn completed without a final text response.";
         emitTurn({ type: "complete", title: "Research turn complete", detail: `${actions.length} approval item${actions.length === 1 ? "" : "s"}` });

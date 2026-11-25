@@ -134,3 +134,43 @@ test("basic role edits preserve a shared profile while explicit edits update it"
   assert.equal(dedicated.maxOutputTokens, 321);
   assert.equal(dedicated.sharedAcrossRoles, false);
 });
+
+test("the selected API profile drives a turn without changing either role default", async (t) => {
+  const directory = tempUser();
+  const store = require("./store.cjs").createWorkspaceStore(directory);
+  t.after(() => { store.close(); fs.rmSync(directory, { recursive: true, force: true }); });
+  modelConfig.initializeModelConfig(directory);
+  const first = modelConfig.saveModelConfig({ provider: "custom", baseUrl: "https://first.test/v1", model: "first-model", apiKey: "first-key" });
+  const second = modelConfig.saveModelProfile({ provider: "custom", baseUrl: "https://second.test/v1", model: "second-model", apiKey: "second-key" });
+  const requests = [];
+  t.mock.method(globalThis, "fetch", async (url, options) => {
+    requests.push([new URL(url).hostname, JSON.parse(options.body).model, options.headers.Authorization]);
+    return Response.json({ choices: [{ finish_reason: "stop", message: { content: "Fixture reply" } }] });
+  });
+  const { runAgent } = require("./agent.cjs");
+  const common = { dataStore: store, workspace: directory, prompt: "Say OK", mode: "free-chat", autoBuildGraph: false };
+  const initial = await runAgent(common);
+  const next = await runAgent({ ...common, threadId: initial.threadId, apiConfig: modelConfig.getAgentModelConfig(second.id) });
+  assert.equal(next.status, "completed");
+  assert.equal(next.threadId, initial.threadId);
+  assert.deepEqual(requests, [
+    ["first.test", "first-model", "Bearer first-key"],
+    ["second.test", "second-model", "Bearer second-key"],
+  ]);
+  assert.deepEqual(modelConfig.getRoleAssignments(), { agent: first.modelId, proactive: null });
+  assert.throws(() => modelConfig.getAgentModelConfig("deleted"), /not in the registry/);
+});
+
+test("connection success does not forward an echoed credential as a model label", async (t) => {
+  const directory = tempUser();
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  modelConfig.initializeModelConfig(directory);
+  t.mock.method(globalThis, "fetch", async () => Response.json({
+    model: "fixture-private-key", choices: [{ message: { content: "OK" } }],
+  }));
+  const result = await modelConfig.testModelConfig({
+    provider: "custom", baseUrl: "https://test.example/v1", model: "requested-model", apiKey: "fixture-private-key",
+  });
+  assert.equal(result.resolvedModel, "requested-model");
+  assert.doesNotMatch(JSON.stringify(result), /fixture-private-key/);
+});

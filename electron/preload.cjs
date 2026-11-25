@@ -162,7 +162,7 @@ contextBridge.exposeInMainWorld("researchDesk", {
   deleteModelProfile: (id) => ipcRenderer.invoke("model-registry:delete", id),
   setModelRole: (role, id) => ipcRenderer.invoke("model-registry:set-role", role, id),
   getModelRoleAssignments: () => ipcRenderer.invoke("model-registry:assignments"),
-  getModelCapabilities: (role) => ipcRenderer.invoke("model-config:capabilities", role),
+  getModelCapabilities: (role, profileId) => ipcRenderer.invoke("model-config:capabilities", role, profileId),
   listProviderModels: (input, role) => ipcRenderer.invoke("model-config:list-models", input, role),
   saveModelConfig: (input, role) => ipcRenderer.invoke("model-config:save", input, role),
   testModelConfig: (input, role) => ipcRenderer.invoke("model-config:test", input, role),

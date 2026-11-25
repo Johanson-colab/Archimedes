@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   Brain,
   Check,
@@ -70,9 +70,29 @@ export function formatModelConnectionError(error: unknown, t: ReturnType<typeof 
   const message = error instanceof Error ? error.message : String(error);
   const detail = message.replace(/^Error invoking remote method '[^']+':\s*(?:Error:\s*)?|^Error:\s*/, "");
   const missingSession = /^Connection failed \((\d+)\): MissingSessionID$/.exec(detail);
-  return missingSession
-    ? t("Connection failed ({status}). In Settings → Models, select OpenCode Go or set Session header to x-opencode-session and Strategy to Thread.", { status: missingSession[1] })
-    : t(detail);
+  if (missingSession) return t("Connection failed ({status}). In Settings → Models, select OpenCode Go or set Session header to x-opencode-session and Strategy to Thread.", { status: missingSession[1] });
+  const failedStatus = /^Connection failed \((\d+)\)/.exec(detail);
+  return failedStatus ? t("Connection failed ({status}). Check the provider, model, and API key.", { status: failedStatus[1] }) : t(detail);
+}
+
+export function useModelConnectionTest(t: ReturnType<typeof useUISettings>["t"]) {
+  const [state, setState] = useState<{ kind: "testing" | "success" | "error"; text: string } | null>(null);
+  const revision = useRef(0);
+  const reset = useCallback(() => { revision.current++; setState(null); }, []);
+  useEffect(() => () => { revision.current++; }, []);
+
+  async function run(test: () => Promise<ModelConnectionResult>) {
+    const id = ++revision.current;
+    setState({ kind: "testing", text: t("Testing model connection…") });
+    try {
+      const result = await test();
+      if (id === revision.current) setState({ kind: "success", text: t("Connected in {latency} ms · {model}", { latency: result.latencyMs, model: result.resolvedModel }) });
+    } catch (error) {
+      if (id === revision.current) setState({ kind: "error", text: formatModelConnectionError(error, t) });
+    }
+  }
+
+  return { state, reset, run };
 }
 
 const modelProfilesPreference = "archimedes-advanced-model-profiles";
@@ -111,7 +131,17 @@ export default function ModelSettingsModal({ bridge, open, onClose, onSaved, emb
   const hasFixedSessionValue = Boolean(sameConnection && savedConnection?.sessionHeader?.hasValue &&
     savedConnection.sessionHeader.name.toLowerCase() === sessionHeaderName.trim().toLowerCase());
   const [loading, setLoading] = useState(false);
-  const [testing, setTesting] = useState(false);
+  const { state: connectionResult, reset: resetConnectionTest, run: runConnectionTest } = useModelConnectionTest(t);
+  const testing = connectionResult?.kind === "testing";
+  const catalogRevision = useRef(0);
+  useLayoutEffect(resetConnectionTest, [resetConnectionTest, open, role, settingsPage, provider, baseUrl, model, apiKey, headersText, sessionHeaderName, sessionStrategy, sessionHeaderValue, userAgent, selectedProfileId, advancedProfiles]);
+  useLayoutEffect(() => {
+    catalogRevision.current++;
+    setCatalogModels([]);
+    setCatalogError("");
+    setCatalogLoading(false);
+    return () => { catalogRevision.current++; };
+  }, [open, role, settingsPage, provider, baseUrl, apiKey, headersText, sessionHeaderName, sessionStrategy, sessionHeaderValue, userAgent, selectedProfileId]);
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState<{ kind: "success" | "error" | "idle"; text: string }>({ kind: "idle", text: "" });
   const [catalogModels, setCatalogModels] = useState<string[]>([]);
@@ -208,6 +238,7 @@ export default function ModelSettingsModal({ bridge, open, onClose, onSaved, emb
   function toggleAdvancedProfiles(enabled: boolean) {
     window.localStorage.setItem(modelProfilesPreference, String(enabled));
     setAdvancedProfiles(enabled);
+    onSaved();
   }
 
   function loadConnectionFields(config: Pick<PublicModelConfig, "provider" | "baseUrl" | "model" | "sessionHeader" | "userAgent" | "contextWindowTokens" | "maxOutputTokens">) {
@@ -282,18 +313,19 @@ export default function ModelSettingsModal({ bridge, open, onClose, onSaved, emb
   async function refreshModelCatalog({ quiet = false } = {}) {
     if (catalogLoading || !baseUrl.trim()) return;
     if (!apiKey.trim() && !hasApiKey && provider !== "openrouter" && provider !== "opencode-go") {
-      if (!quiet) setCatalogError("Add this provider's API key, then refresh to load the live catalog.");
+      if (!quiet) setCatalogError(t("Add this provider's API key, then refresh to load the live catalog."));
       return;
     }
+    const request = ++catalogRevision.current;
     setCatalogLoading(true);
     setCatalogError("");
     try {
       const result = await bridge.listProviderModels({ provider, baseUrl, apiKey, ...requestExtras() }, role);
-      setCatalogModels(result.models);
+      if (request === catalogRevision.current) setCatalogModels(result.models);
     } catch (error) {
-      setCatalogError(formatModelConnectionError(error, t));
+      if (request === catalogRevision.current) setCatalogError(formatModelConnectionError(error, t));
     } finally {
-      setCatalogLoading(false);
+      if (request === catalogRevision.current) setCatalogLoading(false);
     }
   }
 
@@ -309,6 +341,7 @@ export default function ModelSettingsModal({ bridge, open, onClose, onSaved, emb
   }
 
   function chooseModel(name: string) {
+    setFeedback({ kind: "idle", text: "" });
     setModel(name);
     setModelSearch("");
     setModelMenuOpen(false);
@@ -344,19 +377,12 @@ export default function ModelSettingsModal({ bridge, open, onClose, onSaved, emb
   }
 
   async function testConnection() {
-    setTesting(true);
     setFeedback({ kind: "idle", text: "" });
-    try {
-      const result = await bridge.testModelConfig({ provider, baseUrl, model, apiKey, ...requestExtras() }, role);
-      setFeedback({ kind: "success", text: `Connected in ${result.latencyMs} ms · ${result.resolvedModel}` });
-    } catch (error) {
-      setFeedback({ kind: "error", text: formatModelConnectionError(error, t) });
-    } finally {
-      setTesting(false);
-    }
+    await runConnectionTest(async () => bridge.testModelConfig({ provider, baseUrl, model, apiKey, ...requestExtras() }, role));
   }
 
   async function save() {
+    resetConnectionTest();
     setSaving(true);
     setFeedback({ kind: "idle", text: "" });
     try {
@@ -399,6 +425,7 @@ export default function ModelSettingsModal({ bridge, open, onClose, onSaved, emb
   }
 
   if (!open) return null;
+  const displayedFeedback = connectionResult || feedback;
   const content = <>
       {!embedded && <header className="model-settings-header">
         <div><span>{proactiveRole ? "Proactive runtime" : "Agent runtime"}</span><h2>{proactiveRole ? "Proactive model" : "Model providers"}</h2><p>{proactiveRole ? "Choose the model Proactive agent uses for replies and live observation." : "Choose the model Archimedes uses for new research turns."}</p></div>
@@ -410,7 +437,7 @@ export default function ModelSettingsModal({ bridge, open, onClose, onSaved, emb
         <Tab value="api" id={`${panelId}-api-tab`} controls={`${panelId}-api`} icon={<Key size={16} />}>{t("API models")}</Tab>
         <Tab value="agents" id={`${panelId}-agents-tab`} controls={`${panelId}-agents`} icon={<Workflow size={16} />} badge={activeBackend && activeBackend !== "api" ? ({ codex: "Codex", claude: "Claude Code", opencode: "OpenCode" }[activeBackend]) : undefined}>{t("Harnesses")}</Tab>
       </Tabs>}
-      <div className="model-settings-panel" id={`${panelId}-api`} role={proactiveRole ? undefined : "tabpanel"} aria-labelledby={proactiveRole ? undefined : `${panelId}-api-tab`} hidden={!proactiveRole && settingsPage !== "api"}>
+      <div className="model-settings-panel" onChangeCapture={() => setFeedback({ kind: "idle", text: "" })} id={`${panelId}-api`} role={proactiveRole ? undefined : "tabpanel"} aria-labelledby={proactiveRole ? undefined : `${panelId}-api-tab`} hidden={!proactiveRole && settingsPage !== "api"}>
       {!proactiveRole && <p className="model-connection-description">{t("Connect model providers with an API key. Archimedes manages the tools and research workflow.")}</p>}
       <div className="model-settings-body">
         <nav className="provider-list" aria-label="Model providers">
@@ -496,10 +523,10 @@ export default function ModelSettingsModal({ bridge, open, onClose, onSaved, emb
         </div>
       </div>
 
-      {feedback.text && <div className={`model-feedback ${feedback.kind}`} role={feedback.kind === "error" ? "alert" : "status"}>{feedback.kind === "success" ? <Check size={14} /> : feedback.kind === "error" ? <X size={14} /> : null}<span>{feedback.text}</span></div>}
+      {displayedFeedback.text && <div className={`model-feedback ${displayedFeedback.kind}`} role={displayedFeedback.kind === "error" ? "alert" : "status"}>{displayedFeedback.kind === "success" ? <Check size={14} /> : displayedFeedback.kind === "error" ? <X size={14} /> : null}<span>{displayedFeedback.text}</span></div>}
       <footer className="model-settings-footer">
         <div className="model-settings-footer-left">
-          <button className="secondary-button" onClick={() => void testConnection()} disabled={loading || testing || saving || !baseUrl.trim() || !model.trim()}>{testing ? <LoaderCircle className="spin" size={14} /> : <Network size={14} />}{t("Test connection")}</button>
+          <button className="secondary-button" onClick={() => void testConnection()} disabled={loading || testing || saving || !baseUrl.trim() || !model.trim()}>{testing ? <LoaderCircle className="spin" size={14} /> : <Network size={14} />}{t(testing ? "Testing…" : "Test connection")}</button>
           {proactiveRole && <button className="secondary-button" onClick={() => void useMainAgent()} disabled={loading || testing || saving || savedConfig?.inheritedFromAgent}>{t("Use main Agent model")}</button>}
         </div>
         <div>{!embedded && <button className="secondary-button" onClick={onClose}>{t("Cancel")}</button>}<button className="primary-button" onClick={() => void save()} disabled={loading || testing || saving || !baseUrl.trim() || !model.trim()}>{saving ? <LoaderCircle className="spin" size={14} /> : <Save size={14} />}{t(advancedProfiles ? "Save profile" : "Save model")}</button></div>

@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useState } from "react";
 import { Check, LoaderCircle, Network, Save, X } from "lucide-react";
 import { useUISettings } from "./i18n";
 import { SettingsChoiceGroup, SettingsRow, SettingsSection, SettingsSwitch } from "./SettingsPrimitives";
-import { formatModelConnectionError, modelProfilesEnabled, providers } from "./ModelSettingsModal";
+import { modelProfilesEnabled, providers, useModelConnectionTest } from "./ModelSettingsModal";
 import type { ProactiveSettings } from "./proactive-types";
 
 const MODES: Array<{ id: ProactiveSettings["mode"]; label: string; description: string }> = [
@@ -43,7 +43,9 @@ export default function ProactiveSettingsPanel({
   const [apiKey, setApiKey] = useState("");
   const [modelLoading, setModelLoading] = useState(true);
   const [modelSaving, setModelSaving] = useState(false);
-  const [modelTesting, setModelTesting] = useState(false);
+  const { state: connectionResult, reset: resetConnectionTest, run: runConnectionTest } = useModelConnectionTest(t);
+  const modelTesting = connectionResult?.kind === "testing";
+  useLayoutEffect(resetConnectionTest, [resetConnectionTest, provider, baseUrl, modelName, apiKey]);
   const [modelFeedback, setModelFeedback] = useState<{ kind: "idle" | "success" | "error"; text: string }>({ kind: "idle", text: "" });
   const editingSharedProfile = modelProfilesEnabled() && modelConfig?.sharedAcrossRoles;
   const selectedProvider = providers.find((item) => item.id === provider) ?? providers.at(-1)!;
@@ -95,6 +97,7 @@ export default function ProactiveSettingsPanel({
   }
 
   async function saveModel() {
+    resetConnectionTest();
     setModelSaving(true);
     setModelFeedback({ kind: "idle", text: "" });
     try {
@@ -113,19 +116,12 @@ export default function ProactiveSettingsPanel({
   }
 
   async function testModel() {
-    setModelTesting(true);
     setModelFeedback({ kind: "idle", text: "" });
-    try {
-      const result = await bridge.testModelConfig({ provider, baseUrl, model: modelName, apiKey }, "proactive");
-      setModelFeedback({ kind: "success", text: `Connected in ${result.latencyMs} ms · ${result.resolvedModel}` });
-    } catch (error) {
-      setModelFeedback({ kind: "error", text: formatModelConnectionError(error, t) });
-    } finally {
-      setModelTesting(false);
-    }
+    await runConnectionTest(() => bridge.testModelConfig({ provider, baseUrl, model: modelName, apiKey }, "proactive"));
   }
 
   async function useMainAgentModel() {
+    resetConnectionTest();
     setModelSaving(true);
     setModelFeedback({ kind: "idle", text: "" });
     try {
@@ -140,6 +136,7 @@ export default function ProactiveSettingsPanel({
     }
   }
 
+  const displayedFeedback = connectionResult || modelFeedback;
   return <div className="settings-sections">
     <p className="settings-group-note">{t("A quiet research sidekick. It reads app context; screenshots are opt-in, app-only, and never written to disk.")}</p>
 
@@ -215,13 +212,13 @@ export default function ProactiveSettingsPanel({
                   {modelSaving ? <LoaderCircle className="spin" size={14} /> : <Save size={14} />}{t("Save model")}
                 </button>
                 <button className="secondary-button" onClick={() => void testModel()} disabled={modelLoading || modelSaving || modelTesting || !baseUrl.trim() || !modelName.trim()}>
-                  {modelTesting ? <LoaderCircle className="spin" size={14} /> : <Network size={14} />}{t("Test connection")}
+                  {modelTesting ? <LoaderCircle className="spin" size={14} /> : <Network size={14} />}{t(modelTesting ? "Testing…" : "Test connection")}
                 </button>
                 <button className="secondary-button" onClick={() => void useMainAgentModel()} disabled={modelLoading || modelSaving || modelTesting || modelConfig?.inheritedFromAgent}>
                   {t("Use main Agent model")}
                 </button>
               </div>
-              {modelFeedback.text && <div className={`model-feedback ${modelFeedback.kind}`}>{modelFeedback.kind === "success" ? <Check size={14} /> : <X size={14} />}<span>{modelFeedback.text}</span></div>}
+              {displayedFeedback.text && <div className={`model-feedback ${displayedFeedback.kind}`} role={displayedFeedback.kind === "error" ? "alert" : "status"}>{displayedFeedback.kind === "success" ? <Check size={14} /> : displayedFeedback.kind === "error" ? <X size={14} /> : null}<span>{displayedFeedback.text}</span></div>}
             </>}
         </SettingsRow>
       </div>

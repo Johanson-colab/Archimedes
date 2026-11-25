@@ -204,6 +204,14 @@ function profileForInput(input, role) {
   return getActiveModelConfig(role);
 }
 
+function getAgentModelConfig(profileId) {
+  if (profileId === undefined) return getActiveModelConfig();
+  if (typeof profileId !== "string" || !profileId || profileId.length > 200) throw new Error("Choose a saved model profile.");
+  const profile = profileForInput({ id: profileId }, "agent");
+  if (!profile.apiKey) throw new Error("The selected model profile needs an API key.");
+  return { ...profile, modelId: profile.id };
+}
+
 function saveProfile(input, previous, role) {
   const baseUrl = normalizeBaseUrl(input.baseUrl);
   const provider = normalizeProvider(input.provider, baseUrl);
@@ -284,7 +292,7 @@ async function testModelConfig(input = null, role = "agent") {
     return {
       ok: true,
       latencyMs: Date.now() - startedAt,
-      resolvedModel: String(body.model || candidate.model),
+      resolvedModel: candidate.model,
     };
   } catch (error) {
     if (error?.name === "AbortError") throw new Error("Connection test timed out after 25 seconds.");
@@ -297,6 +305,7 @@ async function testModelConfig(input = null, role = "agent") {
 module.exports = {
   deleteModelProfile: modelRegistry.deleteModel,
   getActiveModelConfig,
+  getAgentModelConfig,
   getPublicModelConfig,
   getRoleAssignments: modelRegistry.getRoleAssignments,
   initializeModelConfig,

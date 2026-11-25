@@ -57,7 +57,8 @@ import ArtifactsPanel from "./ArtifactsPanel";
 import ChatActivityTimeline from "./ChatActivityTimeline";
 import NativeAgentPanel, { NativeContextUsage, NativeQuestionCard, NativeSessionBusyNotice } from "./NativeAgentPanel";
 import { mergeNativeEvent, nativeTurnEvents, nativeUsage, updateNativeQuestions, type NativeSessionBackend } from "./native-agent-state";
-import HarnessPicker from "./HarnessPicker";
+import HarnessPicker, { ComposerModelPicker } from "./HarnessPicker";
+import { modelProfilesEnabled } from "./ModelSettingsModal";
 import NewChatModePicker, { draftForNewChatMode, RESEARCH_EXAMPLE, type NewChatMode } from "./NewChatModePicker";
 import JourneyView from "./JourneyView";
 import { defaultJourneySettings, normalizeJourneySettings } from "./journeySettings";
@@ -1511,6 +1512,8 @@ function App() {
   const [modal, setModal] = useState<Modal>(null);
   const [modelConfigRevision, setModelConfigRevision] = useState(0);
   const [activeModelConfig, setActiveModelConfig] = useState<PublicModelConfig | null>(null);
+  const [modelProfiles, setModelProfiles] = useState<PublicModelProfile[]>([]);
+  const [chatModelChoices, setChatModelChoices] = useState<Record<string, string | undefined>>({});
   const [newProjectOpen, setNewProjectOpen] = useState(false);
   const [newProjectName, setNewProjectName] = useState("");
   const [newProjectWorkspace, setNewProjectWorkspace] = useState("");
@@ -1594,6 +1597,11 @@ function App() {
   // and paper writing operate inside the session folder: session snapshot →
   // project folder → primary workspace.
   const executionWorkspace = activeThread?.workspace_path || activeWorkspace?.root || activeProject?.workspace_path || workspace;
+  const chatModelScope = JSON.stringify([workspace, activeThreadId || ["draft", activeProjectId, chatViewNonce], selectedHarness]);
+  const requestedChatModel = chatModelChoices[chatModelScope];
+  const selectedChatModel = selectedHarness === "api" && !modelProfiles.some(profile => profile.id === requestedChatModel)
+    ? undefined : requestedChatModel;
+  const defaultChatModel = activeModelConfig?.hasApiKey ? activeModelConfig.model : "";
   const executionWorkspaceRef = useRef(executionWorkspace);
   const fileWorkspaceVersionRef = useRef(0);
   if (executionWorkspaceRef.current !== executionWorkspace) fileWorkspaceVersionRef.current += 1;
@@ -1714,13 +1722,13 @@ function App() {
 
   useEffect(() => {
     let active = true;
-    void desktopBridge.getModelCapabilities().then((capabilities) => {
+    void desktopBridge.getModelCapabilities("agent", selectedHarness === "api" ? selectedChatModel : undefined).then((capabilities) => {
       if (active) setModelCapabilities(capabilities);
     }).catch(() => {
       if (active) setModelCapabilities(previewModelCapabilities);
     });
     return () => { active = false; };
-  }, [activeModelConfig]);
+  }, [activeModelConfig, selectedHarness, selectedChatModel]);
 
   useEffect(() => {
     if (modelCapabilities.thinkingEfforts.length && !modelCapabilities.thinkingEfforts.includes(reasoningEffort)) {
@@ -2324,11 +2332,14 @@ function App() {
 
   useEffect(() => {
     let active = true;
+    const profiles = modelProfilesEnabled() && typeof desktopBridge.listModelProfiles === "function" ? desktopBridge.listModelProfiles() : Promise.resolve([]);
     void desktopBridge.getModelConfig().then((config) => {
       if (active) setActiveModelConfig(config);
     }).catch(() => {
       if (active) setActiveModelConfig(null);
     });
+    void profiles.then((next) => { if (active) setModelProfiles(next.filter(profile => profile.hasApiKey)); })
+      .catch(() => { if (active) setModelProfiles([]); });
     return () => { active = false; };
   }, [modelConfigRevision]);
 
@@ -2967,7 +2978,9 @@ function App() {
     setEvents(selectedNativeBackend ? [] : [{ title: "Evidence synthesis", detail: "Reading workspace and knowledge context", state: "active" }]);
 
     try {
-      const result = await desktopBridge.runAgent({ prompt: requestPrompt, workspace: executionWorkspace, threadId: forceNew ? undefined : activeThreadId || undefined, projectId: activeProjectId || undefined, workspaceId: activeWorkspace?.id, visibility: threadVisibility, mode: requestedMode, researchSkill, mineruToken, reasoningEffort: requestedReasoningEffort, contextLength: requestedContextLength, contextItems: submittedContext, capabilities: { write: "ask", command: "ask" }, origin: "research", backend: backendOverride || selectedHarness, ...(remoteServerId && !researchSkill && (backendOverride || selectedHarness) === "codex" && ["research", "experiment-setup"].includes(requestedMode) ? { remoteServerId } : {}) });
+      const result = await desktopBridge.runAgent({ prompt: requestPrompt, workspace: executionWorkspace, threadId: forceNew ? undefined : activeThreadId || undefined, projectId: activeProjectId || undefined, workspaceId: activeWorkspace?.id, visibility: threadVisibility, mode: requestedMode, researchSkill, mineruToken, reasoningEffort: requestedReasoningEffort, contextLength: requestedContextLength, contextItems: submittedContext, capabilities: { write: "ask", command: "ask" }, origin: "research", backend: backendOverride || selectedHarness,
+        ...(!backendOverride && (selectedHarness === "api" ? { modelProfileId: selectedChatModel } : { nativeModel: selectedChatModel })),
+        ...(remoteServerId && !researchSkill && (backendOverride || selectedHarness) === "codex" && ["research", "experiment-setup"].includes(requestedMode) ? { remoteServerId } : {}) });
       setThreads((current) => [result.thread, ...current.filter((thread) => thread.id !== result.threadId)]);
       setNativeStream((current) => current.threadId === result.threadId ? { threadId: "", events: [] } : current);
       setNativeQuestions((current) => current.filter((item) => item.threadId !== result.threadId));
@@ -2990,6 +3003,10 @@ function App() {
         setTrajectoryEvents(result.thread.events ?? []);
         setEvents([]);
         setActiveThreadId(result.threadId);
+        if (!backendOverride && selectedChatModel !== undefined) {
+          const scope = JSON.stringify([workspace, result.threadId, selectedHarness]);
+          setChatModelChoices(current => ({ ...current, [scope]: selectedChatModel }));
+        }
         setBoundHarness(result.thread.harness ?? backendOverride ?? selectedHarness);
         setActiveProjectId(result.thread.project_id);
         if (result.thread.workspace_id) setActiveWorkspaceId(result.thread.workspace_id);
@@ -3675,7 +3692,10 @@ function App() {
               events={events}
               trajectoryEvents={combinedTrajectoryEvents}
               nativeBackend={selectedNativeBackend}
-              modelLabel={activeModelConfig?.hasApiKey ? activeModelConfig.model : ""}
+              defaultChatModel={defaultChatModel}
+              modelProfiles={modelProfiles}
+              selectedChatModel={selectedChatModel}
+              onChatModelChange={(model) => setChatModelChoices(current => ({ ...current, [chatModelScope]: model }))}
               remoteServers={remoteServers}
               remoteServerId={remoteServerId}
               onRemoteServerChange={setRemoteServerId}
@@ -3735,7 +3755,7 @@ function App() {
               onComposerRequestApplied={(id) => setComposerRequest((current) => current?.id === id ? null : current)}
             />
           )}
-          {sideThread && <div className={mainSection === "chat" ? "side-chat-host" : "side-chat-host hidden"}><SideConversation key={sideThread.id} bridge={desktopBridge} initialThread={sideThread} dataWorkspace={workspace} reasoningEffort={reasoningEffort} contextLength={contextLength} onBusyChange={setSideBusy} onClose={() => setSideThread(null)} onOpenMain={(thread) => { setSideThread(null); void openResearchThread(thread); }} onUpdated={(thread) => { setSideThread((current) => current?.id === thread.id ? thread : current); setThreads((current) => [thread, ...current.filter((item) => item.id !== thread.id)]); }} /></div>}
+          {sideThread && <div className={mainSection === "chat" ? "side-chat-host" : "side-chat-host hidden"}><SideConversation key={sideThread.id} bridge={desktopBridge} initialThread={sideThread} dataWorkspace={workspace} defaultChatModel={defaultChatModel} modelProfiles={modelProfiles} onModelSettings={() => { void runConversationCommand("model"); }} reasoningEffort={reasoningEffort} contextLength={contextLength} onBusyChange={setSideBusy} onClose={() => setSideThread(null)} onOpenMain={(thread) => { setSideThread(null); void openResearchThread(thread); }} onUpdated={(thread) => { setSideThread((current) => current?.id === thread.id ? thread : current); setThreads((current) => [thread, ...current.filter((item) => item.id !== thread.id)]); }} /></div>}
           <Suspense fallback={null}>
             {/* View host sidebar-modules: one looping projection, semantics derived from the module registry (keepMounted/cacheClass/requiresWorkspace/open gate). */}
             {(Object.entries(sidebarModuleContent) as [string, ReactNode][]).map(([id, content]) => {
@@ -4241,7 +4261,7 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
   </div>;
 });
 
-function ConversationView({ messages, events, trajectoryEvents, remoteServers, remoteServerId, onRemoteServerChange, onRefreshRemoteServers, onOpenSshSettings, nativeBackend, modelLabel, harnessBound, onHarnessChange, nativeQuestions, onNativeAnswer, onNativeSteer, workspace, projectId, agentBusy, interrupting, canInterrupt, pendingAction, changeSets, researchMode, researchGraphOpen, onToggleResearchGraph, onResearchGraphAvailability, reasoningEffort, contextLength, modelCapabilities, contextItems, onOpenWorkspaceSettings, onCommand, contextSummary, compactedThroughTurnId, onSubmit, onInterrupt, onResearchMode, onAddContext, onRemoveContext, onApprove, onReject, onOpenFile, showWelcome, onWelcomeAction, composerRequest, draftKey, currentFile, currentSelection, onComposerRequestApplied, initialScrollTop, onScrollTop, commentScope, addingComment, commentsShowResolved, onExitComments }: {
+function ConversationView({ messages, events, trajectoryEvents, remoteServers, remoteServerId, onRemoteServerChange, onRefreshRemoteServers, onOpenSshSettings, nativeBackend, defaultChatModel, modelProfiles, selectedChatModel, onChatModelChange, harnessBound, onHarnessChange, nativeQuestions, onNativeAnswer, onNativeSteer, workspace, projectId, agentBusy, interrupting, canInterrupt, pendingAction, changeSets, researchMode, researchGraphOpen, onToggleResearchGraph, onResearchGraphAvailability, reasoningEffort, contextLength, modelCapabilities, contextItems, onOpenWorkspaceSettings, onCommand, contextSummary, compactedThroughTurnId, onSubmit, onInterrupt, onResearchMode, onAddContext, onRemoveContext, onApprove, onReject, onOpenFile, showWelcome, onWelcomeAction, composerRequest, draftKey, currentFile, currentSelection, onComposerRequestApplied, initialScrollTop, onScrollTop, commentScope, addingComment, commentsShowResolved, onExitComments }: {
   commentScope: SessionCommentsScope | null;
   addingComment: boolean;
   commentsShowResolved: boolean;
@@ -4250,7 +4270,10 @@ function ConversationView({ messages, events, trajectoryEvents, remoteServers, r
   events: TimelineEvent[];
   trajectoryEvents: ResearchEvent[];
   nativeBackend: AgentBackendConfig | null;
-  modelLabel?: string;
+  defaultChatModel: string;
+  modelProfiles: PublicModelProfile[];
+  selectedChatModel?: string;
+  onChatModelChange: (model: string | undefined) => void;
   remoteServers: SshServer[];
   remoteServerId: string;
   onRemoteServerChange: (id: string) => void;
@@ -4871,7 +4894,12 @@ function ConversationView({ messages, events, trajectoryEvents, remoteServers, r
         {commandNotice && <div className="composer-command-notice" role="status">{commandNotice}</div>}
         <div className="conversation-composer-footer">
           <ContextPicker bridge={desktopBridge} workspace={workspace} projectId={projectId} items={contextItems} openRequest={contextPickerRequest} currentFile={currentFile} currentSelection={currentSelection} onAdd={addContextItems} />
-          <HarnessPicker backend={nativeBackend?.backend || "api"} modelLabel={modelLabel} bound={harnessBound} busy={agentBusy} onChange={onHarnessChange} onSettings={() => { void onCommand("model"); }} />
+          <div className="composer-agent-model">
+            <HarnessPicker backend={nativeBackend?.backend || "api"} bound={harnessBound} busy={agentBusy} onChange={onHarnessChange} onSettings={() => { void onCommand("model"); }} />
+            <ComposerModelPicker bridge={desktopBridge} native={nativeBackend} workspace={workspace} defaultModel={defaultChatModel}
+              profiles={modelProfiles} value={selectedChatModel} bound={harnessBound} disabled={agentBusy}
+              onChange={onChatModelChange} onSettings={() => { void onCommand("model"); }} />
+          </div>
           <button
             type="button"
             className="composer-context"
