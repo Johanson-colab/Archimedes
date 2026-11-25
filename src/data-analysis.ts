@@ -118,6 +118,36 @@ function sampleLinePoints(points: PlotPoint[], limit: number) {
   return points.filter((point) => sampled.has(point));
 }
 
+function scatterCorrelation(points: PlotPoint[]) {
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const { x, y } of points) {
+    minX = Math.min(minX, x); maxX = Math.max(maxX, x);
+    minY = Math.min(minY, y); maxY = Math.max(maxY, y);
+  }
+  if (minX === maxX || minY === maxY) return null;
+
+  // Center before scaling to keep differences when values share a large offset.
+  // Halving the endpoints keeps the midpoint finite even at the numeric limits.
+  const originX = minX / 2 + maxX / 2, originY = minY / 2 + maxY / 2;
+  const scaleX = Math.max(maxX - originX, originX - minX);
+  const scaleY = Math.max(maxY - originY, originY - minY);
+  let sumX = 0, sumY = 0;
+  for (const { x, y } of points) {
+    sumX += (x - originX) / scaleX;
+    sumY += (y - originY) / scaleY;
+  }
+  const meanX = sumX / points.length, meanY = sumY / points.length;
+  let xx = 0, yy = 0, xy = 0;
+  for (const { x, y } of points) {
+    const dx = (x - originX) / scaleX - meanX;
+    const dy = (y - originY) / scaleY - meanY;
+    xx += dx * dx;
+    yy += dy * dy;
+    xy += dx * dy;
+  }
+  return Math.max(-1, Math.min(1, xy / Math.sqrt(xx * yy)));
+}
+
 /** Calculations use every valid row; only the scatter/line display is bounded. */
 export function buildPlot(dataset: Dataset, config: PlotConfig): PlotResult {
   const { type, x, y, group } = config;
@@ -158,12 +188,7 @@ export function buildPlot(dataset: Dataset, config: PlotConfig): PlotResult {
   }
   result.valid = all.length;
   if (type === "line") all.sort((a, b) => a.x - b.x);
-  if (type === "scatter" && all.length > 1) {
-    const mx = all.reduce((sum, point) => sum + point.x / all.length, 0), my = all.reduce((sum, point) => sum + point.y / all.length, 0);
-    let xx = 0, yy = 0, xy = 0;
-    for (const point of all) { xx += (point.x - mx) ** 2; yy += (point.y - my) ** 2; xy += (point.x - mx) * (point.y - my); }
-    result.correlation = xx && yy ? Math.max(-1, Math.min(1, xy / Math.sqrt(xx * yy))) : null;
-  }
+  if (type === "scatter" && all.length > 1) result.correlation = scatterCorrelation(all);
   const groups = [...new Set(all.map((point) => point.group))];
   const accepted = new Set(groups.slice(0, 6));
   result.omittedGroups = Math.max(0, groups.length - accepted.size);

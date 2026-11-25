@@ -74,6 +74,26 @@ test("display sampling retains endpoints and unsupported numeric fields return a
   assert.equal(scope.buildPlot(data, { type: "histogram", x: 0, y: -1, group: -1 }).points.length, 0);
 });
 
+test("Pearson correlation is stable across axis scales and offsets", async (t) => {
+  const pairs = [[-1, -1], [0, 1], [1, 0]];
+  const cases = [
+    ["ordinary scale", pairs, 0.5],
+    ["large scale", pairs.map(([x, y]) => [x * 1e90, y * 1e90]), 0.5],
+    ["tiny scale", pairs.map(([x, y]) => [x * 1e-100, y * 1e-100]), 0.5],
+    ["disparate scales and negative relationship", pairs.map(([x, y]) => [x * 1e250, -y * 1e-250]), -0.5],
+    ["nearby values at a large offset", pairs.map(([x, y]) => [1e16 + x * 2, 1e16 + y * 2]), 0.5],
+    ["constant axis", pairs.map(([, y]) => [7, y]), null],
+  ];
+  for (const [name, rows, expected] of cases) {
+    await t.test(name, () => {
+      const dataset = { headers: ["x", "y"], rows: rows.map((row) => row.map(String)) };
+      const { correlation } = scope.buildPlot(dataset, { type: "scatter", x: 0, y: 1, group: -1 });
+      if (expected === null) assert.equal(correlation, null);
+      else assert.ok(correlation !== null && Math.abs(correlation - expected) < 1e-12, `expected ${expected}, received ${correlation}`);
+    });
+  }
+});
+
 test("grouped line sampling preserves each series and its source rows within the display cap", () => {
   const rows = Array.from({ length: 4000 }, (_, i) => [
     String(Math.floor(i / 2)), String(i), i % 2 === 0 ? "Indoor" : "Outdoor",
