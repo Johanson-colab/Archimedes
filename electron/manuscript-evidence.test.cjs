@@ -10,7 +10,7 @@ const { captureManuscriptSources, writeManuscriptSnapshot } = require("./manuscr
 const { saveAnalysis } = require("./project-results.cjs");
 const { saveEvidence, getEvidence, listEvidence } = require("./manuscript-evidence.cjs");
 
-test("reopen linked manuscript values, flag changed or missing evidence, and enforce project ownership", (t) => {
+test("reopen linked manuscript values, flag changed or missing evidence, and enforce project ownership", async (t) => {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "manuscript-result-")));
   let store = createWorkspaceStore(root);
   t.after(() => { store.close(); fs.rmSync(root, { recursive: true, force: true }); });
@@ -30,7 +30,7 @@ test("reopen linked manuscript values, flag changed or missing evidence, and enf
   });
   const log = path.join(root, ".archimedes", "fixture.log");
   fs.writeFileSync(log, "seed 1: 70 73\nseed 2: 72 72\nseed 3: 71 74\n");
-  const run = store.createExperimentRun({ projectId: project.id, threadId: thread.id, nodeId: graph.id, cwd: root, command: "printf fixture", logPath: log });
+  const run = await store.createExperimentRun({ projectId: project.id, threadId: thread.id, nodeId: graph.id, cwd: root, command: "printf fixture", logPath: log });
   store.updateExperimentRun({ runId: run.id, status: "succeeded", exitCode: 0 });
   const bytes = Buffer.from("seed,baseline,target\n1,70,73\n2,72,72\n3,71,74\n");
   const saved = saveAnalysis(root, project.id, { bytes, name: "accuracy.csv", recipe: {
