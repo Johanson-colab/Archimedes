@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Dialog } from "./Dialog";
 import { InlineNotice } from "./InlineNotice";
 import { useUISettings } from "./i18n";
-import { bibliographyTitleKey, indexBibliographyBatch, citationKeyIdentity, exportBibliography, hasConflictingBibliographyIdentifiers, matchBibliographyPaper, metadataDifferences, paperWithLearnedIdentifiers, parseBibliography, type BibliographyBridge, type BibliographyPaper, type MetadataPatch } from "./bibliography";
+import { bibliographyTitleKey, indexBibliographyBatch, citationKeyIdentity, exportBibliography, hasConflictingBibliographyIdentifiers, hasConflictingSavedBibliographyIdentifiers, matchBibliographyPaper, metadataDifferences, paperWithLearnedIdentifiers, parseBibliography, type BibliographyBridge, type BibliographyPaper, type MetadataPatch } from "./bibliography";
 import "./bibliography.css";
 
 export default function BibliographyDialog({ bridge, library, onClose, onChanged }: { bridge: ResearchDeskBridge; library: ResearchLibrary; onClose: () => void; onChanged: () => Promise<void> }) {
@@ -43,7 +43,7 @@ export default function BibliographyDialog({ bridge, library, onClose, onChanged
         || matchBibliographyPaper(candidate, projectCandidates, matchOptions)
         || matchBibliographyPaper(candidate, knownCandidates, matchOptions);
       const duplicate = batch.repeatedRows.has(index);
-      const identifierConflict = batch.conflictingRows.has(index);
+      const identifierConflict = batch.conflictingRows.has(index) || !duplicate && hasConflictingSavedBibliographyIdentifiers(candidate, knownCandidates, existing);
       const enriched = existing && paperWithLearnedIdentifiers(existing, candidate);
       const differences = enriched ? metadataDifferences(entry.paper, enriched) : {};
       const updateKey = (repairs[index] || []).includes("citekey");

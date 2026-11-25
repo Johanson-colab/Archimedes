@@ -39,7 +39,7 @@ before(async () => {
     const result = new Function(...Object.keys(scope), `${code.replace(/^export \{\};?$/gm, "")}\nreturn {${names.join(",")}};`)(...Object.values(scope));
     Object.assign(scope, result);
   }
-  await load("bibliography.ts", ["parseBibliography", "bibliographyTitleKey", "indexBibliographyBatch", "exportBibliography", "matchBibliographyPaper", "hasConflictingBibliographyIdentifiers", "metadataDifferences", "paperWithLearnedIdentifiers", "citationKeyIdentity"]);
+  await load("bibliography.ts", ["parseBibliography", "bibliographyTitleKey", "indexBibliographyBatch", "exportBibliography", "matchBibliographyPaper", "hasConflictingBibliographyIdentifiers", "hasConflictingSavedBibliographyIdentifiers", "metadataDifferences", "paperWithLearnedIdentifiers", "citationKeyIdentity"]);
   await load("i18n/translations/library.ts", ["library"]);
   await load("Tabs.tsx", ["Tabs", "Tab", "FilterGroup", "FilterButton"]);
   scope.conferenceCatalog = require("../shared/conferences.json");
@@ -675,6 +675,63 @@ test("contradictory identifier claims are blocked before writing and unrelated r
     await input(field, source.join("\n") + "\n");
     await click("Import selected references");
     assert.deepEqual(data.db.listPapers(library.id).map(paper => paper.id).sort(), papers.map(paper => paper.id).sort());
+  } finally { if (unmount) await unmount(); data.close(); }
+});
+
+test("a retained bibliography key cannot be assigned to a conflicting enriched reference", async () => {
+  const data = database("BibTeX key with a learned alias"); let unmount;
+  try {
+    const library = data.db.listLibraries(data.project.id)[0];
+    const saved = data.db.addPaper(library.id, { ...fixture.paper, title: "Shared title", doi: "10.5555/shared", arxiv_id: "" });
+    data.db.setPaperBibliography(saved.id, { citekey: "keep" });
+    unmount = await mount(scope.BibliographyDialog, { bridge: data.bridge, library, onClose() {}, onChanged: async () => {} });
+    await input(document.querySelector('[aria-label="BibTeX source"]'), [
+      '@article{keep,title={Shared title},doi={10.5555/shared}}',
+      '@article{alias,title={Shared title},doi={10.5555/shared},eprint={2401.01234}}',
+      '@article{keep,title={Shared title},eprint={2401.05678}}',
+    ].join("\n"));
+    const collision = document.querySelectorAll("article.external-paper")[2];
+    assert.match(collision.querySelector("small").textContent, /Citation key conflict/);
+    assert.equal(collision.querySelector("input").disabled, true);
+    await click("Import selected references");
+    data.db.closeAllWorkspaces();
+    data.db.openWorkspace(data.root);
+    assert.deepEqual(data.db.listPapers(library.id).map(paper => [paper.id, paper.citekey, paper.arxiv_id]), [[saved.id, "keep", "2401.01234"]]);
+    await click("Preview BibTeX export");
+    const exported = scope.parseBibliography(document.querySelector('[aria-label="BibTeX export preview"]').value);
+    assert.deepEqual(exported.entries.map(({ citekey, paper }) => [citekey, paper.arxiv_id]), [["keep", "2401.01234"]]);
+  } finally { if (unmount) await unmount(); data.close(); }
+});
+
+test("a learned identifier cannot join a saved paper with a conflicting DOI", async () => {
+  const data = database("BibTeX alias claimed by a saved paper"); let unmount;
+  try {
+    const library = data.db.listLibraries(data.project.id)[0];
+    const owner = data.db.addPaper(library.id, { ...fixture.paper, title: "First result", doi: "10.5555/first", arxiv_id: "2401.01234" });
+    const other = data.db.addPaper(library.id, { ...fixture.paper, title: "Second result", doi: "10.5555/second", arxiv_id: "" });
+    unmount = await mount(scope.BibliographyDialog, { bridge: data.bridge, library, onClose() {}, onChanged: async () => {} });
+    const field = document.querySelector('[aria-label="BibTeX source"]');
+    const source = [
+      '@article{second,title={Second result},doi={10.5555/second}}',
+      '@article{alias,title={Second result expanded},doi={10.5555/second},eprint={2401.01234}}',
+      '@article{independent,title={Independent},doi={10.5555/independent}}',
+    ].join("\n");
+    await input(field, source);
+    const representative = document.querySelector("article.external-paper");
+    assert.match(representative.querySelector("small").textContent, /Conflicting DOI or arXiv IDs/);
+    assert.equal(representative.querySelector("input").disabled, true);
+    await click("Import selected references");
+    assert.equal(data.db.getPaper(owner.id).arxiv_id, "2401.01234");
+    assert.equal(data.db.getPaper(other.id).arxiv_id, "");
+    assert.equal(data.db.listPapers(library.id).length, 3);
+
+    await input(field, source.replace("2401.01234", "2401.05678"));
+    await click("Import selected references");
+    data.db.closeAllWorkspaces();
+    data.db.openWorkspace(data.root);
+    assert.equal(data.db.getPaper(other.id).arxiv_id, "2401.05678");
+    assert.equal(data.db.getPaper(owner.id).arxiv_id, "2401.01234");
+    assert.equal(data.db.listPapers(library.id).length, 3);
   } finally { if (unmount) await unmount(); data.close(); }
 });
 
