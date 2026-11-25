@@ -95,7 +95,6 @@ export const writing: Record<string, string> = {
   "No matches": "无匹配结果",
   "No matching changes": "没有匹配的变更",
   "No matching templates": "没有匹配的模板",
-  "No project selected": "尚未选择项目",
   "No values are linked in this manuscript.": "这篇稿件还没有关联数值。",
   "Notes editor": "笔记编辑器",
   "Official author kit": "官方作者模板",
