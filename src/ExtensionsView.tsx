@@ -12,6 +12,7 @@ import {
   Trash,
   X,
 } from "lucide-react";
+import { useUISettings } from "./i18n";
 import { Dialog } from "./Dialog";
 import { InlineNotice } from "./InlineNotice";
 import { StateView } from "./StateView";
@@ -587,6 +588,7 @@ function SourceManager({ bridge, sources, onClose, onSaved }: {
   onClose: () => void;
   onSaved: (sources: ExtensionSource[]) => void;
 }) {
+  const { t } = useUISettings();
   const [draft, setDraft] = useState<ExtensionSource[]>(sources);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -667,6 +669,11 @@ function SourceManager({ bridge, sources, onClose, onSaved }: {
           <label className="extensions-source-toggle"><input type="checkbox" checked={source.enabled} onChange={(event) => updateSource(source.id, { enabled: event.target.checked })} /><span>{source.name}</span></label>
           <span className="extensions-source-kind">{SOURCE_TYPE_LABEL[source.type]}</span>
           <span className="extensions-source-state">{source.error ? <span className="error">{source.error}</span> : source.count ? `${source.count} results` : "Not synced"}</span>
+          {source.hasToken && <details><summary>{t("Saved token")}</summary>
+            <input aria-label={t("Replace token")} type="password" autoComplete="new-password"
+              placeholder={t("Replace token")} value={source.token || ""} onChange={event => updateSource(source.id, { token: event.target.value || undefined })} />
+            <button type="button" className="secondary-button" onClick={() => updateSource(source.id, { token: "", hasToken: false })}>{t("Clear saved token")}</button>
+          </details>}
           {!source.builtin && <button className="extensions-icon-button" onClick={() => setDraft((current) => current.filter((candidate) => candidate.id !== source.id))} aria-label={`Remove ${source.name}`}><Trash size={13} /></button>}
         </div>)}
       </div>
