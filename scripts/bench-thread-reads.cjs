@@ -266,15 +266,34 @@ function installRenderer(prompt) {
   };
   const composer = () => document.querySelector("[data-ui=research-composer] textarea");
   const sendButton = () => document.querySelector("[data-ui=research-composer] .conversation-send");
+  const sessionButton = () => document.querySelector(".session-chip");
+  const canClick = element => {
+    if (!element) return false;
+    const { x, y, width, height } = element.getBoundingClientRect();
+    return element.contains(document.elementFromPoint(x + width / 2, y + height / 2));
+  };
   const setDraft = (element, value) => {
     Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value").set.call(element, value);
     element.dispatchEvent(new Event("input", { bubbles: true }));
   };
   window.threadBench = {
+    async prepare(workspace) {
+      await eventually(() => document.querySelector(".toolbar-workspace")?.title.startsWith(`${workspace} · `) &&
+        !document.querySelector("dialog.workspace-opening-dialog[open]"));
+      const guide = document.querySelector(".first-run-guide");
+      if (guide) {
+        const skip = guide.querySelector("footer .secondary-button");
+        await eventually(() => canClick(skip));
+        skip.click();
+        await eventually(() => !document.querySelector(".first-run-guide"));
+      }
+      await eventually(() => canClick(sessionButton()));
+      return Boolean(guide);
+    },
     async open(target, sessionCount) {
-      await eventually(() => document.querySelector(".session-chip"));
+      await eventually(() => canClick(sessionButton()));
       const start = performance.now();
-      document.querySelector(".session-chip").click();
+      sessionButton().click();
       await eventually(() => Number(document.querySelector(".session-menu-heading small")?.textContent) === sessionCount);
       const choices = [...document.querySelectorAll(".session-row-open")];
       const button = choices.find(row => row.querySelector(".session-row-title")?.textContent.trim() === target.title);
@@ -289,7 +308,7 @@ function installRenderer(prompt) {
     },
     async send() {
       setDraft(composer(), prompt);
-      await eventually(() => sendButton()?.getAttribute("aria-label") === "Send" && !sendButton().disabled);
+      await eventually(() => sendButton()?.getAttribute("aria-label") === "Send" && !sendButton().disabled && canClick(sendButton()));
       return new Promise(resolve => {
         const start = performance.now();
         const unsubscribe = window.researchDesk.onAgentEvent(event => {
@@ -392,6 +411,7 @@ async function benchmarkDesktop(fixture) {
       return send.call(this, channel, event, ...args);
     };
     await run(`(${installRenderer})(${JSON.stringify(prompt)})`);
+    const firstRunGuideSkipped = await run(`window.threadBench.prepare(${JSON.stringify(fixture.workspace)})`);
     const [primary, ...other] = fixture.sessions;
     const open = async target => {
       const ms = await run(`window.threadBench.open(${JSON.stringify(target)}, ${fixture.sessions.length})`);
@@ -427,7 +447,7 @@ async function benchmarkDesktop(fixture) {
     assert.equal(model.requests.length, fixture.samples + 1);
     const timing = Object.fromEntries(Object.entries(samples).map(([name, group]) => [name, summary(group)]));
     timing.inputDuringPoll = summary(pollSamples, "inputMs");
-    console.log(JSON.stringify({ runtime: process.versions.electron, viewport: await run("[innerWidth, innerHeight, devicePixelRatio]"),
+    console.log(JSON.stringify({ runtime: process.versions.electron, viewport: await run("[innerWidth, innerHeight, devicePixelRatio]"), firstRunGuideSkipped,
       cold, samples, timing, eventLoopDelayMs: eventLoopReport(loop),
       peakRssKiB: process.resourceUsage().maxRSS,
       rendererPeakRssKiB: app.getAppMetrics().find(item => item.type === "Tab")?.memory.peakWorkingSetSize }));
