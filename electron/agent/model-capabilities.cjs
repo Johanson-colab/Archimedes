@@ -54,7 +54,9 @@ function getModelCapabilities(config = {}) {
     ? officialEfforts.length > 0 && explicit.nativeThinking !== false
     : explicit.nativeThinking === undefined ? isNativeThinkingModel(config) : Boolean(explicit.nativeThinking);
   const configuredEfforts = Array.isArray(explicit.thinkingEfforts) ? explicit.thinkingEfforts : THINKING_EFFORTS;
-  const thinkingEfforts = nativeThinking ? configuredEfforts.filter(value => !official || officialEfforts.includes(value)) : [];
+  const thinkingEfforts = official
+    ? (nativeThinking ? configuredEfforts.filter(value => officialEfforts.includes(value)) : [])
+    : (explicit.thinkingEfforts ?? (nativeThinking ? THINKING_EFFORTS : []));
   const extraLongContext = explicit.extraLongContext === undefined ? supportsExtraLongContext(config) : Boolean(explicit.extraLongContext);
   const contextWindowTokens = tokenCount(config.contextWindowTokens);
   // The conversation and composer share a character estimate. The provider

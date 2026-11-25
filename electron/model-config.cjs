@@ -278,10 +278,10 @@ async function testModelConfig(input = null, role = "agent") {
   try {
     const profile = isOfficialOpenAI(candidate) ? openAIWorkModel(candidate.model) : null;
     if (profile?.endpoint === "responses") {
-      const result = await completeResponses(candidate, { ...profile, stream: false }, [{ role: "user", content: "Reply with OK." }], {
+      await completeResponses(candidate, { ...profile, stream: false }, [{ role: "user", content: "Reply with OK." }], {
         signal: controller.signal, sessionId: "archimedes-connection-test", tools: [], effort: profile.efforts[0], onTextDelta: () => {},
       });
-      return { ok: true, latencyMs: Date.now() - startedAt, resolvedModel: result.resolvedModel };
+      return { ok: true, latencyMs: Date.now() - startedAt, resolvedModel: candidate.model };
     }
     const anthropic = candidate.provider === "anthropic";
     const requestOptions = buildModelRequestOptions(candidate, "archimedes-connection-test", {

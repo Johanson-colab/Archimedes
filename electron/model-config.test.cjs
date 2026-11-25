@@ -159,6 +159,6 @@ test("official Work catalog and connection use the model profile while image dis
   });
   assert.deepEqual((await listProviderModels({ ...input, purpose: "work" })).models, ["gpt-4o-mini", "gpt-6.2-sol"]);
   assert.equal((await listProviderModels(input)).models.length, ids.length);
-  assert.equal((await testModelConfig(input)).resolvedModel, "resolved-fixture");
+  assert.equal((await testModelConfig(input)).resolvedModel, input.model);
   assert.equal(requests.at(-1), input.baseUrl + "/responses");
 });
