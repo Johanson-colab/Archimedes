@@ -17,7 +17,7 @@ const { extractPdfText, extractPdfTextData, findPdfTextData, renderPdfPageData }
 const { fetchPublicPdf, findPublicPage, isPrivateAddress, openPublicPage } = require("./agent/remote-content.cjs");
 const { evidenceForTool } = require("./agent/evidence.cjs");
 const { openAiReasoningOptions, reasoningPolicy } = require("./agent/reasoning.cjs");
-const { contextCharacterLimit, estimateTokenCharacters, normalizeContextLength, normalizeReasoningEffort: normalizeModelReasoningEffort, outputTokenLimit } = require("./agent/model-capabilities.cjs");
+const { contextCharacterLimit, estimateTokenCharacters, getModelCapabilities, normalizeContextLength, normalizeReasoningEffort: normalizeModelReasoningEffort, outputTokenLimit } = require("./agent/model-capabilities.cjs");
 const { snapshotWorkspace, compareWorkspaceSnapshots, workspacePath: existingWorkspacePath } = require("./workspace-files.cjs");
 const { artifactKind } = require("./artifacts.cjs");
 const { runNative } = require("./agent/external-backend.cjs");
@@ -1734,7 +1734,8 @@ async function runAgentInStore({ prompt, workspace, threadId, projectId, workspa
         !(tool.function.name === "search_academic_papers" && academicSearches >= policy.maxAcademicSearches) &&
         !(tool.function.name === "web_search" && webSearches >= policy.maxWebSearches) &&
         (["research", "experiment-setup"].includes(mode) || !["create_experiment", "prepare_experiment_workspace", "run_experiment"].includes(tool.function.name)));
-    const initialRequest = { availableTools: availableToolDefinitions(), reasoningEffort: resolvedReasoningEffort };
+    const toolCapable = getModelCapabilities(config).supportsTools;
+    const initialRequest = { availableTools: toolCapable ? availableToolDefinitions() : [], reasoningEffort: resolvedReasoningEffort };
     const context = prepareConversation({
       // Internal review workers are intentionally not persisted, but their
       // active turn still has to be present for the normal context builder.
@@ -1770,7 +1771,8 @@ async function runAgentInStore({ prompt, workspace, threadId, projectId, workspa
     for (let round = 0; round < maxToolRounds; round += 1) {
       const completionOptions = {
         signal: controller.signal,
-        availableTools: round === 0 ? initialRequest.availableTools : availableToolDefinitions(),
+        allowTools: toolCapable,
+        availableTools: toolCapable ? (round === 0 ? initialRequest.availableTools : availableToolDefinitions()) : [],
         reasoningEffort: resolvedReasoningEffort,
         sessionId: thread.id,
         onTextDelta: (delta) => emitTurn({ type: "assistant_delta", title: "Writing response", detail: "Streaming model output", delta }),
