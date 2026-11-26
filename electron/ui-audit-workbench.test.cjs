@@ -9,6 +9,9 @@ const css = fs.readFileSync(path.join(root, "src", "styles.css"), "utf8");
 const tokens = fs.readFileSync(path.join(root, "src", "tokens.css"), "utf8");
 const terminal = fs.readFileSync(path.join(root, "src", "TerminalPanel.tsx"), "utf8");
 const workbench = fs.readFileSync(path.join(root, "src", "RightWorkbench.tsx"), "utf8");
+const libraryWorkspace = fs.readFileSync(path.join(root, "src", "LibraryWorkspace.tsx"), "utf8");
+const paperWriting = fs.readFileSync(path.join(root, "src", "PaperWritingView.tsx"), "utf8");
+const researchGraph = fs.readFileSync(path.join(root, "src", "research-graph", "ResearchGraphPanel.tsx"), "utf8");
 const tabs = fs.readFileSync(path.join(root, "src", "workbench-tabs.tsx"), "utf8");
 const trajectory = fs.readFileSync(path.join(root, "src", "TrajectoryView.tsx"), "utf8");
 const jsonCode = fs.readFileSync(path.join(root, "src", "JsonCode.tsx"), "utf8");
@@ -26,7 +29,20 @@ test("terminal lives in the right workbench instead of the bottom panel", () => 
 
 test("sidebar workbench toggle uses a directional arrow for each state", () => {
   assert.match(app, /aria-label=\{workbenchOpen \? t\("Hide workbench"\) : t\("Show workbench"\)\}/);
-  assert.match(app, /aria-pressed=\{workbenchOpen\}>\s*\{workbenchOpen \? <ChevronLeft size=\{17\} \/> : <ChevronRight size=\{17\} \/>\}/);
+  assert.match(app, /aria-pressed=\{workbenchOpen\}>\s*\{workbenchOpen \? <ArrowLeft size=\{17\} \/> : <ArrowRight size=\{17\} \/>\}/);
+});
+
+test("panel collapse controls use single directional arrows across pages", () => {
+  assert.match(app, /sidebar-collapse-button[\s\S]*?title=\{t\("Hide sidebar"\)\}[\s\S]*?<ArrowLeft size=\{16\} \/>/);
+  assert.match(app, /sidebar-restore-button[\s\S]*?title=\{t\("Show sidebar"\)\}[\s\S]*?<ArrowRight size=\{17\} \/>/);
+  assert.match(app, /sidebarHidden \? <ArrowRight size=\{15\} \/> : <ArrowLeft size=\{15\} \/>/);
+  assert.match(app, /filesListCollapsed \? <ArrowRight size=\{13\} \/> : <ArrowLeft size=\{13\} \/>/);
+  assert.match(app, /filesEditorCollapsed \? <ArrowLeft size=\{13\} \/> : <ArrowRight size=\{13\} \/>/);
+  assert.match(paperWriting, /browserCollapsed \? <ArrowRight size=\{13\} \/> : <ArrowLeft size=\{13\} \/>/);
+  assert.match(libraryWorkspace, /Hide library folders[\s\S]*?<ArrowLeft size=\{15\} \/>/);
+  assert.match(libraryWorkspace, /Show library folders[\s\S]*?<ArrowRight size=\{16\} \/>/);
+  assert.match(library, /aria-expanded=\{chatOpen\}[\s\S]*?chatOpen \? <ArrowLeft size=\{15\} \/> : <ArrowRight size=\{15\} \/>/);
+  assert.match(researchGraph, /aria-pressed=\{inspectorOpen\}>\{inspectorOpen \? <ArrowLeft size=\{13\} \/> : <ArrowRight size=\{13\} \/>/);
 });
 
 test("workbench shares the sidebar top edge and overlays only on narrow screens", () => {
