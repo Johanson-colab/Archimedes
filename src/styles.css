@@ -3952,6 +3952,67 @@ html[data-theme="paper"] .arch-pdf-text-layer ::selection,
   .benchmark-header-actions { gap: 8px; }
 }
 
+/* Benchmark Radar: a compact, consistent reading scale. */
+.benchmark-radar-page {
+  --benchmark-meta-size: 12px;
+  --benchmark-control-size: 13px;
+  --benchmark-body-size: 14px;
+  --benchmark-section-size: 21px;
+  padding-top: 26px;
+}
+.benchmark-header h1 { font-size: 30px; }
+.benchmark-header p { font-size: var(--benchmark-body-size); line-height: 1.55; }
+.benchmark-source { font-size: var(--benchmark-meta-size); }
+.benchmark-tabs { gap: 6px; margin: 16px 0 22px; }
+.benchmark-tabs button { min-height: 36px; padding-inline: 12px; font-size: var(--benchmark-control-size); }
+.benchmark-tabs > span, .benchmark-header-actions > span { font-size: var(--benchmark-meta-size); }
+.benchmark-intro { padding-bottom: 22px; }
+.benchmark-intro h2 { font-size: var(--benchmark-section-size); line-height: 1.2; }
+.benchmark-intro p { font-size: var(--benchmark-body-size); line-height: 1.55; }
+.benchmark-intro > strong { font-size: 32px; font-variant-numeric: tabular-nums; }
+.benchmark-intro > strong small { font-size: var(--benchmark-meta-size); }
+.benchmark-controls { gap: 28px; padding: 20px 0; }
+.benchmark-controls > div > span, .benchmark-library-toolbar label > span { margin-bottom: 8px; font-size: var(--benchmark-meta-size); }
+.benchmark-segmented button { min-height: 38px; padding-inline: 15px; font-size: var(--benchmark-control-size); }
+.benchmark-results-heading { padding: 15px 0; }
+.benchmark-results-heading h2 { font-size: 18px; }
+.benchmark-results-heading small { font-size: var(--benchmark-meta-size); }
+.benchmark-row { gap: 22px; padding: 22px 0; }
+.benchmark-date { gap: 7px; font-variant-numeric: tabular-nums; }
+.benchmark-date small { font-size: 11px; }
+.benchmark-date strong { font-size: 14px; }
+.benchmark-row h2 { font-size: 19px; line-height: 1.3; }
+.benchmark-row-heading span { font-size: var(--benchmark-meta-size); }
+.benchmark-row p { margin-top: 8px; font-size: var(--benchmark-body-size); line-height: 1.6; }
+.benchmark-tags { gap: 6px 7px; margin-top: 12px; }
+.benchmark-tags span { padding: 5px 8px; font-size: 11px; }
+.benchmark-signal { gap: 8px 10px; margin-top: 12px; font-size: var(--benchmark-meta-size); }
+.benchmark-signal b { padding: 4px 7px; font-size: 11px; }
+.benchmark-resource-links { gap: 14px; margin-top: 12px; }
+.benchmark-resource-links a, .benchmark-save { font-size: var(--benchmark-meta-size); }
+.benchmark-save { min-height: 34px; padding-inline: 10px; }
+.benchmark-data-status { gap: 8px 22px; margin: 14px 0 22px; font-size: var(--benchmark-meta-size); }
+.benchmark-direction-head { padding-bottom: 18px; }
+.benchmark-direction-head > span, .benchmark-directions h2 { font-size: 11px; }
+.benchmark-direction-head p { font-size: 13px; line-height: 1.55; }
+.benchmark-library-layout { grid-template-columns: 260px minmax(0, 1fr); gap: 30px; }
+.benchmark-directions section { margin-top: 20px; }
+.benchmark-directions > button, .benchmark-directions section > button { min-height: 36px; padding: 7px 10px; font-size: 12px; }
+.benchmark-directions button small { font-size: 11px; }
+.benchmark-library-toolbar { gap: 20px; padding-bottom: 20px; }
+.benchmark-library-toolbar label > div:first-of-type:not(.benchmark-segmented) { min-height: 42px; }
+.benchmark-library-toolbar input { font-size: var(--benchmark-body-size); }
+.benchmark-limit, .benchmark-empty { font-size: var(--benchmark-meta-size); }
+.benchmark-refresh { min-height: 36px; padding-inline: 12px; font-size: var(--benchmark-control-size); }
+.benchmark-forecast, .benchmark-row .benchmark-forecast p { font-size: var(--benchmark-body-size); line-height: 1.55; }
+@media (max-width: 620px) {
+  .benchmark-radar-page { padding-top: 20px; }
+  .benchmark-header h1 { font-size: 27px; }
+  .benchmark-intro h2 { font-size: 20px; }
+  .benchmark-row h2 { font-size: 18px; }
+  .benchmark-row p { font-size: 13px; }
+}
+
 /* New-task research cabinet: Archimedes' instruments become four workflow entrances. */
 .conversation-layout.has-welcome {
   background: var(--welcome-ground);
