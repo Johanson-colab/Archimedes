@@ -33,6 +33,7 @@ import ResearchWelcome, { type ResearchWelcomeAction } from "./ResearchWelcome";
 import FirstRunGuide, { readFirstRunGuide, writeFirstRunGuide, type FirstRunGuideResult, type FirstRunGuideStep } from "./FirstRunGuide";
 import ContextPicker, { ContextChips } from "./ContextPicker";
 import ProjectSidebar, { NewProjectModal, ProjectRemoveModal } from "./ProjectSidebar";
+import SidebarSectionHeader from "./SidebarSectionHeader";
 import { type ExtensionsTab } from "./ExtensionsView";
 import { useConfirm } from "./ConfirmDialog";
 import { Dialog } from "./Dialog";
@@ -76,6 +77,7 @@ import packageMetadata from "../package.json";
 import AuthModal from "./AuthModal";
 import { useUISettings } from "./i18n";
 import { moveSidebarOrder, orderSidebarIds, readSidebarOrder, reconcileSidebarOrder, writeSidebarOrder, type SidebarOrderGroup } from "./sidebar-order";
+import { readSidebarSectionCollapse, writeSidebarSectionCollapse, type SidebarSectionId } from "./sidebar-section-collapse";
 import { type PaperOpenRequest } from "./PaperWritingView";
 import { createFileDraft, finishFileEditorSave, formatFileComment, getFileEditorScope, hasDirtyFileEditorScopes, isDraftDirty, isEditableFile, mergeRefreshedFiles, prepareFileContent, toEditorText, updateFileEditorScope, type FileComment, type FileDraft, type FileEditorScope, type FileEditorScopes, type FileSelection } from "./file-editor";
 import { shortcutMatches } from "./file-text-size";
@@ -1393,6 +1395,7 @@ function App() {
   const [sidebarWidth, setSidebarWidth] = useState(readSidebarWidth);
   const [sidebarOrder, setSidebarOrder] = useState(readSidebarOrder);
   const [sidebarOrderAnnouncement, setSidebarOrderAnnouncement] = useState("");
+  const [collapsedSidebarSections, setCollapsedSidebarSections] = useState(readSidebarSectionCollapse);
   const sidebarItemDragRef = useRef<{ group: "apps"; id: string } | null>(null);
   const suppressSidebarAppClickUntil = useRef(0);
   const [sidebarAppDragging, setSidebarAppDragging] = useState<string | null>(null);
@@ -3529,6 +3532,7 @@ function App() {
   })), [projects, archivedProjects, workspaces, sidebarOrder.workspaces]);
   const availableSidebarOrder = useMemo(() => ({ apps: registeredSidebarEntries.map((entry) => entry.id), projects: projects.map((entry) => entry.id), archivedProjects: archivedProjects.map((entry) => entry.id), workspaces: availableSidebarWorkspaces }), [registeredSidebarEntries, projects, archivedProjects, availableSidebarWorkspaces]);
   useEffect(() => { writeSidebarOrder(sidebarOrder); }, [sidebarOrder]);
+  useEffect(() => { writeSidebarSectionCollapse(collapsedSidebarSections); }, [collapsedSidebarSections]);
   useEffect(() => {
     if (!workspaceReady) return;
     setSidebarOrder((current) => {
@@ -3539,6 +3543,9 @@ function App() {
   const reorderSidebar = useCallback((group: SidebarOrderGroup, sourceId: string, targetId: string, after: boolean, parentId?: string) => {
     setSidebarOrder((current) => moveSidebarOrder(reconcileSidebarOrder(current, { ...availableSidebarOrder, workspaces: { ...availableSidebarWorkspaces } }), group, sourceId, targetId, after, parentId));
   }, [availableSidebarOrder, availableSidebarWorkspaces]);
+  const toggleSidebarSection = (sectionId: SidebarSectionId) => {
+    setCollapsedSidebarSections((current) => ({ ...current, [sectionId]: !current[sectionId] }));
+  };
   const moduleCommands: PaletteCommand[] = flatModuleEntries.map((entry) => ({
     id: entry.commandId,
     group: t("Research Apps"),
@@ -3637,11 +3644,16 @@ function App() {
         </button>
 
         <nav className="sidebar-nav sidebar-modules" aria-label={t("Primary")}>
-          <div className="sidebar-section-label">
-            <span>{t("Research Apps")}</span>
+          <SidebarSectionHeader
+            id="apps"
+            title={t("Research Apps")}
+            collapsed={collapsedSidebarSections.apps}
+            onToggle={() => toggleSidebarSection("apps")}
+            className="sidebar-section-label"
+          >
             <button className="sidebar-apps-manage" title={t("Manage Research Apps")} aria-label={t("Manage Research Apps")} onClick={() => { setSettingsSection("plugins"); setSettingsOpen(true); }}><Plus size={13} /></button>
-          </div>
-          <div className="sidebar-module-list">{flatModuleEntries.map(moduleButton)}</div>
+          </SidebarSectionHeader>
+          <div className="sidebar-module-list" id="sidebar-section-content-apps" hidden={collapsedSidebarSections.apps}>{flatModuleEntries.map(moduleButton)}</div>
         </nav>
 
         <ProjectSidebar
@@ -3663,6 +3675,8 @@ function App() {
           onRenameWorkspace={openWorkspaceRename}
           onDeleteWorkspace={(workspaceToDelete) => void deleteWorkspace(workspaceToDelete)}
           filterError={projectFolderError}
+          sectionCollapsed={collapsedSidebarSections.projects}
+          onToggleSection={() => toggleSidebarSection("projects")}
         />
         <span className="sidebar-order-live" aria-live="polite">{sidebarOrderAnnouncement}</span>
 
