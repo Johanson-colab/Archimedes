@@ -727,7 +727,7 @@ app.whenReady().then(async () => {
   journeySnapshots.initialize(app.getPath("userData"));
   workbenchSettings.initialize(app.getPath("userData"));
   workbenchNotes.initialize(app.getPath("userData"));
-  extensionMarketplace.initialize(app.getPath("userData"));
+  extensionMarketplace.initialize(app.getPath("userData"), safeStorage);
   sidebarPlugins.initialize(app.getPath("userData"));
   sidebarSettings.initialize(app.getPath("userData"));
   news.initialize(app.getPath("userData"));
