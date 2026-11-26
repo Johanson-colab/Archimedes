@@ -30,6 +30,7 @@ import { applyAppearance, readAppearance, resolveTheme, writeAppearance, type Ap
 import { chooseIconName } from "./file-icons/opencode/choose-icon-name";
 import { ensureOpenCodeSprite } from "./file-icons/opencode/sprite";
 import ResearchWelcome, { type ResearchWelcomeAction } from "./ResearchWelcome";
+import FirstRunGuide, { readFirstRunGuide, writeFirstRunGuide, type FirstRunGuideResult, type FirstRunGuideStep } from "./FirstRunGuide";
 import ContextPicker, { ContextChips } from "./ContextPicker";
 import ProjectSidebar, { NewProjectModal, ProjectRemoveModal } from "./ProjectSidebar";
 import { type ExtensionsTab } from "./ExtensionsView";
@@ -105,6 +106,7 @@ import {
   ChevronsRight,
   ChevronRight,
   CircleDot,
+  CircleHelp,
   Clipboard,
   Copy,
   Cpu,
@@ -1421,8 +1423,11 @@ function App() {
   const [trajectoryEvents, setTrajectoryEvents] = useState<ResearchEvent[]>([]);
   const [workspace, setWorkspace] = useState(DEFAULT_WORKSPACE);
   const [workspaceReady, setWorkspaceReady] = useState(false);
+  const [guideStep, setGuideStep] = useState<FirstRunGuideStep | null>(() => readFirstRunGuide() ? null : "intro");
   const [workspaceOpenError, setWorkspaceOpenError] = useState("");
   const [workspaceOpening, setWorkspaceOpening] = useState(false);
+  const visibleGuideStep = workspaceReady && !workspaceOpening && !workspaceOpenError ? guideStep : null;
+  const sidebarVisible = !sidebarHidden || visibleGuideStep === "sidebar";
   const workspaceOpeningRef = useRef(false);
   const [projects, setProjects] = useState<ResearchProject[]>([]);
   const [archivedProjects, setArchivedProjects] = useState<ResearchProject[]>([]);
@@ -2176,6 +2181,17 @@ function App() {
   function toggleWorkbench() {
     if (workbenchOpen) closeWorkbench();
     else setWorkbenchOpen(true);
+  }
+
+  function advanceGuide(step: FirstRunGuideStep) {
+    if (step === "chat") setMainSection("chat");
+    if (step === "workbench") setWorkbenchOpen(true);
+    setGuideStep(step);
+  }
+
+  function closeGuide(result: FirstRunGuideResult) {
+    if (result === "completed" || !readFirstRunGuide()) writeFirstRunGuide(result);
+    setGuideStep(null);
   }
 
   useEffect(() => () => {
@@ -3608,8 +3624,8 @@ function App() {
   const sidebarModuleOpen: Partial<Record<string, boolean>> = { daily: dailyOpened || mainSection === "daily", "image-creation": imageCreationOpened, "data-charts": dataChartsOpened, "data-analysis": dataAnalysisOpened, "literature-review": literatureReviewOpened };
 
   return (
-    <main className={`codex-shell theme-${theme}${sidebarHidden ? " sidebar-hidden" : ""}`} style={{ "--sidebar-width": `${sidebarWidth}px` } as React.CSSProperties}>
-      <aside className="codex-sidebar" aria-label={t("Archimedes navigation")} data-ui="application-navigation" inert={sidebarHidden}>
+    <main className={`codex-shell theme-${theme}${sidebarVisible ? "" : " sidebar-hidden"}`} data-guide-step={visibleGuideStep ?? undefined} style={{ "--sidebar-width": `${sidebarWidth}px` } as React.CSSProperties}>
+      <aside className="codex-sidebar" aria-label={t("Archimedes navigation")} data-ui="application-navigation" inert={!sidebarVisible}>
         <div className="codex-brand">
           <ArchimedesMark className="codex-brand-symbol" size={24} variant="small" />
           <ArchimedesWordmark className="codex-brand-wordmark" />
@@ -3677,7 +3693,7 @@ function App() {
 
       <section className={workbenchOpen ? "codex-main workbench-open" : "codex-main"} style={{ "--workbench-width": workbenchOpen ? `${workbenchWidth}px` : "0px" } as React.CSSProperties}>
         <header className="main-toolbar" data-ui="application-toolbar">
-          {sidebarHidden && <button className="quiet-icon-button sidebar-restore-button" onClick={() => setSidebarHidden(false)} title={t("Show sidebar")} aria-label={t("Show sidebar")} aria-pressed={sidebarHidden}><PanelLeftOpen size={17} /></button>}
+          {!sidebarVisible && <button className="quiet-icon-button sidebar-restore-button" onClick={() => setSidebarHidden(false)} title={t("Show sidebar")} aria-label={t("Show sidebar")} aria-pressed={sidebarHidden}><PanelLeftOpen size={17} /></button>}
           <SessionSwitcher
             project={activeProject}
             workspace={activeWorkspace}
@@ -3701,6 +3717,9 @@ function App() {
           />
           <div className="main-toolbar-actions">
             <div id="module-toolbar-actions" className="module-toolbar-actions" />
+            <button className="quiet-icon-button" onClick={(event) => { event.currentTarget.focus(); setGuideStep("intro"); }} title={t("Open quick guide")} aria-label={t("Open quick guide")}>
+              <CircleHelp size={16} aria-hidden="true" />
+            </button>
             {presenceMembers.length > 0 && <div className="presence-stack" title={presenceMembers.map((member) => member.displayName).join(", ")} aria-label={`${presenceMembers.length} collaborators online`}>
               {presenceMembers.slice(0, 4).map((member) => <span className="presence-avatar" key={member.key} title={member.displayName}>{member.displayName.slice(0, 1).toUpperCase()}</span>)}
               {presenceMembers.length > 4 && <span className="presence-avatar more">+{presenceMembers.length - 4}</span>}
@@ -4116,6 +4135,7 @@ function App() {
         onSubmit={(input) => void submitWorkspaceDialog(input)}
       />
       <CommandPalette open={paletteOpen} commands={paletteCommands} onClose={() => setPaletteOpen(false)} />
+      {visibleGuideStep && <FirstRunGuide step={visibleGuideStep} onStep={advanceGuide} onExit={closeGuide} />}
       <ProjectRemoveModal project={projectToRemove} onClose={() => setProjectToRemove(null)} onRemove={() => projectToRemove && void removeProject(projectToRemove)} />
       <Dialog open={workspaceOpening} blocking size="compact" className="workspace-opening-dialog" ariaLabel={t("Opening workspace")}>
         <div role="status"><LoaderCircle className="spin" size={16} />{t("Opening workspace")}</div>
