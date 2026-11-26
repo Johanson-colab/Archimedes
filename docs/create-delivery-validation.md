@@ -31,11 +31,11 @@ Dataset Discovery Desk, workspace `/Users/jackson/Documents/AI Research`:
 - Started through `createResearchAppRuntime`; `/`, `/app.js`, `/style.css`, `/api/datasets?q=mnist&limit=3`, and `/api/favorites` all returned HTTP 200. The live Hugging Face response contained three dataset records.
 - In the embedded Archimedes page, submitting `mnist` returned 30 live results. The later screenshot shows a `code generation` query with 30 results, also visibly running in the host.
 - In an isolated source copy, saved a favorite, stopped/restarted the host runtime, confirmed persistence and removed the test record. The original App's favorites were not changed by this persistence test.
-- Focused tests: 32 passed. Lint, build, and theme checks passed. Full suite: 1,630 passed, five skipped, one failed. The unrelated LaTeX template compilation test fails because this machine's TeX installation lacks `phvr7t.tfm`; no LaTeX code or tests were changed.
+- Focused tests: 32 passed. Lint, build, and theme checks passed. On the isolated fix branch based on `origin/main` (`9f49079`), the full suite reported 1,633 passed, five skipped, one failed. The unrelated LaTeX template compilation test fails because this machine's TeX installation lacks `phvr7t.tfm`. That same test was run on unchanged `origin/main` before applying the fix and reproduced the same missing-font failure; no LaTeX code or tests were changed.
 
 ## UI evidence
 
-The before image is the user's original failure screenshot. The after image is a live host capture after environment setup. Their viewport and App state differ; this is startup outcome evidence, not a pixel comparison. Setup-state controls and recovery are also covered by renderer behavior tests.
+The before image is the user's original failure screenshot. The after image is a live host capture after environment setup. Their viewport and App state differ; this is startup outcome evidence, not a pixel comparison. Recreating the original failure in the user's workspace would require undoing its repaired environment, so that was not done. Setup-state controls and recovery are also covered by renderer behavior tests.
 
 ![Before: missing Python environment](assets/create-delivery-fix/before.png)
 
