@@ -1,4 +1,4 @@
-const { buildModelRequestOptions, hasPrivateHeaderValues } = require("./model-request-headers.cjs");
+const { buildModelRequestOptions, hasPrivateHeaderValues, redactModelSecrets } = require("./model-request-headers.cjs");
 const { parseModelResponseJson, readModelResponseJson } = require("./model-response-json.cjs");
 
 const MAX_PAPER_CHARS = 60_000;
@@ -56,7 +56,7 @@ async function completeFigure(config, complete, messages, model, timeoutMs = 180
     return content;
   } catch (error) {
     if (error?.name === "AbortError") throw new Error("The model request timed out.");
-    const message = String(error?.message || error).split(config.apiKey).join("[redacted]");
+    const message = redactModelSecrets(error?.message || error, config);
     const status = message.match(/(?:failed|HTTP)\s*\(?\s*(401|403)\b/i)?.[1];
     throw new Error(status ? `HTTP ${status}: model authentication or access failed.` : message);
   } finally { clearTimeout(timer); }
@@ -215,7 +215,7 @@ async function generateBitmap(input, { config, fetchImpl = fetch }) {
   } catch (error) {
     if (error?.name === "AbortError") throw new Error("Image generation timed out.");
     if (error?.code === "GEMINI_NO_IMAGE" && hasPrivateHeaderValues(config)) throw new Error("Gemini returned no image (NO_IMAGE).");
-    throw new Error(String(error?.message || error).split(config.apiKey).join("[redacted]"));
+    throw new Error(redactModelSecrets(error?.message || error, config));
   } finally { clearTimeout(timer); }
 }
 
@@ -283,7 +283,7 @@ async function prepareFigurePlan(input, { config, complete, fetchImpl = fetch })
     return { plan, model: config.model, provider: config.provider, source: "text" };
   } catch (error) {
     if (error?.name === "AbortError") throw new Error("Paper analysis timed out. Please retry.");
-    throw new Error(String(error?.message || error).split(config.apiKey).join("[redacted]"));
+    throw new Error(redactModelSecrets(error?.message || error, config));
   } finally { clearTimeout(timer); }
 }
 

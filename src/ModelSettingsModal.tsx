@@ -90,7 +90,8 @@ export default function ModelSettingsModal({ bridge, open, onClose, onSaved, emb
   const [sessionHeaderValue, setSessionHeaderValue] = useState("");
   const [userAgent, setUserAgent] = useState("");
   const [savedConfig, setSavedConfig] = useState<PublicModelConfig | null>(null);
-  const sameConnection = savedConfig?.provider === provider && savedConfig.baseUrl === baseUrl.trim().replace(/\/+$/, "");
+  const normalizeConnectionUrl = (value: unknown) => String(value || "").trim().replace(/\/+$/, "");
+  const sameConnection = savedConfig?.provider === provider && normalizeConnectionUrl(savedConfig.baseUrl) === normalizeConnectionUrl(baseUrl);
   const hasApiKey = Boolean(sameConnection && savedConfig?.hasApiKey);
   const hasCustomHeaders = Boolean(sameConnection && savedConfig?.hasCustomHeaders);
   const hasFixedSessionValue = Boolean(sameConnection && savedConfig?.sessionHeader?.hasValue &&

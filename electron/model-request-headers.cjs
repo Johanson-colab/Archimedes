@@ -62,6 +62,13 @@ function buildModelHeaders(config = {}, sessionId = "", options = {}) {
   return Object.fromEntries(headers.values());
 }
 
+function redactModelSecrets(value, config = {}) {
+  let text = String(value || "");
+  const secrets = [config.apiKey, config.sessionHeader?.value, ...Object.values(config.headers || {})];
+  for (const secret of secrets) if (typeof secret === "string" && secret) text = text.split(secret).join("[redacted]");
+  return text;
+}
+
 function hasPrivateHeaderValues(config) {
   return Boolean(Object.keys(config.headers || {}).length || config.sessionHeader?.strategy === "fixed");
 }
@@ -107,6 +114,7 @@ module.exports = {
   formatModelRequestError,
   hasPrivateHeaderValues,
   modelProviderErrorDetail,
+  redactModelSecrets,
   sanitizeHeaders,
   sanitizeSessionHeader,
 };
