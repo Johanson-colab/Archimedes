@@ -617,7 +617,9 @@ const previewBridge = {
     return structuredClone(skill);
   },
   listExtensionSources: async () => structuredClone(previewExtensionSources),
-  saveExtensionSources: async (sources: ExtensionSource[]) => sources,
+  saveExtensionSources: async (sources: ExtensionSource[]) => sources.map(({ token, ...source }) => ({
+    ...source, hasToken: token === undefined ? Boolean(source.hasToken) : Boolean(token),
+  })),
   resetExtensionSources: async () => structuredClone(previewExtensionSources),
   listExtensions: async () => ({
     items: structuredClone(previewExtensionItems),
