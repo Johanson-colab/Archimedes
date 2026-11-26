@@ -4990,7 +4990,10 @@ html:not([data-theme="paper"]) .paper-review-notice span { color: #b9a48b; }
 .extensions-scope-field small { color: var(--night-faint); font: 9px "SFMono-Regular", Consolas, monospace; }
 .extensions-source-modal { width: min(620px, 100%); }
 .extensions-source-list { display: grid; border-top: 1px solid var(--night-line-soft); }
+.extensions-source-entry { display: grid; gap: 7px; padding: 5px 0 9px; border-bottom: 1px solid var(--night-line-soft); }
+.extensions-source-entry .extensions-source-row { padding: 0; border-bottom: 0; }
 .extensions-source-row { display: grid; grid-template-columns: minmax(0, 1fr) 90px 130px 30px; align-items: center; gap: 9px; min-height: 42px; padding: 6px 0; border-bottom: 1px solid var(--night-line-soft); }
+.extensions-source-token { margin: 0; }
 .extensions-source-toggle { display: flex; min-width: 0; align-items: center; gap: 7px; color: var(--night-ink); font-size: 10px; }
 .extensions-source-toggle span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .extensions-source-toggle input { accent-color: var(--accent); }

@@ -78,6 +78,29 @@ function safeId(value, fallback) {
   return raw || fallback;
 }
 
+function tokenEncodings(token) {
+  return [token, JSON.stringify(token).slice(1, -1)];
+}
+
+function containsSecret(value, token) {
+  if (typeof value === "string") return value.includes(token);
+  if (Array.isArray(value)) return value.some((item) => containsSecret(item, token));
+  if (value && typeof value === "object") {
+    return Object.entries(value).some(([key, child]) => key.includes(token) || containsSecret(child, token));
+  }
+  return false;
+}
+
+function redactSecret(message, token) {
+  let text = String(message || "");
+  for (const encoding of tokenEncodings(token)) if (encoding) text = text.split(encoding).join("[redacted]");
+  return text;
+}
+
+function validBearerToken(token) {
+  return !token || /^[\x21-\x7E]+$/.test(token);
+}
+
 function normalizeSource(input, index = 0) {
   const type = SOURCE_TYPES.has(input?.type) ? input.type : "json";
   const fallback = `${type}-${index + 1}`;
@@ -158,6 +181,7 @@ function saveSources(input) {
     const prior = previous.get(source.id);
     if (typeof item.token === "string") {
       const token = safeString(item.token, 4000);
+      if (!validBearerToken(token)) throw new Error("The token contains characters that cannot be sent in an Authorization header.");
       if (token) source.encryptedToken = codec.encrypt(token);
     } else if (prior?.encryptedToken && prior.url === source.url && prior.type === source.type && prior.query === source.query) {
       source.encryptedToken = prior.encryptedToken;
@@ -192,21 +216,28 @@ async function requestJson(url, source, ms = 9_000) {
   const target = safeUrl(url);
   if (!target) throw new Error("Source URL is invalid.");
   const timer = timeoutSignal(ms);
+  const token = source?.encryptedToken ? codec.decrypt(source.encryptedToken) : "";
   try {
     const headers = { Accept: "application/json", "User-Agent": "Archimedes/0.1" };
-    const token = source?.encryptedToken ? codec.decrypt(source.encryptedToken) : "";
     if (token) headers.Authorization = `Bearer ${token}`;
     if (source?.type === "github") headers.Accept = "application/vnd.github+json";
     const response = await fetch(target, { headers, signal: timer.signal, redirect: token ? "error" : "follow" });
     if (!response.ok) throw new Error(`Source returned HTTP ${response.status}.`);
     if (!token) return await response.json();
     const body = await response.text();
-    if (body.includes(token) || body.includes(JSON.stringify(token).slice(1, -1)))
-      throw new Error("The extension source returned its credential.");
-    try { return JSON.parse(body); }
+    const echoed = tokenEncodings(token).some((encoding) => body.includes(encoding));
+    if (echoed) throw new Error("The extension source returned its credential.");
+    let payload;
+    try { payload = JSON.parse(body); }
     catch { throw new Error("The extension source returned invalid JSON."); }
+    // A JSON parser restores escaped text, so inspect the decoded values too.
+    if (containsSecret(payload, token)) throw new Error("The extension source returned its credential.");
+    return payload;
   } catch (error) {
     if (error?.name === "AbortError") throw new Error("Source timed out.");
+    const message = error instanceof Error ? error.message : String(error);
+    const redacted = redactSecret(message, token);
+    if (redacted !== message) throw new Error(redacted);
     throw error;
   } finally {
     timer.clear();
