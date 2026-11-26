@@ -2858,7 +2858,8 @@ function App() {
         setWorkspaceDialog(null);
       }
     } catch (error) {
-      setWorkspaceDialogError(error instanceof Error ? error.message : String(error));
+      const message = error instanceof Error ? error.message : String(error);
+      setWorkspaceDialogError(message.replace(/^Error invoking remote method '[^']+':\s*(?:Error:\s*)?/, "").replace(/^Error:\s*/, ""));
     } finally {
       setCreatingWorkspace(false);
     }

@@ -209,7 +209,7 @@ export default function ChatActivityTimeline({
   const status = busy && <div className="chat-activity-status" aria-live="polite">
     <span className="chat-activity-dot" aria-hidden="true" />
     <strong>{interrupting ? t("Stopping task") : latest ? t("Working") : t("Thinking…")}</strong>
-    {latest && <span className="chat-activity-status-detail">{latest.label}{latest.detail ? ` · ${latest.detail}` : ""}</span>}
+    {latest && <span className="chat-activity-status-detail">{latest.label}{latest.detail ? ` · ${t(latest.detail)}` : ""}</span>}
   </div>;
 
   const stepRows = (list: ChatStep[]) => list.map((step) => {
@@ -217,7 +217,7 @@ export default function ChatActivityTimeline({
     return <div className={`chat-activity-step ${step.status}`} key={step.id}>
       <span className="chat-activity-step-icon"><Icon size={13} /></span>
       <span className="chat-activity-step-label">{step.label}</span>
-      <span className="chat-activity-step-detail" title={step.full || step.detail}>{step.detail || step.full || "—"}</span>
+      <span className="chat-activity-step-detail" title={step.full || (step.detail ? t(step.detail) : "")}>{step.detail ? t(step.detail) : step.full || "—"}</span>
       <span className="chat-activity-step-state" aria-label={step.status}>
         {step.status === "running" ? <span className="chat-activity-pulse" /> : step.status === "waiting" ? <span className="chat-activity-wait" /> : step.status === "error" ? <span className="chat-activity-error">!</span> : null}
       </span>
