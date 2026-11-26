@@ -16,6 +16,7 @@ function readAcceptance(app) {
     if (check.json !== undefined && (!check.json || typeof check.json.path !== 'string' || check.json.path.length > 200 || !/^[A-Za-z0-9_.]*$/.test(check.json.path) || (!Object.hasOwn(check.json, 'equals') && !Object.hasOwn(check.json, 'minItems')) || (check.json.minItems !== undefined && (!Number.isInteger(check.json.minItems) || check.json.minItems < 1 || check.json.minItems > 10000)))) throw new Error('Invalid JSON acceptance assertion.');
   }
   for (const step of plan.browser) {
+    if (step.timeoutMs !== undefined && (!Number.isInteger(step.timeoutMs) || step.timeoutMs < 100 || step.timeoutMs > 120000)) throw new Error('Browser step timeout must be 100–120000 ms.');
     if (!['fill', 'click', 'select', 'expect'].includes(step.action) || typeof step.selector !== 'string' || !step.selector.trim() || step.selector.length > 500) throw new Error('Unsupported browser acceptance action or selector.');
     for (const key of ['value', 'text']) if (step[key] !== undefined && (typeof step[key] !== 'string' || step[key].length > 4000)) throw new Error('Browser assertion text is too large.');
     if (['fill', 'select'].includes(step.action) && typeof step.value !== 'string') throw new Error('Input actions need a value.');

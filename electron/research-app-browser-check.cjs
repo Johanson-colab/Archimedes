@@ -11,7 +11,7 @@ async function checkBrowser({ url, steps, signal, runAgent, onFrame = () => {} }
   const errors = [], checks = []; let timer, bridgeTimer; const inFlight = new Set();
   const stop = () => { if (!window.isDestroyed()) window.destroy(); };
   signal?.addEventListener('abort', stop, { once: true });
-  const timeout = new Promise((_, reject) => { timer = setTimeout(() => { stop(); reject(new Error('Browser acceptance exceeded 90 seconds.')); }, 90000); });
+  const timeout = new Promise((_, reject) => { timer = setTimeout(() => { stop(); reject(new Error('Browser acceptance exceeded its time budget.')); }, Math.min(600000, Math.max(90000, steps.reduce((sum, step) => sum + (step.timeoutMs || 15000), 30000)))); });
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   window.webContents.on('will-navigate', (event, target) => { if (new URL(target).origin !== origin) event.preventDefault(); });
   isolated.on('will-download', event => event.preventDefault());
@@ -61,7 +61,7 @@ async function checkBrowser({ url, steps, signal, runAgent, onFrame = () => {} }
       for (const step of steps) {
         if (signal?.aborted) throw new Error('Validation cancelled.');
         trace(step.action + ' ' + step.selector);
-        const deadline = Date.now() + 15000; let result = false;
+        const deadline = Date.now() + (step.timeoutMs || 15000); let result = false;
         while (!result && Date.now() < deadline) {
           if (signal?.aborted) throw new Error('Validation cancelled.');
           result = await frame.executeJavaScript(`(() => {

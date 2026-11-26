@@ -29,7 +29,7 @@ Capabilities remain optional: zero, one or multiple skills; direct APIs/scripts 
 
 ## Mandatory acceptance
 
-Each App provides a bounded declarative `research-app.checks.json`, containing a workflow description, HTTP paths and browser actions/assertions. Supported interactions are fill, select, click and expect (text, value or element count). HTTP assertions support an explicit expected status for negative cases, response text and JSON-path equality/nonempty arrays.
+Each App provides a bounded declarative `research-app.checks.json`, containing a workflow description, HTTP paths and browser actions/assertions. Supported interactions are fill, select, click and expect (text, value or element count). Browser steps can set `timeoutMs` from 100 to 120000 ms; the full browser run is bounded to ten minutes. HTTP assertions support an explicit expected status for negative cases, response text and JSON-path equality/nonempty arrays.
 
 The host runs source in a temporary workspace with fresh local App data, using the App's existing Python environment where needed. This avoids testing against the user's favorites or other `.data` records. Python execution still uses the user's OS permissions; a temporary workspace is not an OS sandbox. Declared keys follow the normal execution approval; no keys or response bodies are persisted in evidence. CLI `verify` remains a bounded diagnostic and cannot grant Ready by itself.
 
@@ -48,10 +48,10 @@ Every successful version has a checked source snapshot. Restore verifies its int
 ## Validation evidence
 
 - Lint, renderer build and theme checks passed.
-- Full suite: 1,647 passed, five skipped, one failure. The failure is the already reproduced `origin/main` LaTeX template failure from missing local `phvr7t.tfm`; no LaTeX tests were weakened.
+- Full suite: 1,663 passed, five skipped, one failure. The failure is the already reproduced `origin/main` LaTeX template failure from missing local `phvr7t.tfm`; no LaTeX tests were weakened.
 - Real Chromium: static word-count and Python text-processing workflows passed input → button → output, using the real host runtime. An explicitly handled HTTP 404 flow also passed. A wrong output was rejected, repaired and rechecked. An uncaught JavaScript error was rejected even when result assertions otherwise matched. Processes were stopped and source restoration preserved a data sentinel.
 - Live Codex: the same repair adapter used by the desktop repaired the intentionally broken word-count App, and subsequent Chromium acceptance passed. No assertion was weakened. Claude Code/OpenCode adapter configuration and approval behavior have unit coverage; their live-provider repair flow was not run in this change.
-- Additional behavior tests cover installation gating, stale evidence, absent browser evidence, retry bounds, no-op repairs, plan tampering, concurrent source edits, cancellation, workspace IPC boundaries, restore integrity and local-data preservation.
+- Additional behavior tests cover installation gating, stale evidence, absent browser evidence, retry bounds, no-op repairs, plan tampering, concurrent source edits, cancellation and shutdown cleanup, interrupted validation, workspace IPC boundaries, restore integrity and local-data preservation.
 
 Reproduce deterministic browser checks with `node --test electron/research-app-browser.test.cjs`. The live-provider test is deliberately opt-in (uses the user's configured provider/account):
 

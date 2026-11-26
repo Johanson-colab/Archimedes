@@ -4,7 +4,7 @@ const { verifyApp } = require('./research-app-verify.cjs');
 const store = require('./research-app-delivery-store.cjs');
 
 function createDelivery({ setup, approve, readSecret = () => '', browser, repair, changed = () => {}, stop = async () => {}, verify = verifyApp } = {}) {
-  const active = new Map();
+  const active = new Map(), runtimes = new Set();
   const key = (workspace, id) => `${require('node:fs').realpathSync(workspace)}\0${id}`;
   function cancel(workspace, id) { const controller = active.get(key(workspace, id)); controller?.abort(); return { cancelled: Boolean(controller) }; }
   async function validate(workspace, id, { repairBackend, signal } = {}) {
@@ -32,7 +32,7 @@ function createDelivery({ setup, approve, readSecret = () => '', browser, repair
         try {
           const plan = readAcceptance(app); acceptedPlan = JSON.stringify(plan);
           if (!browser) throw new Error('Browser acceptance requires the Archimedes desktop app.');
-          evidence = await verify({ workspace, appId: id, paths: [...new Set(['/', ...plan.http.map(check => check.path)])], httpChecks: plan.http, browser, browserSteps: plan.browser, approve, readSecret, signal: controller.signal });
+          evidence = await verify({ workspace, appId: id, paths: [...new Set(['/', ...plan.http.map(check => check.path)])], httpChecks: plan.http, browser, browserSteps: plan.browser, approve, readSecret, signal: controller.signal, onRuntime: (runtime, running) => { if (running) runtimes.add(runtime); else runtimes.delete(runtime); } });
         } catch (error) { evidence = { passed: false, error: String(error.message).slice(0, 2000) }; }
         cancelled();
         if (!store.same(store.identity(readApp(workspace, id)), expected)) { update({ status: 'failed', error: 'Source or environment changed during validation. Run validation again.' }); break; }
@@ -59,6 +59,10 @@ function createDelivery({ setup, approve, readSecret = () => '', browser, repair
     await stop(workspace, id);
     const result = store.restoreVerified(workspace, id); changed(workspace); return result;
   }
-  return { validate, restore, cancel };
+  async function shutdown() {
+    for (const controller of active.values()) controller.abort();
+    await Promise.allSettled([...runtimes].map(runtime => runtime.shutdown()));
+  }
+  return { validate, restore, cancel, shutdown };
 }
 module.exports = { createDelivery };

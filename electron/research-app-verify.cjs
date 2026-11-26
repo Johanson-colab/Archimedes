@@ -5,7 +5,7 @@ const { readApp, sourceFiles, createResearchAppRuntime } = require('./research-a
 
 // Called through the native harness's normal command approval mechanism.
 // This executes local App code, does not install dependencies or persist consent.
-async function verifyApp({ workspace, appId, paths = ['/'], httpChecks = [], browser, browserSteps = [], approve = async () => true, readSecret = () => '', signal } = {}) {
+async function verifyApp({ workspace, appId, paths = ['/'], httpChecks = [], browser, browserSteps = [], approve = async () => true, readSecret = () => '', signal, onRuntime = () => {} } = {}) {
   if (!Array.isArray(paths) || !paths.length || paths.length > 10 || paths.some(value => typeof value !== 'string' || value.length > 2000 || !value.startsWith('/') || value.startsWith('//') || value.includes('\\'))) throw new Error('Provide up to ten App-relative HTTP paths.');
   const trace = value => { if (process.env.ARCHIMEDES_DELIVERY_TRACE) console.error('[verify]', value); };
   const app = readApp(workspace, appId);
@@ -15,13 +15,15 @@ async function verifyApp({ workspace, appId, paths = ['/'], httpChecks = [], bro
   const temporary = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'research-app-check-')));
   const isolatedDir = path.join(temporary, 'research-apps', appId);
   fs.mkdirSync(isolatedDir, { recursive: true });
+  let isolatedApp;
   try {
     for (const file of sourceFiles(app)) { const destination = path.join(isolatedDir, file.path); fs.mkdirSync(path.dirname(destination), { recursive: true }); fs.writeFileSync(destination, file.content, { mode: file.mode }); }
     if (app.runtime.kind === 'python-http') fs.symlinkSync(path.join(app.directory, '.venv'), path.join(isolatedDir, '.venv'), process.platform === 'win32' ? 'junction' : 'dir');
+    isolatedApp = readApp(temporary, appId);
   } catch (error) { fs.rmSync(temporary, { recursive: true, force: true }); throw error; }
-  const isolatedApp = readApp(temporary, appId);
   const runtime = createResearchAppRuntime({ approve: request => approve({ ...request, app }), readSecret, validation: true });
-  const cancel = () => { void runtime.shutdown(); };
+  onRuntime(runtime, true);
+  const cancel = () => { void runtime.shutdown().catch(() => {}); };
   signal?.addEventListener('abort', cancel, { once: true });
   try {
     if (signal?.aborted) throw new Error('Validation cancelled.');
@@ -62,6 +64,6 @@ async function verifyApp({ workspace, appId, paths = ['/'], httpChecks = [], bro
     }
     return result;
   } catch (error) { return { ...result, passed: false, error: String(error.message).slice(0, 2000) }; }
-  finally { signal?.removeEventListener('abort', cancel); await runtime.shutdown(); fs.rmSync(temporary, { recursive: true, force: true }); }
+  finally { signal?.removeEventListener('abort', cancel); await runtime.shutdown(); onRuntime(runtime, false); fs.rmSync(temporary, { recursive: true, force: true }); }
 }
 module.exports = { verifyApp };

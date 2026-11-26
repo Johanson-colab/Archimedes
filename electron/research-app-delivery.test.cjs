@@ -115,3 +115,13 @@ test('an interrupted host validation is retryable after restart', t => {
   const state = JSON.parse(fs.readFileSync(file)); state.ownerPid = 2147483647; fs.writeFileSync(file, JSON.stringify(state));
   const status = records.deliveryStatus(f.app()); assert.equal(status.status, 'failed'); assert.match(status.error, /interrupted/);
 });
+
+test('host shutdown aborts verification and cleans up its managed runtimes', async t => {
+  const f = fixture(t); let stopped = 0;
+  const pipeline = delivery({ verify: async ({ signal, onRuntime }) => {
+    onRuntime({ shutdown: async () => { stopped++; } }, true);
+    return new Promise(resolve => signal.addEventListener('abort', () => resolve({ passed: false }), { once: true }));
+  } });
+  const pending = pipeline.validate(f.workspace, 'sample'); await new Promise(setImmediate);
+  await pipeline.shutdown(); await assert.rejects(pending, /cancelled/); assert.equal(stopped, 1);
+});

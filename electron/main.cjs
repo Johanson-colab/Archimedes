@@ -21,6 +21,7 @@ const researchAppRuntimeOptions = {
   },
 };
 const researchAppRuntime = createResearchAppRuntime(researchAppRuntimeOptions);
+let researchAppDelivery;
 const { spawn } = require("node:child_process");
 const { randomUUID } = require("node:crypto");
 const os = require("node:os");
@@ -968,16 +969,20 @@ app.whenReady().then(async () => {
     setup: researchAppSetup.setup, approve: researchAppRuntimeOptions.approve,
     readSecret: researchAppRuntimeOptions.readSecret, changed: researchAppRuntimeOptions.changed,
     stop: researchAppRuntime.stop,
-    browser: options => require("./research-app-browser-check.cjs").checkBrowser({ ...options,
-      runAgent: input => createAppAgent({ ...appAgentOptions, runtime: options.runtime,
+    browser: options => {
+      const scopedAgent = createAppAgent({ ...appAgentOptions, runtime: options.runtime,
         approve: request => appAgentOptions.approve({ ...request, app: options.originalApp }),
         approveTool: request => appAgentOptions.approveTool({ ...request, app: options.originalApp }),
-      }).run(options.app.workspace, options.app.id, input),
-    }),
+      });
+      return require("./research-app-browser-check.cjs").checkBrowser({ ...options,
+        runAgent: input => scopedAgent.run(options.app.workspace, options.app.id, input),
+      });
+    },
     repair: require("./research-app-repair.cjs").createAppRepair({ getConfig: () => agentBackendConfig.get(),
       approve: appAgentOptions.approve, approveTool: appAgentOptions.approveTool, runNative: nativeAgent.runNative,
     }),
   });
+  researchAppDelivery = appDelivery;
   ipcMain.handle("research-apps:validate", (event, input = {}) => {
     if (input.backend !== undefined && !["codex", "claude", "opencode"].includes(input.backend)) throw new Error("Unsupported repair backend.");
     return runWindowAgent({ sender: event.sender, run: ({ externalSignal }) => appDelivery.validate(researchAppWorkspace(event, input), input.id, { repairBackend: input.backend, signal: externalSignal }) });
@@ -2794,6 +2799,7 @@ app.whenReady().then(async () => {
 
 app.on("window-all-closed", () => {
   void researchAppRuntime.shutdown();
+  void researchAppDelivery?.shutdown();
   if (process.platform !== "darwin") app.quit();
 });
 
@@ -2801,7 +2807,7 @@ let researchAppsStoppedForQuit = false;
 app.on("before-quit", (event) => {
   if (researchAppsStoppedForQuit) return;
   event.preventDefault();
-  void researchAppRuntime.shutdown().finally(() => { researchAppsStoppedForQuit = true; app.quit(); });
+  void Promise.allSettled([researchAppRuntime.shutdown(), researchAppDelivery?.shutdown()]).finally(() => { researchAppsStoppedForQuit = true; app.quit(); });
 });
 
 app.on("activate", () => {
