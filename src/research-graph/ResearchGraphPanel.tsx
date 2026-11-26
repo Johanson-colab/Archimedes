@@ -262,7 +262,7 @@ export default function ResearchGraphPanel({
       aria-pressed={pinned}
       disabled={!hasThread && !pinned}
     ><Pin size={12} /></button>}
-    <button className={inspectorOpen ? "agent-path-icon on" : "agent-path-icon"} onClick={() => setInspectorOpen(value => !value)} aria-label={t(inspectorOpen ? "Hide node details" : "Show node details")} title={t(inspectorOpen ? "Hide node details" : "Show node details")} aria-pressed={inspectorOpen}>{inspectorOpen ? <ArrowLeft size={13} /> : <ArrowRight size={13} />}</button>
+    <button className={inspectorOpen ? "agent-path-icon on" : "agent-path-icon"} onClick={() => setInspectorOpen(value => !value)} aria-label={t(inspectorOpen ? "Hide node details" : "Show node details")} title={t(inspectorOpen ? "Hide node details" : "Show node details")} aria-pressed={inspectorOpen}>{inspectorOpen ? <ArrowRight size={13} /> : <ArrowLeft size={13} />}</button>
     {retractedCount > 0 && <button
       className={showHistory ? "agent-path-icon on" : "agent-path-icon"}
       onClick={() => setShowHistory((value) => !value)}

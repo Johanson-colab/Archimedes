@@ -1,8 +1,10 @@
 # Minimal panel arrows
 
 Panel visibility controls use single directional arrows instead of panel
-glyphs or chevrons. Opening/showing uses a right arrow; hiding/collapsing uses a
-left arrow. Accessible labels and existing tooltips remain in place.
+glyphs or chevrons. Arrows point toward the panel when it opens and toward the
+outer edge when it closes: left-side panels show with a right arrow and hide
+with a left arrow; right-side panels show with a left arrow and hide with a
+right arrow. Accessible labels and existing tooltips remain in place.
 
 This is applied to the sidebar, workbench, Files split panes, Library folders,
 the LaTeX file browser, the paper assistant, and Research Graph node details.

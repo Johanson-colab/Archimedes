@@ -29,7 +29,7 @@ test("terminal lives in the right workbench instead of the bottom panel", () => 
 
 test("sidebar workbench toggle uses a directional arrow for each state", () => {
   assert.match(app, /aria-label=\{workbenchOpen \? t\("Hide workbench"\) : t\("Show workbench"\)\}/);
-  assert.match(app, /aria-pressed=\{workbenchOpen\}>\s*\{workbenchOpen \? <ArrowLeft size=\{17\} \/> : <ArrowRight size=\{17\} \/>\}/);
+  assert.match(app, /aria-pressed=\{workbenchOpen\}>\s*\{workbenchOpen \? <ArrowRight size=\{17\} \/> : <ArrowLeft size=\{17\} \/>\}/);
 });
 
 test("panel collapse controls use single directional arrows across pages", () => {
@@ -41,8 +41,8 @@ test("panel collapse controls use single directional arrows across pages", () =>
   assert.match(paperWriting, /browserCollapsed \? <ArrowRight size=\{13\} \/> : <ArrowLeft size=\{13\} \/>/);
   assert.match(libraryWorkspace, /Hide library folders[\s\S]*?<ArrowLeft size=\{15\} \/>/);
   assert.match(libraryWorkspace, /Show library folders[\s\S]*?<ArrowRight size=\{16\} \/>/);
-  assert.match(library, /aria-expanded=\{chatOpen\}[\s\S]*?chatOpen \? <ArrowLeft size=\{15\} \/> : <ArrowRight size=\{15\} \/>/);
-  assert.match(researchGraph, /aria-pressed=\{inspectorOpen\}>\{inspectorOpen \? <ArrowLeft size=\{13\} \/> : <ArrowRight size=\{13\} \/>/);
+  assert.match(library, /aria-expanded=\{chatOpen\}[\s\S]*?chatOpen \? <ArrowRight size=\{15\} \/> : <ArrowLeft size=\{15\} \/>/);
+  assert.match(researchGraph, /aria-pressed=\{inspectorOpen\}>\{inspectorOpen \? <ArrowRight size=\{13\} \/> : <ArrowLeft size=\{13\} \/>/);
 });
 
 test("workbench shares the sidebar top edge and overlays only on narrow screens", () => {

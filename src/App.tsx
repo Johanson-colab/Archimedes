@@ -3742,7 +3742,7 @@ function App() {
               {proactive.queuedCount > 0 && <span className="dock-badge" aria-label={`${proactive.queuedCount} queued suggestions`}>{proactive.queuedCount > 9 ? "9+" : proactive.queuedCount}</span>}
             </button>
             <button className={workbenchOpen ? "quiet-icon-button workbench-toggle open" : "quiet-icon-button workbench-toggle"} onClick={toggleWorkbench} title={workbenchOpen ? `${t("Hide workbench")} (Ctrl+\`)` : `${t("Show workbench")} (Ctrl+\`)`} aria-label={workbenchOpen ? t("Hide workbench") : t("Show workbench")} aria-pressed={workbenchOpen}>
-              {workbenchOpen ? <ArrowLeft size={17} /> : <ArrowRight size={17} />}
+              {workbenchOpen ? <ArrowRight size={17} /> : <ArrowLeft size={17} />}
             </button>
           </div>
         </header>
