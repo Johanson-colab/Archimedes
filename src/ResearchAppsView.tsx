@@ -18,6 +18,7 @@ export default function ResearchAppsView({ bridge, workspace, apps, appId, onRef
   const app = apps.find((item) => item.id === appId);
   const [runtime, setRuntime] = useState<ResearchAppRuntimeStatus | null>(null);
   const [busy, setBusy] = useState(false);
+  const [settingUp, setSettingUp] = useState(false);
   const [error, setError] = useState("");
   const [logsOpen, setLogsOpen] = useState(false);
   const [frameVersion, setFrameVersion] = useState(0);
@@ -34,19 +35,24 @@ export default function ResearchAppsView({ bridge, workspace, apps, appId, onRef
         if (operation === "start") setRuntime({ status: "starting", url: null, logs: "", error: "" });
         const result = await (operation === "start" ? bridge.startResearchApp(workspace, app.id) : bridge.stopResearchApp(workspace, app.id));
         if (alive.current) setRuntime(result);
-      } else if (operation === "setup") await bridge.setupResearchApp(workspace, app.id);
+      } else if (operation === "setup") {
+        setSettingUp(true);
+        await bridge.setupResearchApp(workspace, app.id);
+        const result = await bridge.stopResearchApp(workspace, app.id);
+        if (alive.current) setRuntime(result);
+      }
       else if (operation === "install") await bridge.installResearchApp(workspace, app.id);
       else if (operation === "pin") await bridge.pinResearchApp(workspace, app.id, !app.pinned);
       else await bridge.removeResearchApp(workspace, app.id);
       onRefresh();
     } catch (reason) { if (alive.current) setError(String(reason).replace(/^Error invoking remote method '[^']+':\s*/, "")); }
-    finally { if (alive.current) setBusy(false); }
+    finally { if (alive.current) { setBusy(false); setSettingUp(false); } }
   }, [app, bridge, workspace, onRefresh]);
   useEffect(() => {
     const key = `${workspace}:${app?.id}`;
     if (!app || attempted.current === key) return;
     attempted.current = key;
-    if (app.installed && app.pinned && app.status === "stopped") void action("start");
+    if (app.installed && app.pinned && !app.needsSetup && app.status === "stopped") void action("start");
   }, [app, workspace, action]);
   useEffect(() => {
     if (!logsOpen || !appId) return;
@@ -85,23 +91,23 @@ export default function ResearchAppsView({ bridge, workspace, apps, appId, onRef
   return <section className="research-app-host">
     <header className="research-app-toolbar">
       <button className="created-apps-action" onClick={onBack} aria-label={t("Back to created apps")}><ArrowLeft size={15} /></button>
-      <div className="research-app-title"><h1>{app?.name || appId}</h1><span>{t(state?.status === "running" ? "Running" : state?.status === "starting" ? "Starting…" : state?.status === "failed" ? "Failed" : "Stopped")}</span></div>
+      <div className="research-app-title"><h1>{app?.name || appId}</h1><span>{t(settingUp ? "Preparing environment…" : app?.needsSetup ? "Setup required" : state?.status === "running" ? "Running" : state?.status === "starting" ? "Starting…" : state?.status === "failed" ? "Failed" : "Stopped")}</span></div>
       <div className="research-app-controls">
-        {app?.needsSetup && state?.status !== "running" && state?.status !== "starting" && <button className="created-apps-action" disabled={busy} onClick={() => void action("setup")}>{t("Set up dependencies")}</button>}
+        {app?.needsSetup && state?.status !== "running" && state?.status !== "starting" && <button className="created-apps-action primary" disabled={busy} onClick={() => void action("setup")}>{t(settingUp ? "Preparing environment…" : "Set up dependencies")}</button>}
         <button className="created-apps-action" onClick={() => setLogsOpen((value) => !value)} aria-pressed={logsOpen}><Terminal size={14} />{t("Logs")}</button>
         {state?.status === "running" && <button className="created-apps-action" onClick={() => setFrameVersion((value) => value + 1)}><RefreshCw size={14} />{t("Reload preview")}</button>}
-        {state?.status === "running" || state?.status === "starting" ? <button className="created-apps-action" onClick={() => void action("stop")}><Square size={13} />{t("Stop app")}</button> : <button className="created-apps-action" disabled={busy || !app || app.status === "invalid"} onClick={() => void action("start")}><Play size={13} />{t("Start preview")}</button>}
-        {app?.installed ? <><button className="created-apps-action" disabled={busy} onClick={() => void action("pin")}>{app.pinned ? <PinOff size={14} /> : <Pin size={14} />}{t(app.pinned ? "Unpin app" : "Pin app")}</button><button className="created-apps-action" disabled={busy} onClick={() => void action("remove")} title={t("Uninstall app; keep its files")} aria-label={t("Uninstall app; keep its files")}><Trash size={14} /></button></> : <button className="created-apps-action primary" disabled={busy || !app || app.status === "invalid"} onClick={() => void action("install")}><Pin size={14} />{t("Install and pin")}</button>}
+        {state?.status === "running" || state?.status === "starting" ? <button className="created-apps-action" onClick={() => void action("stop")}><Square size={13} />{t("Stop app")}</button> : !app?.needsSetup && <button className="created-apps-action" disabled={busy || !app || app.status === "invalid"} onClick={() => void action("start")}><Play size={13} />{t("Start preview")}</button>}
+        {app?.installed ? <><button className="created-apps-action" disabled={busy} onClick={() => void action("pin")}>{app.pinned ? <PinOff size={14} /> : <Pin size={14} />}{t(app.pinned ? "Unpin app" : "Pin app")}</button><button className="created-apps-action" disabled={busy} onClick={() => void action("remove")} title={t("Uninstall app; keep its files")} aria-label={t("Uninstall app; keep its files")}><Trash size={14} /></button></> : <button className="created-apps-action primary" disabled={busy || !app || app.needsSetup || app.status === "invalid"} onClick={() => void action("install")}><Pin size={14} />{t("Install and pin")}</button>}
       </div>
     </header>
-    {(error || state?.error) && <p className="research-app-error" role="alert">{error || state?.error}</p>}
+    {(error || (!app?.needsSetup && state?.error)) && <p className="research-app-error" role="alert">{error || state?.error}</p>}
     {logsOpen && <pre className="research-app-logs" aria-label={t("App runtime logs")}>{state?.logs || t("No runtime logs yet.")}</pre>}
     <div className="research-app-preview">
       {state?.status === "running" && state.url ? <iframe ref={frame} key={`${state.url}:${frameVersion}`} src={state.url} title={app?.name || appId} sandbox="allow-scripts allow-same-origin allow-forms allow-downloads" allow="camera 'none'; microphone 'none'; geolocation 'none'; clipboard-read 'none'; clipboard-write 'none'" referrerPolicy="no-referrer" /> : <StateView
-        tone={state?.status === "starting" ? "loading" : state?.status === "failed" || state?.status === "invalid" ? "error" : "empty"}
-        icon={state?.status === "starting" ? <LoaderCircle size={23} className="spin" /> : <FileCode size={23} />}
-        title={t(state?.status === "starting" ? "Starting app…" : state?.status === "failed" ? "App could not start" : state?.status === "invalid" ? "App manifest is invalid" : "Ready to preview")}
-        description={t("Archimedes manages this app's process. Local code runs with your user permissions; Agent requests require approval.")}
+        tone={settingUp || state?.status === "starting" ? "loading" : app?.needsSetup ? "empty" : state?.status === "failed" || state?.status === "invalid" ? "error" : "empty"}
+        icon={settingUp || state?.status === "starting" ? <LoaderCircle size={23} className="spin" /> : <FileCode size={23} />}
+        title={t(settingUp ? "Preparing environment…" : app?.needsSetup ? "Set up this app first" : state?.status === "starting" ? "Starting app…" : state?.status === "failed" ? "App could not start" : state?.status === "invalid" ? "App manifest is invalid" : "Ready to preview")}
+        description={t(app?.needsSetup ? "Prepare this app's Python environment, then start the preview." : "Archimedes manages this app's process. Local code runs with your user permissions; Agent requests require approval.")}
       />}
     </div>
   </section>;

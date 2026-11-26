@@ -144,6 +144,7 @@ function createResearchAppRuntime({ approve = async () => false, readSecret = ()
   }
   async function install(workspace, id, pinned = true) {
     const app = readApp(workspace, id);
+    if (app.needsSetup) throw new Error("Set up this App's Python environment before installing it.");
     const signature = await consent(app, "install");
     const state = readState(app.workspace);
     state.apps[id] = { fingerprint: signature, pinned: Boolean(pinned), installedAt: new Date().toISOString() };
@@ -178,7 +179,7 @@ function createResearchAppRuntime({ approve = async () => false, readSecret = ()
         run.child.once("exit", () => { clearTimeout(timer); resolve(); }); kill("SIGTERM");
       });
     }
-    run.status = "stopped"; run.url = null; notify(run);
+    run.status = "stopped"; run.url = null; run.error = ""; notify(run);
     return publicRun(run);
   }
   async function remove(workspace, id) {

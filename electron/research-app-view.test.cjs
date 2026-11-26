@@ -66,6 +66,28 @@ test("opening a pinned installed App starts once and reports a startup failure",
   await React.act(async () => root.unmount());
 });
 
+test('a pinned Python App without an environment shows setup instead of attempting startup', async () => {
+  const root = createRoot(document.getElementById('root')); let starts = 0;
+  const props = { workspace: '/project', appId: 'sample', apps: [{ ...draft, installed: true, pinned: true, needsSetup: true }], bridge: { startResearchApp: async () => { starts++; return draft; } }, onOpen: () => {}, onRefresh: () => {}, onBack: () => {} };
+  await React.act(async () => root.render(React.createElement(View, props)));
+  assert.equal(starts, 0); assert.ok(button('Set up dependencies')); assert.equal(button('Start preview'), undefined);
+  assert.match(document.body.textContent, /Setup required/); assert.doesNotMatch(document.body.textContent, /App could not start/);
+  await React.act(async () => root.unmount());
+});
+
+test('successful setup clears stale startup failures and enables explicit preview', async () => {
+  const root = createRoot(document.getElementById('root')); let apps = [{ ...draft, needsSetup: true, status: 'failed', error: 'App Python environment is missing' }];
+  const bridge = {
+    setupResearchApp: async () => { apps = [{ ...draft, needsSetup: false }]; },
+    stopResearchApp: async () => draft,
+  };
+  const render = () => root.render(React.createElement(View, { workspace: '/project', appId: 'sample', apps, bridge, onOpen: () => {}, onRefresh: render, onBack: () => {} }));
+  await React.act(async () => render());
+  await React.act(async () => button('Set up dependencies').click());
+  assert.ok(button('Start preview')); assert.doesNotMatch(document.body.textContent, /Python environment is missing|App could not start/);
+  await React.act(async () => root.unmount());
+});
+
 test("installing and pinning a draft updates controls without starting it until reopened", async () => {
   let root = createRoot(document.getElementById("root"));
   let starts = 0, apps = [draft];

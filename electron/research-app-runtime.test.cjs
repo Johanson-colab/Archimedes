@@ -87,10 +87,12 @@ test("invalid manifests and linked source cannot escape the app directory", asyn
 
 test("missing Python dependencies report a recoverable failure instead of a dead URL", async (t) => {
   const f = fixture(t, { kind: "python-http", source: "print('not started')" });
+  await assert.rejects(f.runtime.install(f.workspace, 'sample-app'), /Set up this App's Python environment/);
   const result = await f.runtime.start(f.workspace, "sample-app");
   assert.equal(result.status, "failed");
   assert.equal(result.url, null);
   assert.match(result.error, /Python environment is missing/);
+  assert.equal((await f.runtime.stop(f.workspace, 'sample-app')).error, '');
 });
 
 const python = spawnSync("python3", ["-c", "import sys; print(sys.executable)"], { encoding: "utf8" });
