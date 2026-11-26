@@ -12,7 +12,8 @@ function readable(value: unknown, fallback: string) {
 }
 
 /** Research Apps management; Extensions remains the MCP and skills marketplace. */
-export default function PluginsSettingsPanel({ bridge, workspace, onPluginsChanged, disabledCoreModules, onCoreModuleEnabled }: {
+export default function PluginsSettingsPanel({ onOpenCreatedApps, bridge, workspace, onPluginsChanged, disabledCoreModules, onCoreModuleEnabled }: {
+  onOpenCreatedApps?: () => void;
   bridge: ResearchDeskBridge;
   workspace: string;
   onPluginsChanged?: () => void;
@@ -103,6 +104,7 @@ export default function PluginsSettingsPanel({ bridge, workspace, onPluginsChang
 
   const categoryIcons = { discovery: Radar, evidence: BookOpen, experiments: FlaskConical, analysis: ImagePlus, writing: FilePen };
   return <div className="settings-sections">
+    {onOpenCreatedApps && <SettingsSection title={t("Created Research Apps")}><SettingsGroup><SettingsRow title={t("Your workspace apps")} description={t("Preview, run and pin apps created in this workspace.")} icon={<Puzzle size={14} />}><button className="secondary-button" onClick={onOpenCreatedApps}>{t("Open apps")}</button></SettingsRow></SettingsGroup></SettingsSection>}
     <p className="research-apps-summary">{t("Choose apps for your sidebar. Changes apply immediately; hiding an app keeps its research data.")}</p>
     {error && <p className="settings-row-hint" role="alert">{error}</p>}
     {loading && <p className="settings-row-hint"><LoaderCircle className="spin" size={13} /> {t("Loading…")}</p>}

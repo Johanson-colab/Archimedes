@@ -182,9 +182,10 @@ test("git projects can open and remove a worktree workspace", () => {
     store.openWorkspace(primary);
     const project = store.createResearchProject({ name: "Git project", workspacePath: projectFolder });
     assert.equal(store.getResearchProject(project.id).git_state, "ready");
+    const suggested = store.suggestProjectWorkspaceName();
     const worktree = store.createProjectWorkspace({ projectId: project.id, kind: "worktree" });
     assert.equal(worktree.kind, "worktree");
-    assert.equal(worktree.name, nameLibrary[0].name);
+    assert.equal(worktree.name, suggested);
     assert.equal(fs.existsSync(path.join(worktree.root, "README.md")), true);
     assert.ok(worktree.base_ref);
 

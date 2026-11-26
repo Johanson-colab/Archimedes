@@ -77,13 +77,9 @@ export default function WorkspaceDialog({
           disabled={busy}
           onChange={(event) => setName(event.target.value)}
           onKeyDown={(event) => {
-            if (event.key === "Enter") {
+            if (event.key === "Enter" && !event.nativeEvent.isComposing && event.keyCode !== 229) {
               event.preventDefault();
               submit();
-            }
-            if (event.key === "Escape") {
-              event.preventDefault();
-              onClose();
             }
           }}
         />

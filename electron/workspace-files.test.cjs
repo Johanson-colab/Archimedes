@@ -2,6 +2,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+const { EventEmitter } = require("node:events");
 const test = require("node:test");
 const {
   compareWorkspaceSnapshots,
@@ -50,6 +51,13 @@ test("inspects files and nested directories without escaping the workspace", (t)
     t.after(() => fs.rmSync(outside, { recursive: true, force: true }));
     fs.symlinkSync(outside, path.join(root, "escape"));
     assert.throws(() => inspectWorkspacePath(root, "escape"), /outside/);
+    const nested = "escape/notes/result.md";
+    assert.throws(() => fileChangeForContent(root, nested, "note"), /outside/);
+    assert.throws(() => writeWorkspaceTextFile(root, nested, "note"), /outside/);
+    assert.deepEqual(fs.readdirSync(outside), []);
+    fs.symlinkSync(path.join(root, "src"), path.join(root, "linked-src"));
+    writeWorkspaceTextFile(root, "linked-src/notes/result.md", "note");
+    assert.equal(fs.readFileSync(path.join(root, "src/notes/result.md"), "utf8"), "note");
   }
 });
 
@@ -93,4 +101,31 @@ test("snapshots bound retained file contents without losing change detection", (
   assert.ok(retained <= 8_000_000);
   fs.writeFileSync(path.join(root, "file-9.txt"), "y".repeat(900_000));
   assert.deepEqual(compareWorkspaceSnapshots(before, snapshotWorkspace(root)).map(change => change.path), ["file-9.txt"]);
+});
+
+test("a workspace watcher error closes and removes only that watcher", (t) => {
+  const source = fs.readFileSync(path.join(__dirname, "main.cjs"), "utf8");
+  const section = (start, end) => source.slice(source.indexOf(`function ${start}(`), source.indexOf(`function ${end}(`));
+  const workspaceWatchers = new Map();
+  const watchers = [];
+  const watch = (_root, _options, onChange) => {
+    const watcher = Object.assign(new EventEmitter(), { close: t.mock.fn(), onChange });
+    watchers.push(watcher);
+    return watcher;
+  };
+  const watchWorkspace = new Function("fs", "workspaceWatchers", `
+    ${section("stopWorkspaceWatcher", "setWindowWorkspace")}
+    ${section("watchWorkspace", "titleBarOverlay")}
+    return watchWorkspace;
+  `)({ watch }, workspaceWatchers);
+  const sender = { id: 1 };
+  watchWorkspace(sender, "/first");
+  watchWorkspace(sender, "/second");
+  const [old, current] = watchers;
+  old.emit("error", new Error("Stale watcher"));
+  assert.equal(workspaceWatchers.get(sender.id).watcher, current);
+  current.onChange("rename", "README.md");
+  current.emit("error", new Error("Workspace unmounted"));
+  assert.equal(current.close.mock.callCount(), 1);
+  assert.equal(workspaceWatchers.has(sender.id), false);
 });

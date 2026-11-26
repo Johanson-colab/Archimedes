@@ -30,6 +30,7 @@ import { applyAppearance, readAppearance, resolveTheme, writeAppearance, type Ap
 import { chooseIconName } from "./file-icons/opencode/choose-icon-name";
 import { ensureOpenCodeSprite } from "./file-icons/opencode/sprite";
 import ResearchWelcome, { type ResearchWelcomeAction } from "./ResearchWelcome";
+import FirstRunGuide, { readFirstRunGuide, writeFirstRunGuide, type FirstRunGuideResult, type FirstRunGuideStep } from "./FirstRunGuide";
 import ContextPicker, { ContextChips } from "./ContextPicker";
 import ProjectSidebar, { NewProjectModal, ProjectRemoveModal } from "./ProjectSidebar";
 import { type ExtensionsTab } from "./ExtensionsView";
@@ -37,13 +38,13 @@ import { useConfirm } from "./ConfirmDialog";
 import { Dialog } from "./Dialog";
 import CommandPalette, { type PaletteCommand } from "./CommandPalette";
 import { defaultDisabledResearchApps, researchAppMetadata } from "./research-apps";
-import { sidebarEntries, sidebarModule, type MainSection, type SidebarEntry, type SidebarModuleId } from "./sidebar-registry";
+import { registerGeneratedAppEntries, sidebarEntries, sidebarModule, type MainSection, type SidebarEntry, type SidebarModuleId } from "./sidebar-registry";
 import { loadSidebarPlugins, PluginModuleView } from "./plugin-runtime";
 import RightWorkbench, { clampWorkbenchWidth, defaultWorkbenchWidth } from "./RightWorkbench";
 import SessionSwitcher from "./SessionSwitcher";
 import WorkspaceDialog from "./WorkspaceDialog";
 import ChangesView from "./ChangesView";
-import NotesView from "./NotesView";
+import NotesView, { type NoteSaveState } from "./NotesView";
 import VoiceInputButton from "./VoiceInputButton";
 import SideConversation from "./SideConversation";
 import { INIT_PROMPT, type ConversationCommand, type ConversationCommandResult } from "./conversation-commands";
@@ -58,6 +59,7 @@ import ChatActivityTimeline from "./ChatActivityTimeline";
 import NativeAgentPanel, { NativeContextUsage, NativeQuestionCard, NativeSessionBusyNotice } from "./NativeAgentPanel";
 import { mergeNativeEvent, nativeTurnEvents, nativeUsage, updateNativeQuestions, type NativeSessionBackend } from "./native-agent-state";
 import HarnessPicker from "./HarnessPicker";
+import ResearchAppsView from "./ResearchAppsView";
 import NewChatModePicker, { draftForNewChatMode, RESEARCH_EXAMPLE, type NewChatMode } from "./NewChatModePicker";
 import JourneyView from "./JourneyView";
 import { defaultJourneySettings, normalizeJourneySettings } from "./journeySettings";
@@ -67,6 +69,7 @@ import TerminalPanel from "./TerminalPanel";
 import TerminalSettingsModal from "./TerminalSettingsModal";
 import SettingsModal, { type SettingsSection } from "./SettingsModal";
 import ThreadShareModal from "./ThreadShareModal";
+import SnapshotRangeDialog from "./SnapshotRangeDialog";
 import SessionComments, { type SessionCommentsScope } from "./SessionComments";
 import AccountChip from "./AccountChip";
 import packageMetadata from "../package.json";
@@ -103,6 +106,7 @@ import {
   ChevronsRight,
   ChevronRight,
   CircleDot,
+  CircleHelp,
   Clipboard,
   Copy,
   Cpu,
@@ -192,6 +196,7 @@ type TimelineEvent = {
 
 type PendingAction = AgentAction & { source: "agent" | "manual"; ownerThreadId?: string | null };
 type Modal = "file" | null;
+type WorkbenchNoteEdit = { content: string; timer: number | null; state: Exclude<NoteSaveState, "idle"> };
 type ResearchMode = NewChatMode | "free-chat" | "idea-spark" | "experiment-setup" | "paper-generation" | "paper-review" | "deep-research";
 type ReasoningEffort = "low" | "medium" | "high";
 type ContextLength = "standard" | "extra-long";
@@ -852,10 +857,11 @@ const previewBridge = {
     thread.visibility = visibility === "private" ? "private" : "project";
     return { visibility: thread.visibility };
   },
-  createResearchThreadSnapshot: async (threadId: string) => {
+  listResearchThreadSnapshotTurns: async (threadId: string) => (previewThreads.find(thread => thread.id === threadId)?.turns ?? []).map(turn => ({ id: turn.id, user_message: turn.user_message.slice(0, 180), created_at: turn.created_at })),
+  createResearchThreadSnapshot: async (threadId: string, turnIds?: string[], includeSources?: boolean) => {
     const thread = previewThreads.find((candidate) => candidate.id === threadId);
     if (!thread) throw new Error("Research session not found.");
-    const snapshot = { id: crypto.randomUUID(), thread_id: thread.id, project_id: thread.project_id, sequence: thread.events?.length || 0, created_at: new Date().toISOString(), manifest: { version: 1, thread: { id: thread.id, title: thread.title, visibility: thread.visibility }, sequence: thread.events?.length || 0, turns: thread.turns, events: thread.events ?? [], references: [], artifacts: [] } };
+    const snapshot = { id: crypto.randomUUID(), thread_id: thread.id, project_id: thread.project_id, sequence: thread.events?.length || 0, created_at: new Date().toISOString(), manifest: { version: 1, thread: { id: thread.id, title: thread.title, visibility: thread.visibility }, sequence: thread.events?.length || 0, turns: turnIds ? thread.turns.filter(turn => turnIds.includes(turn.id)) : thread.turns, events: turnIds ? (thread.events ?? []).filter(event => includeSources !== false && event.turn_id && turnIds.includes(event.turn_id) && ["source_evidence", "tool_result"].includes(event.type)) : thread.events ?? [], ...(turnIds ? { partial: true, diagnostics_omitted: true, sources_omitted: includeSources === false } : {}), references: [], artifacts: [] } };
     previewThreadSnapshots.unshift(snapshot);
     return structuredClone(snapshot);
   },
@@ -933,6 +939,11 @@ const previewBridge = {
   },
   getModelConfig: async () => ({ provider: "custom" as ModelProviderId, baseUrl: "https://api.openai.com/v1", model: "gpt-4.1-mini", hasApiKey: false, source: "environment" as const }),
   getAgentBackendConfig: async () => ({ backend: "api", binary: "codex", model: "" }),
+  detectHarnessCli: async () => { throw new Error("CLI setup requires the desktop app."); },
+  installHarnessCli: async () => { throw new Error("CLI setup requires the desktop app."); },
+  getHarnessInstallStatus: async () => ({ phase: "idle" }),
+  cancelHarnessInstall: async () => {},
+  loginHarnessCli: async () => { throw new Error("CLI setup requires the desktop app."); },
   saveAgentBackendConfig: async () => { throw new Error("External Agent backends require the desktop app."); },
   checkAgentBackend: async () => { throw new Error("Codex detection requires the desktop app."); },
   listCodexModelCatalog: async () => { throw new Error("Codex detection requires the desktop app."); },
@@ -1215,6 +1226,15 @@ const previewBridge = {
     return next;
   },
   setSidebarLayout: async () => readPreviewSidebarSettings(),
+  listResearchApps: async () => [],
+  setupResearchApp: async () => { throw new Error("Research App setup requires the desktop app."); },
+  runResearchAppAgent: async () => { throw new Error("Research App Agents require the desktop app."); },
+  researchAppStatus: async () => ({ status: "stopped", url: null, error: "", logs: "" }),
+  startResearchApp: async () => { throw new Error("Research App runtimes require the desktop app."); },
+  stopResearchApp: async () => ({ status: "stopped", url: null, error: "", logs: "" }),
+  installResearchApp: async () => [],
+  pinResearchApp: async () => [],
+  removeResearchApp: async () => [],
   listSidebarPlugins: async () => [],
   setSidebarPluginEnabled: async () => [],
   removeSidebarPlugin: async () => [],
@@ -1383,6 +1403,8 @@ function App() {
   const sidebarDragRef = useRef<{ startX: number; startWidth: number } | null>(null);
   const [mainSection, setMainSection] = useState<MainSection>("chat");
   const [pluginEntries, setPluginEntries] = useState<SidebarEntry[]>([]);
+  const [generatedApps, setGeneratedApps] = useState<GeneratedResearchApp[]>([]);
+  const generatedAppsRequest = useRef(0);
   const [reproduceId, setReproduceId] = useState<string | null>(null);
   const [extensionsTab, setExtensionsTab] = useState<ExtensionsTab>("installed");
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -1401,8 +1423,11 @@ function App() {
   const [trajectoryEvents, setTrajectoryEvents] = useState<ResearchEvent[]>([]);
   const [workspace, setWorkspace] = useState(DEFAULT_WORKSPACE);
   const [workspaceReady, setWorkspaceReady] = useState(false);
+  const [guideStep, setGuideStep] = useState<FirstRunGuideStep | null>(() => readFirstRunGuide() ? null : "intro");
   const [workspaceOpenError, setWorkspaceOpenError] = useState("");
   const [workspaceOpening, setWorkspaceOpening] = useState(false);
+  const visibleGuideStep = workspaceReady && !workspaceOpening && !workspaceOpenError ? guideStep : null;
+  const sidebarVisible = !sidebarHidden || visibleGuideStep === "sidebar";
   const workspaceOpeningRef = useRef(false);
   const [projects, setProjects] = useState<ResearchProject[]>([]);
   const [archivedProjects, setArchivedProjects] = useState<ResearchProject[]>([]);
@@ -1422,8 +1447,9 @@ function App() {
   const [workspaceDialogError, setWorkspaceDialogError] = useState("");
   const [sessionSwitcherSignal, setSessionSwitcherSignal] = useState(0);
   const [threadVisibility, setThreadVisibility] = useState<"project" | "private">("project");
+  const [snapshotRangeThread, setSnapshotRangeThread] = useState<string | null>(null);
   const [shareSnapshot, setShareSnapshot] = useState<Awaited<ReturnType<ResearchDeskBridge["createResearchThreadSnapshot"]>> | null>(null);
-  useEffect(() => { setShareSnapshot(null); }, [activeThreadId]);
+  useEffect(() => { setShareSnapshot(null); setSnapshotRangeThread(null); }, [activeThreadId]);
   const [commentsOpen, setCommentsOpen] = useState(false);
   useEffect(() => { setCommentsOpen(false); }, [activeThreadId]);
   const [runningThreadId, setRunningThreadId] = useState<string | null>(null);
@@ -1436,7 +1462,7 @@ function App() {
   const workbenchActiveTabs = useMemo(() => activeWorkbenchPaneTabs(workbenchLayout), [workbenchLayout]);
   const [noteValues, setNoteValues] = useState<Record<string, string>>({});
   const [noteLoadedKey, setNoteLoadedKey] = useState<string | null>(null);
-  const [noteSaveState, setNoteSaveState] = useState<"idle" | "saving" | "saved">("idle");
+  const [noteSaveState, setNoteSaveState] = useState<NoteSaveState>("idle");
   const [seenChangeSetIds, setSeenChangeSetIds] = useState<Set<string>>(new Set());
   const [artifactsBadge, setArtifactsBadge] = useState(0);
   const [artifactsVersion, setArtifactsVersion] = useState(0);
@@ -1525,6 +1551,7 @@ function App() {
   const openFilesRef = useRef<WorkspaceFilePreview[]>([]);
   const fileEditorScopesRef = useRef<FileEditorScopes>({});
   const noteValuesRef = useRef<Record<string, string>>({});
+  const noteEditsRef = useRef(new Map<string, WorkbenchNoteEdit>());
   const noteKeyRef = useRef("draft");
   const pendingAssistantDeltasRef = useRef(new Map<string, string>());
   const assistantDeltaFrameRef = useRef<number | null>(null);
@@ -1890,34 +1917,84 @@ function App() {
   }
 
   useEffect(() => {
+    const edit = noteEditsRef.current.get(noteKey);
+    if (edit && edit.state !== "saved") {
+      setNoteLoadedKey(noteKey);
+      setNoteSaveState(edit.state);
+      return;
+    }
+
     let cancelled = false;
     setNoteLoadedKey(null);
     setNoteSaveState("idle");
     void desktopBridge.getWorkbenchNote(noteKey)
       .then((note) => {
-        if (cancelled) return;
+        if (cancelled || noteEditsRef.current.get(noteKey) !== edit) return;
         setNoteValues((current) => ({ ...current, [noteKey]: note.content }));
         setNoteLoadedKey(noteKey);
+        if (note.updatedAt) setNoteSaveState("saved");
       })
       .catch(() => {
-        if (cancelled) return;
-        setNoteValues((current) => ({ ...current, [noteKey]: "" }));
+        if (cancelled || noteEditsRef.current.get(noteKey) !== edit) return;
         setNoteLoadedKey(noteKey);
       });
     return () => { cancelled = true; };
   }, [noteKey]);
 
-  useEffect(() => {
-    if (noteLoadedKey !== noteKey) return;
-    const content = noteValues[noteKey] ?? "";
+  function persistWorkbenchNoteEdit(key: string, edit: WorkbenchNoteEdit) {
+    edit.timer = null;
+    edit.state = "saving";
+    if (noteKeyRef.current === key) setNoteSaveState("saving");
+    function finish(state: "saved" | "error") {
+      if (noteEditsRef.current.get(key) !== edit) return;
+      edit.state = state;
+      if (noteKeyRef.current === key) setNoteSaveState(state);
+    }
+    void desktopBridge.saveWorkbenchNote(key, edit.content).then(() => finish("saved"), () => finish("error"));
+  }
+
+  function changeWorkbenchNote(key: string, content: string) {
+    const previous = noteEditsRef.current.get(key);
+    if (previous?.timer != null) window.clearTimeout(previous.timer);
+    const edit: WorkbenchNoteEdit = { content, timer: null, state: "saving" };
+    noteEditsRef.current.set(key, edit);
+    setNoteValues((current) => ({ ...current, [key]: content }));
     setNoteSaveState("saving");
-    const timer = window.setTimeout(() => {
-      void desktopBridge.saveWorkbenchNote(noteKey, content)
-        .then(() => { if (noteKeyRef.current === noteKey) setNoteSaveState("saved"); })
-        .catch(() => { if (noteKeyRef.current === noteKey) setNoteSaveState("idle"); });
-    }, 600);
-    return () => window.clearTimeout(timer);
-  }, [noteKey, noteLoadedKey, noteValues]);
+    // This timer belongs to the note and continues after the editor switches sessions.
+    edit.timer = window.setTimeout(() => persistWorkbenchNoteEdit(key, edit), 600);
+  }
+
+  async function moveDraftWorkbenchNote(sourceKey: string, targetKey: string) {
+    const edit = noteEditsRef.current.get(sourceKey);
+    const draft = edit?.content ?? noteValuesRef.current[sourceKey];
+    if (!draft?.trim() || noteEditsRef.current.has(targetKey)) return;
+    let cancelledSourceTimer = false;
+    try {
+      await desktopBridge.saveWorkbenchNote(targetKey, draft);
+      if (noteEditsRef.current.has(targetKey)) return;
+      noteEditsRef.current.set(targetKey, { content: draft, timer: null, state: "saved" });
+      setNoteValues((current) => ({ ...current, [targetKey]: draft }));
+      if (noteKeyRef.current === targetKey) {
+        setNoteLoadedKey(targetKey);
+        setNoteSaveState("saved");
+      }
+      if (noteEditsRef.current.get(sourceKey) !== edit) return;
+      if (edit?.timer != null) {
+        window.clearTimeout(edit.timer);
+        edit.timer = null;
+        cancelledSourceTimer = true;
+      }
+      await desktopBridge.deleteWorkbenchNote(sourceKey);
+      if (noteEditsRef.current.get(sourceKey) !== edit) return;
+      noteEditsRef.current.delete(sourceKey);
+      setNoteValues((current) => ({ ...current, [sourceKey]: "" }));
+    } catch {
+      // The source draft stays available if it could not be moved.
+      if (cancelledSourceTimer && edit && noteEditsRef.current.get(sourceKey) === edit) {
+        persistWorkbenchNoteEdit(sourceKey, edit);
+      }
+    }
+  }
 
   useEffect(() => {
     if (!workbenchActiveTabs.has("changes")) return;
@@ -2026,6 +2103,22 @@ function App() {
     return () => window.removeEventListener("keydown", handleWorkbenchShortcut);
   }, [workbenchOpen]);
 
+  const refreshGeneratedApps = useCallback(() => {
+    const request = ++generatedAppsRequest.current;
+    if (!workspaceReady || typeof desktopBridge.listResearchApps !== "function") { registerGeneratedAppEntries([]); setGeneratedApps([]); return; }
+    void desktopBridge.listResearchApps(workspace).then((apps) => {
+      if (request !== generatedAppsRequest.current) return;
+      registerGeneratedAppEntries(apps); setGeneratedApps(apps);
+    }).catch(() => { if (request === generatedAppsRequest.current) { registerGeneratedAppEntries([]); setGeneratedApps([]); } });
+  }, [workspace, workspaceReady]);
+  useEffect(() => {
+    registerGeneratedAppEntries([]); setGeneratedApps([]);
+    refreshGeneratedApps();
+    const changed = desktopBridge.onResearchAppsChanged?.((event) => { if (event.workspace === workspace) refreshGeneratedApps(); });
+    const completed = desktopBridge.onAgentEvent((event) => { if (event.type === "complete") refreshGeneratedApps(); });
+    return () => { generatedAppsRequest.current++; changed?.(); completed(); };
+  }, [workspace, refreshGeneratedApps]);
+
   const refreshSidebarPlugins = useCallback(() => {
     loadSidebarPlugins(desktopBridge).then((entries) => {
       setPluginEntries(entries);
@@ -2088,6 +2181,17 @@ function App() {
   function toggleWorkbench() {
     if (workbenchOpen) closeWorkbench();
     else setWorkbenchOpen(true);
+  }
+
+  function advanceGuide(step: FirstRunGuideStep) {
+    if (step === "chat") setMainSection("chat");
+    if (step === "workbench") setWorkbenchOpen(true);
+    setGuideStep(step);
+  }
+
+  function closeGuide(result: FirstRunGuideResult) {
+    if (result === "completed" || !readFirstRunGuide()) writeFirstRunGuide(result);
+    setGuideStep(null);
   }
 
   useEffect(() => () => {
@@ -2534,7 +2638,9 @@ function App() {
       const snapshot = await desktopBridge.createResearchThreadSnapshot(sessionId);
       if (activeThreadIdRef.current === sessionId) setShareSnapshot(snapshot);
     } catch (error) {
-      setMessages((current) => [...current, { id: crypto.randomUUID(), role: "assistant", text: `Could not create a snapshot: ${String(error)}` }]);
+      if (activeThreadIdRef.current !== sessionId) return;
+      if (String(error).includes("SNAPSHOT_TOO_LARGE")) setSnapshotRangeThread(sessionId);
+      else setMessages((current) => [...current, { id: crypto.randomUUID(), role: "assistant", text: `Could not create a snapshot: ${String(error)}` }]);
     }
   }
 
@@ -2958,16 +3064,7 @@ function App() {
       setThreads((current) => [result.thread, ...current.filter((thread) => thread.id !== result.threadId)]);
       setNativeStream((current) => current.threadId === result.threadId ? { threadId: "", events: [] } : current);
       setNativeQuestions((current) => current.filter((item) => item.threadId !== result.threadId));
-      if (submittedThreadId === null) {
-        const draftNote = noteValuesRef.current[draftNoteKey] ?? "";
-        if (draftNote.trim()) {
-          try {
-            await desktopBridge.saveWorkbenchNote(result.threadId, draftNote);
-            await desktopBridge.deleteWorkbenchNote(draftNoteKey);
-            setNoteValues((current) => ({ ...current, [result.threadId]: draftNote, [draftNoteKey]: "" }));
-          } catch { /* Keep the draft so it can be recovered. */ }
-        }
-      }
+      if (submittedThreadId === null) await moveDraftWorkbenchNote(draftNoteKey, result.threadId);
       const stillViewingSubmittedThread = activeThreadIdRef.current === result.threadId
         || (submittedThreadId === null && activeThreadIdRef.current === null);
       if (stillViewingSubmittedThread) {
@@ -3423,8 +3520,8 @@ function App() {
     : null;
   const workspaceDialogProject = projects.find((project) => project.id === workspaceDialogProjectId) ?? null;
   const activeModule = mainSection === "chat" || mainSection === "files" ? null : sidebarModule(mainSection);
-  const registeredSidebarEntries = useMemo(() => sidebarEntries().filter((entry) => !entry.disabled), [pluginEntries]);
-  const availableModuleEntries = useMemo(() => sidebarEntries().filter((entry) => !entry.disabled && !hiddenCoreModules.has(entry.id)), [hiddenCoreModules, pluginEntries]);
+  const registeredSidebarEntries = useMemo(() => sidebarEntries().filter((entry) => !entry.disabled), [pluginEntries, generatedApps]);
+  const availableModuleEntries = useMemo(() => sidebarEntries().filter((entry) => !entry.disabled && !hiddenCoreModules.has(entry.id)), [hiddenCoreModules, pluginEntries, generatedApps]);
   const flatModuleEntries = useMemo(() => orderSidebarIds(availableModuleEntries, sidebarOrder.apps), [availableModuleEntries, sidebarOrder.apps]);
   const availableSidebarWorkspaces = useMemo(() => Object.fromEntries([...projects, ...archivedProjects].map((project) => {
     const current = workspaces.filter((entry) => entry.project_id === project.id).map((entry) => entry.id);
@@ -3527,8 +3624,8 @@ function App() {
   const sidebarModuleOpen: Partial<Record<string, boolean>> = { daily: dailyOpened || mainSection === "daily", "image-creation": imageCreationOpened, "data-charts": dataChartsOpened, "data-analysis": dataAnalysisOpened, "literature-review": literatureReviewOpened };
 
   return (
-    <main className={`codex-shell theme-${theme}${sidebarHidden ? " sidebar-hidden" : ""}`} style={{ "--sidebar-width": `${sidebarWidth}px` } as React.CSSProperties}>
-      <aside className="codex-sidebar" aria-label={t("Archimedes navigation")} data-ui="application-navigation" inert={sidebarHidden}>
+    <main className={`codex-shell theme-${theme}${sidebarVisible ? "" : " sidebar-hidden"}`} data-guide-step={visibleGuideStep ?? undefined} style={{ "--sidebar-width": `${sidebarWidth}px` } as React.CSSProperties}>
+      <aside className="codex-sidebar" aria-label={t("Archimedes navigation")} data-ui="application-navigation" inert={!sidebarVisible}>
         <div className="codex-brand">
           <ArchimedesMark className="codex-brand-symbol" size={24} variant="small" />
           <ArchimedesWordmark className="codex-brand-wordmark" />
@@ -3596,7 +3693,7 @@ function App() {
 
       <section className={workbenchOpen ? "codex-main workbench-open" : "codex-main"} style={{ "--workbench-width": workbenchOpen ? `${workbenchWidth}px` : "0px" } as React.CSSProperties}>
         <header className="main-toolbar" data-ui="application-toolbar">
-          {sidebarHidden && <button className="quiet-icon-button sidebar-restore-button" onClick={() => setSidebarHidden(false)} title={t("Show sidebar")} aria-label={t("Show sidebar")} aria-pressed={sidebarHidden}><PanelLeftOpen size={17} /></button>}
+          {!sidebarVisible && <button className="quiet-icon-button sidebar-restore-button" onClick={() => setSidebarHidden(false)} title={t("Show sidebar")} aria-label={t("Show sidebar")} aria-pressed={sidebarHidden}><PanelLeftOpen size={17} /></button>}
           <SessionSwitcher
             project={activeProject}
             workspace={activeWorkspace}
@@ -3620,6 +3717,9 @@ function App() {
           />
           <div className="main-toolbar-actions">
             <div id="module-toolbar-actions" className="module-toolbar-actions" />
+            <button className="quiet-icon-button" onClick={(event) => { event.currentTarget.focus(); setGuideStep("intro"); }} title={t("Open quick guide")} aria-label={t("Open quick guide")}>
+              <CircleHelp size={16} aria-hidden="true" />
+            </button>
             {presenceMembers.length > 0 && <div className="presence-stack" title={presenceMembers.map((member) => member.displayName).join(", ")} aria-label={`${presenceMembers.length} collaborators online`}>
               {presenceMembers.slice(0, 4).map((member) => <span className="presence-avatar" key={member.key} title={member.displayName}>{member.displayName.slice(0, 1).toUpperCase()}</span>)}
               {presenceMembers.length > 4 && <span className="presence-avatar more">+{presenceMembers.length - 4}</span>}
@@ -3651,6 +3751,11 @@ function App() {
 
         <div className="main-workspace" ref={mainWorkspaceRef}>
         <div className={mainSection === "chat" ? `main-view chat-main${sideThread ? " has-side-chat" : ""}` : "main-view knowledge-main"}>
+          {(mainSection === "created-apps" || mainSection.startsWith("research-app:")) && <ResearchAppsView
+            key={`${workspace}:${mainSection}`} bridge={desktopBridge} workspace={workspace} apps={generatedApps}
+            appId={mainSection.startsWith("research-app:") ? mainSection.slice("research-app:".length) : undefined}
+            onRefresh={refreshGeneratedApps} onOpen={(id) => setMainSection(`research-app:${id}`)} onBack={() => setMainSection("created-apps")}
+          />}
           {mainSection === "chat" && (
             <ConversationView
               key={activeThreadId ?? `new:${chatViewNonce}`}
@@ -3672,7 +3777,7 @@ function App() {
                 if (agentBusy) throw new Error(t("Stop the running turn before using this command."));
                 const current = await desktopBridge.getAgentBackendConfig();
                 const target = backend === "api" ? "codex" : backend;
-                const profile = current.profiles?.[target] || (current.backend === backend ? current : { binary: target, model: "", effort: "", permissionMode: target === "codex" ? "read-only" as const : "ask" as const });
+                const profile = current.profiles?.[target] || (current.backend === backend ? current : { binary: target === "antigravity" ? "agy" : target, model: "", effort: "", permissionMode: target === "codex" ? "read-only" as const : "ask" as const });
                 const saved = await desktopBridge.saveAgentBackendConfig({ ...profile, backend });
                 setNativeBackend(saved);
                 if (boundHarness && backend !== boundHarness) startNewTask();
@@ -3711,6 +3816,7 @@ function App() {
               onReject={(id) => void rejectPendingAction(id)}
               onOpenFile={openChangedFile}
               showWelcome={activeThreadId === null && messages.length === 1 && messages[0]?.id === "welcome" && !agentBusy}
+              onOpenCreatedApps={() => { refreshGeneratedApps(); setMainSection("created-apps"); }}
               onWelcomeAction={openWelcomeWorkflow}
               composerRequest={composerRequest}
               draftKey={composerDraftKey}
@@ -3877,11 +3983,16 @@ function App() {
             />,
             changes: <ChangesView changeSets={changeSets} hasThread={Boolean(activeThreadId)} onOpenFile={openChangedFile} />,
             notes: <NotesView
+              key={noteKey}
               value={noteValue}
               loading={noteLoadedKey !== noteKey}
               saveState={noteSaveState}
               contextLabel={activeThreadId ? t("Conversation notes") : t("New conversation notes")}
-              onChange={(content) => setNoteValues((current) => ({ ...current, [noteKey]: content }))}
+              onChange={(content) => changeWorkbenchNote(noteKey, content)}
+              onRetry={() => {
+                const edit = noteEditsRef.current.get(noteKey);
+                if (edit?.state === "error") persistWorkbenchNoteEdit(noteKey, edit);
+              }}
               onSend={sendNoteToChat}
             />,
             browser: <BrowserView active={workbenchOpen && workbenchActiveTabs.has("browser")} onOpenExternal={(url) => desktopBridge.openExternalUrl(url)} />,
@@ -3980,10 +4091,12 @@ function App() {
         onSignUp={signUp}
         onSignOut={signOut}
         onOpenAuth={(mode) => { setSettingsOpen(false); openAuth(mode || "choice"); }}
+        onOpenCreatedApps={() => { setSettingsOpen(false); refreshGeneratedApps(); setMainSection("created-apps"); }}
         onPluginsChanged={refreshSidebarPlugins}
         disabledCoreModules={disabledCoreModules}
         onCoreModuleEnabled={setCoreModuleEnabled}
       />
+      {snapshotRangeThread && <SnapshotRangeDialog bridge={desktopBridge} threadId={snapshotRangeThread} title={activeThread?.title ?? t("Research session")} onClose={() => setSnapshotRangeThread(null)} onCreated={snapshot => { if (activeThreadIdRef.current === snapshotRangeThread) { setSnapshotRangeThread(null); setShareSnapshot(snapshot); } }} />}
       <ThreadShareModal
         signedIn={Boolean(authState?.user)}
         key={`${shareSnapshot?.id ?? "none"}:${authState?.user?.id ?? "signed-out"}`}
@@ -4022,6 +4135,7 @@ function App() {
         onSubmit={(input) => void submitWorkspaceDialog(input)}
       />
       <CommandPalette open={paletteOpen} commands={paletteCommands} onClose={() => setPaletteOpen(false)} />
+      {visibleGuideStep && <FirstRunGuide step={visibleGuideStep} onStep={advanceGuide} onExit={closeGuide} />}
       <ProjectRemoveModal project={projectToRemove} onClose={() => setProjectToRemove(null)} onRemove={() => projectToRemove && void removeProject(projectToRemove)} />
       <Dialog open={workspaceOpening} blocking size="compact" className="workspace-opening-dialog" ariaLabel={t("Opening workspace")}>
         <div role="status"><LoaderCircle className="spin" size={16} />{t("Opening workspace")}</div>
@@ -4090,7 +4204,7 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
     for (const event of trajectoryEvents) {
       if (event.type === "native_session_busy") {
         const backend = (event.payload as { backend?: unknown } | null)?.backend;
-        if (backend === "codex" || backend === "claude" || backend === "opencode") busy.set(event.turn_id, backend);
+        if (backend === "codex" || backend === "claude" || backend === "opencode" || backend === "antigravity") busy.set(event.turn_id, backend);
         continue;
       }
       if (!event.type.startsWith("native_")) continue;
@@ -4190,7 +4304,7 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
         {pendingAction && <section className="conversation-approval">
           <div className="approval-content">
             <div className="approval-head">
-              <span className="approval-kind">{pendingAction.payload.externalAgent ? ({ codex: "Codex", claude: "Claude Code", opencode: "OpenCode" }[pendingAction.payload.externalAgent]) : pendingAction.kind === "write" ? "Write file" : "Run command"}</span>
+              <span className="approval-kind">{pendingAction.payload.externalAgent ? ({ codex: "Codex", claude: "Claude Code", opencode: "OpenCode", antigravity: "Antigravity" }[pendingAction.payload.externalAgent]) : pendingAction.kind === "write" ? "Write file" : "Run command"}</span>
               {pendingAction.payload.change && <div className="approval-diff-stats"><span>+{pendingAction.payload.change.additions}</span><span>-{pendingAction.payload.change.deletions}</span></div>}
             </div>
             <code>{pendingAction.kind === "write" ? pendingAction.payload.path : pendingAction.payload.command}</code>
@@ -4220,7 +4334,8 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
   </div>;
 });
 
-function ConversationView({ messages, events, trajectoryEvents, remoteServers, remoteServerId, onRemoteServerChange, onRefreshRemoteServers, onOpenSshSettings, nativeBackend, harnessBound, onHarnessChange, nativeQuestions, onNativeAnswer, onNativeSteer, workspace, projectId, agentBusy, interrupting, canInterrupt, pendingAction, changeSets, researchMode, researchGraphOpen, onToggleResearchGraph, onResearchGraphAvailability, reasoningEffort, contextLength, modelCapabilities, contextItems, onOpenWorkspaceSettings, onCommand, contextSummary, compactedThroughTurnId, onSubmit, onInterrupt, onResearchMode, onAddContext, onRemoveContext, onApprove, onReject, onOpenFile, showWelcome, onWelcomeAction, composerRequest, draftKey, currentFile, currentSelection, onComposerRequestApplied, initialScrollTop, onScrollTop, commentScope, addingComment, commentsShowResolved, onExitComments }: {
+function ConversationView({ onOpenCreatedApps, messages, events, trajectoryEvents, remoteServers, remoteServerId, onRemoteServerChange, onRefreshRemoteServers, onOpenSshSettings, nativeBackend, harnessBound, onHarnessChange, nativeQuestions, onNativeAnswer, onNativeSteer, workspace, projectId, agentBusy, interrupting, canInterrupt, pendingAction, changeSets, researchMode, researchGraphOpen, onToggleResearchGraph, onResearchGraphAvailability, reasoningEffort, contextLength, modelCapabilities, contextItems, onOpenWorkspaceSettings, onCommand, contextSummary, compactedThroughTurnId, onSubmit, onInterrupt, onResearchMode, onAddContext, onRemoveContext, onApprove, onReject, onOpenFile, showWelcome, onWelcomeAction, composerRequest, draftKey, currentFile, currentSelection, onComposerRequestApplied, initialScrollTop, onScrollTop, commentScope, addingComment, commentsShowResolved, onExitComments }: {
+  onOpenCreatedApps: () => void;
   commentScope: SessionCommentsScope | null;
   addingComment: boolean;
   commentsShowResolved: boolean;
@@ -4745,6 +4860,7 @@ function ConversationView({ messages, events, trajectoryEvents, remoteServers, r
     </WorkspaceMarkdownProvider>
 
     <div className="conversation-composer-wrap" data-ui="research-composer">
+      {(showWelcome ? newChatMode === "create" : researchMode === "create") && <button className="creator-apps-button" type="button" onClick={onOpenCreatedApps}><Puzzle size={13} />{t("Preview Research Apps")}</button>}
       {showWelcome && <NewChatModePicker value={newChatMode} onChange={(mode) => {
           if (mode !== "research" && researchGraphOpen) onToggleResearchGraph(false);
           setNewChatMode(mode);
