@@ -69,9 +69,9 @@ const providers: Array<{
 export function formatModelConnectionError(error: unknown, t: ReturnType<typeof useUISettings>["t"]) {
   const message = error instanceof Error ? error.message : String(error);
   const detail = message.replace(/^Error invoking remote method '[^']+':\s*(?:Error:\s*)?|^Error:\s*/, "");
-  const missingSession = /^Connection failed \((\d+)\): MissingSessionID$/.exec(detail);
+  const missingSession = /^(?:Connection failed|Model request failed) \((\d+)\): MissingSessionID$/.exec(detail);
   if (missingSession) return t("Connection failed ({status}). In Settings → Models, select OpenCode Go or set Session header to x-opencode-session and Strategy to Thread.", { status: missingSession[1] });
-  const failedStatus = /^Connection failed \((\d+)\)/.exec(detail);
+  const failedStatus = /^(?:Connection failed|Model request failed) \((\d+)\)/.exec(detail);
   return failedStatus ? t("Connection failed ({status}). Check the provider, model, and API key.", { status: failedStatus[1] }) : t(detail);
 }
 

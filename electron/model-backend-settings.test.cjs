@@ -4,7 +4,7 @@ const path = require("node:path");
 const { test, before, after } = require("node:test");
 const { JSDOM } = require("jsdom");
 
-let dom, React, createRoot, ModelSettingsModal;
+let dom, React, createRoot, ModelSettingsModal, formatModelConnectionError;
 const calls = {};
 const translate = (key, values) => key.replace(/\{(\w+)\}/g, (placeholder, name) => values?.[name] ?? placeholder);
 
@@ -43,7 +43,7 @@ before(async () => {
   await load("Menu", ["MenuSurface", "MenuItem"]);
   await load("HarnessSetupPanel", ["HarnessSetupPanel"]);
   await load("AgentBackendSettings", ["AgentBackendSettings"]);
-  ({ ModelSettingsModal } = await load("ModelSettingsModal", ["ModelSettingsModal"]));
+  ({ ModelSettingsModal, formatModelConnectionError } = await load("ModelSettingsModal", ["ModelSettingsModal", "formatModelConnectionError"]));
 });
 
 after(() => {
@@ -683,4 +683,11 @@ test('Antigravity thinking effort is independently saved and reset when its mode
     await click('Use Antigravity'); assert.equal(calls.savedBackends.at(-1).effort,'xhigh');
     await input('Antigravity model','another-model'); assert.equal(select.value,'');
   } finally { await cleanup(); }
+});
+
+test("Responses connection failures use the localized connection-test message", () => {
+  assert.equal(
+    formatModelConnectionError(new Error("Error invoking remote method \u0027model:test\u0027: Error: Model request failed (401): bad key"), translate),
+    "Connection failed (401). Check the provider, model, and API key.",
+  );
 });
