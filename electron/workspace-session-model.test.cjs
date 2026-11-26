@@ -206,6 +206,24 @@ test("git projects can open and remove a worktree workspace", async () => {
   }
 });
 
+test("worktree mutations stay tracked while Git is pending", async () => {
+  const { root, primary, projectFolder } = makeRoots("pending-mutation");
+  try {
+    initRepo(projectFolder);
+    store.openWorkspace(primary);
+    const project = store.createResearchProject({ name: "Pending mutation", workspacePath: projectFolder });
+    await store.refreshProjectGitState(project.id);
+    assert.equal(store.hasPendingWorkspaceMutations(), false);
+    const pending = store.createProjectWorkspace({ projectId: project.id, kind: "worktree" });
+    assert.equal(store.hasPendingWorkspaceMutations(), true);
+    await pending;
+    assert.equal(store.hasPendingWorkspaceMutations(), false);
+  } finally {
+    closeStore();
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("projects without git cannot create a worktree", async () => {
   const { root, primary, projectFolder } = makeRoots("no-git");
   try {

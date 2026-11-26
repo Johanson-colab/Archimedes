@@ -2474,7 +2474,7 @@ function createSandboxCopy(source, destination) {
   copyDirectory(source, destination);
 }
 
-async function createProjectWorkspace({ projectId, kind = "shared", name = "", baseCommit = null } = {}, experiment = null) {
+async function createProjectWorkspaceInternal({ projectId, kind = "shared", name = "", baseCommit = null } = {}, experiment = null) {
   const db = requireDatabase();
   if (typeof projectId !== "string" || !projectId) throw new Error("A project is required.");
   if (!WORKSPACE_KINDS.has(kind)) throw new Error("Unknown workspace kind.");
@@ -2657,7 +2657,7 @@ async function removeGitWorktree(root, workspaceRoot) {
   await runGit(root, ["worktree", "prune"], { timeout: 30_000 });
 }
 
-async function deleteProjectWorkspace(id) {
+async function deleteProjectWorkspaceInternal(id) {
   const db = requireDatabase();
   const workspace = db.prepare("SELECT * FROM project_workspaces WHERE id = ?").get(id);
   if (!workspace) throw new Error("Workspace not found.");
@@ -2667,10 +2667,14 @@ async function deleteProjectWorkspace(id) {
     throw new Error("This workspace is linked to an experiment and cannot be deleted here.");
   }
   const project = db.prepare("SELECT * FROM research_projects WHERE id = ?").get(workspace.project_id);
-  const fallback = ensureProjectSharedWorkspace(db, project);
+  let fallback = ensureProjectSharedWorkspace(db, project);
   if (workspace.kind === "worktree") {
     await removeGitWorktree(resolveProjectRoot(project), workspace.root);
     if (!getProjectWorkspace(id)) return { deleted: true };
+    // Another window may have rebound the project folder while Git was
+    // removing the worktree. Migrate sessions to the current shared root.
+    const currentProject = db.prepare("SELECT * FROM research_projects WHERE id = ?").get(workspace.project_id);
+    fallback = currentProject ? ensureProjectSharedWorkspace(db, currentProject) : null;
   } else {
     fs.rmSync(workspace.root, { recursive: true, force: true });
   }
@@ -2689,6 +2693,26 @@ async function deleteProjectWorkspace(id) {
     metadata: { kind: workspace.kind, root: workspace.root },
   });
   return { deleted: true };
+}
+
+let pendingWorkspaceMutations = 0;
+
+async function trackWorkspaceMutation(work) {
+  pendingWorkspaceMutations += 1;
+  try { return await work(); }
+  finally { pendingWorkspaceMutations -= 1; }
+}
+
+function createProjectWorkspace(args = {}, experiment = null) {
+  return trackWorkspaceMutation(() => createProjectWorkspaceInternal(args, experiment));
+}
+
+function deleteProjectWorkspace(id) {
+  return trackWorkspaceMutation(() => deleteProjectWorkspaceInternal(id));
+}
+
+function hasPendingWorkspaceMutations() {
+  return pendingWorkspaceMutations > 0;
 }
 
 function setWorkspaceLastSession(workspaceId, sessionId) {
@@ -4819,6 +4843,7 @@ module.exports = {
   refreshProjectGitState,
   refreshWorkspaceGitStates,
   createProjectWorkspace,
+  hasPendingWorkspaceMutations,
   defaultProjectWorkspace,
   deleteProjectWorkspace,
   getProjectWorkspace,

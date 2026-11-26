@@ -2802,15 +2802,7 @@ app.whenReady().then(async () => {
 });
 
 app.on("window-all-closed", () => {
-  void researchAppRuntime.shutdown();
   if (process.platform !== "darwin") app.quit();
-});
-
-let researchAppsStoppedForQuit = false;
-app.on("before-quit", (event) => {
-  if (researchAppsStoppedForQuit) return;
-  event.preventDefault();
-  void researchAppRuntime.shutdown().finally(() => { researchAppsStoppedForQuit = true; app.quit(); });
 });
 
 app.on("activate", () => {
@@ -2826,7 +2818,7 @@ installQuitGuard({ app, dialog,
   restoreWindow: () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow(startupWorkspace());
   },
-  hasWork: () => listActiveRuns().length > 0 || agent.hasActiveAgentRuns(),
+  hasWork: () => listActiveRuns().length > 0 || agent.hasActiveAgentRuns() || store.hasPendingWorkspaceMutations() || researchAppRuntime.hasRunningApps(),
   stopWork: async () => {
     stoppingResearch = true;
     const reproductions = listActiveRuns("reproduction");
@@ -2835,13 +2827,16 @@ installQuitGuard({ app, dialog,
       ...reproductions.map(run => run.completion),
       experimentRunner.shutdownExperimentRuns(),
       agent.shutdownAgentRuns(),
+      researchAppRuntime.shutdown(),
     ]);
+    while (store.hasPendingWorkspaceMutations()) await new Promise((resolve) => setTimeout(resolve, 25));
   },
 });
 
 app.on("will-quit", (event) => {
   if (event?.defaultPrevented) return;
   harnessSetup.shutdown();
+  void researchAppRuntime.shutdown();
   closeAllNativeClients();
   closeAllTerminals();
   experimentRunner.shutdownExperimentRuns();
