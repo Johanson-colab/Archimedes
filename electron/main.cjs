@@ -178,7 +178,7 @@ function stopWorkspaceWatcher(senderId) {
   const current = workspaceWatchers.get(senderId);
   if (!current) return;
   if (current.timer) clearTimeout(current.timer);
-  current.watcher.close();
+  try { current.watcher?.close(); } catch { /* The watcher may already be closed after an error. */ }
   workspaceWatchers.delete(senderId);
 }
 
@@ -254,6 +254,16 @@ function watchWorkspace(sender, workspace) {
       state.timer = setTimeout(() => {
         if (!sender.isDestroyed()) sender.send("workspace:files-changed", { path: changedPath });
       }, 180);
+    });
+    // fs.watch emits "error" asynchronously for deleted or inaccessible
+    // directories. Without a listener that event would crash the main process.
+    state.watcher.on("error", () => {
+      if (state.timer) {
+        clearTimeout(state.timer);
+        state.timer = null;
+      }
+      workspaceWatchers.delete(sender.id);
+      try { state.watcher.close(); } catch { /* The watcher failed while closing. */ }
     });
     workspaceWatchers.set(sender.id, state);
   } catch {

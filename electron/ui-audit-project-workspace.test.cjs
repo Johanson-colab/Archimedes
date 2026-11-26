@@ -74,6 +74,12 @@ test("the composer surfaces the effective working folder", () => {
   assert.match(app, /title=\{workspace \? `\$\{t\("Workspace"\)\}: \$\{workspace\}`/);
 });
 
+test("workspace watchers handle asynchronous errors without crashing the main process", () => {
+  assert.match(main, /state\.watcher\.on\("error", \(\) => \{/);
+  assert.match(main, /workspaceWatchers\.delete\(sender\.id\);\s*\n\s*try \{ state\.watcher\.close\(\); \}/);
+  assert.match(main, /function stopWorkspaceWatcher\(senderId\) \{[\s\S]*?try \{ current\.watcher\?\.close\(\)/);
+});
+
 test("folder previews and watches do not move the window's primary workspace", () => {
   assert.match(main, /function createPreviewToken\(senderId, workspace\)/);
   assert.match(main, /const token = createPreviewToken\(event\.sender\.id, workspace\);/);
