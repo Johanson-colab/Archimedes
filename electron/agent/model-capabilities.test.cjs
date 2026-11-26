@@ -17,3 +17,28 @@ test("uses a conservative context-length capability and character cap", () => {
   assert.equal(normalizeContextLength(unsupported, "extra-long"), "standard");
   assert.equal(contextCharacterLimit(unsupported, "extra-long"), 500_000);
 });
+
+test("OpenCode Go keeps the capabilities of the same compatible model", () => {
+  const go = { provider: "opencode-go", model: "gpt-5.6-luna" };
+  assert.deepEqual(getModelCapabilities(go), getModelCapabilities({ ...go, provider: "custom" }));
+  assert.equal(normalizeReasoningEffort(go, "high"), "high");
+  assert.equal(contextCharacterLimit(go, "extra-long"), 1_000_000);
+  assert.deepEqual(getModelCapabilities({ ...go, model: "hy4" }).thinkingEfforts, []);
+});
+
+test("converts a configured token window into the character-budgeting unit", () => {
+  const { prepareConversation } = require("./context.cjs");
+  const { boundActiveContext } = require("./active-context.cjs");
+  const config = { provider: "custom", model: "fixture", contextWindowTokens: 32_768 };
+  const prompt = "word ".repeat(8_000);
+  const limit = contextCharacterLimit(config, "standard");
+  const prepared = prepareConversation({
+    thread: { turns: [{ id: "first", user_message: prompt }] },
+    currentTurnId: "first",
+    contextCharacterLimit: limit,
+    strictContextLimit: true,
+  });
+  assert.equal(limit, 131_072);
+  assert.deepEqual(boundActiveContext(prepared.messages, limit, { strict: true }), { removed: 0, clipped: 0 });
+  assert.equal(prepared.messages.at(-1).content, prompt);
+});
