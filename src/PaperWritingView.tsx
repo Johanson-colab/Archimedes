@@ -2,7 +2,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react"
 import { AlertTriangle, ArrowDown, ArrowUp, Check, ChevronDown, ChevronRight, CircleDot, Cloud, FileCode2, FileImage, FilePlus2, FileText, Folder, FolderOpen, FolderPlus, FolderUp, LoaderCircle, MessageCircle, PanelLeftClose, PanelLeftOpen, Play, RefreshCw, Search, X } from "lucide-react";
 import { useUISettings } from "./i18n";
 import SharedNoteEditor from "./SharedNoteEditor";
-import PaperTemplateLibrary, { paperTemplates } from "./PaperTemplateLibrary";
+import PaperTemplateLibrary from "./PaperTemplateLibrary";
 import { Dialog } from "./Dialog";
 import { StateView } from "./StateView";
 import { fingerprintFor } from "./proactive-engine";
@@ -169,7 +169,7 @@ export default function PaperWritingView({ bridge, workspace, projectId, openReq
   const [chooserOpen, setChooserOpen] = useState(true);
   const [projectName, setProjectName] = useState("paper");
   const [creating, setCreating] = useState(false);
-  const [templateId, setTemplateId] = useState(paperTemplates[0]?.id ?? "");
+  const [templateId, setTemplateId] = useState("minimal-article");
   const [browserWidth, setBrowserWidth] = useState(() => readStoredNumber("archimedes-paper-browser-width", BROWSER_DEFAULT_WIDTH, BROWSER_MIN_WIDTH, BROWSER_MAX_WIDTH));
   const [previewSplit, setPreviewSplit] = useState(() => readStoredNumber("archimedes-paper-split", PREVIEW_SPLIT_DEFAULT, PREVIEW_SPLIT_MIN, PREVIEW_SPLIT_MAX));
   const [browserCollapsed, setBrowserCollapsed] = useState(() => readStoredFlag("archimedes-paper-browser-collapsed"));
