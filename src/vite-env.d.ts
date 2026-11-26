@@ -330,6 +330,7 @@ interface ResearchDeskBridge {
     listNews: (filters?: { source?: string; sort?: "new" | "hot"; query?: string; savedOnly?: boolean; sinceHours?: number; limit?: number }) => Promise<NewsFeedPayload>;
     refreshNews: (input?: { force?: boolean }) => Promise<{ skipped: boolean; results: Array<{ source: string; status: string; updated: number; error?: string }> }>;
     markNewsRead: (id: string, read?: boolean) => Promise<{ ok: boolean }>;
+    markAllNewsRead?: (source?: string) => Promise<{ ok: boolean }>;
     setNewsSaved: (id: string, saved: boolean) => Promise<{ ok: boolean }>;
     getPaperReviewSettings: () => Promise<PublicPaperReviewSettings>;
     savePaperReviewSettings: (patch: Partial<PublicPaperReviewSettings> & { model?: Partial<PaperReviewModelSettings> }) => Promise<PublicPaperReviewSettings>;

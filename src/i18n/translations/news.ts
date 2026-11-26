@@ -26,6 +26,8 @@ export const news: Record<string, string> = {
   "Just now": "刚刚",
   "Keywords": "关键词",
   "Loading news…": "正在加载新闻…",
+  "Mark all read": "全部标为已读",
+  "Marked all stories as read.": "已将全部新闻标为已读。",
   "Minutes between conditional refresh requests.": "两次条件刷新之间的分钟数。",
   "Mute keywords": "屏蔽关键词",
   "Newest": "最新",
