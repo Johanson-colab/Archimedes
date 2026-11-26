@@ -49,6 +49,14 @@ test("workbench supports keyboard toggle and resizing", () => {
   assert.match(css, /body\.workbench-resizing/);
 });
 
+test("terminal resize releases window listeners when it is cancelled or unmounted", () => {
+  assert.match(terminal, /window\.addEventListener\("pointercancel", stop\)/);
+  assert.match(terminal, /window\.removeEventListener\("pointercancel", stop\)/);
+  assert.match(terminal, /stopResizeRef\.current\?\.\(\)/);
+  assert.match(terminal, /useEffect\(\(\) => \(\) => \{[\s\S]*?stopResizeRef\.current\?\.\(\)/);
+  assert.match(terminal, /document\.body\.classList\.remove\("terminal-resizing"\)/);
+});
+
 test("files use a compact workbench pane with drill-down and split modes", () => {
   assert.match(tabs, /Files/);
   assert.match(fs.readFileSync(path.join(root, "src", "Tabs.tsx"), "utf8"), /ui-tab-badge/);

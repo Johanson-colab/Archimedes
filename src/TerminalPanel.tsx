@@ -143,6 +143,13 @@ export default function TerminalPanel({ bridge, open, theme, workspace, settings
     if (nextTabs.length === 0) onClose();
   }
 
+  const stopResizeRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => () => {
+    stopResizeRef.current?.();
+    stopResizeRef.current = null;
+  }, []);
+
   function startResize(event: React.PointerEvent<HTMLDivElement>) {
     if (height == null || !onHeightChange) return;
     const resize = onHeightChange;
@@ -153,14 +160,21 @@ export default function TerminalPanel({ bridge, open, theme, workspace, settings
       const maximum = Math.max(220, window.innerHeight - 190);
       resize(Math.max(160, Math.min(maximum, startHeight + startY - pointerEvent.clientY)));
     };
-    const onPointerUp = () => {
+    const stop = () => {
       window.removeEventListener("pointermove", onPointerMove);
-      window.removeEventListener("pointerup", onPointerUp);
+      window.removeEventListener("pointerup", stop);
+      window.removeEventListener("pointercancel", stop);
       document.body.classList.remove("terminal-resizing");
+      if (stopResizeRef.current === stop) stopResizeRef.current = null;
     };
+    // A second drag or an unmount before pointerup must not leave the previous
+    // window listeners or the body cursor lock behind.
+    stopResizeRef.current?.();
+    stopResizeRef.current = stop;
     document.body.classList.add("terminal-resizing");
     window.addEventListener("pointermove", onPointerMove);
-    window.addEventListener("pointerup", onPointerUp);
+    window.addEventListener("pointerup", stop);
+    window.addEventListener("pointercancel", stop);
   }
 
   return <section className={[open ? "smart-terminal open" : "smart-terminal", orientation === "right" ? "in-workbench" : ""].join(" ")} aria-label="Terminal panel">
