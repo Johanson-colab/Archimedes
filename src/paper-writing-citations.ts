@@ -3,7 +3,7 @@ import { citationKeyIdentity, exportBibliography, matchBibliographyPaper, parseB
 export function manuscriptBibliographyPaths(content: string, mainPath: string) {
   const base = mainPath.split("/").slice(0, -1).join("/");
   const source = content.replace(/\\(?:\\|%)|%[^\r\n]*/g, value => value.startsWith("%") ? "" : value);
-  const names = [...source.matchAll(/\\(?:bibliography|addbibresource)(?:\[[^\]]*\])?\{([^}]+)\}/g)].flatMap(match => match[1].split(","));
+  const names = [...source.matchAll(/\\(?:bibliography|addbibresource)\s*(?:\[[^\]]*\])?\s*\{([^}]+)\}/g)].flatMap(match => match[1].split(","));
   const paths = new Set<string>();
   for (const name of names.map(value => value.trim())) {
     if (name.startsWith("/") || name.includes("\\") || name.split("/").includes("..")) continue;

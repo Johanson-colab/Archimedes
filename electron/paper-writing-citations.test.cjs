@@ -51,6 +51,6 @@ test("checks conflicts and matching references across every declared bibliograph
 });
 
 test("suggests only bibliography paths declared inside the manuscript folder", () => {
-  const main = "% \\bibliography{unused}\n\\bibliography{references,../outside}\n\\addbibresource{more.bib}";
+  const main = "% \\bibliography{unused}\n\\bibliography {references,../outside}\n\\addbibresource\n{more.bib}";
   assert.deepEqual(api.manuscriptBibliographyPaths(main, "paper/main.tex"), ["paper/references.bib", "paper/more.bib"]);
 });
