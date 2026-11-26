@@ -125,7 +125,8 @@ export default function ModelSettingsModal({ bridge, open, onClose, onSaved, emb
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>();
   const [savedConfig, setSavedConfig] = useState<PublicModelConfig | null>(null);
   const savedConnection = !advancedProfiles || selectedProfileId === undefined ? savedConfig : profiles.find((profile) => profile.id === selectedProfileId);
-  const sameConnection = savedConnection?.provider === provider && savedConnection.baseUrl === baseUrl.trim().replace(/\/+$/, "");
+  const normalizeConnectionUrl = (value: unknown) => String(value || "").trim().replace(/\/+$/, "");
+  const sameConnection = savedConnection?.provider === provider && normalizeConnectionUrl(savedConnection.baseUrl) === normalizeConnectionUrl(baseUrl);
   const hasApiKey = Boolean(sameConnection && savedConnection?.hasApiKey);
   const hasCustomHeaders = Boolean(sameConnection && savedConnection?.hasCustomHeaders);
   const hasFixedSessionValue = Boolean(sameConnection && savedConnection?.sessionHeader?.hasValue &&

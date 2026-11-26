@@ -123,7 +123,7 @@ export function ComposerModelPicker({ bridge, native, workspace, defaultModel, p
       {native && bound && <p className="harness-picker-notice">{t("Changing model starts a new native session with this chat’s recent context.")}</p>}
       <MenuItem checked={value === undefined} onClick={() => choose(undefined)}>{native ? t("Use agent setting: {model}", { model: defaultLabel }) : t("Use Agent model: {model}", { model: defaultLabel })}</MenuItem>
       {native?.model && <MenuItem checked={value === ""} onClick={() => choose("")}>{automatic}</MenuItem>}
-      {native && catalog.length > 80 && <input className="composer-model-search" aria-label={t("Search agent models")} placeholder={t("Search agent models")} value={search} onChange={event => setSearch(event.target.value)} />}
+      {native && catalog.length > 80 && <input className="composer-model-search" aria-label={t("Search agent models")} placeholder={t("Search agent models")} value={search} onChange={event => setSearch(event.target.value)} onKeyDown={event => event.stopPropagation()} />}
       {native ? models.map(model => <MenuItem key={model.id} checked={value === model.id} onClick={() => choose(model.id)}>{model.id}</MenuItem>)
         : profiles.map(profile => <MenuItem key={profile.id} checked={profile.id === value} onClick={() => choose(profile.id)}>{profile.label === profile.model ? profile.model : `${profile.label} · ${profile.model}`}</MenuItem>)}
       {canLoadNative && <MenuItem disabled={loading} icon={loading ? <LoaderCircle size={14} className="spin" /> : undefined} onClick={() => void loadNativeModels()}>{t("Load agent models")}</MenuItem>}
