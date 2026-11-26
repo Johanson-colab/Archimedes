@@ -81,6 +81,7 @@ import { readSidebarSectionCollapse, writeSidebarSectionCollapse, type SidebarSe
 import { type PaperOpenRequest } from "./PaperWritingView";
 import { createFileDraft, finishFileEditorSave, formatFileComment, getFileEditorScope, hasDirtyFileEditorScopes, isDraftDirty, isEditableFile, mergeRefreshedFiles, prepareFileContent, toEditorText, updateFileEditorScope, type FileComment, type FileDraft, type FileEditorScope, type FileEditorScopes, type FileSelection } from "./file-editor";
 import { shortcutMatches } from "./file-text-size";
+import { sameResearchEventList } from "./research-events";
 import { previewLibraryBridge } from "./library-preview";
 import AgentLayer from "./AgentLayer";
 import ResearchPathPanel from "./ResearchPathPanel";
@@ -1818,10 +1819,11 @@ function App() {
     if (!agentBusy || !activeThreadId) return;
     let cancelled = false;
     const refresh = () => {
+      if (document.hidden) return;
       void desktopBridge.getResearchThread(activeThreadId, workspace)
         .then((thread) => {
           if (cancelled || activeThreadIdRef.current !== thread.id) return;
-          setTrajectoryEvents(thread.events ?? []);
+          setTrajectoryEvents((current) => sameResearchEventList(current, thread.events ?? []) ? current : thread.events ?? []);
         })
         .catch(() => undefined);
     };
