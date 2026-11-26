@@ -67,11 +67,37 @@ test("arXiv references accept IDs, abs URLs and pdf URLs", () => {
     ["2501.01234", "2501.01234"],
     ["2501.01234v1", "2501.01234v1"],
     ["arXiv:2501.01234v2", "2501.01234v2"],
+    ["https://arxiv.org/v1/abs/2501.01234", "2501.01234"],
     ["https://arxiv.org/abs/2501.01234", "2501.01234"],
     ["https://arxiv.org/abs/2501.01234v2", "2501.01234v2"],
+    ["https://arxiv.org/abs/2501.01234V12", "2501.01234v12"],
     ["https://arxiv.org/pdf/2501.01234v1.pdf", "2501.01234v1"],
     ["not a paper", ""],
   ]) assert.equal(paperReview.parseArxivRef(input), expected, input);
+});
+
+// The pre-change parser, kept here only to make the behavioral difference
+// explicit: every explicit version was silently stripped before downloading.
+function legacyParseArxivRef(value) {
+  const source = String(value || "").trim();
+  if (!source) return "";
+  const match = source.match(/(?:arxiv\.org\/(?:abs|pdf)\/|arxiv:)?\s*([0-9]{4}\.[0-9]{4,5})(?:v\d+)?/i);
+  return match ? match[1] : "";
+}
+
+test("the version suffix is the only parsing difference from the previous reviewer", () => {
+  for (const [input, previous, current] of [
+    ["2501.01234", "2501.01234", "2501.01234"],
+    ["2501.01234v1", "2501.01234", "2501.01234v1"],
+    ["arXiv:2501.01234v2", "2501.01234", "2501.01234v2"],
+    ["https://arxiv.org/abs/2501.01234v2", "2501.01234", "2501.01234v2"],
+    ["https://arxiv.org/abs/2501.01234V12", "2501.01234", "2501.01234v12"],
+    ["https://arxiv.org/pdf/2501.01234v1.pdf", "2501.01234", "2501.01234v1"],
+    ["not a paper", "", ""],
+  ]) {
+    assert.equal(legacyParseArxivRef(input), previous, `previous parser: ${input}`);
+    assert.equal(paperReview.parseArxivRef(input), current, `current parser: ${input}`);
+  }
 });
 
 function arxivFixture(t, missingPath) {
@@ -147,6 +173,15 @@ test("unavailable arXiv version reports its identifier without downloading the u
   assert.deepEqual(calls, { downloads: ["/pdf/2501.01234v1"], model: 0 });
   assert.equal(saved.status, "error");
   assert.match(saved.error, /2501\.01234v1.*404/);
+});
+
+test("an unavailable unversioned arXiv source keeps the original download error", async t => {
+  const { calls } = arxivFixture(t, "/pdf/2501.01234");
+  const saved = paperReview.getRun(await startArxivReview("2501.01234"));
+  assert.deepEqual(calls, { downloads: ["/pdf/2501.01234"], model: 0 });
+  assert.equal(saved.status, "error");
+  assert.match(saved.error, /404/);
+  assert.doesNotMatch(saved.error, /^Could not download/);
 });
 
 test("Markdown export includes scores, evidence and the simulation disclaimer", () => {
