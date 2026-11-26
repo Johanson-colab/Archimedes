@@ -1,5 +1,6 @@
 const fs = require("node:fs");
 const path = require("node:path");
+const { randomUUID } = require("node:crypto");
 
 /** Replace a validated target with a complete text file staged beside it. */
 function writeTextFileAtomically(target, content) {
@@ -11,7 +12,7 @@ function writeTextFileAtomically(target, content) {
   }
   const directory = path.dirname(target);
   fs.mkdirSync(directory, { recursive: true });
-  const temporary = path.join(directory, `.archimedes-save-${crypto.randomUUID()}.tmp`);
+  const temporary = path.join(directory, `.archimedes-save-${randomUUID()}.tmp`);
   const fd = fs.openSync(temporary, "wx", stats ? stats.mode & 0o600 : 0o666);
   try {
     try {
