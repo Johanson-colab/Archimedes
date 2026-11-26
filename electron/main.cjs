@@ -683,6 +683,7 @@ let presence = null;
 let authFlow = null;
 let dailyFigureCache = null;
 let stoppingResearch = false;
+let uiLanguage = "en";
 
 const singleInstanceLock = app.requestSingleInstanceLock();
 if (!singleInstanceLock) {
@@ -825,6 +826,10 @@ app.whenReady().then(async () => {
       // Linux window managers may not expose an overlay title bar.
     }
     browserWindow.setBackgroundColor(dark ? "#111111" : "#f6f7f5");
+  });
+
+  ipcMain.on("app:set-ui-language", (_event, value) => {
+    uiLanguage = value === "zh" ? "zh" : "en";
   });
 
   ipcMain.handle("window:set-ui-zoom", (event, factor) => {
@@ -2812,7 +2817,12 @@ app.on("activate", () => {
   if (BrowserWindow.getAllWindows().length === 0) createWindow(startupWorkspace());
 });
 
+const QUIT_DIALOG_COPY = {
+  en: { message: "Research is still running", detail: "Stop active work and quit Archimedes?", buttons: ["Keep running", "Stop and quit"] },
+  zh: { message: "研究任务仍在运行", detail: "停止正在运行的工作并退出 Archimedes？", buttons: ["保持运行", "停止并退出"] },
+};
 installQuitGuard({ app, dialog,
+  strings: () => QUIT_DIALOG_COPY[uiLanguage] ?? QUIT_DIALOG_COPY.en,
   restoreWindow: () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow(startupWorkspace());
   },

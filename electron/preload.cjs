@@ -28,6 +28,7 @@ contextBridge.exposeInMainWorld("researchDesk", {
   updateLocalIdentity: (patch) => ipcRenderer.invoke("identity:update", patch),
   setTitleBarTheme: (theme) => ipcRenderer.invoke("window:set-titlebar-theme", theme),
   setUiZoom: (factor) => ipcRenderer.invoke("window:set-ui-zoom", factor),
+  setUiLanguage: (language) => ipcRenderer.send("app:set-ui-language", language),
   chooseWorkspace: () => ipcRenderer.invoke("workspace:choose"),
   watchWorkspace: (workspace) => ipcRenderer.invoke("workspace:watch", workspace),
   revealWorkspace: (workspace) => ipcRenderer.invoke("workspace:reveal", workspace),
