@@ -171,7 +171,8 @@ interface ResearchDeskBridge {
   createComment: (input: { workspace?: string; projectId: string; resourceType: ResearchComment["resource_type"]; resourceId: string; body: string; parentId?: string | null; anchor?: Record<string, unknown> }) => Promise<ResearchComment | null>;
   resolveComment: (input: { workspace?: string; id: string; resolved?: boolean }) => Promise<ResearchComment | null>;
   deleteComment: (input: { workspace?: string; id: string }) => Promise<{ deleted: boolean }>;
-  createResearchThreadSnapshot: (threadId: string) => Promise<{ id: string; thread_id: string; project_id: string; sequence: number; created_at: string; manifest: Record<string, unknown> }>;
+  createResearchThreadSnapshot: (threadId: string, turnIds?: string[], includeSources?: boolean) => Promise<{ id: string; thread_id: string; project_id: string; sequence: number; created_at: string; manifest: Record<string, unknown> }>;
+  listResearchThreadSnapshotTurns: (threadId: string) => Promise<Array<{ id: string; user_message: string; created_at: string }>>;
   listResearchThreadSnapshots: (threadId: string) => Promise<Array<{ id: string; thread_id: string; project_id: string; owner_id: string; sequence: number; created_at: string }>>;
   getResearchThreadSnapshot: (snapshotId: string) => Promise<{ id: string; thread_id: string; project_id: string; sequence: number; created_at: string; manifest: Record<string, unknown> } | null>;
     deleteResearchThread: (id: string) => Promise<{ deleted: boolean }>;

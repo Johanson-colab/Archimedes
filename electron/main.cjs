@@ -2304,9 +2304,13 @@ app.whenReady().then(async () => {
     if (typeof threadId !== "string" || !threadId) throw new Error("A research thread is required.");
     return store.setResearchThreadVisibility(threadId, visibility);
   });
-  ipcMain.handle("research-thread:create-snapshot", (_event, { threadId } = {}) => {
+  ipcMain.handle("research-thread:create-snapshot", (_event, { threadId, turnIds, includeSources } = {}) => {
     if (typeof threadId !== "string" || !threadId) throw new Error("A research thread is required.");
-    return store.createThreadSnapshot(threadId);
+    return store.createThreadSnapshot(threadId, { turnIds, includeSources });
+  });
+  ipcMain.handle("research-thread:snapshot-turns", (_event, { threadId } = {}) => {
+    if (typeof threadId !== "string" || !threadId) throw new Error("A research thread is required.");
+    return store.listThreadSnapshotTurns(threadId);
   });
   ipcMain.handle("research-thread:list-snapshots", (_event, { threadId } = {}) => {
     if (typeof threadId !== "string" || !threadId) throw new Error("A research thread is required.");

@@ -68,6 +68,7 @@ import TerminalPanel from "./TerminalPanel";
 import TerminalSettingsModal from "./TerminalSettingsModal";
 import SettingsModal, { type SettingsSection } from "./SettingsModal";
 import ThreadShareModal from "./ThreadShareModal";
+import SnapshotRangeDialog from "./SnapshotRangeDialog";
 import SessionComments, { type SessionCommentsScope } from "./SessionComments";
 import AccountChip from "./AccountChip";
 import packageMetadata from "../package.json";
@@ -854,10 +855,11 @@ const previewBridge = {
     thread.visibility = visibility === "private" ? "private" : "project";
     return { visibility: thread.visibility };
   },
-  createResearchThreadSnapshot: async (threadId: string) => {
+  listResearchThreadSnapshotTurns: async (threadId: string) => (previewThreads.find(thread => thread.id === threadId)?.turns ?? []).map(turn => ({ id: turn.id, user_message: turn.user_message.slice(0, 180), created_at: turn.created_at })),
+  createResearchThreadSnapshot: async (threadId: string, turnIds?: string[], includeSources?: boolean) => {
     const thread = previewThreads.find((candidate) => candidate.id === threadId);
     if (!thread) throw new Error("Research session not found.");
-    const snapshot = { id: crypto.randomUUID(), thread_id: thread.id, project_id: thread.project_id, sequence: thread.events?.length || 0, created_at: new Date().toISOString(), manifest: { version: 1, thread: { id: thread.id, title: thread.title, visibility: thread.visibility }, sequence: thread.events?.length || 0, turns: thread.turns, events: thread.events ?? [], references: [], artifacts: [] } };
+    const snapshot = { id: crypto.randomUUID(), thread_id: thread.id, project_id: thread.project_id, sequence: thread.events?.length || 0, created_at: new Date().toISOString(), manifest: { version: 1, thread: { id: thread.id, title: thread.title, visibility: thread.visibility }, sequence: thread.events?.length || 0, turns: turnIds ? thread.turns.filter(turn => turnIds.includes(turn.id)) : thread.turns, events: turnIds ? (thread.events ?? []).filter(event => includeSources !== false && event.turn_id && turnIds.includes(event.turn_id) && ["source_evidence", "tool_result"].includes(event.type)) : thread.events ?? [], ...(turnIds ? { partial: true, diagnostics_omitted: true, sources_omitted: includeSources === false } : {}), references: [], artifacts: [] } };
     previewThreadSnapshots.unshift(snapshot);
     return structuredClone(snapshot);
   },
@@ -1440,8 +1442,9 @@ function App() {
   const [workspaceDialogError, setWorkspaceDialogError] = useState("");
   const [sessionSwitcherSignal, setSessionSwitcherSignal] = useState(0);
   const [threadVisibility, setThreadVisibility] = useState<"project" | "private">("project");
+  const [snapshotRangeThread, setSnapshotRangeThread] = useState<string | null>(null);
   const [shareSnapshot, setShareSnapshot] = useState<Awaited<ReturnType<ResearchDeskBridge["createResearchThreadSnapshot"]>> | null>(null);
-  useEffect(() => { setShareSnapshot(null); }, [activeThreadId]);
+  useEffect(() => { setShareSnapshot(null); setSnapshotRangeThread(null); }, [activeThreadId]);
   const [commentsOpen, setCommentsOpen] = useState(false);
   useEffect(() => { setCommentsOpen(false); }, [activeThreadId]);
   const [runningThreadId, setRunningThreadId] = useState<string | null>(null);
@@ -2619,7 +2622,9 @@ function App() {
       const snapshot = await desktopBridge.createResearchThreadSnapshot(sessionId);
       if (activeThreadIdRef.current === sessionId) setShareSnapshot(snapshot);
     } catch (error) {
-      setMessages((current) => [...current, { id: crypto.randomUUID(), role: "assistant", text: `Could not create a snapshot: ${String(error)}` }]);
+      if (activeThreadIdRef.current !== sessionId) return;
+      if (String(error).includes("SNAPSHOT_TOO_LARGE")) setSnapshotRangeThread(sessionId);
+      else setMessages((current) => [...current, { id: crypto.randomUUID(), role: "assistant", text: `Could not create a snapshot: ${String(error)}` }]);
     }
   }
 
@@ -4072,6 +4077,7 @@ function App() {
         disabledCoreModules={disabledCoreModules}
         onCoreModuleEnabled={setCoreModuleEnabled}
       />
+      {snapshotRangeThread && <SnapshotRangeDialog bridge={desktopBridge} threadId={snapshotRangeThread} title={activeThread?.title ?? t("Research session")} onClose={() => setSnapshotRangeThread(null)} onCreated={snapshot => { if (activeThreadIdRef.current === snapshotRangeThread) { setSnapshotRangeThread(null); setShareSnapshot(snapshot); } }} />}
       <ThreadShareModal
         signedIn={Boolean(authState?.user)}
         key={`${shareSnapshot?.id ?? "none"}:${authState?.user?.id ?? "signed-out"}`}
