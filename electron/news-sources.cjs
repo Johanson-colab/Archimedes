@@ -252,7 +252,10 @@ function parseRssFeed(xml, { feedLabel = "" } = {}) {
       // HTML would turn literal comparisons such as "a < b" into markup.
       const summaryIsText = Boolean(atomSummary) && atomSummaryType === "text";
       // RSS descriptions can contain escaped HTML or an unescaped CDATA fragment.
-      const summary = rawDescription.trimStart().startsWith("<![CDATA[") ? rawDescription : decodeEntities(rawDescription);
+      const cdata = rawDescription.trim().match(/^<!\[CDATA\[([\s\S]*?)\]\]>$/);
+      const summary = summaryIsText
+        ? decodeEntities(cdata ? cdata[1] : rawDescription)
+        : (rawDescription.trimStart().startsWith("<![CDATA[") ? rawDescription : decodeEntities(rawDescription));
       const media = [];
       for (const match of block.matchAll(/<enclosure[^>]*\burl="([^"]+)"[^>]*>/gi)) {
         const tag = match[0];

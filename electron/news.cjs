@@ -135,6 +135,8 @@ function setSettings(patch = {}) {
   const current = structuredClone(settingsOrDefaults());
   const muteChanged = patch?.mute !== undefined
     && JSON.stringify(cleanKeywords(patch.mute)) !== JSON.stringify(current.mute);
+  const feedsChanged = patch?.rssFeeds !== undefined
+    && JSON.stringify(cleanRssFeeds(patch.rssFeeds)) !== JSON.stringify(current.rssFeeds);
   const next = { ...current };
   if (patch && typeof patch === "object") {
     if (patch.view !== undefined) next.view = patch.view;
@@ -168,7 +170,7 @@ function setSettings(patch = {}) {
   }
   settings = normalizeSettings(next);
   persist();
-  if (muteChanged) invalidateValidators(settings.rssFeeds);
+  if (muteChanged || feedsChanged) invalidateValidators(settings.rssFeeds);
   return publicSettings();
 }
 

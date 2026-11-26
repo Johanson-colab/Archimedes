@@ -96,6 +96,27 @@ test("RSS feeds that only return Last-Modified receive a conditional request", a
   assert.equal(news.list().items[0].title, "Last-Modified story");
 });
 
+test("changing an RSS label invalidates its validators and refreshes cached provenance", async (t) => {
+  profile(t);
+  const feed = { id: "lab-label", label: "Old label", url: "https://lab.example/label-rss" };
+  const etag = '"lab-label-v1"';
+  let validator;
+  const fetchImpl = async (_url, { headers }) => {
+    validator = headers["If-None-Match"];
+    if (validator === etag) return new Response(null, { status: 304 });
+    return new Response('<rss><channel><item><title>Label story</title><link>https://lab.example/label</link></item></channel></rss>', { headers: { etag } });
+  };
+  news.setSettings({ sources: { ...disabledSources, rss: true }, rssFeeds: [feed] });
+  await news.refresh({ force: true, fetchImpl });
+  assert.equal(validator, undefined);
+  news.setSettings({ rssFeeds: [{ ...feed, label: "New label" }] });
+  await news.refresh({ force: true, fetchImpl });
+  assert.equal(validator, undefined);
+  const [item] = news.list().items;
+  assert.equal(item.tags[0], "New label");
+  assert.equal(item.native.feedLabel, "New label");
+});
+
 test("a date-less X refresh keeps the cached publication date", async (t) => {
   profile(t);
   webSearch.saveWebSearchConfig({ provider: "tavily", apiKey: "test-news-key" });

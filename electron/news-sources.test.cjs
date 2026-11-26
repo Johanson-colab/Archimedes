@@ -146,6 +146,12 @@ test("Atom text summaries keep literal comparison operators", () => {
   }
 });
 
+test("Atom plain-text summaries unwrap CDATA before display", () => {
+  const xml = `<feed xmlns="http://www.w3.org/2005/Atom"><title>Lab</title><entry><title>Bounds</title><link href="https://lab.example/cdata" /><summary type="text"><![CDATA[Lab result]]></summary></entry></feed>`;
+  const [item] = parseRssFeed(xml);
+  assert.equal(item.summary, "Lab result");
+});
+
 test("parseReddit keeps subreddit, flair, score and preview image", () => {
   const items = parseReddit({
     data: {
