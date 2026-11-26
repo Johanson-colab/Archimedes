@@ -6,6 +6,11 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createResearchAppRuntime, readApp } = require("./research-app-runtime.cjs");
 
+function certify(workspace, id = 'sample-app') {
+  const app = readApp(workspace, id), records = require('./research-app-delivery-store.cjs');
+  // Unit fixture isolates the runtime consent/lifecycle contract; full acceptance is tested in Chromium separately.
+  records.markVerified(app, { scope: 'host-http-and-browser', checks: [{ path: '/', passed: true }], browser: { passed: true, checks: [{ action: 'expect', passed: true }] } }, records.identity(app));
+}
 function fixture(t, { kind = "static", source, approve = async () => true, ...options } = {}) {
   const workspace = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-managed-app-")));
   const directory = path.join(workspace, "research-apps", "sample-app");
@@ -13,6 +18,7 @@ function fixture(t, { kind = "static", source, approve = async () => true, ...op
   const manifest = { schemaVersion: 1, id: "sample-app", name: "Sample App", version: "0.1.0", category: "analysis", runtime: { kind, entry: kind === "static" ? "public/index.html" : "app.py" } };
   fs.writeFileSync(path.join(directory, "research-app.json"), JSON.stringify(manifest));
   fs.writeFileSync(path.join(directory, manifest.runtime.entry), source || "<h1>Sample research app</h1>");
+  if (kind === "static") certify(workspace);
   const runtime = createResearchAppRuntime({ approve, startupTimeoutMs: 1500, healthIntervalMs: 10000, ...options });
   t.after(async () => { await runtime.shutdown(); fs.rmSync(workspace, { recursive: true, force: true }); });
   return { workspace, directory, runtime, manifest };
@@ -69,6 +75,10 @@ test("changed installed source requires new approval; workspaces keep separate i
   assert.equal(f.runtime.list(other.workspace)[0].installed, false);
   fs.writeFileSync(path.join(f.directory, "public/index.html"), "Changed source");
   allowed = false;
+  assert.equal((await f.runtime.start(f.workspace, "sample-app")).status, "failed");
+  assert.match(f.runtime.status(f.workspace, "sample-app").error, /Validate this App version/);
+  assert.equal(approvals, 1);
+  certify(f.workspace);
   assert.equal((await f.runtime.start(f.workspace, "sample-app")).status, "failed");
   assert.equal(approvals, 2);
 });

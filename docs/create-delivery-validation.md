@@ -1,5 +1,7 @@
 # Create conversation language and delivery checks
 
+The initial fix described here is extended by the [mandatory delivery pipeline](create-app-delivery-pipeline.md), which adds scaffolds, browser acceptance, installation gates, repair and source recovery.
+
 Scope: Create / Research Apps from [#256](https://github.com/Johanson-colab/Archimedes/issues/256), following the owner's report that a Chinese creation request received an English reply and Dataset Discovery Desk failed to start. The owner requested this repair in the development conversation.
 
 ## What failed

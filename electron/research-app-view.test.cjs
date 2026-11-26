@@ -19,12 +19,12 @@ before(async () => {
   View = scope.ResearchAppsView;
 });
 after(() => { dom.window.close(); for (const key of ["window", "document", "HTMLElement", "Node", "IS_REACT_ACT_ENVIRONMENT"]) delete global[key]; });
-const draft = { id: "sample", name: "Sample App", category: "analysis", status: "stopped", installed: false, pinned: false, logs: "", error: "", url: null };
+const draft = { delivery: { status: "ready", canRestore: false }, id: "sample", name: "Sample App", category: "analysis", status: "stopped", installed: false, pinned: false, logs: "", error: "", url: null };
 function button(text) { return [...document.querySelectorAll("button")].find((element) => element.textContent === text); }
 test("workspace Apps are visible as drafts without implicit execution", async () => {
   const root = createRoot(document.getElementById("root"));
   const opened = [];
-  await React.act(async () => root.render(React.createElement(View, { workspace: "/project", apps: [draft], bridge: {}, onOpen: (id) => opened.push(id), onRefresh: () => {}, onBack: () => {} })));
+  await React.act(async () => root.render(React.createElement(View, { workspace: "/project", apps: [{ ...draft, delivery: undefined }], bridge: {}, onOpen: (id) => opened.push(id), onRefresh: () => {}, onBack: () => {} })));
   assert.match(document.body.textContent, /Created Research Apps/);
   assert.match(document.body.textContent, /Draft/);
   await React.act(async () => document.querySelector(".created-app-card").click());
@@ -124,5 +124,26 @@ test("only the active App frame and origin can request a declared Agent", async 
   assert.equal(calls, 0);
   await React.act(async () => window.dispatchEvent(new window.MessageEvent('message', { data, origin: 'http://127.0.0.1:34567', source: frame })));
   assert.equal(calls, 1);
+  await React.act(async () => root.unmount());
+});
+
+test('unverified drafts cannot install and validation/cancel/restore use the host pipeline', async () => {
+  const root = createRoot(document.getElementById('root')); const calls = [];
+  let item = { ...draft, delivery: { status: 'draft', canRestore: true } };
+  const render = () => root.render(React.createElement(View, { workspace: '/project', appId: 'sample', apps: [item], bridge: {
+    validateResearchApp: async (_workspace, _id, backend) => { calls.push(backend || 'validate'); },
+    restoreResearchApp: async () => { calls.push('restore'); },
+    cancelResearchAppValidation: async () => { calls.push('cancel'); },
+  }, onOpen: () => {}, onRefresh: render, onBack: () => {} }));
+  await React.act(async () => render());
+  assert.equal(button('Install and pin').disabled, true);
+  await React.act(async () => button('Validate app').click());
+  await React.act(async () => button('Validate and repair').click());
+  await React.act(async () => button('Restore verified version').click());
+  item = { ...item, delivery: { status: 'checking', canRestore: true } };
+  await React.act(async () => render());
+  assert.equal(button('Validate app'), undefined);
+  await React.act(async () => button('Cancel validation').click());
+  assert.deepEqual(calls, ['validate', 'codex', 'restore', 'cancel']);
   await React.act(async () => root.unmount());
 });

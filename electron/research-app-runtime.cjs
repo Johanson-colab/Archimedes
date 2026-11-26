@@ -57,12 +57,11 @@ function readApp(workspace, id) {
     for (const part of [path.join(directory, ".capabilities"), path.join(directory, ".capabilities", skill), skillPath]) if (fs.lstatSync(part).isSymbolicLink()) throw new Error("Linked App skill files are not supported.");
     if (!fs.statSync(skillPath).isFile() || fs.statSync(skillPath).size > 128000) throw new Error("App skill file is unavailable or too large.");
   }
-  const needsSetup = source.runtime.kind === "python-http" && !fs.lstatSync(path.join(directory, ".venv"), { throwIfNoEntry: false });
+  const needsSetup = source.runtime.kind === "python-http" && !fs.statSync(path.join(directory, ".venv", process.platform === "win32" ? "Scripts/python.exe" : "bin/python"), { throwIfNoEntry: false })?.isFile();
   return { id, name: source.name.trim(), description: String(source.description || "").slice(0, 500), version: String(source.version || "0.1.0").slice(0, 40), category: source.category, runtime: { kind: source.runtime.kind, entry }, environment, agents, skills, needsSetup, workspace: root, directory };
 }
-function fingerprint(app) {
-  const h = createHash("sha256");
-  let count = 0, bytes = 0;
+function sourceFiles(app) {
+  const files = []; let bytes = 0;
   function visit(directory) {
     for (const entry of fs.readdirSync(directory, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
       if (SKIP.has(entry.name) || (entry.name.startsWith(".") && entry.name !== ".capabilities")) continue;
@@ -70,14 +69,17 @@ function fingerprint(app) {
       if (entry.isSymbolicLink()) throw new Error("Linked App source files are not supported.");
       if (entry.isDirectory()) visit(file);
       else if (entry.isFile()) {
-        const size = fs.statSync(file).size;
-        count++; bytes += size;
-        if (count > 1600 || bytes > 16_000_000) throw new Error("App source exceeds the review limit. Keep datasets and generated outputs outside the App source folder.");
-        h.update(path.relative(app.directory, file)); h.update("\0"); h.update(fs.readFileSync(file));
+        bytes += fs.statSync(file).size;
+        if (files.length >= 1600 || bytes > 16_000_000) throw new Error("App source exceeds the review limit. Keep datasets and generated outputs outside the App source folder.");
+        files.push({ path: path.relative(app.directory, file), content: fs.readFileSync(file), mode: fs.statSync(file).mode & 0o777 });
       }
     }
   }
-  visit(app.directory);
+  visit(app.directory); return files;
+}
+function fingerprint(app) {
+  const h = createHash("sha256");
+  for (const file of sourceFiles(app)) { h.update(file.path); h.update("\0"); h.update(file.content); }
   return h.digest("hex");
 }
 function readState(root) {
@@ -110,7 +112,7 @@ async function availablePort() {
   await new Promise((resolve) => server.close(resolve));
   return port;
 }
-function createResearchAppRuntime({ approve = async () => false, readSecret = () => "", changed = () => {}, startupTimeoutMs = 45000, healthIntervalMs = 4000 } = {}) {
+function createResearchAppRuntime({ approve = async () => false, readSecret = () => "", changed = () => {}, startupTimeoutMs = 45000, healthIntervalMs = 4000, validation = false } = {}) {
   const runs = new Map();
   const key = (root, id) => {
     let canonical;
@@ -130,8 +132,8 @@ function createResearchAppRuntime({ approve = async () => false, readSecret = ()
       if (!fs.existsSync(path.join(root, "research-apps", entry.name, MANIFEST))) return [];
       try {
         const app = readApp(root, entry.name);
-        return [{ ...app, installed: Boolean(installed), pinned: Boolean(installed?.pinned), ...status(root, app.id) }];
-      } catch (error) { return [{ id: entry.name, name: entry.name, category: "evidence", installed: Boolean(installed), pinned: false, error: error.message, status: "invalid", url: null, logs: "", workspace: root, directory: path.join(root, "research-apps", entry.name) }]; }
+        return [{ ...app, installed: Boolean(installed), pinned: Boolean(installed?.pinned), delivery: require("./research-app-delivery-store.cjs").deliveryStatus(app), ...status(root, app.id) }];
+      } catch (error) { return [{ id: entry.name, name: entry.name, category: "evidence", installed: Boolean(installed), pinned: false, error: error.message, status: "invalid", url: null, logs: "", delivery: { status: "failed", error: error.message, canRestore: require("./research-app-delivery-store.cjs").recoveryAvailable(root, entry.name) }, workspace: root, directory: path.join(root, "research-apps", entry.name) }]; }
     });
   }
   async function consent(app, operation) {
@@ -145,7 +147,9 @@ function createResearchAppRuntime({ approve = async () => false, readSecret = ()
   async function install(workspace, id, pinned = true) {
     const app = readApp(workspace, id);
     if (app.needsSetup) throw new Error("Set up this App's Python environment before installing it.");
+    require("./research-app-delivery-store.cjs").requireVerified(app);
     const signature = await consent(app, "install");
+    require("./research-app-delivery-store.cjs").requireVerified(readApp(workspace, id));
     const state = readState(app.workspace);
     state.apps[id] = { fingerprint: signature, pinned: Boolean(pinned), installedAt: new Date().toISOString() };
     writeState(app.workspace, state); changed(app.workspace);
@@ -196,6 +200,7 @@ function createResearchAppRuntime({ approve = async () => false, readSecret = ()
     const run = { app, status: "starting", token: randomBytes(24).toString("hex"), logs: "", error: "", url: null, controller: new AbortController() };
     runs.set(runKey, run); notify(run);
     try {
+      if (!validation && readState(app.workspace).apps[app.id]) require("./research-app-delivery-store.cjs").requireVerified(app);
       await consent(app, "start");
       if (run.controller.signal.aborted) throw new Error("App startup was cancelled.");
       if (app.runtime.kind === "static") {
@@ -276,4 +281,4 @@ function createResearchAppRuntime({ approve = async () => false, readSecret = ()
   async function shutdown() { await Promise.all([...runs.values()].map((run) => stop(run.app.workspace, run.app.id))); }
   return { list, start, stop, status, install, pin, remove, shutdown };
 }
-module.exports = { createResearchAppRuntime, readApp, fingerprint, MANIFEST };
+module.exports = { createResearchAppRuntime, readApp, fingerprint, sourceFiles, MANIFEST };

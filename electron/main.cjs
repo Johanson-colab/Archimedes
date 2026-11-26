@@ -3,7 +3,7 @@ const { installMainWindowLinks } = require("./main-window-links.cjs");
 const { createResearchAppRuntime } = require("./research-app-runtime.cjs");
 const { createSetup: createResearchAppSetup } = require("./research-app-setup.cjs");
 const { createAppAgent } = require("./research-app-agent.cjs");
-const researchAppRuntime = createResearchAppRuntime({
+const researchAppRuntimeOptions = {
   readSecret: (name) => environmentVault?.get(name) || "",
   approve: async ({ app: researchApp, operation }) => {
     const owner = BrowserWindow.getAllWindows().find((window) => workspaceForWindow(window) === researchApp.workspace) ?? BrowserWindow.getFocusedWindow();
@@ -19,7 +19,8 @@ const researchAppRuntime = createResearchAppRuntime({
   changed: (workspace) => {
     for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.webContents.send("research-apps:changed", { workspace });
   },
-});
+};
+const researchAppRuntime = createResearchAppRuntime(researchAppRuntimeOptions);
 const { spawn } = require("node:child_process");
 const { randomUUID } = require("node:crypto");
 const os = require("node:os");
@@ -941,7 +942,7 @@ app.whenReady().then(async () => {
     return result.response === 1;
   } });
   ipcMain.handle("research-apps:setup", (event, input = {}) => researchAppSetup.setup(researchAppWorkspace(event, input), input.id));
-  const appAgent = createAppAgent({
+  const appAgentOptions = {
     runtime: researchAppRuntime, getConfig: () => agentBackendConfig.get(), runNative: nativeAgent.runNative,
     approve: async ({ app: researchApp, backend, prompt }) => {
       const owner = BrowserWindow.getAllWindows().find(window => workspaceForWindow(window) === researchApp.workspace);
@@ -961,6 +962,33 @@ app.whenReady().then(async () => {
         buttons: ["Deny", "Allow once"], defaultId: 0, cancelId: 0 });
       return result.response === 1 && !signal?.aborted;
     },
+  };
+  const appAgent = createAppAgent(appAgentOptions);
+  const appDelivery = require("./research-app-delivery.cjs").createDelivery({
+    setup: researchAppSetup.setup, approve: researchAppRuntimeOptions.approve,
+    readSecret: researchAppRuntimeOptions.readSecret, changed: researchAppRuntimeOptions.changed,
+    stop: researchAppRuntime.stop,
+    browser: options => require("./research-app-browser-check.cjs").checkBrowser({ ...options,
+      runAgent: input => createAppAgent({ ...appAgentOptions, runtime: options.runtime,
+        approve: request => appAgentOptions.approve({ ...request, app: options.originalApp }),
+        approveTool: request => appAgentOptions.approveTool({ ...request, app: options.originalApp }),
+      }).run(options.app.workspace, options.app.id, input),
+    }),
+    repair: require("./research-app-repair.cjs").createAppRepair({ getConfig: () => agentBackendConfig.get(),
+      approve: appAgentOptions.approve, approveTool: appAgentOptions.approveTool, runNative: nativeAgent.runNative,
+    }),
+  });
+  ipcMain.handle("research-apps:validate", (event, input = {}) => {
+    if (input.backend !== undefined && !["codex", "claude", "opencode"].includes(input.backend)) throw new Error("Unsupported repair backend.");
+    return runWindowAgent({ sender: event.sender, run: ({ externalSignal }) => appDelivery.validate(researchAppWorkspace(event, input), input.id, { repairBackend: input.backend, signal: externalSignal }) });
+  });
+  ipcMain.handle("research-apps:cancel-validation", (event, input = {}) => appDelivery.cancel(researchAppWorkspace(event, input), input.id));
+  ipcMain.handle("research-apps:restore", async (event, input = {}) => {
+    const workspace = researchAppWorkspace(event, input);
+    const owner = BrowserWindow.fromWebContents(event.sender);
+    const answer = await dialog.showMessageBox(owner, { type: "question", title: "Restore verified App", message: "Restore the last verified source?", detail: "The current source will be retained in a recovery folder. Local data and the Python environment are preserved.", buttons: ["Cancel", "Restore"], defaultId: 0, cancelId: 0 });
+    if (answer.response !== 1) throw new Error("App restore was cancelled.");
+    return appDelivery.restore(workspace, input.id);
   });
   ipcMain.handle("research-apps:agent", (event, input = {}) => appAgent.run(researchAppWorkspace(event, input), input.id, input));
   for (const operation of ["list", "status", "start", "stop", "install", "pin", "remove"]) {
@@ -2074,6 +2102,7 @@ app.whenReady().then(async () => {
     const contextLength = externalBackend ? undefined : normalizeContextLength(config, input.contextLength);
     if (externalBackend && input.threadId && store.getResearchThread(input.threadId).kind === "paper") throw new Error("Paper chat uses the API harness in this version.");
     const dataStore = store.currentStore();
+    const appsBeforeCreate = mode === "create" ? new Map(researchAppRuntime.list(workspace).map(item => [item.id, item.delivery?.fingerprint])) : null;
     const result = await runWindowAgent({ sender: event.sender, native: Boolean(externalBackend), run: ({ externalSignal, emit }) => agent.runAgent({
       dataStore,
       externalBackend,
@@ -2097,6 +2126,16 @@ app.whenReady().then(async () => {
       browser: (args, signal, activeThreadId) => browserUse(event.sender, activeThreadId, args, signal),
       emit: (payload) => emit({ ...payload, ...(clientRunId ? { clientRunId } : {}) }),
     }) });
+    if (appsBeforeCreate && !event.sender.isDestroyed()) {
+      const candidates = researchAppRuntime.list(workspace).filter(item => item.status !== "invalid" && appsBeforeCreate.get(item.id) !== item.delivery?.fingerprint);
+      for (const candidate of candidates) {
+        try {
+          await runWindowAgent({ sender: event.sender, run: ({ externalSignal }) => appDelivery.validate(workspace, candidate.id, {
+            repairBackend: ["codex", "claude", "opencode"].includes(selectedBackend) ? selectedBackend : undefined, signal: externalSignal,
+          }) });
+        } catch (error) { console.warn("Research App acceptance did not complete:", String(error.message).slice(0, 500)); }
+      }
+    }
     if (input.origin === "paper" && typeof input.paperId === "string") {
       try { dataStore.setPaperChatThread(input.paperId, result.threadId, input.projectId); }
       catch (error) { return { ...result, paperChatSaveError: error.message || String(error) }; }
