@@ -10,7 +10,7 @@ before(async () => {
   const filename = path.join(__dirname, "../src/paper-writing-citations.ts");
   const source = fs.readFileSync(filename, "utf8").replace(/^import .*;\n/, "").replace(/^export /gm, "");
   const { code } = await transformWithOxc(source, filename);
-  api = new Function(...Object.keys(bibliographic), code.replace(/^export \{\};?$/gm, "") + "\nreturn { manuscriptBibliographyPaths, prepareManuscriptCitation, insertCitationAt };")(...Object.values(bibliographic));
+  api = new Function(...Object.keys(bibliographic), code.replace(/^export \{\};?$/gm, "") + "\nreturn { manuscriptBibliographyPaths, prepareManuscriptCitation, findManuscriptCitation, insertCitationAt };")(...Object.values(bibliographic));
 });
 
 const paper = {
@@ -36,6 +36,18 @@ test("reuses a matching reference byte for byte and refuses occupied keys", () =
     "@article{doe2025, title={Measured Models}, author={Different}, year={2025}}",
     "@article{doe2025, title={Measured Models}, doi={10.1000/measured}}\n@article{doe2025, title={Different}}",
   ]) assert.throws(() => api.prepareManuscriptCitation(input, paper), /different bibliography entry/);
+});
+
+test("checks conflicts and matching references across every declared bibliography file", () => {
+  const conflict = "@article{doe2025, title={Different}, doi={10.1000/other}}";
+  assert.throws(() => api.findManuscriptCitation(new Map([["a.bib", conflict], ["b.bib", ""]]), paper, "b.bib"), /different bibliography entry/);
+  const matching = "@article{local, title={Measured Models}, doi={10.1000/measured}}";
+  assert.deepEqual(api.findManuscriptCitation(new Map([["a.bib", matching], ["b.bib", ""]]), paper, "b.bib"),
+    { content: matching, key: "local", path: "a.bib", changed: false });
+  const added = api.findManuscriptCitation(new Map([["a.bib", ""], ["b.bib", ""]]), paper, "b.bib");
+  assert.equal(added.path, "b.bib");
+  assert.equal(added.key, "doe2025");
+  assert.equal(added.changed, true);
 });
 
 test("suggests only bibliography paths declared inside the manuscript folder", () => {

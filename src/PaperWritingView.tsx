@@ -4,7 +4,7 @@ import { useUISettings } from "./i18n";
 import SharedNoteEditor from "./SharedNoteEditor";
 import PaperTemplateLibrary, { paperTemplates } from "./PaperTemplateLibrary";
 import PaperWritingCitations from "./PaperWritingCitations";
-import { insertCitationAt, manuscriptBibliographyPaths, prepareManuscriptCitation } from "./paper-writing-citations";
+import { findManuscriptCitation, insertCitationAt, manuscriptBibliographyPaths } from "./paper-writing-citations";
 import type { BibliographyPaper } from "./bibliography";
 import { Dialog } from "./Dialog";
 import { StateView } from "./StateView";
@@ -645,20 +645,27 @@ export default function PaperWritingView({ bridge, workspace, projectId = null, 
 
   async function insertProjectCitation(paper: BibliographyPaper, selected: WorkspaceFilePreview) {
     if (!citation || citation.document !== currentDocument) return;
-    const { document, initialDraft, position, written } = citation;
-    const cached = owner.documents.get(selected.path);
-    if (cached && cached.draft !== cached.savedDraft) throw new Error("Save the open bibliography draft before inserting a citation.");
-    const expected = written.get(selected.path) ?? selected.content ?? "";
-    const current = await bridge.readWorkspaceFile(document.workspace, selected.path);
-    if (current.content !== expected) throw new Error("The bibliography changed on disk. Reopen the citation picker.");
-    const replacement = prepareManuscriptCitation(expected, paper);
-    const draft = insertCitationAt(initialDraft, position, replacement.key);
-    if (document.draft !== initialDraft && document.draft !== draft) throw new Error("The source changed in the editor. Reopen the citation picker.");
-    if (replacement.content !== expected) {
-      await bridge.writeWorkspaceFile(document.workspace, selected.path, replacement.content, expected);
-      written.set(selected.path, replacement.content);
-      if (cached) owner.documents.delete(selected.path);
+    const { document, initialDraft, position, paths, written } = citation;
+    const contents = new Map<string, string>();
+    for (const path of paths) {
+      const cached = owner.documents.get(path);
+      if (cached && cached.draft !== cached.savedDraft) throw new Error("Save the open bibliography draft before inserting a citation.");
+      const current = await bridge.readWorkspaceFile(document.workspace, path);
+      if (path === selected.path) {
+        const expected = written.get(path) ?? selected.content ?? "";
+        if ((current.content ?? "") !== expected) throw new Error("The bibliography changed on disk. Reopen the citation picker.");
+      }
+      contents.set(path, current.content ?? "");
     }
+    const found = findManuscriptCitation(contents, paper, selected.path);
+    if (found.changed) {
+      const current = contents.get(found.path) ?? "";
+      await bridge.writeWorkspaceFile(document.workspace, found.path, found.content, current);
+      written.set(found.path, found.content);
+      const cached = owner.documents.get(found.path);
+      if (cached) owner.documents.delete(found.path);
+    }
+    const draft = insertCitationAt(initialDraft, position, found.key);
     if (document.draft !== initialDraft && document.draft !== draft) throw new Error("The source changed in the editor. Reopen the citation picker.");
     if (document.draft !== draft) editWritingDocument(document, draft);
     refreshScope();

@@ -39,6 +39,20 @@ export function prepareManuscriptCitation(content: string, paper: BibliographyPa
   return { content: `${content}${content ? (content.endsWith("\n") ? "\n" : "\n\n") : ""}${generated}`, key: requested };
 }
 
+export function findManuscriptCitation(contents: Map<string, string>, paper: BibliographyPaper, targetPath: string) {
+  // A conflict in any declared file invalidates the insert. A matching
+  // reference in another file lets the manuscript reuse that key without
+  // adding a duplicate entry to the selected file.
+  for (const [path, content] of contents) {
+    const prepared = prepareManuscriptCitation(content, paper);
+    if (prepared.content === content) return { ...prepared, path, changed: false };
+  }
+  const content = contents.get(targetPath);
+  if (content === undefined) throw new Error("The selected bibliography is not declared by the manuscript.");
+  const prepared = prepareManuscriptCitation(content, paper);
+  return { ...prepared, path: targetPath, changed: prepared.content !== content };
+}
+
 export function insertCitationAt(draft: string, position: number, key: string) {
   const citation = `\\cite{${key}}`;
   return draft.startsWith(citation, position) ? draft : `${draft.slice(0, position)}${citation}${draft.slice(position)}`;
