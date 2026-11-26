@@ -11,6 +11,12 @@ import "./data-analysis.css";
 function initialData() { return parseDelimited(analysisExamples[0].csv, ","); }
 const PAGE_SIZE = 50;
 
+function analysisError(reason: unknown) {
+  return String(reason)
+    .replace(/^Error invoking remote method '[^']+':\s*(?:Error:\s*)?/, "")
+    .replace(/^Error:\s*/, "");
+}
+
 export default function DataAnalysisView({ owner, bridge, onAskAI }: { owner?: AnalysisOwner; bridge?: ResearchDeskBridge; onAskAI?: (text: string) => void }) {
   const { t } = useUISettings();
   const [dataset, setDataset] = useState<Dataset>(initialData);
@@ -38,7 +44,7 @@ export default function DataAnalysisView({ owner, bridge, onAskAI }: { owner?: A
     if (!projectId || !workspace || !bridge?.listAnalyses) return;
     let current = true;
     bridge.listAnalyses({ projectId, workspace }).then((items) => { if (current) setSaved(items); },
-      (reason) => { if (current) setError(String(reason)); });
+      (reason) => { if (current) setError(analysisError(reason)); });
     return () => { current = false; fileRequest.current++; };
   }, [bridge, projectId, workspace]);
   const profiles = useMemo(() => profileDataset(dataset), [dataset]);
@@ -72,7 +78,7 @@ export default function DataAnalysisView({ owner, bridge, onAskAI }: { owner?: A
       setDataset(data); setName(file.name); setExampleId(null); setPresetIndex(-1);
       setColumn(Math.max(0, y)); setConfig({ type: numbers.length > 1 ? "scatter" : "histogram", x: numbers[0]?.index ?? 0, y, group: -1 });
       setTab(numbers.length ? "plot" : "data"); setPage(0); setQuestion(""); setError("");
-    } catch (reason) { setError(reason instanceof Error ? reason.message : "Could not read the file"); }
+    } catch (reason) { setError(analysisError(reason) || "Could not read the file"); }
   }
 
   async function saveAnalysis() {
@@ -83,7 +89,7 @@ export default function DataAnalysisView({ owner, bridge, onAskAI }: { owner?: A
       const item = await bridge.saveAnalysis(owner, { bytes: sourceBytes, name, recipe: { config, column, unit, seedColumn } });
       setSaved((items) => [item, ...items.filter((other) => other.id !== item.id)]);
       if (request === fileRequest.current) setNotice(t("Analysis saved to this project."));
-    } catch (reason) { if (request === fileRequest.current) setError(String(reason)); }
+    } catch (reason) { if (request === fileRequest.current) setError(analysisError(reason)); }
     finally { setBusy(false); }
   }
 
@@ -103,7 +109,7 @@ export default function DataAnalysisView({ owner, bridge, onAskAI }: { owner?: A
       setSourceBytes(bytes); setName(source.name); setExampleId(null); setPresetIndex(-1); setPage(0); setQuestion("");
       setConfig(recipe.config); setColumn(recipe.column); setSeedColumn(recipe.seedColumn); setUnit(recipe.unit);
       setNotice(t("Reopened saved analysis.") + " SHA-256 " + source.sha256.slice(0, 12));
-    } catch (reason) { if (request === fileRequest.current) setError(String(reason)); }
+    } catch (reason) { if (request === fileRequest.current) setError(analysisError(reason)); }
     finally { setBusy(false); }
   }
 
@@ -184,7 +190,7 @@ export default function DataAnalysisView({ owner, bridge, onAskAI }: { owner?: A
         <section className="analysis-field-detail"><h3>{dataset.headers[column]}</h3><div className="analysis-definition">{selectedProfile.kind === "number" ? t("Numeric") : selectedProfile.kind === "date" ? t("Date") : t("Categorical")} <span>{selectedProfile.distinct.toLocaleString()} {t("distinct")}</span></div>
           <dl className="analysis-statistics">{(selectedProfile.kind === "number" ? [["Mean", format(summary.mean)], ["Median", format(summary.median)], ["Minimum", format(summary.min)], ["Maximum", format(summary.max)]] : [["Present", (dataset.rows.length - selectedProfile.missing).toLocaleString()]]).concat([["Missing", String(selectedProfile.missing)]]).map(([label, value]) => <div key={label}><dt>{t(label)}</dt><dd>{value}</dd></div>)}</dl>
           {selectedProfile.kind === "text" && <div className="analysis-frequencies">{selectedProfile.common.map((item) => <div key={item.value}><span title={item.value}>{item.value}</span><span>{item.count}</span></div>)}</div>}
-        </section><p className="analysis-local-note">{t("Local processing. Files are kept for this session only.")}</p>
+        </section><p className="analysis-local-note">{t(owner && bridge?.saveAnalysis ? "Local processing. Unsaved data stays in this session; saved analyses are stored in the project." : "Local processing. Files are kept for this session only.")}</p>
       </aside>
       <div className="analysis-main">
         <div className="analysis-view-toolbar"><Tabs label={t("Analysis view")} value={tab} onChange={setTab} variant="segmented"><Tab value="plot" controls="analysis-plot-panel">{t("Visualization")}</Tab><Tab value="data" controls="analysis-data-panel">{t("Data table")}</Tab></Tabs>{tab === "plot" && <button className="secondary-button" onClick={downloadChart} disabled={!plot.points.length}><Download size={15} />{t("Export SVG")}</button>}</div>
