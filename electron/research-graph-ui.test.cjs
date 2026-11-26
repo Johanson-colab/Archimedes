@@ -12,7 +12,7 @@ before(async () => {
   React = require('react'); ({ createRoot } = require('react-dom/client'));
   const translate = key => key;
   const scope = { React, ...React, useUISettings: () => ({ t: translate }), Dialog: ({ open, children }) => open ? React.createElement('section', { role: 'dialog' }, children) : null };
-  for (const name of ["Activity", "FileText", "FlaskConical", "HelpCircle", "Lightbulb", "GitMerge", "GitCommitHorizontal", "History", "ArrowUpRight", "Maximize2", "Minimize2", "PanelRight", "Pin", "RefreshCw", "X"]) scope[name] = require("lucide-react")[name];
+  for (const name of ["Activity", "FileText", "FlaskConical", "HelpCircle", "Lightbulb", "GitMerge", "GitCommitHorizontal", "History", "ArrowLeft", "ArrowRight", "ArrowUpRight", "Maximize2", "Minimize2", "Pin", "RefreshCw", "X"]) scope[name] = require("lucide-react")[name];
   const { transformWithOxc } = await import('vite');
   async function load(file, names) {
     const source = fs.readFileSync(path.join(__dirname, '../src/research-graph', file), 'utf8')

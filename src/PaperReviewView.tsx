@@ -30,6 +30,11 @@ function riskTone(risk: string) {
   return risk === "high" ? "danger" : risk === "medium" ? "warning" : "ok";
 }
 
+function reviewError(message: string, t: (key: string, values?: Record<string, string | number>) => string) {
+  const match = String(message || "").match(/^Could not download (arXiv:\S+)\. ([\s\S]+)$/);
+  return match ? t("Could not download {identifier}. {reason}", { identifier: match[1], reason: match[2] }) : message;
+}
+
 function decisionLabel(t: (key: string) => string, value: string) {
   const key = String(value || "").trim();
   return key ? t(key) : "";
@@ -204,7 +209,7 @@ export default function PaperReviewView({ bridge, workspace, projectId, active }
         runningRef.current = false;
         setRunning(false);
         const runId = payload.runId || activeRunRef.current;
-        if (payload.type === "error") setError(payload.detail || "The review failed.");
+        if (payload.type === "error") setError(payload.detail ? reviewError(payload.detail, t) : t("The review failed"));
         if (payload.type === "cancelled") setNotice(t("The review was cancelled."));
         if (runId) {
           void loadRun(runId);
@@ -410,7 +415,7 @@ export default function PaperReviewView({ bridge, workspace, projectId, active }
       {!result ? <StateView
         tone={selectedRun.status === "error" ? "error" : selectedRun.status === "cancelled" ? "empty" : "loading"}
         title={selectedRun.status === "error" ? t("The review failed") : selectedRun.status === "cancelled" ? t("The review was cancelled.") : t("The review is running")}
-        description={selectedRun.error ? t(selectedRun.error) : (selectedRun.status === "cancelled" ? t("Start a new run when you are ready.") : t("Progress events will update this page."))}
+        description={selectedRun.error ? reviewError(selectedRun.error, t) : (selectedRun.status === "cancelled" ? t("Start a new run when you are ready.") : t("Progress events will update this page."))}
       /> : null}
 
       {result?.gate?.status === "failed" ? <div className="pra-gate">

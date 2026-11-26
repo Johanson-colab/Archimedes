@@ -123,22 +123,26 @@ async function prepareLibraryDocument({ paperId, workspace, projectId, signal, e
 function parseArxivRef(value) {
   const source = String(value || "").trim();
   if (!source) return "";
-  const match = source.match(/(?:arxiv\.org\/(?:abs|pdf)\/|arxiv:)?\s*([0-9]{4}\.[0-9]{4,5})(?:v\d+)?/i);
-  return match ? match[1] : "";
+  const match = source.match(/(?:arxiv\.org\/(?:abs|pdf)\/|arxiv:)?\s*([0-9]{4}\.[0-9]{4,5}(?:v\d+)?)/i);
+  return match ? match[1].toLowerCase() : "";
 }
 
 async function prepareArxivDocument({ value, signal, emit = () => {} }) {
   const arxivId = parseArxivRef(value);
   if (!arxivId) throw new Error("Enter a valid arXiv ID or URL, for example 2511.05421.");
   emit({ type: "prepare", detail: `Downloading arXiv:${arxivId}.` });
-  const result = await fetchPublicPdf(`https://arxiv.org/pdf/${arxivId}`, signal);
+  const versioned = arxivId.includes("v");
+  const result = await fetchPublicPdf(`https://arxiv.org/pdf/${arxivId}`, signal).catch((error) => {
+    if (!versioned) throw error;
+    throw new Error(`Could not download arXiv:${arxivId}. ${error.message}`, { cause: error });
+  });
   verifyPdf(result.data);
   const cached = cachePdf(result.data);
   emit({ type: "prepare", detail: "Extracting page text from the arXiv PDF." });
   const index = await extractPdfPagesData(result.data, `${arxivId}.pdf`, { signal });
   const title = guessTitle(index.pages, `arXiv:${arxivId}`);
   return parsedDocument({
-    id: `arxiv:${cached.sha256}`,
+    id: `arxiv:${cached.sha256}${versioned ? `:${arxivId}` : ""}`,
     sourceKind: "arxiv",
     sourceRef: `https://arxiv.org/abs/${arxivId}`,
     title,

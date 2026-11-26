@@ -28,6 +28,7 @@ const { buildModelRequestOptions, formatModelRequestError, modelProviderErrorDet
 const { readModelResponseJson } = require("./model-response-json.cjs");
 const { boundActiveContext } = require("./agent/active-context.cjs");
 const { discoverSkills, readSkillResource } = require("./agent/api-skills.cjs");
+const creatorCapabilities = require("./agent/creator-capabilities.cjs");
 const { prepareResearchSkill } = require("./agent/research-skills.cjs");
 const graphAutoBuild = require("./research-graph/auto-build.cjs");
 const researchGraph = require("./research-graph/service.cjs");
@@ -519,7 +520,7 @@ tools.push(
 
 function createToolRegistry() {
   const registry = new ToolRegistry();
-  for (const definition of tools) registry.register({ definition, source: "builtin", execute: (context, args) => executeBuiltInTool(context, args) });
+  for (const definition of [...tools, ...creatorCapabilities.toolDefinitions]) registry.register({ definition, source: "builtin", execute: (context, args) => executeBuiltInTool(context, args) });
   return registry;
 }
 const defaultToolRegistry = createToolRegistry();
@@ -777,9 +778,11 @@ async function waitForExperimentRun(runId, timeoutSeconds = 20) {
   return { ...run, log_tail: log.text };
 }
 
-async function executeBuiltInTool({ root, taskId, threadId, turnId, call, emit, contextItems, foundPapers, pdfCache, signal, capabilities = DEFAULT_CAPABILITIES, browser, config, recordEvent = () => {}, registry = defaultToolRegistry, researchRun, reasoningEffort, isRequestActive = () => true, dataStore = defaultStore.currentStore() }, args) {
+async function executeBuiltInTool({ root, taskId, threadId, turnId, call, emit, contextItems, foundPapers, pdfCache, signal, capabilities = DEFAULT_CAPABILITIES, browser, config, recordEvent = () => {}, registry = defaultToolRegistry, researchRun, reasoningEffort, mode = "standard", isRequestActive = () => true, dataStore = defaultStore.currentStore() }, args) {
   const store = dataStore;
   const name = call.function.name;
+
+  if (creatorCapabilities.TOOL_NAMES.has(name)) return { content: JSON.stringify(creatorCapabilities.invokeCreatorTool(name, args, mode)) };
 
   if (name === "list_skills") return { content: JSON.stringify({ skills: discoverSkills(root) }) };
   if (name === "read_skill_resource") return { content: JSON.stringify(readSkillResource(root, args.skill_id, args.path)) };
@@ -1696,6 +1699,7 @@ async function runAgentInStore({ prompt, workspace, threadId, projectId, workspa
         emitTurn({ type: "status", title: "Context adjusted", detail: "Older tool output was removed from the active model context; saved events remain available." });
       }
       const availableTools = toolRegistry.definitions().filter((tool) =>
+        (!creatorCapabilities.TOOL_NAMES.has(tool.function.name) || mode === "create") &&
         !(tool.function.name === "search_academic_papers" && academicSearches >= policy.maxAcademicSearches) &&
         !(tool.function.name === "web_search" && webSearches >= policy.maxWebSearches) &&
         (["research", "experiment-setup"].includes(mode) || !["create_experiment", "prepare_experiment_workspace", "run_experiment"].includes(tool.function.name)));
@@ -1718,7 +1722,7 @@ async function runAgentInStore({ prompt, workspace, threadId, projectId, workspa
 
       for (const call of message.tool_calls) {
         try {
-          const result = await executeTool({ root: workspace, taskId: task.id, threadId: thread.id, turnId: turn.id, call, emit: emitTurn, contextItems, foundPapers, pdfCache, signal: controller.signal, capabilities: turnCapabilities, browser, config, recordEvent, registry: toolRegistry, researchRun, dataStore, reasoningEffort: resolvedReasoningEffort, preflight: (name, args) => {
+          const result = await executeTool({ root: workspace, taskId: task.id, threadId: thread.id, turnId: turn.id, call, emit: emitTurn, contextItems, foundPapers, pdfCache, signal: controller.signal, capabilities: turnCapabilities, browser, config, recordEvent, registry: toolRegistry, researchRun, dataStore, mode, reasoningEffort: resolvedReasoningEffort, preflight: (name, args) => {
             if (name === "search_academic_papers") {
               if (academicSearches >= policy.maxAcademicSearches) throw new Error("The academic search budget is exhausted. Synthesize the findings already collected.");
               academicSearches += 1;

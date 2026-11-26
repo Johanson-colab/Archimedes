@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Bookmark, BookmarkCheck, ExternalLink, LibraryBig, LoaderCircle, Radar, RefreshCw, Search } from "lucide-react";
 import ToolbarActions from "./ToolbarActions";
-import { useUISettings } from "./i18n";
+import { useUISettings, type Language } from "./i18n";
 import { Tabs, Tab } from "./Tabs";
 
 import { StateView } from "./StateView";
@@ -33,16 +33,39 @@ function attentionValue(record: BenchmarkRadarRecord) {
   return (record.attentionScore ?? 0) * 1000 + (record.attention.githubStars ?? 0) * 3 + (record.attention.hfPaperUpvotes ?? 0);
 }
 
-function formatDate(value: string) {
-  if (!value) return "Date unavailable";
-  const date = new Date(`${value}T00:00:00Z`);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+function localeFor(language: Language) {
+  return language === "zh" ? "zh-CN" : "en-US";
 }
 
-function signalText(record: BenchmarkRadarRecord) {
+function formatDate(value: string, language: Language, includeYear = false) {
+  if (!value) return "";
+  const date = new Date(`${value}T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleDateString(localeFor(language), {
+    timeZone: "UTC",
+    month: "short",
+    day: "numeric",
+    ...(includeYear ? { year: "numeric" as const } : {}),
+  });
+}
+
+function formatTimestamp(value: string, language: Language) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString(localeFor(language), {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function signalText(record: BenchmarkRadarRecord, language: Language) {
+  const locale = localeFor(language);
   const signals: string[] = [];
-  if (record.attention.hfPaperUpvotes != null) signals.push(`${record.attention.hfPaperUpvotes.toLocaleString()} HF votes`);
-  if (record.attention.githubStars != null) signals.push(`${record.attention.githubStars.toLocaleString()} GitHub stars`);
+  if (record.attention.hfPaperUpvotes != null) signals.push(`${record.attention.hfPaperUpvotes.toLocaleString(locale)} HF votes`);
+  if (record.attention.githubStars != null) signals.push(`${record.attention.githubStars.toLocaleString(locale)} GitHub stars`);
   if (record.attentionScore != null) signals.push(`Attention ${record.attentionScore}`);
   return signals.join(" · ") || "Attention not measured yet";
 }
@@ -60,16 +83,16 @@ function SaveButton({ record, saved, onToggle }: { record: BenchmarkRadarRecord;
 }
 
 function BenchmarkRow({ record, saved, onToggle, radar = false, directionNames }: { record: BenchmarkRadarRecord; saved: boolean; onToggle: () => void; radar?: boolean; directionNames?: Map<string, string> }) {
-  const { t } = useUISettings();
+  const { t, language } = useUISettings();
   const hasCode = Boolean(record.links.code) || ["runnable", "maintained"].includes(record.readiness.toLowerCase());
   const labels = (record.directions.length ? record.directions.map((id) => directionNames?.get(id) ?? id) : [...record.capabilityGroups, ...record.topics]).slice(0, 3);
   return <article className={radar ? "benchmark-row radar" : "benchmark-row"}>
-    {radar && <div className="benchmark-date"><small>Released</small><strong>{formatDate(record.releasedAt)}</strong></div>}
+    {radar && <div className="benchmark-date"><small>{t("Released")}</small><strong>{formatDate(record.releasedAt, language) || t("Date unavailable")}</strong></div>}
     <div className="benchmark-row-main">
       <div className="benchmark-row-heading"><h2>{record.name}</h2>{record.publication.venue && <span>{record.publication.venue}</span>}</div>
       <p>{record.description || record.oneLine || "No benchmark summary is available."}</p>
       {labels.length > 0 && <div className="benchmark-tags">{labels.map((label) => <span key={label}>{label}</span>)}</div>}
-      <div className="benchmark-signal">{(record.readiness || hasCode) && <b title={hasCode ? t("A code link is available. Archimedes has not verified that it runs.") : undefined}>{hasCode ? t("Code available") : record.readiness}</b>}<span>{signalText(record)}</span></div>
+      <div className="benchmark-signal">{(record.readiness || hasCode) && <b title={hasCode ? t("A code link is available. Archimedes has not verified that it runs.") : undefined}>{hasCode ? t("Code available") : record.readiness}</b>}<span>{signalText(record, language)}</span></div>
       {record.forecast != null && <details className="benchmark-forecast">
         <summary>{t("Attention forecast")}: {record.forecast}/100</summary>
         <p>{t("An upstream AI estimate of future attention, not benchmark quality or a measured result.")}</p>
@@ -84,7 +107,8 @@ function BenchmarkRow({ record, saved, onToggle, radar = false, directionNames }
 }
 
 export default function BenchmarkRadarView() {
-  const { t } = useUISettings();
+  const { t, language } = useUISettings();
+  const locale = localeFor(language);
   const refresh = useRef<() => Promise<void>>(async () => {});
   const [refreshing, setRefreshing] = useState(true);
   const [data, setData] = useState<BenchmarkRadarData | null>(null);
@@ -180,32 +204,32 @@ export default function BenchmarkRadarView() {
   if (!data) return <main className="benchmark-radar-page"><StateView tone="error" className="benchmark-loading" icon={<Radar size={26} />} title={t("Benchmark Radar is unavailable")} description={error || t("No saved benchmark data is available. Connect to the internet and try again.")} action={<button className="benchmark-refresh" disabled={refreshing} onClick={() => void refresh.current()}>{t("Try again")}</button>} /></main>;
 
   return <main className="benchmark-radar-page">
-    <ToolbarActions><span className="module-toolbar-note"><Radar size={12} />Updated {data.updatedAt || "locally"} · {data.library.length.toLocaleString()} indexed{data.source ? ` · ${SOURCE_LABELS[data.source]}` : ""}</span></ToolbarActions>
+    <ToolbarActions><span className="module-toolbar-note"><Radar size={12} />{t("Updated")} {data.updatedAt ? formatDate(data.updatedAt, language, true) : t("locally")} · {data.library.length.toLocaleString(locale)} {t("indexed")}{data.source ? ` · ${t(SOURCE_LABELS[data.source])}` : ""}</span></ToolbarActions>
 
     <div className="benchmark-tabs-row">
       <Tabs value={tab} onChange={(value) => setTab(value as typeof tab)} label="Benchmark Radar view" className="benchmark-tabs">
         <Tab value="radar" icon={<Radar size={14} />}>Radar</Tab>
         <Tab value="library" icon={<LibraryBig size={14} />}>Library</Tab>
       </Tabs>
-      <div className="benchmark-header-actions"><span>{saved.size} saved</span><button className="benchmark-refresh" disabled={refreshing} onClick={() => void refresh.current()}>
+      <div className="benchmark-header-actions"><span>{saved.size.toLocaleString(locale)} saved</span><button className="benchmark-refresh" disabled={refreshing} onClick={() => void refresh.current()}>
         <RefreshCw size={14} className={refreshing ? "spin" : undefined} />{refreshing ? t("Checking for updates…") : data.source === "local" ? t("Reload local data") : t("Refresh")}
       </button></div>
     </div>
 
     <div className="benchmark-data-status" role="status" aria-live="polite">
-      <span>{t("Data as of {date}", { date: data.updatedAt || t("Unknown") })} · {t(SOURCE_LABELS[data.source])}</span>
-      <span>{data.fetchedAt && Number.isFinite(Date.parse(data.fetchedAt)) ? t("Last checked: {time}", { time: new Date(data.fetchedAt).toLocaleString() }) : data.source === "local" ? t("Development data override is active.") : t("This snapshot has not been checked online yet.")}</span>
+      <span>{t("Data as of {date}", { date: formatDate(data.updatedAt, language, true) || t("Unknown") })} · {t(SOURCE_LABELS[data.source])}</span>
+      <span>{data.fetchedAt && Number.isFinite(Date.parse(data.fetchedAt)) ? t("Last checked: {time}", { time: formatTimestamp(data.fetchedAt, language) }) : data.source === "local" ? t("Development data override is active.") : t("This snapshot has not been checked online yet.")}</span>
       {refreshing && <span>{t("Checking for updates…")}</span>}
       {(error || data.refreshError) && <p className="benchmark-update-warning" title={error || data.refreshError}>{t("Could not update. Showing saved data; use Refresh to try again.")}</p>}
     </div>
     {tab === "radar" ? <section className="benchmark-radar-content">
-      <div className="benchmark-intro"><div><h2>Emerging AI benchmarks</h2><p>New public evaluations from the latest Benchmark Radar release feed, ranked by observable attention where signals are available.</p><p className="benchmark-method-note">{t("Attention uses public signals. Code availability has not been execution-tested by Archimedes.")}</p></div><strong>{radarRecords.length}<small> latest releases</small></strong></div>
+      <div className="benchmark-intro"><div><h2>Emerging AI benchmarks</h2><p>New public evaluations from the latest Benchmark Radar release feed, ranked by observable attention where signals are available.</p><p className="benchmark-method-note">{t("Attention uses public signals. Code availability has not been execution-tested by Archimedes.")}</p></div><strong>{radarRecords.length.toLocaleString(locale)}<small> latest releases</small></strong></div>
       <div className="benchmark-controls" title={t("Time windows are relative to today.")}><div><span>Time window</span><div className="benchmark-segmented">{(["latest", "30d", "90d"] as TimeWindow[]).map((item) => <button key={item} className={windowName === item ? "active" : ""} onClick={() => setWindowName(item)}>{item === "latest" ? "Latest" : item.replace("d", " days")}</button>)}</div></div><div><span>Sort by</span><div className="benchmark-segmented">{(["attention", "newest"] as RadarSort[]).map((item) => <button key={item} className={radarSort === item ? "active" : ""} onClick={() => setRadarSort(item)}>{item[0].toUpperCase() + item.slice(1)}</button>)}</div></div></div>
-      <div className="benchmark-results-heading"><h2>Rising benchmarks <small>{radarRecords.length} results</small></h2></div>
+      <div className="benchmark-results-heading"><h2>Rising benchmarks <small>{radarRecords.length.toLocaleString(locale)} results</small></h2></div>
       <div className="benchmark-list">{radarRecords.length ? radarRecords.map((record) => <BenchmarkRow key={record.id} record={record} saved={saved.has(record.id)} onToggle={() => toggleSaved(record.id)} radar directionNames={directionNames} />) : <StateView compact className="benchmark-empty" description="No releases match this time window." />}</div>
     </section> : <section className="benchmark-library-layout">
-      <aside className="benchmark-directions"><div className="benchmark-direction-head"><span>Research directions</span><p>Browse the Benchmark Radar taxonomy or search every public benchmark.</p></div><button className={!direction ? "active" : ""} onClick={() => setDirection("")}>All benchmarks <small>{data.library.length.toLocaleString()}</small></button>{directionsBySection.map(([section, items]) => <section key={section}><h2>{section}</h2>{items.map((item) => <button key={item.id} className={direction === item.id ? "active" : ""} onClick={() => setDirection(item.id)}><span>{item.name}</span><small>{item.count.toLocaleString()}</small></button>)}</section>)}</aside>
-      <div className="benchmark-library-content"><div className="benchmark-library-toolbar"><label><span>Search</span><div><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search benchmarks, tasks, or research directions" /></div></label><label><span>Sort by</span><div className="benchmark-segmented">{(["newest", "attention", "stars"] as LibrarySort[]).map((item) => <button key={item} className={librarySort === item ? "active" : ""} onClick={() => setLibrarySort(item)}>{item === "stars" ? "GitHub stars" : item[0].toUpperCase() + item.slice(1)}</button>)}</div></label></div><div className="benchmark-results-heading"><h2>{direction ? data.directions.find((item) => item.id === direction)?.name || "Benchmarks" : "All benchmarks"} <small>{libraryRecords.length.toLocaleString()} entries · public attention</small></h2></div><div className="benchmark-list">{libraryRecords.length ? libraryRecords.slice(0, 150).map((record) => <BenchmarkRow key={record.id} record={record} saved={saved.has(record.id)} onToggle={() => toggleSaved(record.id)} directionNames={directionNames} />) : <StateView compact className="benchmark-empty" description="No public benchmarks match this search. Clear the search or choose another research direction." />}{libraryRecords.length > 150 && <p className="benchmark-limit">Showing the first 150 matching benchmarks. Refine the search or choose a research direction.</p>}</div></div>
+       <aside className="benchmark-directions"><div className="benchmark-direction-head"><span>Research directions</span><p>Browse the Benchmark Radar taxonomy or search every public benchmark.</p></div><button className={!direction ? "active" : ""} onClick={() => setDirection("")}>All benchmarks <small>{data.library.length.toLocaleString(locale)}</small></button>{directionsBySection.map(([section, items]) => <section key={section}><h2>{section}</h2>{items.map((item) => <button key={item.id} className={direction === item.id ? "active" : ""} onClick={() => setDirection(item.id)}><span>{item.name}</span><small>{item.count.toLocaleString(locale)}</small></button>)}</section>)}</aside>
+       <div className="benchmark-library-content"><div className="benchmark-library-toolbar"><label><span>Search</span><div><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search benchmarks, tasks, or research directions" /></div></label><label><span>Sort by</span><div className="benchmark-segmented">{(["newest", "attention", "stars"] as LibrarySort[]).map((item) => <button key={item} className={librarySort === item ? "active" : ""} onClick={() => setLibrarySort(item)}>{item === "stars" ? "GitHub stars" : item[0].toUpperCase() + item.slice(1)}</button>)}</div></label></div><div className="benchmark-results-heading"><h2>{direction ? data.directions.find((item) => item.id === direction)?.name || "Benchmarks" : "All benchmarks"} <small>{libraryRecords.length.toLocaleString(locale)} entries · public attention</small></h2></div><div className="benchmark-list">{libraryRecords.length ? libraryRecords.slice(0, 150).map((record) => <BenchmarkRow key={record.id} record={record} saved={saved.has(record.id)} onToggle={() => toggleSaved(record.id)} directionNames={directionNames} />) : <StateView compact className="benchmark-empty" description="No public benchmarks match this search. Clear the search or choose another research direction." />}{libraryRecords.length > 150 && <p className="benchmark-limit">Showing the first 150 matching benchmarks. Refine the search or choose a research direction.</p>}</div></div>
     </section>}
   </main>;
 }

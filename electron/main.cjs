@@ -1,4 +1,25 @@
 const { app, BrowserWindow, Menu, ipcMain: electronIpcMain, dialog, nativeTheme, net, protocol, clipboard, shell, session, safeStorage, systemPreferences, Notification } = require("electron");
+const { installMainWindowLinks } = require("./main-window-links.cjs");
+const { createResearchAppRuntime } = require("./research-app-runtime.cjs");
+const { createSetup: createResearchAppSetup } = require("./research-app-setup.cjs");
+const { createAppAgent } = require("./research-app-agent.cjs");
+const researchAppRuntime = createResearchAppRuntime({
+  readSecret: (name) => environmentVault?.get(name) || "",
+  approve: async ({ app: researchApp, operation }) => {
+    const owner = BrowserWindow.getAllWindows().find((window) => workspaceForWindow(window) === researchApp.workspace) ?? BrowserWindow.getFocusedWindow();
+    if (!owner) return false;
+    const result = await dialog.showMessageBox(owner, {
+      type: "question", title: operation === "install" ? "Install Research App" : "Run Research App",
+      message: researchApp.name,
+      detail: `${researchApp.directory}\n\n${researchApp.runtime.kind}: ${researchApp.runtime.entry}\n\n${researchApp.environment.length ? `Requested Environment keys: ${researchApp.environment.join(", ")}. These values will be passed to the App process when it starts.` : "No Environment keys requested."}\n\nLocal App code runs with your user permissions; it is not an OS sandbox. The embedded page has no access to the Archimedes host bridge. Only approve code you have reviewed. Installing does not start it automatically.`,
+      buttons: ["Cancel", operation === "install" ? "Install" : "Run"], defaultId: 0, cancelId: 0,
+    });
+    return result.response === 1;
+  },
+  changed: (workspace) => {
+    for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.webContents.send("research-apps:changed", { workspace });
+  },
+});
 const { spawn } = require("node:child_process");
 const { randomUUID } = require("node:crypto");
 const os = require("node:os");
@@ -40,6 +61,7 @@ const supabaseConfig = require("../shared/supabase-config.json");
 const journeySummarizer = require("./journey-summarizer.cjs");
 const modelConfig = require("./model-config.cjs");
 const agentBackendConfig = require("./agent-backend-config.cjs");
+const harnessSetup = require("./harness-setup.cjs");
 const nativeAgent = require("./agent/external-backend.cjs");
 const { registerNativeAgentCommands } = require("./native-agent-commands.cjs");
 const { runWindowAgent } = require("./window-agent-run.cjs");
@@ -89,6 +111,7 @@ const { searchConferencePapers } = require("./conferences.cjs");
 const skillCatalog = require("./skill-catalog.cjs");
 const speech = require("./speech.cjs");
 const store = require("./store.cjs");
+const { registerLibraryReads } = require("./ipc/library.cjs");
 const { createWorkspaceIpc, isWorkspaceDataChannel } = require("./workspace-context.cjs");
 const researchGraph = require("./research-graph/service.cjs");
 const experimentRunner = require("./research-graph/experiment-runner.cjs");
@@ -177,9 +200,9 @@ function closeWindowTerminals(senderId) {
 function stopWorkspaceWatcher(senderId) {
   const current = workspaceWatchers.get(senderId);
   if (!current) return;
+  workspaceWatchers.delete(senderId);
   if (current.timer) clearTimeout(current.timer);
   current.watcher.close();
-  workspaceWatchers.delete(senderId);
 }
 
 function setWindowWorkspace(senderId, workspace) {
@@ -256,6 +279,9 @@ function watchWorkspace(sender, workspace) {
       }, 180);
     });
     workspaceWatchers.set(sender.id, state);
+    state.watcher.on("error", () => {
+      if (workspaceWatchers.get(sender.id) === state) stopWorkspaceWatcher(sender.id);
+    });
   } catch {
     // Recursive watching is not available on every platform; manual refresh remains available.
   }
@@ -301,6 +327,10 @@ function createWindow(workspace) {
   if (process.platform !== "darwin") browserWindow.setMenuBarVisibility(false);
 
   const senderId = browserWindow.webContents.id;
+  installMainWindowLinks(browserWindow.webContents, {
+    openExternal: (url) => shell.openExternal(url),
+    onError: () => console.warn("Could not open the web link in the external browser."),
+  });
   browserWindow.webContents.on("will-attach-webview", (event, webPreferences, params) => {
     const browserTab = params.partition === WORKBENCH_BROWSER_PARTITION;
     const allowed = browserTab ? isWebPage(params.src) : isEmbeddableProjectPage(params.src);
@@ -696,7 +726,7 @@ app.whenReady().then(async () => {
   journeySnapshots.initialize(app.getPath("userData"));
   workbenchSettings.initialize(app.getPath("userData"));
   workbenchNotes.initialize(app.getPath("userData"));
-  extensionMarketplace.initialize(app.getPath("userData"));
+  extensionMarketplace.initialize(app.getPath("userData"), safeStorage);
   sidebarPlugins.initialize(app.getPath("userData"));
   sidebarSettings.initialize(app.getPath("userData"));
   news.initialize(app.getPath("userData"));
@@ -895,6 +925,47 @@ app.whenReady().then(async () => {
     uiPlugins: sidebarPlugins.listPlugins(),
   }));
   ipcMain.handle("plugins:list", () => sidebarPlugins.listPlugins());
+  const researchAppWorkspace = (event, input) => {
+    const root = workspaceForWindow(BrowserWindow.fromWebContents(event.sender));
+    if (!root || !input?.workspace || fs.realpathSync(input.workspace) !== fs.realpathSync(root)) throw new Error("Research App access requires the active workspace.");
+    return fs.realpathSync(root);
+  };
+  const researchAppSetup = createResearchAppSetup({ approve: async ({ app: researchApp, packages }) => {
+    const owner = BrowserWindow.getAllWindows().find((window) => workspaceForWindow(window) === researchApp.workspace);
+    if (!owner) return false;
+    const result = await dialog.showMessageBox(owner, {
+      type: "question", title: "Set up App dependencies", message: researchApp.name,
+      detail: `Create a Python environment in ${researchApp.directory}/.venv and download these packages from PyPI:\n\n${packages.join("\n") || "No additional packages"}\n\nPackages and their transitive dependencies can execute code during installation.`,
+      buttons: ["Cancel", "Set up"], defaultId: 0, cancelId: 0,
+    });
+    return result.response === 1;
+  } });
+  ipcMain.handle("research-apps:setup", (event, input = {}) => researchAppSetup.setup(researchAppWorkspace(event, input), input.id));
+  const appAgent = createAppAgent({
+    runtime: researchAppRuntime, getConfig: () => agentBackendConfig.get(), runNative: nativeAgent.runNative,
+    approve: async ({ app: researchApp, backend, prompt }) => {
+      const owner = BrowserWindow.getAllWindows().find(window => workspaceForWindow(window) === researchApp.workspace);
+      if (!owner) return false;
+      const result = await dialog.showMessageBox(owner, { type: "question", title: "Research App Agent request", message: `${researchApp.name} requests ${backend}`,
+        detail: `Prompt:\n${prompt}\n\nApp skills: ${researchApp.skills.join(", ") || "none"}. This sends the prompt and any Agent-selected context to the selected provider. Tool operations may require separate approval.`, buttons: ["Cancel", "Run Agent"], defaultId: 0, cancelId: 0 });
+      return result.response === 1;
+    },
+    approveTool: async ({ app: researchApp, backend, request }) => {
+      const owner = BrowserWindow.getAllWindows().find(window => workspaceForWindow(window) === researchApp.workspace);
+      if (!owner || request.signal?.aborted) return false;
+      const { signal, ...details } = request;
+      const fullRequest = JSON.stringify(details);
+      if (fullRequest.length > 50000) return false;
+      const result = await dialog.showMessageBox(owner, { type: "question", title: "Agent tool approval", message: `${researchApp.name} · ${backend}`,
+        detail: fullRequest,
+        buttons: ["Deny", "Allow once"], defaultId: 0, cancelId: 0 });
+      return result.response === 1 && !signal?.aborted;
+    },
+  });
+  ipcMain.handle("research-apps:agent", (event, input = {}) => appAgent.run(researchAppWorkspace(event, input), input.id, input));
+  for (const operation of ["list", "status", "start", "stop", "install", "pin", "remove"]) {
+    ipcMain.handle(`research-apps:${operation}`, (event, input = {}) => researchAppRuntime[operation](researchAppWorkspace(event, input), input.id, input.pinned));
+  }
   ipcMain.handle("plugins:set-enabled", (_event, input = {}) => sidebarPlugins.setEnabled(String(input?.id || ""), Boolean(input?.enabled)));
   ipcMain.handle("plugins:remove", (_event, input = {}) => sidebarPlugins.removePlugin(String(input?.id || "")));
   ipcMain.handle("sidebar:get-settings", () => sidebarSettings.getSettings());
@@ -1202,6 +1273,19 @@ app.whenReady().then(async () => {
   ipcMain.handle("agent-backend:get", () => agentBackendConfig.get());
   ipcMain.handle("agent-backend:save", (_event, input) => agentBackendConfig.save(input));
   ipcMain.handle("agent-backend:check", (_event, input) => agentBackendConfig.check(input));
+  const setupOwner = (event) => { if (!BrowserWindow.fromWebContents(event.sender)) throw new Error("CLI setup requires an application window."); return event.sender.id; };
+  ipcMain.handle("agent-backend:detect", (event, input) => { setupOwner(event); return harnessSetup.detect(input); });
+  ipcMain.handle("agent-backend:install-status", (event, backend) => { setupOwner(event); return harnessSetup.status(backend); });
+  ipcMain.handle("agent-backend:install-cancel", (event, backend) => harnessSetup.cancel(backend, setupOwner(event)));
+  ipcMain.handle("agent-backend:install", async (event, backend) => {
+    const owner = setupOwner(event);
+    const cancel = () => harnessSetup.cancel(backend, owner);
+    event.sender.once("destroyed", cancel);
+    event.sender.once("render-process-gone", cancel);
+    try { return await harnessSetup.install(backend, owner); }
+    finally { event.sender.removeListener("destroyed", cancel); event.sender.removeListener("render-process-gone", cancel); }
+  });
+  ipcMain.handle("agent-backend:login", (event, input) => { setupOwner(event); return harnessSetup.login(input); });
   ipcMain.handle("agent-backend:codex-models", (_event, input) => agentBackendConfig.listCodexModelCatalog(input));
   ipcMain.handle("agent-backend:opencode-models", (_event, input = {}) => agentBackendConfig.listOpenCodeModelCatalog(input, resolveWorkspace(input.workspace)));
 
@@ -1253,7 +1337,7 @@ app.whenReady().then(async () => {
 
   ipcMain.handle("web-search:save-config", (_event, input = {}) => webSearch.saveWebSearchConfig(input));
 
-  ipcMain.handle("library:list", (_event, input = {}) => store.listLibraries(input.projectId ?? null));
+  registerLibraryReads(ipcMain, store);
 
   ipcMain.handle("library:create", (_event, input) => {
     if (!input || typeof input.name !== "string" || !input.name.trim() || input.name.length > 120) {
@@ -1270,15 +1354,6 @@ app.whenReady().then(async () => {
   ipcMain.handle("library:delete", (_event, id) => {
     if (typeof id !== "string") throw new Error("A library ID is required.");
     return store.deleteLibrary(id);
-  });
-
-  ipcMain.handle("library:list-projects", () => store.listLibraryProjects());
-
-  ipcMain.handle("library:list-papers", (_event, { libraryId, query = "" }) => {
-    if (typeof libraryId !== "string" || typeof query !== "string" || query.length > 300) {
-      throw new Error("A library ID and a short search query are required.");
-    }
-    return store.listPapers(libraryId, query);
   });
 
   ipcMain.handle("library:search-external", (_event, { query, limit }) => searchAcademicPapers(query, limit));
@@ -1795,7 +1870,6 @@ app.whenReady().then(async () => {
     return store.addPaper(libraryId, paper);
   });
 
-  ipcMain.handle("library:get-bibliography", (_event, { paperId }) => store.getPaperBibliography(paperId));
   ipcMain.handle("library:set-bibliography", (_event, { paperId, patch }) => store.setPaperBibliography(paperId, patch));
   ipcMain.handle("library:repair-metadata", (_event, { paperId, patch }) => store.repairLibraryPaperMetadata(paperId, patch));
 
@@ -1980,7 +2054,7 @@ app.whenReady().then(async () => {
     const clientRunId = typeof input.clientRunId === "string" && input.clientRunId ? input.clientRunId : undefined;
     const configuredBackend = agentBackendConfig.get();
     const selectedBackend = input.backend || configuredBackend.backend;
-    if (!["api", "codex", "claude", "opencode"].includes(selectedBackend)) throw new Error("Unknown Agent backend.");
+    if (!["api", "codex", "claude", "opencode", "antigravity"].includes(selectedBackend)) throw new Error("Unknown Agent backend.");
     const backend = selectedBackend === "api" ? configuredBackend : { ...configuredBackend, ...configuredBackend.profiles[selectedBackend], backend: selectedBackend };
     const externalBackend = input.origin === "research" && selectedBackend !== "api" ? backend : null;
     let remoteServer = null;
@@ -2230,9 +2304,13 @@ app.whenReady().then(async () => {
     if (typeof threadId !== "string" || !threadId) throw new Error("A research thread is required.");
     return store.setResearchThreadVisibility(threadId, visibility);
   });
-  ipcMain.handle("research-thread:create-snapshot", (_event, { threadId } = {}) => {
+  ipcMain.handle("research-thread:create-snapshot", (_event, { threadId, turnIds, includeSources } = {}) => {
     if (typeof threadId !== "string" || !threadId) throw new Error("A research thread is required.");
-    return store.createThreadSnapshot(threadId);
+    return store.createThreadSnapshot(threadId, { turnIds, includeSources });
+  });
+  ipcMain.handle("research-thread:snapshot-turns", (_event, { threadId } = {}) => {
+    if (typeof threadId !== "string" || !threadId) throw new Error("A research thread is required.");
+    return store.listThreadSnapshotTurns(threadId);
   });
   ipcMain.handle("research-thread:list-snapshots", (_event, { threadId } = {}) => {
     if (typeof threadId !== "string" || !threadId) throw new Error("A research thread is required.");
@@ -2676,7 +2754,15 @@ app.whenReady().then(async () => {
 });
 
 app.on("window-all-closed", () => {
+  void researchAppRuntime.shutdown();
   if (process.platform !== "darwin") app.quit();
+});
+
+let researchAppsStoppedForQuit = false;
+app.on("before-quit", (event) => {
+  if (researchAppsStoppedForQuit) return;
+  event.preventDefault();
+  void researchAppRuntime.shutdown().finally(() => { researchAppsStoppedForQuit = true; app.quit(); });
 });
 
 app.on("activate", () => {
@@ -2684,6 +2770,7 @@ app.on("activate", () => {
 });
 
 app.on("will-quit", () => {
+  harnessSetup.shutdown();
   closeAllNativeClients();
   closeAllTerminals();
   experimentRunner.shutdownExperimentRuns();
