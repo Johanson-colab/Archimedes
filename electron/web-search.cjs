@@ -134,6 +134,7 @@ function requestFor(provider, query, input, domains, apiKey) {
     body = {
       query, topic: type === "news" ? "news" : "general", max_results: limit, include_domains: domains,
       ...(input.includePublishedDate ? { include_published_date: true, search_depth: "basic", auto_parameters: false } : {}),
+      ...(input.timeRange ? { time_range: input.timeRange } : {}),
     };
   } else if (provider === "exa") {
     endpoint = "https://api.exa.ai/search";

@@ -469,7 +469,10 @@ async function fetchX({ fetchImpl = fetch, state = {}, bearerToken, query } = {}
 
 async function fetchXWithTavily({ query, fetchImpl, apiKey }) {
   const domains = ["x.com", "twitter.com"];
-  const { results } = await searchWeb({ query, domains, includePublishedDate: true }, { provider: "tavily", fetchImpl, apiKey });
+  // The News cache prunes stories published more than 14 days ago, so a
+  // manual X search asks Tavily for the last week instead of returning
+  // relevant posts that would be inserted and immediately deleted.
+  const { results } = await searchWeb({ query, domains, includePublishedDate: true, timeRange: "week" }, { provider: "tavily", fetchImpl, apiKey });
   const items = new Map();
   for (const result of results) {
     let link;

@@ -143,6 +143,7 @@ test("Tavily is opt-in and manual, and duplicate results and failed requests pre
     assert.deepEqual(JSON.parse(request.body).include_domains, ["x.com", "twitter.com"]);
     assert.equal(JSON.parse(request.body).query, query);
     assert.equal(JSON.parse(request.body).search_depth, "basic");
+    assert.equal(JSON.parse(request.body).time_range, "week");
     assert.equal(request.headers.Authorization, "Bearer test-news-key");
     const published = new Date(Date.now() - 60_000).toISOString();
     return Response.json({ results: [
