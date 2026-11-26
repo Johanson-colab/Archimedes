@@ -95,6 +95,8 @@ import ArchimedesWordmark from "./brand/ArchimedesWordmark";
 import {
   AlertTriangle,
   ArrowDown,
+  ArrowLeft,
+  ArrowRight,
   ArrowUp,
   BookOpen,
   BookOpenCheck,
@@ -102,8 +104,6 @@ import {
   Check,
   ChevronDown,
   ChevronLeft,
-  ChevronsLeft,
-  ChevronsRight,
   ChevronRight,
   CircleDot,
   CircleHelp,
@@ -142,11 +142,7 @@ import {
   Minimize2,
   NotebookPen,
   Package,
-  PanelLeftClose,
-  PanelLeftOpen,
   PanelRight,
-  PanelRightClose,
-  PanelRightOpen,
   Play,
   Plus,
   Puzzle,
@@ -3592,7 +3588,7 @@ function App() {
     { id: "notes", group: t("Panels"), label: t("Notes"), icon: <NotebookPen size={15} />, run: () => openWorkbench("notes") },
     { id: "reveal-folder", group: t("System"), label: t("Show working folder"), detail: executionWorkspace, icon: <FolderOpen size={15} />, run: () => void desktopBridge.revealWorkspace?.(executionWorkspace).catch(() => undefined) },
     { id: "settings", group: t("System"), label: t("Settings"), shortcut: "Ctrl ,", icon: <Settings size={15} />, run: () => { setSettingsSection("general"); setSettingsOpen(true); } },
-    { id: "toggle-sidebar", group: t("System"), label: sidebarHidden ? t("Show sidebar") : t("Hide sidebar"), icon: <PanelLeftOpen size={15} />, run: () => setSidebarHidden((hidden) => !hidden) },
+    { id: "toggle-sidebar", group: t("System"), label: sidebarHidden ? t("Show sidebar") : t("Hide sidebar"), icon: sidebarHidden ? <ArrowRight size={15} /> : <ArrowLeft size={15} />, run: () => setSidebarHidden((hidden) => !hidden) },
   ];
 
   // Declarative view host for sidebar modules: the JSX per module is declared
@@ -3632,7 +3628,7 @@ function App() {
           <ArchimedesMark className="codex-brand-symbol" size={24} variant="small" />
           <ArchimedesWordmark className="codex-brand-wordmark" />
           <button className="sidebar-search-button" onClick={() => setPaletteOpen(true)} title={`${t("Search or run a command")} (Ctrl K)`} aria-label={t("Search or run a command")}><Search size={15} /></button>
-          <button className="sidebar-collapse-button" onClick={() => setSidebarHidden(true)} title={t("Hide sidebar")} aria-label={t("Hide sidebar")}><PanelLeftClose size={16} /></button>
+          <button className="sidebar-collapse-button" onClick={() => setSidebarHidden(true)} title={t("Hide sidebar")} aria-label={t("Hide sidebar")}><ArrowLeft size={16} /></button>
         </div>
 
         <button className="new-task-button" onClick={() => startNewTask()} title={t("New research task")} disabled={agentBusy}>
@@ -3695,7 +3691,7 @@ function App() {
 
       <section className={workbenchOpen ? "codex-main workbench-open" : "codex-main"} style={{ "--workbench-width": workbenchOpen ? `${workbenchWidth}px` : "0px" } as React.CSSProperties}>
         <header className="main-toolbar" data-ui="application-toolbar">
-          {!sidebarVisible && <button className="quiet-icon-button sidebar-restore-button" onClick={() => setSidebarHidden(false)} title={t("Show sidebar")} aria-label={t("Show sidebar")} aria-pressed={sidebarHidden}><PanelLeftOpen size={17} /></button>}
+          {!sidebarVisible && <button className="quiet-icon-button sidebar-restore-button" onClick={() => setSidebarHidden(false)} title={t("Show sidebar")} aria-label={t("Show sidebar")} aria-pressed={sidebarHidden}><ArrowRight size={17} /></button>}
           <SessionSwitcher
             project={activeProject}
             workspace={activeWorkspace}
@@ -3746,7 +3742,7 @@ function App() {
               {proactive.queuedCount > 0 && <span className="dock-badge" aria-label={`${proactive.queuedCount} queued suggestions`}>{proactive.queuedCount > 9 ? "9+" : proactive.queuedCount}</span>}
             </button>
             <button className={workbenchOpen ? "quiet-icon-button workbench-toggle open" : "quiet-icon-button workbench-toggle"} onClick={toggleWorkbench} title={workbenchOpen ? `${t("Hide workbench")} (Ctrl+\`)` : `${t("Show workbench")} (Ctrl+\`)`} aria-label={workbenchOpen ? t("Hide workbench") : t("Show workbench")} aria-pressed={workbenchOpen}>
-              <PanelRight size={17} />
+              {workbenchOpen ? <ArrowRight size={17} /> : <ArrowLeft size={17} />}
             </button>
           </div>
         </header>
@@ -5853,8 +5849,8 @@ function FilesView({ workspace, tree, openFiles, selectedPath, directoryRequest,
         {tabs}
         <div className="artifact-workbench-actions">
           {split && <div className="artifact-workbench-pane-toggles" role="group" aria-label="File panes">
-            <button className={filesListCollapsed ? "" : "active"} onClick={toggleFilesList} title={filesListCollapsed ? "Show file list" : "Collapse file list"} aria-label={filesListCollapsed ? "Show file list" : "Collapse file list"} aria-pressed={!filesListCollapsed}>{filesListCollapsed ? <ChevronsRight size={13} /> : <ChevronsLeft size={13} />}</button>
-            <button className={filesEditorCollapsed ? "" : "active"} onClick={toggleFilesEditor} title={filesEditorCollapsed ? "Show editor" : "Collapse editor"} aria-label={filesEditorCollapsed ? "Show editor" : "Collapse editor"} aria-pressed={!filesEditorCollapsed}>{filesEditorCollapsed ? <ChevronsLeft size={13} /> : <ChevronsRight size={13} />}</button>
+            <button className={filesListCollapsed ? "" : "active"} onClick={toggleFilesList} title={filesListCollapsed ? "Show file list" : "Collapse file list"} aria-label={filesListCollapsed ? "Show file list" : "Collapse file list"} aria-pressed={!filesListCollapsed}>{filesListCollapsed ? <ArrowRight size={13} /> : <ArrowLeft size={13} />}</button>
+            <button className={filesEditorCollapsed ? "" : "active"} onClick={toggleFilesEditor} title={filesEditorCollapsed ? "Show editor" : "Collapse editor"} aria-label={filesEditorCollapsed ? "Show editor" : "Collapse editor"} aria-pressed={!filesEditorCollapsed}>{filesEditorCollapsed ? <ArrowLeft size={13} /> : <ArrowRight size={13} />}</button>
           </div>}
           <button onClick={onRefresh} title="Refresh workspace files" aria-label="Refresh workspace files"><RefreshCw size={13} /></button>
           <button onClick={onNewFile} title="New file" aria-label="New file"><Plus size={14} /></button>

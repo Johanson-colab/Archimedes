@@ -41,6 +41,7 @@ import { fingerprintFor } from "./proactive-engine";
 import { emitProactiveSignal } from "./proactive-signals";
 import {
   ArrowLeft,
+  ArrowRight,
   ArrowUp,
   Bookmark,
   BookOpen,
@@ -71,8 +72,6 @@ import {
   LoaderCircle,
   MessageCircleReply,
   Minus,
-  PanelRightClose,
-  PanelRightOpen,
   Pencil,
   Plus,
   RefreshCw,
@@ -1064,7 +1063,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
       <div className="reader-header-actions">
         {publicPaperRecordUrl(paper) && <a className="reader-icon-button" href={publicPaperRecordUrl(paper)} target="_blank" rel="noreferrer" title={t("Open source")}><ExternalLink size={15} /></a>}
         <button className="reader-icon-button" title={paper.starred ? t("Unstar paper") : t("Star paper")} onClick={() => void onUpdate({ starred: !paper.starred })}><Star size={15} fill={paper.starred ? "currentColor" : "none"} /></button>
-        {readerView !== "review" && readerView !== "canvas" && <button className={chatOpen ? "reader-ask-button active" : "reader-ask-button"} title={t("Ask Archimedes")} onClick={() => setChatOpen((value) => !value)}>{chatOpen ? <PanelRightClose size={15} /> : <PanelRightOpen size={15} />}<span>{t("Ask AI")}</span></button>}
+        {readerView !== "review" && readerView !== "canvas" && <button className={chatOpen ? "reader-ask-button active" : "reader-ask-button"} title={t("Ask Archimedes")} aria-expanded={chatOpen} onClick={() => setChatOpen((value) => !value)}>{chatOpen ? <ArrowRight size={15} /> : <ArrowLeft size={15} />}<span>{t("Ask AI")}</span></button>}
       </div>
     </header>
     <div className="paper-reader-layout" style={chatOpen ? { "--paper-chat-width": `${chatWidth}px` } as React.CSSProperties : undefined}>
