@@ -216,6 +216,7 @@ async function checkNative(config, { Client = NativeProcess } = {}) {
     if (config.backend === 'antigravity') {
       const created = await client.request('session/new', { cwd: os.tmpdir(), mcpServers: [] });
       if (!created?.sessionId) throw new Error('Antigravity did not create a session. Sign in with agy, then retry.');
+      await configureOpenCode(client, config, created, created.sessionId, 'Antigravity');
       await configureAntigravityPermissions(client, config, created, created.sessionId);
       return { ready: true, models: openCodeModels(created), message: 'Antigravity ACP is ready. Native permissions and account settings apply; no inference was requested.' };
     }

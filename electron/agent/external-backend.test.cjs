@@ -47,9 +47,9 @@ class ACPFixture extends Fixture {
     if(method==='initialize')return Promise.resolve({protocolVersion:1,agentCapabilities:{loadSession:true,promptCapabilities:{image:true}}});
     if(method==='session/new'||method==='session/load') {
       queueMicrotask(()=>this.emit('message',{method:'session/update',params:{sessionId:'native-acp',update:{sessionUpdate:'agent_message_chunk',content:{type:'text',text:'OLD REPLAY'}}}}));
-      return Promise.resolve({sessionId:'native-acp',configOptions:[{id:'model',options:[{value:'p/model'}]},{id:'mode',currentValue:'default',options:['default','accept-edits','auto','plan'].map(value=>({value}))}]});
+      return Promise.resolve({sessionId:'native-acp',configOptions:[{id:'model',options:[{value:'p/model'}]},{id:'mode',currentValue:'default',options:['default','accept-edits','auto','plan'].map(value=>({value}))},{id:'thought_level',currentValue:'high',options:['low','medium','high','xhigh'].map(value=>({value}))}]});
     }
-    if(method==='session/set_config_option')return Promise.resolve({configOptions:[{id:params.configId,currentValue:params.value,options:[{value:params.value}]}]});
+    if(method==='session/set_config_option')return Promise.resolve({configOptions:[{id:'model',currentValue:params.configId==='model'?params.value:'p/model',options:[{value:'p/model'}]},{id:'thought_level',currentValue:params.configId==='thought_level'?params.value:'high',options:['low','medium','high','xhigh'].map(value=>({value}))},{id:'mode',currentValue:params.configId==='mode'?params.value:'default',options:['default','accept-edits','auto','plan'].map(value=>({value}))}]});
     if(method==='session/prompt'){
       assert.equal(this.options.backend,'opencode');
       this.emit('message',{method:'session/update',params:{sessionId:'native-acp',update:{sessionUpdate:'agent_thought_chunk',content:{type:'text',text:'PRIVATE'}}}});
@@ -322,5 +322,41 @@ test('Antigravity never starts inference when its CLI cannot apply the chosen pe
   await assert.rejects(runNative(o),/permission mode/);
   assert.equal(Fixture.last.sent.some(m=>m.method==='session/prompt'),false);
   assert.equal(o.saves.length,0);
+ }
+});
+
+test('Antigravity applies its native thought_level before a prompt and on connection check', async () => {
+ class ThoughtFixture extends ACPFixture {
+  request(method, params) {
+   if (method !== 'session/prompt') return super.request(method, params);
+   this.sent.push({method,params});
+   this.emit('message',{method:'session/update',params:{sessionId:'native-acp',update:{sessionUpdate:'agent_message_chunk',content:{type:'text',text:'Ready'}}}});
+   return Promise.resolve({stopReason:'end_turn'});
+  }
+ }
+ const o=options('antigravity');o.Client=ThoughtFixture;o.config.model='p/model';o.config.effort='xhigh';
+ assert.equal(await runNative(o),'Ready');
+ const sent=Fixture.last.sent, thought=sent.findIndex(m=>m.method==='session/set_config_option'&&m.params.configId==='thought_level');
+ assert.equal(sent[thought].params.value,'xhigh');
+ assert.ok(thought>sent.findIndex(m=>m.method==='session/set_config_option'&&m.params.configId==='model'));
+ assert.ok(thought<sent.findIndex(m=>m.method==='session/prompt'));
+ assert.equal((await checkNative(o.config,{Client:ThoughtFixture})).ready,true);
+ assert.ok(Fixture.last.sent.some(m=>m.method==='session/set_config_option'&&m.params.configId==='thought_level'&&m.params.value==='xhigh'));
+});
+
+test('Antigravity refuses unsupported or unconfirmed thought levels before inference', async () => {
+ for(const supported of [false,true]) {
+  class UnsupportedThought extends ACPFixture {
+   async request(method,params) {
+    const result=await super.request(method,params);
+    if(method==='session/new'&&!supported) result.configOptions=result.configOptions.filter(option=>option.id!=='thought_level');
+    if(method==='session/set_config_option'&&params.configId==='thought_level'&&supported) result.configOptions.find(option=>option.id==='thought_level').currentValue='high';
+    return result;
+   }
+  }
+  const o=options('antigravity');o.Client=UnsupportedThought;o.config.effort='xhigh';
+  await assert.rejects(runNative(o),/thought_level/);
+  assert.equal(Fixture.last.sent.some(m=>m.method==='session/prompt'),false);
+  assert.equal((await checkNative(o.config,{Client:UnsupportedThought})).ready,false);
  }
 });

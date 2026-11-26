@@ -10,7 +10,7 @@ function openCodeModels(result) {
 }
 async function configureOpenCode(client, config, result, sessionId, name = 'OpenCode') {
   let options = result?.configOptions || [];
-  for (const [configId, value] of [['model', config.model], ['effort', config.effort]]) {
+  for (const [configId, value] of [['model', config.model], [name === 'Antigravity' ? 'thought_level' : 'effort', config.effort]]) {
     if (!value) continue;
     const option = options.find(o => o.id === configId);
     if (!option?.options?.some(o => o.value === value)) throw new Error(`Selected ${name} ${configId} is not advertised by its ACP session.`);

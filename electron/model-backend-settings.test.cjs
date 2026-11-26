@@ -642,3 +642,17 @@ test("Antigravity permissions save independently and do not expose unsupported b
     assert.equal(document.getElementById(claude.htmlFor).value, 'ask');
   } finally { await cleanup(); }
 });
+
+test('Antigravity thinking effort is independently saved and reset when its model changes', async () => {
+  const cleanup = await mount(bridge());
+  try {
+    await click('Harnesses'); await click('Antigravity');
+    const label = [...document.querySelectorAll('label')].find(node => node.textContent === 'Antigravity thinking effort');
+    const select = document.getElementById(label.htmlFor);
+    assert.deepEqual([...select.options].map(option => option.value), ['', 'low', 'medium', 'high', 'xhigh']);
+    await React.act(async () => { select.value='xhigh'; select.dispatchEvent(new dom.window.Event('change', {bubbles:true})); });
+    await click('Check Antigravity'); assert.equal(calls.checkedBackends.at(-1).effort,'xhigh');
+    await click('Use Antigravity'); assert.equal(calls.savedBackends.at(-1).effort,'xhigh');
+    await input('Antigravity model','another-model'); assert.equal(select.value,'');
+  } finally { await cleanup(); }
+});

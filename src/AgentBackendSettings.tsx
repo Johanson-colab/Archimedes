@@ -9,6 +9,7 @@ import { useUISettings } from "./i18n";
 import { MenuItem, MenuSurface } from "./Menu";
 import HarnessSetupPanel from "./HarnessSetupPanel";
 
+const ANTIGRAVITY_EFFORTS = ["low", "medium", "high", "xhigh"] as const;
 const CLAUDE_EFFORTS = ["low", "medium", "high", "xhigh", "max"] as const;
 
 export default function AgentBackendSettings({ bridge, onBackendChange, workspace }: { bridge: ResearchDeskBridge; onBackendChange?: (backend: AgentBackendConfig["backend"]) => void; workspace?: string }) {
@@ -235,6 +236,13 @@ export default function AgentBackendSettings({ bridge, onBackendChange, workspac
               <option value="plan">{t("Plan")}</option>
               <option value="auto">{t("Auto")}</option>
               <option value="full-access">{t("Bypass permissions")}</option>
+            </select>
+          </SettingsRow>}
+          {selected === "antigravity" && <SettingsRow stacked title={<label htmlFor={`${id}-antigravity-effort`}>{t("Antigravity thinking effort")}</label>} description={t("Choose an Antigravity native thinking level. Availability depends on the selected model and CLI version.")}>
+            <select id={`${id}-antigravity-effort`} className="settings-select" disabled={fieldsDisabled} value={config.effort || ""} onChange={(event) => setConfig(current => ({ ...current, effort: event.target.value }))}>
+              <option value="">{t("Antigravity default")}</option>
+              {ANTIGRAVITY_EFFORTS.map(effort => <option key={effort} value={effort}>{effortLabel(effort)}</option>)}
+              {config.effort && !ANTIGRAVITY_EFFORTS.includes(config.effort as typeof ANTIGRAVITY_EFFORTS[number]) && <option value={config.effort}>{effortLabel(config.effort)}</option>}
             </select>
           </SettingsRow>}
           {selected === "antigravity" && <SettingsRow stacked title={<label htmlFor={`${id}-antigravity-permissions`}>{t("Antigravity permissions")}</label>} description={t(config.permissionMode === "plan" ? "Plan without making changes. Native tool rules still apply." : config.permissionMode === "auto" ? "Let Antigravity automatically review tool requests using its native rules." : config.permissionMode === "accept-edits" ? "Accept file edits automatically; other operations follow native approval rules." : "Ask for native approvals. Existing CLI tool rules still apply.")}>
