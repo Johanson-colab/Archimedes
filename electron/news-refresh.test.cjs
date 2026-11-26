@@ -79,6 +79,23 @@ test("changing mute filters invalidates validators so hidden or restored stories
   assert.deepEqual(news.list().items.map((item) => item.title).sort(), ["Hidden story", "Visible story"]);
 });
 
+test("RSS feeds that only return Last-Modified receive a conditional request", async (t) => {
+  profile(t);
+  const feed = { id: "lab-last-modified", label: "Lab last modified", url: "https://lab.example/last-modified-rss" };
+  const modified = "Wed, 25 Nov 2026 10:00:00 GMT";
+  const seen = [];
+  const fetchImpl = async (_url, { headers }) => {
+    seen.push(headers["If-Modified-Since"]);
+    if (headers["If-Modified-Since"] === modified) return new Response(null, { status: 304 });
+    return new Response('<rss><channel><item><title>Last-Modified story</title><link>https://lab.example/last-modified</link></item></channel></rss>', { headers: { "last-modified": modified } });
+  };
+  news.setSettings({ sources: { ...disabledSources, rss: true }, rssFeeds: [feed] });
+  await news.refresh({ force: true, fetchImpl });
+  await news.refresh({ force: true, fetchImpl });
+  assert.deepEqual(seen, [undefined, modified]);
+  assert.equal(news.list().items[0].title, "Last-Modified story");
+});
+
 test("a date-less X refresh keeps the cached publication date", async (t) => {
   profile(t);
   webSearch.saveWebSearchConfig({ provider: "tavily", apiKey: "test-news-key" });

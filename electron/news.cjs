@@ -315,7 +315,11 @@ async function refreshFeeds({ force, fetchImpl, cluster = true }) {
   }
   if (current.sources.rss) {
     for (const feed of current.rssFeeds) {
-      jobs.push(() => runSource(rssSourceId(feed), (state) => sources.fetchRss({ fetchImpl, feed, state })));
+      jobs.push(() => runSource(rssSourceId(feed), (state) => sources.fetchRss({
+        fetchImpl,
+        feed,
+        state: { etag: state.etag, lastModified: state.last_modified },
+      })));
     }
   }
   refreshPromise = (async () => {
