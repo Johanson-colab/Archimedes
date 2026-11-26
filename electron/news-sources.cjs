@@ -125,7 +125,7 @@ function makeItem(source, fields) {
     publishedAt: fields.publishedAt ? new Date(fields.publishedAt).toISOString() : "",
     score: Number(fields.score) || 0,
     comments: Number(fields.comments) || 0,
-    summary: truncate(stripHtml(fields.summary || ""), 460),
+    summary: truncate(fields.summaryIsText ? String(fields.summary || "").trim() : stripHtml(fields.summary || ""), 460),
     tags: normalizeTags(fields.tags),
     media: normalizeMedia(fields.media),
     native: fields.native && typeof fields.native === "object" ? fields.native : {},
@@ -244,7 +244,13 @@ function parseRssFeed(xml, { feedLabel = "" } = {}) {
         ? firstMatch(block, /<link[^>]*\bhref="([^"]+)"[^>]*\/?>/i) || firstMatch(block, /<link[^>]*>([^<]+)<\/link>/i)
         : firstMatch(block, /<link>\s*([^<]+?)\s*<\/link>/i);
       if (!title || !link) return null;
-      const rawDescription = firstMatch(block, /<content:encoded[^>]*>([\s\S]*?)<\/content:encoded>/i) || firstMatch(block, /<description[^>]*>([\s\S]*?)<\/description>/i) || firstMatch(block, /<summary[^>]*>([\s\S]*?)<\/summary>/i);
+      const encoded = firstMatch(block, /<content:encoded[^>]*>([\s\S]*?)<\/content:encoded>/i);
+      const atomSummary = isAtom ? block.match(/<summary([^>]*)>([\s\S]*?)<\/summary>/i) : null;
+      const atomSummaryType = atomSummary ? (firstMatch(atomSummary[1], /\btype="([^"]+)"/i) || "text").toLowerCase() : "";
+      const rawDescription = encoded || atomSummary?.[2] || firstMatch(block, /<description[^>]*>([\s\S]*?)<\/description>/i) || firstMatch(block, /<summary[^>]*>([\s\S]*?)<\/summary>/i);
+      // Atom summaries default to plain text. Decoding then stripping them as
+      // HTML would turn literal comparisons such as "a < b" into markup.
+      const summaryIsText = Boolean(atomSummary) && atomSummaryType === "text";
       // RSS descriptions can contain escaped HTML or an unescaped CDATA fragment.
       const summary = rawDescription.trimStart().startsWith("<![CDATA[") ? rawDescription : decodeEntities(rawDescription);
       const media = [];
@@ -256,7 +262,7 @@ function parseRssFeed(xml, { feedLabel = "" } = {}) {
       for (const match of block.matchAll(/<media:(?:content|thumbnail)[^>]*\burl="([^"]+)"[^>]*>/gi)) {
         media.push({ url: decodeEntities(match[1]) });
       }
-      const inlineImage = `${block} ${summary}`.match(/<img[^>]+src="([^"]+)"/i);
+      const inlineImage = `${block}${summaryIsText ? "" : ` ${summary}`}`.match(/<img[^>]+src="([^"]+)"/i);
       if (inlineImage) media.push({ url: decodeEntities(inlineImage[1]) });
       const published = firstMatch(block, /<pubDate[^>]*>([\s\S]*?)<\/pubDate>/i) || firstMatch(block, /<published[^>]*>([\s\S]*?)<\/published>/i) || firstMatch(block, /<updated[^>]*>([\s\S]*?)<\/updated>/i);
       const author = firstMatch(block, /<dc:creator[^>]*>([\s\S]*?)<\/dc:creator>/i) || firstMatch(block, /<author[\s\S]*?<name>([\s\S]*?)<\/name>/i);
@@ -266,6 +272,7 @@ function parseRssFeed(xml, { feedLabel = "" } = {}) {
         author: stripHtml(author),
         publishedAt: published ? new Date(published).toISOString() : "",
         summary,
+        summaryIsText,
         tags: feedLabel ? [feedLabel] : [],
         media,
         native: { feedLabel: feedLabel || feedTitle || "" },

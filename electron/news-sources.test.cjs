@@ -138,6 +138,14 @@ test("parseRssFeed handles Atom entries", () => {
   assert.equal(items[0].native.feedLabel, "Example feed");
 });
 
+test("Atom text summaries keep literal comparison operators", () => {
+  const feed = (attributes) => `<feed xmlns="http://www.w3.org/2005/Atom"><title>Lab</title><entry><title>Bounds</title><link href="https://lab.example/bounds" /><summary${attributes}>Bounds: a &lt; b and c &gt; d.</summary></entry></feed>`;
+  for (const attributes of ["", ' type="text"']) {
+    const [item] = parseRssFeed(feed(attributes));
+    assert.equal(item.summary, "Bounds: a < b and c > d.", attributes || "default type");
+  }
+});
+
 test("parseReddit keeps subreddit, flair, score and preview image", () => {
   const items = parseReddit({
     data: {
