@@ -96,7 +96,7 @@ function upsertItems(items) {
       title = excluded.title,
       url = excluded.url,
       author = excluded.author,
-      published_at = excluded.published_at,
+      published_at = CASE WHEN excluded.published_at = '' THEN news_items.published_at ELSE excluded.published_at END,
       fetched_at = excluded.fetched_at,
       score = excluded.score,
       comments = excluded.comments,

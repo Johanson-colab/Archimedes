@@ -467,12 +467,13 @@ async function fetchX({ fetchImpl = fetch, state = {}, bearerToken, query } = {}
   return result.notModified ? result : { ...result, items: parseX(result.json) };
 }
 
-async function fetchXWithTavily({ query, fetchImpl }) {
+async function fetchXWithTavily({ query, fetchImpl, apiKey }) {
   const domains = ["x.com", "twitter.com"];
-  const { results } = await searchWeb({ query, domains, includePublishedDate: true }, { provider: "tavily", fetchImpl });
+  const { results } = await searchWeb({ query, domains, includePublishedDate: true }, { provider: "tavily", fetchImpl, apiKey });
   const items = new Map();
   for (const result of results) {
-    const link = new URL(result.url);
+    let link;
+    try { link = new URL(result.url); } catch { continue; }
     const host = link.hostname.replace(/^www\./, "");
     if (link.protocol !== "https:" || !domains.includes(host)) continue;
     const post = link.pathname.match(/^\/(?:i\/(?:web\/)?status|([a-z0-9_]{1,15})\/status)\/(\d{1,20})(?:\/(?:photo|video)\/\d+)?\/?$/i);

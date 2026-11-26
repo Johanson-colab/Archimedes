@@ -133,6 +133,8 @@ function getSettings() {
 
 function setSettings(patch = {}) {
   const current = structuredClone(settingsOrDefaults());
+  const muteChanged = patch?.mute !== undefined
+    && JSON.stringify(cleanKeywords(patch.mute)) !== JSON.stringify(current.mute);
   const next = { ...current };
   if (patch && typeof patch === "object") {
     if (patch.view !== undefined) next.view = patch.view;
@@ -166,6 +168,7 @@ function setSettings(patch = {}) {
   }
   settings = normalizeSettings(next);
   persist();
+  if (muteChanged) invalidateValidators(settings.rssFeeds);
   return publicSettings();
 }
 
@@ -228,6 +231,15 @@ function rssSourceId(feed) {
   return `rss:${feed.url}`;
 }
 
+function invalidateValidators(feeds = []) {
+  // Muting filters ingested items, so a conditional 304 would otherwise keep a
+  // feed's stories hidden after the filter changes in either direction.
+  for (const id of [...SOURCE_IDS, ...feeds.map(rssSourceId)]) {
+    const state = newsStore.getSourceState(id);
+    if (state.etag || state.last_modified) newsStore.setSourceState(id, { etag: "", lastModified: "" });
+  }
+}
+
 function shouldRefresh(force) {
   if (force) return true;
   const current = settingsOrDefaults();
@@ -277,7 +289,7 @@ async function runSource(source, task) {
   }
 }
 
-async function refreshFeeds({ force, fetchImpl }) {
+async function refreshFeeds({ force, fetchImpl, cluster = true }) {
   if (!shouldRefresh(force)) return { skipped: true, results: [] };
   if (refreshPromise) return refreshPromise;
   const current = settingsOrDefaults();
@@ -308,7 +320,7 @@ async function refreshFeeds({ force, fetchImpl }) {
   }
   refreshPromise = (async () => {
     const results = await Promise.all(jobs.map((job) => job()));
-    if (settingsOrDefaults().clustering) computeClusters();
+    if (cluster && settingsOrDefaults().clustering) computeClusters();
     newsStore.prune();
     return { skipped: false, results };
   })();
@@ -321,14 +333,19 @@ async function refreshFeeds({ force, fetchImpl }) {
 
 async function refresh({ force = false, fetchImpl } = {}) {
   const current = settingsOrDefaults();
-  const feeds = refreshFeeds({ force, fetchImpl });
-  if (!force || !current.sources["x-tavily"] || !current.tavilyQuery) return feeds;
+  const searchesX = force && current.sources["x-tavily"] && current.tavilyQuery;
+  // Cluster once both feed and X inserts have finished so a slow Tavily search
+  // cannot leave its new posts without cross-source badges.
+  const feeds = refreshFeeds({ force, fetchImpl, cluster: !searchesX });
+  if (!searchesX) return feeds;
 
   // A click during an automatic RSS refresh must still search X. Repeated
   // clicks while that same search is running join its existing request.
   tavilyRefreshPromise ??= runSource("x-tavily", () => sources.fetchXWithTavily({ query: current.tavilyQuery, fetchImpl }))
     .finally(() => { tavilyRefreshPromise = null; });
   const [feedResult, searchResult] = await Promise.all([feeds, tavilyRefreshPromise]);
+  if (settingsOrDefaults().clustering) computeClusters();
+  newsStore.prune();
   return { skipped: false, results: [...feedResult.results, searchResult] };
 }
 

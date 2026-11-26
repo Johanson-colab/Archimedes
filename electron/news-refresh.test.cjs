@@ -59,6 +59,63 @@ test("a successful RSS subscription keeps its cache and validators when its neig
   assert.ok(offline.sources[0].subscriptions[0].lastSuccessAt);
 });
 
+test("changing mute filters invalidates validators so hidden or restored stories are fetched again", async (t) => {
+  profile(t);
+  const feed = { id: "lab-mute", label: "Lab mute", url: "https://lab.example/mute-rss" };
+  const etag = '"lab-mute-version"';
+  const xml = (titles) => `<rss><channel>${titles.map((title) => `<item><title>${title}</title><link>https://lab.example/${encodeURIComponent(title)}</link></item>`).join("")}</channel></rss>`;
+  let validator;
+  const fetchImpl = async (_url, { headers }) => {
+    validator = headers["If-None-Match"];
+    return new Response(xml(["Visible story", "Hidden story"]), { headers: { etag } });
+  };
+  news.setSettings({ sources: { ...disabledSources, rss: true }, rssFeeds: [feed], mute: ["hidden"] });
+  await news.refresh({ force: true, fetchImpl });
+  assert.equal(validator, undefined);
+  assert.deepEqual(news.list().items.map((item) => item.title), ["Visible story"]);
+  news.setSettings({ mute: [] });
+  await news.refresh({ force: true, fetchImpl });
+  assert.equal(validator, undefined);
+  assert.deepEqual(news.list().items.map((item) => item.title).sort(), ["Hidden story", "Visible story"]);
+});
+
+test("a date-less X refresh keeps the cached publication date", async (t) => {
+  profile(t);
+  webSearch.saveWebSearchConfig({ provider: "tavily", apiKey: "test-news-key" });
+  const published = new Date(Date.now() - 48 * 3600000).toISOString();
+  let includeDate = true;
+  const fetchImpl = async () => Response.json({
+    results: [{ title: "An older public post", url: "https://x.com/Lab/status/9876", ...(includeDate ? { published_date: published } : {}) }],
+  });
+  news.setSettings({ sources: { ...disabledSources, "x-tavily": true }, tavilyQuery: "older post" });
+  await news.refresh({ force: true, fetchImpl });
+  assert.equal(news.list({ source: "x-tavily", sinceHours: 168 }).items[0].publishedAt, published);
+  includeDate = false;
+  await news.refresh({ force: true, fetchImpl });
+  assert.equal(news.list({ source: "x-tavily", sinceHours: 168 }).items[0].publishedAt, published);
+  assert.equal(news.list({ source: "x-tavily", sinceHours: 24 }).items.length, 0);
+});
+
+test("X posts join cross-source clusters on the same refresh", async (t) => {
+  profile(t);
+  const feed = { id: "lab-cluster", label: "Lab cluster", url: "https://lab.example/cluster-rss" };
+  webSearch.saveWebSearchConfig({ provider: "tavily", apiKey: "test-news-key" });
+  const fetchImpl = async (url) => {
+    if (url === feed.url) return new Response('<rss><channel><item><title>A shared research story</title><link>https://lab.example/shared</link></item></channel></rss>');
+    if (url === "https://api.tavily.com/search") return Response.json({
+      results: [{ title: "A shared research story", url: "https://x.com/Lab/status/4321", published_date: new Date().toISOString() }],
+    });
+    throw new Error(`Unexpected request: ${url}`);
+  };
+  news.setSettings({ sources: { ...disabledSources, rss: true, "x-tavily": true }, rssFeeds: [feed], tavilyQuery: "shared story" });
+  await news.refresh({ force: true, fetchImpl });
+  const rss = news.list().items.find((item) => item.source === "rss");
+  const post = news.list().items.find((item) => item.source === "x-tavily");
+  assert.ok(rss && post);
+  assert.ok(rss.clusterId);
+  assert.equal(rss.clusterId, post.clusterId);
+});
+
 test("Tavily is opt-in and manual, and duplicate results and failed requests preserve saved X posts", async (t) => {
   profile(t);
   const query = "AI evaluation";
