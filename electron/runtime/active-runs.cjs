@@ -27,7 +27,7 @@ function listActiveRuns(domain) {
   return [...activeRuns.values()].filter(entry => !domain || entry.domain === domain).map(entry => entry.run);
 }
 
-function installQuitGuard({ app, dialog, hasWork, stopWork, timeoutMs = 2_000 }) {
+function installQuitGuard({ app, dialog, hasWork, stopWork, restoreWindow, timeoutMs = 2_000 }) {
   let asking = false;
   let allowQuit = false;
   let cleaning = false;
@@ -47,7 +47,13 @@ function installQuitGuard({ app, dialog, hasWork, stopWork, timeoutMs = 2_000 })
           defaultId: 0,
           cancelId: 0,
         });
-        if (response !== 1) return;
+        if (response !== 1) {
+          // On Windows/Linux the last window has already closed by the time
+          // this runs. Keep the active work reachable instead of leaving a
+          // windowless process behind.
+          restoreWindow?.();
+          return;
+        }
         allowQuit = true;
         app.quit();
       } catch (error) {

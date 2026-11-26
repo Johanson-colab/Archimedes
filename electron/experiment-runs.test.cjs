@@ -51,7 +51,7 @@ function experimentFor(projectId, threadId) {
   return { question, idea, experiment };
 }
 
-function createRun({ root, project, thread, experiment, command = "true" }) {
+function createRun({ root, project, thread, experiment, command = "true", ...extra }) {
   return store.createExperimentRun({
     projectId: project.id,
     threadId: thread.id,
@@ -60,6 +60,7 @@ function createRun({ root, project, thread, experiment, command = "true" }) {
     cwd: root,
     logPath: path.join(root, "run.log"),
     commitSha: "abc123",
+    ...extra,
   });
 }
 
@@ -106,6 +107,19 @@ test("runs retain the experiment and source idea revisions after later edits", a
     assert.equal(second.provenance.experimentRevisionId, revised.current_revision_id);
     assert.equal(second.provenance.ideas[0].revisionId, originalIdeaRevision);
     assert.equal(store.getExperimentRun(first.id).provenance.experimentRevisionId, originalExperimentRevision);
+  });
+});
+
+test("a run prepared for one experiment revision refuses a concurrent edit", async () => {
+  await withWorkspaceAsync(async ({ root, project }) => {
+    const thread = threadFor(project.id);
+    const { experiment } = experimentFor(project.id, thread.id);
+    const expectedRevisionId = experiment.current_revision_id;
+    graph.reviseNode({ nodeId: experiment.id, content: { hypothesis: "Changed while preparing" } });
+    await assert.rejects(
+      () => createRun({ root, project, thread, experiment, expectedRevisionId }),
+      /changed while its run was being prepared/,
+    );
   });
 });
 

@@ -2813,6 +2813,9 @@ app.on("activate", () => {
 });
 
 installQuitGuard({ app, dialog,
+  restoreWindow: () => {
+    if (BrowserWindow.getAllWindows().length === 0) createWindow(startupWorkspace());
+  },
   hasWork: () => listActiveRuns().length > 0 || agent.hasActiveAgentRuns(),
   stopWork: async () => {
     stoppingResearch = true;

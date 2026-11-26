@@ -91,6 +91,9 @@ async function startInWorkspace({
     throw new Error("The experiment does not belong to this session.");
   }
   if (node.archived || node.status === "retracted") throw new Error("Restore the experiment before starting a run.");
+  // Snapshot preparation awaits Git. Pin the plan revision so an edit made
+  // while the snapshot is being written cannot silently become the run's plan.
+  const expectedRevisionId = node.current_revision_id;
 
   const existing = store.listExperimentRuns({ nodeId });
   if (existing.some((run) => !TERMINAL.has(run.status))) {
@@ -125,6 +128,7 @@ async function startInWorkspace({
       codeSnapshot,
       logPath,
       verifyStart,
+      expectedRevisionId,
     });
   } catch (error) {
     fs.rmSync(directory, { recursive: true, force: true });

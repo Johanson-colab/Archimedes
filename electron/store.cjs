@@ -3514,6 +3514,7 @@ async function createExperimentRun({
   experimentWorkspaceId = null,
   codeSnapshot = null,
   verifyStart,
+  expectedRevisionId = null,
 } = {}) {
   if (!projectId || !threadId || !nodeId) throw new Error("A project, session, and experiment node are required to start a run.");
   if (!["starting", "running"].includes(status)) throw new Error("A new experiment run must start or run.");
@@ -3539,6 +3540,9 @@ async function createExperimentRun({
   if (node.kind !== "experiment") throw new Error("Only an experiment node can start a run.");
   if (node.project_id !== projectId || node.thread_id !== threadId) throw new Error("The experiment does not belong to this session.");
   if (node.archived || node.status === "retracted") throw new Error("Restore the experiment before starting a run.");
+  if (expectedRevisionId && node.current_revision_id !== expectedRevisionId) {
+    throw new Error("The experiment changed while its run was being prepared. Start the run again.");
+  }
   if (!canAccessProject(projectId, "editor")) throw new Error("You do not have permission to start this experiment.");
   const active = requireDatabase().prepare("SELECT id FROM experiment_runs WHERE node_id = ? AND status IN ('starting', 'running') LIMIT 1").get(nodeId);
   if (active) throw new Error("This experiment already has a run in progress.");
