@@ -19,10 +19,14 @@ const store = fs.readFileSync(path.join(root, "electron", "store.cjs"), "utf8");
 
 test("terminal lives in the right workbench instead of the bottom panel", () => {
   assert.match(app, /<RightWorkbench[\s\S]*?onWidthChange/);
-  assert.match(app, /<PanelRight size=\{17\}/);
   assert.doesNotMatch(app, /PanelBottom/);
   assert.match(app, /terminal: <TerminalPanel[\s\S]*?orientation="right"/);
   assert.match(workbench, /\{panels\[id\]\}/);
+});
+
+test("sidebar workbench toggle uses a directional arrow for each state", () => {
+  assert.match(app, /aria-label=\{workbenchOpen \? t\("Hide workbench"\) : t\("Show workbench"\)\}/);
+  assert.match(app, /aria-pressed=\{workbenchOpen\}>\s*\{workbenchOpen \? <ChevronLeft size=\{17\} \/> : <ChevronRight size=\{17\} \/>\}/);
 });
 
 test("workbench shares the sidebar top edge and overlays only on narrow screens", () => {
