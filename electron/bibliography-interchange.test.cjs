@@ -513,6 +513,15 @@ test("BibTeX preview and import keep distinct same-title works and match author 
   } finally { if (unmount) await unmount(); data.close(); }
 });
 
+test("a DOI alias retains corrected title metadata for a later identifier-free row", () => {
+  const batch = scope.parseBibliography([
+    "@article{first,title={Original title},author={Jane Doe},year={2023},doi={10.5555/alias}}",
+    "@article{alias,title={Corrected title},author={Jane Doe},year={2024},doi={10.5555/alias}}",
+    "@article{copy,title={Corrected title},author={Jane Doe},year={2024}}",
+  ].join("\n"));
+  assert.deepEqual([...scope.indexBibliographyBatch(batch.entries).repeatedRows], [1, 2]);
+});
+
 test("a DOI-matched row can connect a subsequent arXiv alias without hiding a conflicting DOI", () => {
   const batch = scope.parseBibliography([
     "@article{a,title={First title},doi={10.1000/first}}",

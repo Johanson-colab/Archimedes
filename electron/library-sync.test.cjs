@@ -170,6 +170,33 @@ test("a new title-only reference joins its legacy cloud record without joining a
   }
 });
 
+test("a title-only legacy cloud record joins a richer local import when its metadata is missing", async () => {
+  const root = workspace();
+  try {
+    const project = store.createResearchProject({ name: "Sparse legacy references" });
+    store.linkResearchProjectToCloud(project.id, "cloud-project");
+    const library = store.listLibraries(project.id)[0];
+    const api = fakeApi();
+    const remote = api.seedRemoteLibrary(library.name, {
+      canonical_key: "title:editorial", title: "Editorial",
+      notes: "Sparse cloud note", reading_status: "read", starred: true,
+      tags: ["checked"], state_updated_at: "2025-01-01T00:00:00.000Z",
+    });
+    store.linkLibraryToCloud(library.id, remote.id);
+    const [legacy] = await api.listPapers(remote.id);
+    const local = store.addPaper(library.id, { title: "Editorial", authors: ["Alex Morgan"], year: 2019 });
+    const result = await createLibrarySync({ store, api }).syncProjectLibraries(project.id);
+    assert.deepEqual(result.warnings, []);
+    assert.equal((await api.listPapers(remote.id)).length, 1);
+    const linked = store.getPaper(local.id);
+    assert.equal(linked.cloud_paper_id, legacy.id);
+    assert.equal(linked.notes, legacy.notes);
+    assert.equal(linked.reading_status, "read");
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("syncing an older cloud duplicate twice cannot overwrite a newer note on the original cloud paper", async () => {
   const root = workspace();
   try {

@@ -380,7 +380,7 @@ export function indexBibliographyBatch(entries: BibliographyEntry[]) {
     }
     if (representative) {
       repeatedRows.add(index);
-      if (titleKey) addIdentity(titleKey, representative);
+      if (titleKey) addIdentity(titleKey, { ...representative, ...paper });
       for (const [field, normalize] of identifierFields) {
         if (!paper[field] || representative[field]) continue;
         representative[field] = paper[field];

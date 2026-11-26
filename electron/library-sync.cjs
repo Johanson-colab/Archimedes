@@ -1,9 +1,16 @@
-const { canonicalTitleKey, identifier } = require("./bibliography-records.cjs");
+const { canonicalTitleKey, identifier, titleIdentity } = require("./bibliography-records.cjs");
 
 function titleFingerprint(paper) {
   if (!paper.canonical_key.startsWith("title:") || Object.entries(identifier).some(([key, normalize]) => normalize(paper[key]))) return null;
   const fingerprint = canonicalTitleKey(paper);
   return fingerprint === canonicalTitleKey({ title: paper.title }) ? null : fingerprint;
+}
+
+function metadataCompatible(left, right) {
+  if (left.year && right.year && left.year !== right.year) return false;
+  const names = (authors) => (Array.isArray(authors) ? authors : []).map((author) => String(author).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim()).filter(Boolean).sort().join("|");
+  const saved = names(left.authors), imported = names(right.authors);
+  return !saved || !imported || saved === imported || saved.endsWith("others") || imported.endsWith("others");
 }
 
 function hasInitialPaperState(paper) {
@@ -26,21 +33,31 @@ function createLibrarySync({ store, api } = {}) {
 
     async function matchingCloudTitlePaper(paper) {
       const fingerprint = titleFingerprint(paper);
-      if (!fingerprint) return null;
       // Read existing cloud references before uploading a title-only identity.
       // Enrichment can leave the saved key behind the current bibliographic metadata.
       visiblePapers ??= Promise.all(remoteLibraries.map(library => api.listPapers(library.id)))
         .then(lists => {
           const byKey = new Map(lists.flat().map(item => [item.canonical_key, item]));
           const byFingerprint = new Map();
+          const byTitle = new Map();
           for (const item of byKey.values()) {
             const identity = titleFingerprint(item);
             if (identity) byFingerprint.set(identity, byFingerprint.has(identity) ? null : item);
+            const titleKey = titleIdentity(item.title);
+            if (titleKey) byTitle.set(titleKey, [...(byTitle.get(titleKey) || []), item]);
           }
-          return { byKey, byFingerprint };
+          return { byKey, byFingerprint, byTitle };
         });
-      const { byKey, byFingerprint } = await visiblePapers;
-      return byKey.has(paper.canonical_key) ? null : byFingerprint.get(fingerprint) ?? null;
+      const { byKey, byFingerprint, byTitle } = await visiblePapers;
+      if (byKey.has(paper.canonical_key)) return null;
+      const fingerprintMatch = fingerprint ? byFingerprint.get(fingerprint) : null;
+      if (fingerprintMatch) return fingerprintMatch;
+      // A legacy cloud row may have only a title, or may lack author/year
+      // metadata that the fresh import now has. Fall back to an unambiguous
+      // metadata-compatible title match instead of uploading a duplicate.
+      const titleKey = titleIdentity(paper.title);
+      const legacy = titleKey ? (byTitle.get(titleKey) || []).filter((item) => item.canonical_key !== paper.canonical_key && metadataCompatible(item, paper)) : [];
+      return legacy.length === 1 ? legacy[0] : null;
     }
 
     // Local -> cloud: create missing cloud libraries and attach papers.
