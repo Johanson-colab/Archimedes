@@ -30,6 +30,7 @@ export const app: Record<string, string> = {
   "Choose your path": "选择你的路径",
   "Clear draft": "清空草稿",
   "Clear queue": "清空队列",
+  "Click to expand or collapse.": "单击可展开或收起。",
   "Close": "关闭",
   "Close all": "全部关闭",
   "Close others": "关闭其他",

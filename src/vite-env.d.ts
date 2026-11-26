@@ -26,6 +26,9 @@ type WorkbenchSettingsSnapshot = {
   layout?: WorkbenchLayoutSnapshot;
 };
 interface ResearchDeskBridge {
+    validateResearchApp: (workspace: string, id: string, backend?: string) => Promise<ResearchAppDeliveryStatus>;
+    cancelResearchAppValidation: (workspace: string, id: string) => Promise<{ cancelled: boolean }>;
+    restoreResearchApp: (workspace: string, id: string) => Promise<{ restored: boolean; fingerprint: string; recoveryPath: string }>;
     listResearchApps: (workspace: string) => Promise<GeneratedResearchApp[]>;
     setupResearchApp: (workspace: string, id: string) => Promise<{ installed: boolean; packages: string[] }>;
     runResearchAppAgent: (workspace: string, id: string, input: { backend: string; prompt: string }) => Promise<string>;
@@ -417,6 +420,7 @@ interface ExtensionSource {
   url: string;
   query?: string;
   token?: string;
+  hasToken?: boolean;
   enabled: boolean;
   builtin?: boolean;
   count?: number;
@@ -457,6 +461,15 @@ interface ExtensionMarketplaceItem {
   updateAvailable?: boolean;
 }
 
+interface ResearchAppDeliveryStatus {
+  status: "draft" | "preparing" | "checking" | "repairing" | "ready" | "needs-configuration" | "failed";
+  error: string;
+  attempts: number;
+  verifiedAt: string | null;
+  canRestore: boolean;
+  fingerprint: string;
+  checks: { path: string; status: number; passed: boolean }[];
+}
 interface ResearchAppRuntimeStatus {
   status: "stopped" | "starting" | "running" | "stopping" | "failed" | "invalid";
   url: string | null;
@@ -474,6 +487,9 @@ interface GeneratedResearchApp extends ResearchAppRuntimeStatus {
   agents?: string[];
   skills?: string[];
   needsSetup?: boolean;
+  frontend?: { kind: "react-vite" };
+  needsBuild?: boolean;
+  delivery?: ResearchAppDeliveryStatus;
   workspace: string;
   directory: string;
   installed: boolean;

@@ -27,3 +27,11 @@
 .research-app-error { padding: 12px 20px; margin: 0; color: var(--text-primary); border-bottom: 1px solid var(--border-default); font-size: 12px; white-space: pre-wrap; }
 .research-app-logs { max-height: 180px; overflow: auto; margin: 0; padding: 16px 20px; font-size: 11px; line-height: 1.6; background: var(--surface-panel); border-bottom: 1px solid var(--border-default); white-space: pre-wrap; overflow-wrap: anywhere; }
 .creator-apps-button { display: inline-flex; align-items: center; gap: 6px; float: right; margin-bottom: 10px; border: 0; padding: 6px 9px; border-radius: 6px; background: var(--surface-panel); color: var(--text-secondary); font: inherit; font-size: 12px; cursor: pointer; }
+
+.research-app-validation { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 10px 20px; border-bottom: 1px solid var(--border-default); color: var(--text-secondary); }
+.research-app-validation > span { display: inline-flex; align-items: center; gap: 8px; margin-right: auto; font-size: 13px; }
+.research-app-validation select { background: var(--surface-ground); color: var(--text-primary); border: 1px solid var(--border-default); border-radius: 6px; padding: 6px 8px; font: inherit; font-size: 12px; }
+
+.research-app-validation-details { padding: 8px 20px; border-bottom: 1px solid var(--border-default); color: var(--text-muted); font-size: 12px; }
+.research-app-validation-details summary { cursor: pointer; }
+.research-app-validation-details p { margin: 8px 0; overflow-wrap: anywhere; }
