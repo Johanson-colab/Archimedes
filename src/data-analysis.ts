@@ -84,6 +84,70 @@ export type PlotConfig = { type: "scatter" | "bar" | "line" | "histogram"; x: nu
 export type PlotPoint = { x: number; y: number; label: string; group: string; count?: number; row?: number };
 export type PlotResult = { points: PlotPoint[]; valid: number; omittedGroups: number; correlation: number | null };
 
+export function groupPlotPoints(points: PlotPoint[]) {
+  const groups = new Map<string, PlotPoint[]>();
+  for (const point of points) {
+    const group = groups.get(point.group) ?? [];
+    group.push(point);
+    groups.set(point.group, group);
+  }
+  return groups;
+}
+
+function sampleEvenly(points: PlotPoint[], count: number) {
+  if (points.length <= count) return points;
+  return Array.from({ length: count }, (_, i) => points[Math.floor(i * (points.length - 1) / (count - 1))]);
+}
+
+function sampleLinePoints(points: PlotPoint[], limit: number) {
+  const groups = [...groupPlotPoints(points).values()];
+  // Reserve each series' endpoints, then allocate the remaining positions by group size.
+  const reserved = groups.reduce((total, group) => total + Math.min(2, group.length), 0);
+  const sampled = new Set<PlotPoint>();
+  const remainingPoints = points.length - reserved;
+  const remainingSlots = limit - reserved;
+  let seen = 0;
+  let allocated = 0;
+  for (const group of groups) {
+    const endpoints = Math.min(2, group.length);
+    seen += group.length - endpoints;
+    const next = Math.floor(seen * remainingSlots / remainingPoints);
+    for (const point of sampleEvenly(group, endpoints + next - allocated)) sampled.add(point);
+    allocated = next;
+  }
+  return points.filter((point) => sampled.has(point));
+}
+
+function scatterCorrelation(points: PlotPoint[]) {
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const { x, y } of points) {
+    minX = Math.min(minX, x); maxX = Math.max(maxX, x);
+    minY = Math.min(minY, y); maxY = Math.max(maxY, y);
+  }
+  if (minX === maxX || minY === maxY) return null;
+
+  // Center before scaling to keep differences when values share a large offset.
+  // Halving the endpoints keeps the midpoint finite even at the numeric limits.
+  const originX = minX / 2 + maxX / 2, originY = minY / 2 + maxY / 2;
+  const scaleX = Math.max(maxX - originX, originX - minX);
+  const scaleY = Math.max(maxY - originY, originY - minY);
+  let sumX = 0, sumY = 0;
+  for (const { x, y } of points) {
+    sumX += (x - originX) / scaleX;
+    sumY += (y - originY) / scaleY;
+  }
+  const meanX = sumX / points.length, meanY = sumY / points.length;
+  let xx = 0, yy = 0, xy = 0;
+  for (const { x, y } of points) {
+    const dx = (x - originX) / scaleX - meanX;
+    const dy = (y - originY) / scaleY - meanY;
+    xx += dx * dx;
+    yy += dy * dy;
+    xy += dx * dy;
+  }
+  return Math.max(-1, Math.min(1, xy / Math.sqrt(xx * yy)));
+}
+
 /** Calculations use every valid row; only the scatter/line display is bounded. */
 export function buildPlot(dataset: Dataset, config: PlotConfig): PlotResult {
   const { type, x, y, group } = config;
@@ -124,17 +188,13 @@ export function buildPlot(dataset: Dataset, config: PlotConfig): PlotResult {
   }
   result.valid = all.length;
   if (type === "line") all.sort((a, b) => a.x - b.x);
-  if (type === "scatter" && all.length > 1) {
-    const mx = all.reduce((sum, point) => sum + point.x / all.length, 0), my = all.reduce((sum, point) => sum + point.y / all.length, 0);
-    let xx = 0, yy = 0, xy = 0;
-    for (const point of all) { xx += (point.x - mx) ** 2; yy += (point.y - my) ** 2; xy += (point.x - mx) * (point.y - my); }
-    result.correlation = xx && yy ? Math.max(-1, Math.min(1, xy / Math.sqrt(xx * yy))) : null;
-  }
+  if (type === "scatter" && all.length > 1) result.correlation = scatterCorrelation(all);
   const groups = [...new Set(all.map((point) => point.group))];
   const accepted = new Set(groups.slice(0, 6));
   result.omittedGroups = Math.max(0, groups.length - accepted.size);
   const filtered = all.filter((point) => accepted.has(point.group));
-  // Even spacing retains the extent of a time series instead of showing only its first rows.
-  result.points = filtered.length > 2000 ? Array.from({ length: 2000 }, (_, i) => filtered[Math.floor(i * (filtered.length - 1) / 1999)]) : filtered;
+  const limit = 2000;
+  result.points = type === "line" && accepted.size > 1 && filtered.length > limit
+    ? sampleLinePoints(filtered, limit) : sampleEvenly(filtered, limit);
   return result;
 }

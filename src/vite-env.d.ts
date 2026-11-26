@@ -26,6 +26,16 @@ type WorkbenchSettingsSnapshot = {
   layout?: WorkbenchLayoutSnapshot;
 };
 interface ResearchDeskBridge {
+    listResearchApps: (workspace: string) => Promise<GeneratedResearchApp[]>;
+    setupResearchApp: (workspace: string, id: string) => Promise<{ installed: boolean; packages: string[] }>;
+    runResearchAppAgent: (workspace: string, id: string, input: { backend: string; prompt: string }) => Promise<string>;
+    researchAppStatus: (workspace: string, id: string) => Promise<ResearchAppRuntimeStatus>;
+    startResearchApp: (workspace: string, id: string) => Promise<ResearchAppRuntimeStatus>;
+    stopResearchApp: (workspace: string, id: string) => Promise<ResearchAppRuntimeStatus>;
+    installResearchApp: (workspace: string, id: string) => Promise<GeneratedResearchApp[]>;
+    pinResearchApp: (workspace: string, id: string, pinned: boolean) => Promise<GeneratedResearchApp[]>;
+    removeResearchApp: (workspace: string, id: string) => Promise<GeneratedResearchApp[]>;
+    onResearchAppsChanged?: (callback: (event: { workspace: string }) => void) => () => void;
     platform?: string;
     getInitialWorkspace: () => Promise<string | null>;
     getLocalIdentity: () => Promise<LocalIdentity>;
@@ -161,7 +171,8 @@ interface ResearchDeskBridge {
   createComment: (input: { workspace?: string; projectId: string; resourceType: ResearchComment["resource_type"]; resourceId: string; body: string; parentId?: string | null; anchor?: Record<string, unknown> }) => Promise<ResearchComment | null>;
   resolveComment: (input: { workspace?: string; id: string; resolved?: boolean }) => Promise<ResearchComment | null>;
   deleteComment: (input: { workspace?: string; id: string }) => Promise<{ deleted: boolean }>;
-  createResearchThreadSnapshot: (threadId: string) => Promise<{ id: string; thread_id: string; project_id: string; sequence: number; created_at: string; manifest: Record<string, unknown> }>;
+  createResearchThreadSnapshot: (threadId: string, turnIds?: string[], includeSources?: boolean) => Promise<{ id: string; thread_id: string; project_id: string; sequence: number; created_at: string; manifest: Record<string, unknown> }>;
+  listResearchThreadSnapshotTurns: (threadId: string) => Promise<Array<{ id: string; user_message: string; created_at: string }>>;
   listResearchThreadSnapshots: (threadId: string) => Promise<Array<{ id: string; thread_id: string; project_id: string; owner_id: string; sequence: number; created_at: string }>>;
   getResearchThreadSnapshot: (snapshotId: string) => Promise<{ id: string; thread_id: string; project_id: string; sequence: number; created_at: string; manifest: Record<string, unknown> } | null>;
     deleteResearchThread: (id: string) => Promise<{ deleted: boolean }>;
@@ -279,6 +290,11 @@ interface ResearchDeskBridge {
     saveTask: (task: { prompt: string; response: string; status?: string }) => Promise<SavedTask>;
     runAgent: (input: { prompt: string; workspace: string; paperId?: string; threadId?: string; projectId?: string; workspaceId?: string; visibility?: "project" | "private"; mode: ResearchMode; researchSkill?: "idea-spark" | "paper-to-slides"; mineruToken?: string; reasoningEffort?: ReasoningEffort; contextLength?: ContextLength; contextItems?: ContextAttachment[]; capabilities?: { write: "ask" | "deny"; command: "ask" | "deny" }; origin?: "research" | "paper"; backend?: AgentBackendConfig["backend"]; modelProfileId?: string; nativeModel?: string; remoteServerId?: string; title?: string; clientRunId?: string }) => Promise<AgentRunResult>;
     getAgentBackendConfig: () => Promise<AgentBackendConfig>;
+    detectHarnessCli: (input: { backend: string; binary?: string }) => Promise<HarnessCliInstallation>;
+    installHarnessCli: (backend: string) => Promise<HarnessCliInstallation>;
+    getHarnessInstallStatus: (backend: string) => Promise<{ phase: string }>;
+    cancelHarnessInstall: (backend: string) => Promise<void>;
+    loginHarnessCli: (input: { backend: string; binary?: string }) => Promise<{ opened: boolean }>;
     saveAgentBackendConfig: (input: AgentBackendConfig) => Promise<AgentBackendConfig>;
     listCodexModelCatalog: (input: AgentBackendConfig) => Promise<{ models: NativeAgentModel[]; effectiveModelId?: string }>;
     listOpenCodeModelCatalog: (input: AgentBackendConfig & { workspace?: string }) => Promise<{ models: NativeAgentModel[] }>;
@@ -405,6 +421,7 @@ interface ExtensionSource {
   url: string;
   query?: string;
   token?: string;
+  hasToken?: boolean;
   enabled: boolean;
   builtin?: boolean;
   count?: number;
@@ -445,6 +462,28 @@ interface ExtensionMarketplaceItem {
   updateAvailable?: boolean;
 }
 
+interface ResearchAppRuntimeStatus {
+  status: "stopped" | "starting" | "running" | "stopping" | "failed" | "invalid";
+  url: string | null;
+  error: string;
+  logs: string;
+}
+interface GeneratedResearchApp extends ResearchAppRuntimeStatus {
+  id: string;
+  name: string;
+  description?: string;
+  version?: string;
+  category: import("./research-apps").ResearchAppCategory;
+  runtime?: { kind: "static" | "python-http"; entry: string };
+  environment?: string[];
+  agents?: string[];
+  skills?: string[];
+  needsSetup?: boolean;
+  workspace: string;
+  directory: string;
+  installed: boolean;
+  pinned: boolean;
+}
 interface SidebarPluginRecord {
   researchCategory?: import("./research-apps").ResearchAppCategory;
   id: string;
@@ -1781,7 +1820,7 @@ interface ResearchComment {
 interface ResearchThread {
   id: string;
   kind?: "research" | "paper";
-  harness?: "api" | "codex" | "claude" | "opencode" | null;
+  harness?: "api" | "codex" | "claude" | "opencode" | "antigravity" | null;
   project_id: string;
   owner_id?: string | null;
   visibility?: "project" | "private";
@@ -1950,7 +1989,7 @@ interface AgentAction {
   id: string;
   task_id: string;
   kind: "write" | "command";
-  payload: { path?: string; content?: string; command?: string; cwd?: string; managedByAgent?: boolean; remoteOperation?: "ssh_remote_exec" | "ssh_remote_read" | "ssh_remote_edit"; editPreview?: { before: string; after: string }; externalAgent?: "codex" | "claude" | "opencode"; change?: WorkspaceFileChange; changes?: WorkspaceFileChange[] };
+  payload: { path?: string; content?: string; command?: string; cwd?: string; managedByAgent?: boolean; remoteOperation?: "ssh_remote_exec" | "ssh_remote_read" | "ssh_remote_edit"; editPreview?: { before: string; after: string }; externalAgent?: "codex" | "claude" | "opencode" | "antigravity"; change?: WorkspaceFileChange; changes?: WorkspaceFileChange[] };
   status: "pending" | "approved" | "rejected";
   created_at: string;
   resolved_at: string | null;
@@ -1962,9 +2001,11 @@ interface AgentBackendProfile {
   effort?: string;
   permissionMode?: "read-only" | "workspace-write" | "ask" | "auto-review" | "full-access" | "accept-edits" | "plan" | "auto";
 }
+
+interface HarnessCliInstallation { installed: boolean; backend: string; binary?: string; version?: string; docsUrl: string; phase: string }
 interface AgentBackendConfig extends AgentBackendProfile {
-  backend: "api" | "codex" | "claude" | "opencode";
-  profiles?: Partial<Record<"codex" | "claude" | "opencode", AgentBackendProfile>>;
+  backend: "api" | "codex" | "claude" | "opencode" | "antigravity";
+  profiles?: Partial<Record<"codex" | "claude" | "opencode" | "antigravity", AgentBackendProfile>>;
 }
 
 interface NativeAgentModel { id: string; label: string; efforts?: string[]; defaultEffort?: string; isDefault?: boolean }

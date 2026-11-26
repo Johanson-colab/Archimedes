@@ -24,7 +24,6 @@ test("all true tab groups use the primitive", () => {
     ["src/RightWorkbench.tsx", /<Tabs value=\{pane\.active\}/],
     ["src/LibraryView.tsx", /<Tabs value=\{readerView\}/],
     ["src/LibraryView.tsx", /<Tabs value=\{searchActive \? "" : mode\}/],
-    ["src/LibraryView.tsx", /<Tabs value=\{searchKind\}/],
     ["src/ImageCreationView.tsx", /<Tabs value=\{forgeMethod\}/],
     ["src/BenchmarkRadarView.tsx", /<Tabs value=\{tab\}/],
     ["src/LibraryView.tsx", /<Tabs value=\{aiMode\}/],

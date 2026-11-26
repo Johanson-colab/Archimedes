@@ -1,21 +1,21 @@
 function opencodeLaunch({ config, root }) { return { backend: 'opencode', binary: config.binary || 'opencode', args: ['acp'], cwd: root }; }
-async function initializeOpenCode(client) {
+async function initializeOpenCode(client, name = 'OpenCode') {
   const result = await client.request('initialize', { protocolVersion: 1, clientInfo: { name: 'archimedes', version: '0.1.0' }, clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false } });
-  if (result?.protocolVersion !== 1) throw new Error('OpenCode does not support ACP protocol version 1.');
+  if (result?.protocolVersion !== 1) throw new Error(`${name} does not support ACP protocol version 1.`);
   return result;
 }
 function openCodeModels(result) {
   const option = result?.configOptions?.find(o => o.id === 'model');
   return (option?.options || []).filter(o => typeof o.value === 'string').slice(0, 1000).map(o => ({ id: o.value.slice(0, 300), label: String(o.name || o.value).slice(0, 300), efforts: [] }));
 }
-async function configureOpenCode(client, config, result, sessionId) {
+async function configureOpenCode(client, config, result, sessionId, name = 'OpenCode') {
   let options = result?.configOptions || [];
-  for (const [configId, value] of [['model', config.model], ['effort', config.effort]]) {
+  for (const [configId, value] of [['model', config.model], [name === 'Antigravity' ? 'thought_level' : 'effort', config.effort]]) {
     if (!value) continue;
     const option = options.find(o => o.id === configId);
-    if (!option?.options?.some(o => o.value === value)) throw new Error(`Selected OpenCode ${configId} is not advertised by its ACP session.`);
+    if (!option?.options?.some(o => o.value === value)) throw new Error(`Selected ${name} ${configId} is not advertised by its ACP session.`);
     const changed = await client.request('session/set_config_option', { sessionId, configId, value });
-    if (!changed?.configOptions?.some(o => o.id === configId && o.currentValue === value)) throw new Error(`OpenCode did not confirm the selected ${configId}.`);
+    if (!changed?.configOptions?.some(o => o.id === configId && o.currentValue === value)) throw new Error(`${name} did not confirm the selected ${configId}.`);
     options = changed.configOptions;
   }
 }

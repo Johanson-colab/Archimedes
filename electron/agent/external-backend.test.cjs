@@ -12,6 +12,16 @@ class Fixture extends EventEmitter {
   request(method,params){this.sent.push({method,params});if(method==='initialize')return Promise.resolve({models:[{value:'sonnet',displayName:'Sonnet',supportedEffortLevels:['low','medium','high']}]});return Promise.resolve({});}
 }
 function options(backend='claude') { const saves=[],events=[];return {config:{backend,binary:process.execPath,permissionMode:'ask'},workspace:process.cwd(),thread:{id:'local',turns:[]},turn:{id:'turn',user_message:'hi'},emit:e=>events.push(e),bindings:{get:()=>null,save:b=>saves.push(b)},Client:Fixture,saves,events}; }
+test('Claude Create receives targeted capability retrieval without installing global skills',async t=>{
+ const o=options();o.workspace=fs.mkdtempSync(path.join(os.tmpdir(),'archimedes-claude-create-'));
+ t.after(()=>fs.rmSync(o.workspace,{recursive:true,force:true}));
+ o.thread.mode='create';o.turn.mode='create';
+ assert.equal(await runNative(o),'Hello');
+ const text=Fixture.last.sent.find(m=>m.type==='user').message.content[0].text;
+ assert.match(text,/creator-capabilities-cli.cjs/);
+ assert.match(text,/zero, one or multiple/);
+ assert.deepEqual(fs.readdirSync(o.workspace),[]);
+});
 test('external resume requires backend workspace model and completed local turn',()=>{
  const b={backend:'claude',native_thread_id:'id',workspace:'/x',model:'m',last_turn_id:'t'};
  assert.equal(canResumeExternal(b,{backend:'claude',workspace:'/x',model:'m',previousTurnId:'t'}),true);
@@ -37,9 +47,9 @@ class ACPFixture extends Fixture {
     if(method==='initialize')return Promise.resolve({protocolVersion:1,agentCapabilities:{loadSession:true,promptCapabilities:{image:true}}});
     if(method==='session/new'||method==='session/load') {
       queueMicrotask(()=>this.emit('message',{method:'session/update',params:{sessionId:'native-acp',update:{sessionUpdate:'agent_message_chunk',content:{type:'text',text:'OLD REPLAY'}}}}));
-      return Promise.resolve({sessionId:'native-acp',configOptions:[{id:'model',options:[{value:'p/model'}]}]});
+      return Promise.resolve({sessionId:'native-acp',configOptions:[{id:'model',options:[{value:'p/model'}]},{id:'mode',currentValue:'default',options:['default','accept-edits','auto','plan'].map(value=>({value}))},{id:'thought_level',currentValue:'high',options:['low','medium','high','xhigh'].map(value=>({value}))}]});
     }
-    if(method==='session/set_config_option')return Promise.resolve({configOptions:[{id:params.configId,currentValue:params.value,options:[{value:params.value}]}]});
+    if(method==='session/set_config_option')return Promise.resolve({configOptions:[{id:'model',currentValue:params.configId==='model'?params.value:'p/model',options:[{value:'p/model'}]},{id:'thought_level',currentValue:params.configId==='thought_level'?params.value:'high',options:['low','medium','high','xhigh'].map(value=>({value}))},{id:'mode',currentValue:params.configId==='mode'?params.value:'default',options:['default','accept-edits','auto','plan'].map(value=>({value}))}]});
     if(method==='session/prompt'){
       assert.equal(this.options.backend,'opencode');
       this.emit('message',{method:'session/update',params:{sessionId:'native-acp',update:{sessionUpdate:'agent_thought_chunk',content:{type:'text',text:'PRIVATE'}}}});
@@ -49,6 +59,65 @@ class ACPFixture extends Fixture {
     return Promise.resolve({});
   }
 }
+test('Antigravity uses agy ACP, validates models, streams and resumes its own session', async () => {
+ class AntigravityFixture extends ACPFixture {
+  request(method, params) {
+   if (method !== 'session/prompt') return super.request(method, params);
+   this.sent.push({method, params});
+   assert.equal(this.options.backend, 'antigravity');
+   this.emit('message',{method:'session/update',params:{sessionId:'native-acp',update:{sessionUpdate:'agent_message_chunk',content:{type:'text',text:'Antigravity answer'}}}});
+   return Promise.resolve({stopReason:'end_turn'});
+  }
+ }
+ const o=options('antigravity');o.Client=AntigravityFixture;o.config.binary='agy';o.config.model='p/model';
+ assert.equal(await runNative(o),'Antigravity answer');
+ assert.equal(Fixture.last.options.binary,'agy');assert.deepEqual(Fixture.last.options.args,['acp']);
+ assert.equal(o.saves.at(-1).backend,'antigravity');
+ assert.ok(Fixture.last.sent.some(m=>m.method==='session/set_config_option'));
+ assert.ok(o.events.some(e=>e.type==='assistant_delta' && e.delta==='Antigravity answer'));
+ const prior=o.saves.at(-1);o.bindings.get=()=>prior;o.thread.turns=[{id:'turn'}];o.turn={id:'second',user_message:'next'};
+ assert.equal(await runNative(o),'Antigravity answer');
+ assert.ok(Fixture.last.sent.some(m=>m.method==='session/load'));
+});
+test('Antigravity connection check creates an ACP session without asking for inference', async () => {
+ const c=await checkNative({backend:'antigravity',binary:'agy'},{Client:ACPFixture});
+ assert.equal(c.ready,true);assert.equal(c.models[0].id,'p/model');
+ assert.equal(Fixture.last.sent.some(m=>m.method==='session/prompt'),false);assert.equal(Fixture.last.closed,true);
+});
+test('Antigravity forwards native tool approval and respects denial', async () => {
+ class PermissionFixture extends ACPFixture {
+  request(method, params) {
+   if (method !== 'session/prompt') return super.request(method, params);
+   this.sent.push({method, params});
+   return new Promise(resolve => {
+    this.finishPrompt=resolve;
+    this.emit('message',{jsonrpc:'2.0',id:7,method:'session/request_permission',params:{sessionId:'native-acp',toolCall:{title:'Run command',kind:'execute',rawInput:{command:'pwd'}},options:[{kind:'allow_once',optionId:'yes'},{kind:'reject_once',optionId:'no'}]}});
+   });
+  }
+  respond(id, result) {
+   this.sent.push({id,result});
+   this.emit('message',{method:'session/update',params:{sessionId:'native-acp',update:{sessionUpdate:'agent_message_chunk',content:{type:'text',text:'Denied'}}}});
+   this.finishPrompt({stopReason:'end_turn'});
+  }
+ }
+ const o=options('antigravity');o.Client=PermissionFixture;o.config.binary='agy';
+ let requested;o.approve=async request=>{requested=request;return false;};
+ assert.equal(await runNative(o),'Denied');
+ assert.match(requested.command,/pwd/);
+ assert.equal(requested.nativeMethod,'antigravity/tool');
+ assert.equal(Fixture.last.sent.find(m=>m.id===7).result.outcome.optionId,'no');
+});
+test('OpenCode Create receives the same capability entry through ACP',async t=>{
+ const o=options('opencode');o.Client=ACPFixture;
+ o.workspace=fs.mkdtempSync(path.join(os.tmpdir(),'archimedes-opencode-create-'));
+ t.after(()=>fs.rmSync(o.workspace,{recursive:true,force:true}));
+ o.thread.mode='create';o.turn.mode='create';
+ assert.equal(await runNative(o),'ACP answer');
+ const text=Fixture.last.sent.find(m=>m.method==='session/prompt').params.prompt[0].text;
+ assert.match(text,/creator-capabilities-cli.cjs/);
+ assert.match(text,/direct APIs\/links or deterministic scripts/);
+ assert.deepEqual(fs.readdirSync(o.workspace),[]);
+});
 test('Claude maps native effort and permission selections onto its CLI flags', async () => {
  const o=options();o.config.model='sonnet';o.config.effort='high';o.config.permissionMode='accept-edits';
  assert.equal(await runNative(o),'Hello');
@@ -220,4 +289,74 @@ test('native adapters reserve a shared saved session before connecting a copied 
     await first;
     assert.equal(await runNative(copy), backend === 'claude' ? 'Hello' : 'ACP answer');
   }
+});
+
+test('Antigravity applies each advertised native permission mode before delivering the prompt', async () => {
+ for (const mode of ['ask', 'accept-edits', 'auto', 'plan']) {
+  class PermissionFixture extends ACPFixture {
+   request(method, params) {
+    if (method !== 'session/prompt') return super.request(method, params);
+    this.sent.push({method, params});
+    this.emit('message',{method:'session/update',params:{sessionId:'native-acp',update:{sessionUpdate:'agent_message_chunk',content:{type:'text',text:'Ready'}}}});
+    return Promise.resolve({stopReason:'end_turn'});
+   }
+  }
+  const o=options('antigravity');o.Client=PermissionFixture;o.config.permissionMode=mode;
+  assert.equal(await runNative(o),'Ready');
+  const messages=Fixture.last.sent;
+  const setting=messages.findIndex(m=>m.method==='session/set_config_option'&&m.params.configId==='mode');
+  assert.ok(setting>=0&&setting<messages.findIndex(m=>m.method==='session/prompt'));
+  assert.equal(messages[setting].params.value,mode==='ask'?'default':mode);
+ }
+});
+test('Antigravity never starts inference when its CLI cannot apply the chosen permissions', async () => {
+ for (const advertised of [false,true]) {
+  class UnsupportedMode extends ACPFixture {
+   async request(method, params) {
+    const result=await super.request(method,params);
+    if ((method==='session/new'&&!advertised)||method==='session/set_config_option') return {...result,configOptions:[]};
+    return result;
+   }
+  }
+  const o=options('antigravity');o.Client=UnsupportedMode;o.config.permissionMode='plan';
+  await assert.rejects(runNative(o),/permission mode/);
+  assert.equal(Fixture.last.sent.some(m=>m.method==='session/prompt'),false);
+  assert.equal(o.saves.length,0);
+ }
+});
+
+test('Antigravity applies its native thought_level before a prompt and on connection check', async () => {
+ class ThoughtFixture extends ACPFixture {
+  request(method, params) {
+   if (method !== 'session/prompt') return super.request(method, params);
+   this.sent.push({method,params});
+   this.emit('message',{method:'session/update',params:{sessionId:'native-acp',update:{sessionUpdate:'agent_message_chunk',content:{type:'text',text:'Ready'}}}});
+   return Promise.resolve({stopReason:'end_turn'});
+  }
+ }
+ const o=options('antigravity');o.Client=ThoughtFixture;o.config.model='p/model';o.config.effort='xhigh';
+ assert.equal(await runNative(o),'Ready');
+ const sent=Fixture.last.sent, thought=sent.findIndex(m=>m.method==='session/set_config_option'&&m.params.configId==='thought_level');
+ assert.equal(sent[thought].params.value,'xhigh');
+ assert.ok(thought>sent.findIndex(m=>m.method==='session/set_config_option'&&m.params.configId==='model'));
+ assert.ok(thought<sent.findIndex(m=>m.method==='session/prompt'));
+ assert.equal((await checkNative(o.config,{Client:ThoughtFixture})).ready,true);
+ assert.ok(Fixture.last.sent.some(m=>m.method==='session/set_config_option'&&m.params.configId==='thought_level'&&m.params.value==='xhigh'));
+});
+
+test('Antigravity refuses unsupported or unconfirmed thought levels before inference', async () => {
+ for(const supported of [false,true]) {
+  class UnsupportedThought extends ACPFixture {
+   async request(method,params) {
+    const result=await super.request(method,params);
+    if(method==='session/new'&&!supported) result.configOptions=result.configOptions.filter(option=>option.id!=='thought_level');
+    if(method==='session/set_config_option'&&params.configId==='thought_level'&&supported) result.configOptions.find(option=>option.id==='thought_level').currentValue='high';
+    return result;
+   }
+  }
+  const o=options('antigravity');o.Client=UnsupportedThought;o.config.effort='xhigh';
+  await assert.rejects(runNative(o),/thought_level/);
+  assert.equal(Fixture.last.sent.some(m=>m.method==='session/prompt'),false);
+  assert.equal((await checkNative(o.config,{Client:UnsupportedThought})).ready,false);
+ }
 });

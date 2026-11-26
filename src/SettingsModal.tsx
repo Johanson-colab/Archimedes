@@ -73,6 +73,7 @@ type SettingsModalProps = {
   onSignUp: (email: string, password: string, displayName?: string) => Promise<AuthState>;
   onSignOut: () => Promise<AuthState>;
   onOpenAuth: (mode?: "choice" | "password" | "signup" | "reset") => void;
+  onOpenCreatedApps?: () => void;
   onPluginsChanged?: () => void;
   disabledCoreModules: string[];
   onCoreModuleEnabled: (id: string, enabled: boolean) => Promise<void> | void;
@@ -123,6 +124,7 @@ export default function SettingsModal({
   onSignUp,
   onSignOut,
   onOpenAuth,
+  onOpenCreatedApps,
   onPluginsChanged,
   disabledCoreModules,
   onCoreModuleEnabled,
@@ -205,7 +207,7 @@ export default function SettingsModal({
             onSessionToolsChange={onSessionToolsChange}
           />}
           {location.section === "models" && <ModelSettingsModal bridge={bridge} open embedded onClose={() => undefined} onSaved={onModelSaved} executionPreferences={executionPreferences} workspace={modelWorkspace || workspace} />}
-          {location.section === "plugins" && <PluginsSettingsPanel bridge={bridge} workspace={workspace} onPluginsChanged={onPluginsChanged} disabledCoreModules={disabledCoreModules} onCoreModuleEnabled={onCoreModuleEnabled} />}
+          {location.section === "plugins" && <PluginsSettingsPanel onOpenCreatedApps={onOpenCreatedApps} bridge={bridge} workspace={workspace} onPluginsChanged={onPluginsChanged} disabledCoreModules={disabledCoreModules} onCoreModuleEnabled={onCoreModuleEnabled} />}
           {location.section === "workspace" && <WorkspaceSettingsHub
             view={subview}
             workspace={workspace}
