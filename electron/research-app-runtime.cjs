@@ -36,15 +36,20 @@ function readApp(workspace, id) {
   const manifestFile = localFile(directory, MANIFEST);
   if (fs.statSync(manifestFile).size > 16000) throw new Error("Research App manifest is too large.");
   const source = JSON.parse(fs.readFileSync(manifestFile, "utf8"));
-  if (Object.keys(source).some((field) => !["schemaVersion", "id", "name", "description", "version", "category", "runtime", "environment", "agents", "skills"].includes(field)) || !source.runtime || Object.keys(source.runtime).some((field) => !["kind", "entry"].includes(field))) throw new Error("Unsupported Research App manifest field.");
+  if (Object.keys(source).some((field) => !["schemaVersion", "id", "name", "description", "version", "category", "runtime", "environment", "agents", "skills", "frontend"].includes(field)) || !source.runtime || Object.keys(source.runtime).some((field) => !["kind", "entry"].includes(field))) throw new Error("Unsupported Research App manifest field.");
   if (source.schemaVersion !== 1 || source.id !== id || !CATEGORIES.has(source.category)) throw new Error("Invalid Research App manifest or category.");
   if (typeof source.name !== "string" || !source.name.trim() || source.name.length > 80) throw new Error("Research App needs a name.");
   if (source.description !== undefined && (typeof source.description !== "string" || source.description.length > 500)) throw new Error("Research App description must be bounded text.");
   if (source.version !== undefined && (typeof source.version !== "string" || source.version.length > 40)) throw new Error("Research App version must be bounded text.");
   if (!["static", "python-http"].includes(source.runtime?.kind)) throw new Error("Use a static or python-http App runtime.");
   const entry = source.runtime.entry;
+  const frontend = source.frontend;
+  if (frontend !== undefined && (!frontend || frontend.kind !== "react-vite" || Object.keys(frontend).some(key => key !== "kind"))) throw new Error("Unsupported App frontend.");
   if (source.runtime.kind === "static" && !entry?.startsWith("public/")) throw new Error("Static App entry must be inside public/.");
-  localFile(directory, entry);
+  if (!frontend || source.runtime.kind === "python-http" || fs.existsSync(path.join(directory, entry))) localFile(directory, entry);
+  else if (entry !== "public/index.html") throw new Error("React App entry must be public/index.html.");
+  if (frontend && source.runtime.kind === "static" && entry !== "public/index.html") throw new Error("React App entry must be public/index.html.");
+  if (frontend) { localFile(directory, "package.json"); localFile(directory, "package-lock.json"); localFile(directory, "src/main.tsx"); }
   if (!(source.runtime.kind === "static" ? entry.endsWith(".html") : entry.endsWith(".py"))) throw new Error("App entry must be HTML or Python for the selected runtime.");
   const environment = source.environment ?? [];
   if (!Array.isArray(environment) || environment.length > 10 || new Set(environment).size !== environment.length || environment.some((name) => typeof name !== "string" || !/^[A-Z][A-Z0-9_]{0,100}_(?:API_KEY|TOKEN)$/.test(name) || name.startsWith("ARCHIMEDES_") || name.startsWith("PYTHON") || name.startsWith("PIP_"))) throw new Error("App environment entries must be unique API key or token names.");
@@ -57,27 +62,32 @@ function readApp(workspace, id) {
     for (const part of [path.join(directory, ".capabilities"), path.join(directory, ".capabilities", skill), skillPath]) if (fs.lstatSync(part).isSymbolicLink()) throw new Error("Linked App skill files are not supported.");
     if (!fs.statSync(skillPath).isFile() || fs.statSync(skillPath).size > 128000) throw new Error("App skill file is unavailable or too large.");
   }
-  const needsSetup = source.runtime.kind === "python-http" && !fs.lstatSync(path.join(directory, ".venv"), { throwIfNoEntry: false });
-  return { id, name: source.name.trim(), description: String(source.description || "").slice(0, 500), version: String(source.version || "0.1.0").slice(0, 40), category: source.category, runtime: { kind: source.runtime.kind, entry }, environment, agents, skills, needsSetup, workspace: root, directory };
+  const needsSetup = source.runtime.kind === "python-http" && !fs.statSync(path.join(directory, ".venv", process.platform === "win32" ? "Scripts/python.exe" : "bin/python"), { throwIfNoEntry: false })?.isFile();
+  const app = { id, name: source.name.trim(), description: String(source.description || "").slice(0, 500), version: String(source.version || "0.1.0").slice(0, 40), category: source.category, runtime: { kind: source.runtime.kind, entry }, environment, agents, skills, needsSetup, frontend, workspace: root, directory };
+  app.needsBuild = Boolean(frontend && !require("./research-app-frontend.cjs").buildStatus(app).current);
+  return app;
 }
-function fingerprint(app) {
-  const h = createHash("sha256");
-  let count = 0, bytes = 0;
+function sourceFiles(app) {
+  const files = []; let bytes = 0;
   function visit(directory) {
     for (const entry of fs.readdirSync(directory, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+      if (app.frontend && directory === app.directory && entry.name === "public") continue;
       if (SKIP.has(entry.name) || (entry.name.startsWith(".") && entry.name !== ".capabilities")) continue;
       const file = path.join(directory, entry.name);
       if (entry.isSymbolicLink()) throw new Error("Linked App source files are not supported.");
       if (entry.isDirectory()) visit(file);
       else if (entry.isFile()) {
-        const size = fs.statSync(file).size;
-        count++; bytes += size;
-        if (count > 1600 || bytes > 16_000_000) throw new Error("App source exceeds the review limit. Keep datasets and generated outputs outside the App source folder.");
-        h.update(path.relative(app.directory, file)); h.update("\0"); h.update(fs.readFileSync(file));
+        bytes += fs.statSync(file).size;
+        if (files.length >= 1600 || bytes > 16_000_000) throw new Error("App source exceeds the review limit. Keep datasets and generated outputs outside the App source folder.");
+        files.push({ path: path.relative(app.directory, file), content: fs.readFileSync(file), mode: fs.statSync(file).mode & 0o777 });
       }
     }
   }
-  visit(app.directory);
+  visit(app.directory); return files;
+}
+function fingerprint(app) {
+  const h = createHash("sha256");
+  for (const file of sourceFiles(app)) { h.update(file.path); h.update("\0"); h.update(file.content); }
   return h.digest("hex");
 }
 function readState(root) {
@@ -110,7 +120,7 @@ async function availablePort() {
   await new Promise((resolve) => server.close(resolve));
   return port;
 }
-function createResearchAppRuntime({ approve = async () => false, readSecret = () => "", changed = () => {}, startupTimeoutMs = 45000, healthIntervalMs = 4000 } = {}) {
+function createResearchAppRuntime({ approve = async () => false, readSecret = () => "", changed = () => {}, startupTimeoutMs = 45000, healthIntervalMs = 4000, validation = false } = {}) {
   const runs = new Map();
   const key = (root, id) => {
     let canonical;
@@ -130,8 +140,8 @@ function createResearchAppRuntime({ approve = async () => false, readSecret = ()
       if (!fs.existsSync(path.join(root, "research-apps", entry.name, MANIFEST))) return [];
       try {
         const app = readApp(root, entry.name);
-        return [{ ...app, installed: Boolean(installed), pinned: Boolean(installed?.pinned), ...status(root, app.id) }];
-      } catch (error) { return [{ id: entry.name, name: entry.name, category: "evidence", installed: Boolean(installed), pinned: false, error: error.message, status: "invalid", url: null, logs: "", workspace: root, directory: path.join(root, "research-apps", entry.name) }]; }
+        return [{ ...app, installed: Boolean(installed), pinned: Boolean(installed?.pinned), delivery: require("./research-app-delivery-store.cjs").deliveryStatus(app), ...status(root, app.id) }];
+      } catch (error) { return [{ id: entry.name, name: entry.name, category: "evidence", installed: Boolean(installed), pinned: false, error: error.message, status: "invalid", url: null, logs: "", delivery: { status: "failed", error: error.message, canRestore: require("./research-app-delivery-store.cjs").recoveryAvailable(root, entry.name) }, workspace: root, directory: path.join(root, "research-apps", entry.name) }]; }
     });
   }
   async function consent(app, operation) {
@@ -144,7 +154,11 @@ function createResearchAppRuntime({ approve = async () => false, readSecret = ()
   }
   async function install(workspace, id, pinned = true) {
     const app = readApp(workspace, id);
+    if (app.needsBuild) throw new Error("Build and validate this App frontend before installing it.");
+    if (app.needsSetup) throw new Error("Set up this App's Python environment before installing it.");
+    require("./research-app-delivery-store.cjs").requireVerified(app);
     const signature = await consent(app, "install");
+    require("./research-app-delivery-store.cjs").requireVerified(readApp(workspace, id));
     const state = readState(app.workspace);
     state.apps[id] = { fingerprint: signature, pinned: Boolean(pinned), installedAt: new Date().toISOString() };
     writeState(app.workspace, state); changed(app.workspace);
@@ -178,7 +192,7 @@ function createResearchAppRuntime({ approve = async () => false, readSecret = ()
         run.child.once("exit", () => { clearTimeout(timer); resolve(); }); kill("SIGTERM");
       });
     }
-    run.status = "stopped"; run.url = null; notify(run);
+    run.status = "stopped"; run.url = null; run.error = ""; notify(run);
     return publicRun(run);
   }
   async function remove(workspace, id) {
@@ -195,6 +209,8 @@ function createResearchAppRuntime({ approve = async () => false, readSecret = ()
     const run = { app, status: "starting", token: randomBytes(24).toString("hex"), logs: "", error: "", url: null, controller: new AbortController() };
     runs.set(runKey, run); notify(run);
     try {
+      if (!validation && app.needsBuild) throw new Error("Build this App frontend before previewing it.");
+      if (!validation && readState(app.workspace).apps[app.id]) require("./research-app-delivery-store.cjs").requireVerified(app);
       await consent(app, "start");
       if (run.controller.signal.aborted) throw new Error("App startup was cancelled.");
       if (app.runtime.kind === "static") {
@@ -275,4 +291,4 @@ function createResearchAppRuntime({ approve = async () => false, readSecret = ()
   async function shutdown() { await Promise.all([...runs.values()].map((run) => stop(run.app.workspace, run.app.id))); }
   return { list, start, stop, status, install, pin, remove, shutdown };
 }
-module.exports = { createResearchAppRuntime, readApp, fingerprint, MANIFEST };
+module.exports = { createResearchAppRuntime, readApp, fingerprint, sourceFiles, MANIFEST };
