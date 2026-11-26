@@ -205,6 +205,7 @@ export const app: Record<string, string> = {
   "The workspace data folder moved while work was still running. Let it finish or stop it in the original window, then reopen the moved folder.": "任务仍在运行时，工作区的数据文件夹已被移动。请等待任务完成，或在原窗口停止任务，然后重新打开移动后的文件夹。",
   "The workspace database was replaced while work was still running. Reopen the folder after that work finishes.": "工作区数据库已被替换。请等待正在运行的任务结束后，重新打开此文件夹。",
   "The workspace database was replaced. Reopen the folder to load the new data.": "工作区数据库已被替换。请重新打开此文件夹，加载新的数据。",
+  "The workspace open request is no longer current.": "工作区打开请求已失效。",
   "Thinking effort": "思考强度",
   "This research database is already open from another workspace folder.": "此研究数据库已从另一个工作区文件夹打开。",
   "Trajectory": "轨迹",
