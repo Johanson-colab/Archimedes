@@ -26,7 +26,7 @@ if (process.versions.electron) {
     try {
       const css = ['tokens.css', 'styles.css', 'research-app-runtime.css'].map(file => fs.readFileSync(path.join(root, 'src', file), 'utf8')).join('\n');
       for (const version of ['before', 'after']) {
-        const scope = { React, ...React, ...require('lucide-react'), useUISettings: () => ({ t: value => value }), researchAppCategories: [] };
+        const scope = { researchAppContext: () => ({ type: "archimedes:context", theme: "paper", tokens: {} }), React, ...React, ...require('lucide-react'), useUISettings: () => ({ t: value => value }), researchAppCategories: [] };
         for (const name of ['StateView', 'ResearchAppsView']) {
           let source = version === 'before' && name === 'ResearchAppsView' ? execFileSync('git', ['show', 'b7b3a46:src/ResearchAppsView.tsx'], { cwd: root, encoding: 'utf8' }) : fs.readFileSync(path.join(root, `src/${name}.tsx`), 'utf8');
           source = source.replace(/^import .*?;\r?\n/gm, '').replace(/export default function/g, 'function').replace(/export function/g, 'function');

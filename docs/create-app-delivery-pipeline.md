@@ -17,6 +17,8 @@ After a Create turn, the desktop compares generated App fingerprints and validat
 
 ## Standard scaffolds
 
+The default frontend is now the [React/TypeScript/Vite foundation](create-react-template.md), including host theme/components and a controlled SDK. The plain template described below remains an explicit compatibility option.
+
 The native/API harness can use its approved command tool:
 
 ```sh

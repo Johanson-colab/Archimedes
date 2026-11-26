@@ -6,10 +6,10 @@ const { JSDOM } = require("jsdom");
 let React, createRoot, View, dom;
 before(async () => {
   dom = new JSDOM('<div id="root"></div>', { url: "http://localhost:5173/" });
-  for (const key of ["window", "document", "HTMLElement", "Node"]) global[key] = dom.window[key];
+  for (const key of ["window", "document", "HTMLElement", "Node", "MutationObserver"]) global[key] = dom.window[key];
   global.IS_REACT_ACT_ENVIRONMENT = true;
   React = require("react"); ({ createRoot } = require("react-dom/client"));
-  const scope = { React, ...React, ...require("lucide-react"), useUISettings: () => ({ t: (value) => value }), researchAppCategories: [{ id: "analysis", label: "Analysis & visualization" }] };
+  const scope = { researchAppContext: () => ({ type: "archimedes:context", theme: document.documentElement.dataset.theme || "paper", tokens: {}, language: "en" }), React, ...React, ...require("lucide-react"), useUISettings: () => ({ t: (value) => value }), researchAppCategories: [{ id: "analysis", label: "Analysis & visualization" }] };
   const { transformWithOxc } = await import("vite");
   for (const [name, exports] of [["StateView", "StateView"], ["ResearchAppsView", "ResearchAppsView"]]) {
     const source = fs.readFileSync(path.join(__dirname, `../src/${name}.tsx`), "utf8").replace(/^import .*?;\r?\n/gm, "").replace(/export default function/g, "function").replace(/export function/g, "function");
@@ -18,7 +18,7 @@ before(async () => {
   }
   View = scope.ResearchAppsView;
 });
-after(() => { dom.window.close(); for (const key of ["window", "document", "HTMLElement", "Node", "IS_REACT_ACT_ENVIRONMENT"]) delete global[key]; });
+after(() => { dom.window.close(); for (const key of ["window", "document", "HTMLElement", "Node", "MutationObserver", "IS_REACT_ACT_ENVIRONMENT"]) delete global[key]; });
 const draft = { delivery: { status: "ready", canRestore: false }, id: "sample", name: "Sample App", category: "analysis", status: "stopped", installed: false, pinned: false, logs: "", error: "", url: null };
 function button(text) { return [...document.querySelectorAll("button")].find((element) => element.textContent === text); }
 test("workspace Apps are visible as drafts without implicit execution", async () => {
@@ -146,4 +146,21 @@ test('unverified drafts cannot install and validation/cancel/restore use the hos
   await React.act(async () => button('Cancel validation').click());
   assert.deepEqual(calls, ['validate', 'codex', 'restore', 'cancel']);
   await React.act(async () => root.unmount());
+});
+
+test('all running Apps receive live theme context, including Apps without Agent permissions', async () => {
+  const root = createRoot(document.getElementById('root'));
+  const item = { ...draft, status: 'running', url: 'http://127.0.0.1:34567/', agents: [] };
+  await React.act(async () => root.render(React.createElement(View, { workspace: '/project', appId: 'sample', apps: [item], bridge: {}, onOpen: () => {}, onRefresh: () => {}, onBack: () => {} })));
+  const frame = document.querySelector('iframe').contentWindow, messages = [];
+  frame.postMessage = (data, origin) => messages.push({ data, origin });
+  await React.act(async () => {
+    window.dispatchEvent(new window.MessageEvent('message', { data: { type: 'archimedes:context-request' }, origin: 'http://127.0.0.1:11111', source: frame }));
+  });
+  assert.equal(messages.length, 0);
+  await React.act(async () => window.dispatchEvent(new window.MessageEvent('message', { data: { type: 'archimedes:context-request' }, origin: 'http://127.0.0.1:34567', source: frame })));
+  assert.equal(messages[0].data.type, 'archimedes:context');
+  await React.act(async () => { document.documentElement.dataset.theme = 'charcoal'; await Promise.resolve(); });
+  assert.equal(messages.at(-1).data.theme, 'charcoal'); assert.equal(messages.at(-1).origin, 'http://127.0.0.1:34567');
+  await React.act(async () => root.unmount()); delete document.documentElement.dataset.theme;
 });

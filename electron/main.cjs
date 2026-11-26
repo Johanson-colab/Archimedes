@@ -965,16 +965,26 @@ app.whenReady().then(async () => {
     },
   };
   const appAgent = createAppAgent(appAgentOptions);
+  const appFrontend = require("./research-app-frontend.cjs").createFrontend({ approve: async ({ app: researchApp, packages }) => {
+    const owner = BrowserWindow.getAllWindows().find(window => workspaceForWindow(window) === researchApp.workspace);
+    if (!owner) return false;
+    const result = await dialog.showMessageBox(owner, { type: "question", title: "Build Research App", message: researchApp.name,
+      detail: `Install locked frontend packages from npm (installation scripts disabled), then run TypeScript and Vite on local App code.\n\n${Object.entries(packages).map(([name, version]) => `${name}@${version}`).join("\n")}\n\n${researchApp.directory}\n\nBuild configuration executes with your user permissions. Environment vault keys are not provided to build tools.`, buttons: ["Cancel", "Build"], defaultId: 0, cancelId: 0 });
+    return result.response === 1;
+  } });
   const appDelivery = require("./research-app-delivery.cjs").createDelivery({
-    setup: researchAppSetup.setup, approve: researchAppRuntimeOptions.approve,
+    setup: researchAppSetup.setup, build: appFrontend.build, approve: researchAppRuntimeOptions.approve,
     readSecret: researchAppRuntimeOptions.readSecret, changed: researchAppRuntimeOptions.changed,
     stop: researchAppRuntime.stop,
-    browser: options => {
+    browser: async options => {
+      const owner = BrowserWindow.getAllWindows().find(window => workspaceForWindow(window) === options.originalApp.workspace);
+      const keys = require("../shared/research-app-context.json").tokens;
+      const visual = owner ? await owner.webContents.executeJavaScript(`({ theme: document.documentElement.dataset.theme === "paper" ? "paper" : "charcoal", tokens: Object.fromEntries(${JSON.stringify(keys)}.map(key => [key,getComputedStyle(document.documentElement).getPropertyValue(key).trim()])) })`) : { theme: "paper", tokens: {} };
       const scopedAgent = createAppAgent({ ...appAgentOptions, runtime: options.runtime,
         approve: request => appAgentOptions.approve({ ...request, app: options.originalApp }),
         approveTool: request => appAgentOptions.approveTool({ ...request, app: options.originalApp }),
       });
-      return require("./research-app-browser-check.cjs").checkBrowser({ ...options,
+      return require("./research-app-browser-check.cjs").checkBrowser({ ...options, ...visual,
         runAgent: input => scopedAgent.run(options.app.workspace, options.app.id, input),
       });
     },

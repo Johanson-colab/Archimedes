@@ -16,7 +16,7 @@ app.whenReady().then(async () => {
     for (const kind of ['static', 'python-http']) {
       if (process.env.ARCHIMEDES_DELIVERY_TRACE) console.error('[fixture]', kind);
       const appId = kind === 'static' ? 'word-counter' : 'text-processor';
-      const draft = scaffoldApp({ workspace, appId, name: kind === 'static' ? 'Word counter' : 'Text processor', kind });
+      const draft = scaffoldApp({ frontend: 'plain', workspace, appId, name: kind === 'static' ? 'Word counter' : 'Text processor', kind });
       const jsFile = path.join(draft.directory, 'public/app.js');
       const planFile = path.join(draft.directory, 'research-app.checks.json');
       const plan = JSON.parse(fs.readFileSync(planFile)); delete plan.starter;

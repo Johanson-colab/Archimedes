@@ -1,13 +1,13 @@
 const { randomUUID } = require('node:crypto');
 
 // Runs a generated page in a fresh, nonpersistent Chromium session, with no host preload.
-async function checkBrowser({ url, steps, signal, runAgent, onFrame = () => {} }, { BrowserWindow, session } = require('electron')) {
+async function checkBrowser({ url, steps, signal, runAgent, theme = "paper", tokens = {}, app: researchApp, viewport = { width: 1280, height: 900 }, onFrame = () => {} }, { BrowserWindow, session } = require('electron')) {
   const trace = value => { if (process.env.ARCHIMEDES_DELIVERY_TRACE) console.error('[browser]', value); };
   const origin = new URL(url).origin, partition = `research-app-check-${randomUUID()}`;
   const isolated = session.fromPartition(partition);
   isolated.setPermissionRequestHandler((_contents, _permission, respond) => respond(false));
   isolated.setPermissionCheckHandler(() => false);
-  const window = new BrowserWindow({ show: false, width: 1280, height: 900, webPreferences: { partition, sandbox: true, contextIsolation: true, nodeIntegration: false, webSecurity: true, backgroundThrottling: false } });
+  const window = new BrowserWindow({ show: false, width: viewport.width, height: viewport.height, webPreferences: { partition, sandbox: true, contextIsolation: true, nodeIntegration: false, webSecurity: true, backgroundThrottling: false } });
   const errors = [], checks = []; let timer, bridgeTimer; const inFlight = new Set();
   const stop = () => { if (!window.isDestroyed()) window.destroy(); };
   signal?.addEventListener('abort', stop, { once: true });
@@ -22,7 +22,8 @@ async function checkBrowser({ url, steps, signal, runAgent, onFrame = () => {} }
   try {
     const work = async () => {
       if (signal?.aborted) throw new Error('Validation cancelled.');
-      const shell = '<!doctype html><html><meta charset="utf-8"><style>html,body,iframe{margin:0;width:100%;height:100%;border:0}</style><iframe sandbox="allow-scripts allow-same-origin allow-forms allow-downloads" referrerpolicy="no-referrer"></iframe></html>';
+      const themeCss = require('node:fs').readFileSync(require('node:path').join(__dirname, 'assets/research-app-template/src/archimedes/tokens.css'), 'utf8');
+      const shell = '<!doctype html><html data-theme="' + theme + '"><meta charset="utf-8"><style>' + themeCss + ' html,body,iframe{margin:0;width:100%;height:100%;border:0}body{background:var(--surface-ground)}</style><iframe sandbox="allow-scripts allow-same-origin allow-forms allow-downloads" referrerpolicy="no-referrer"></iframe></html>';
       trace('loading shell');
       await window.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(shell));
       window.webContents.debugger.attach('1.3');
@@ -30,7 +31,13 @@ async function checkBrowser({ url, steps, signal, runAgent, onFrame = () => {} }
       await window.webContents.debugger.sendCommand('Runtime.enable');
       await window.webContents.executeJavaScript(`{
         const frame = document.querySelector('iframe'); window.agentQueue = [];
+        const context = ${JSON.stringify({ type: 'archimedes:context', theme, tokens, language: 'en' })};
+        for (const [key,value] of Object.entries(context.tokens)) document.documentElement.style.setProperty(key,value);
+        const computed = getComputedStyle(document.documentElement);
+        context.tokens = Object.fromEntries(${JSON.stringify(require('../shared/research-app-context.json').tokens)}.map(key => [key, computed.getPropertyValue(key).trim()]).filter(([,value]) => value));
+        frame.addEventListener('load', () => frame.contentWindow.postMessage(context, ${JSON.stringify(origin)}));
         addEventListener('message', event => { const data = event.data;
+          if (event.source === frame.contentWindow && event.origin === ${JSON.stringify(origin)} && data?.type === 'archimedes:context-request') { frame.contentWindow.postMessage(context, ${JSON.stringify(origin)}); return; }
           if (event.source === frame.contentWindow && event.origin === ${JSON.stringify(origin)} && data?.type === 'archimedes:agent-request' && typeof data.requestId === 'string' && /^[A-Za-z0-9_-]{1,80}$/.test(data.requestId) && typeof data.prompt === 'string' && data.prompt.length <= 12000 && window.agentQueue.length < 10) window.agentQueue.push({ requestId: data.requestId, backend: data.backend, prompt: data.prompt });
         }); frame.src = ${JSON.stringify(url)};
       }`);
@@ -87,10 +94,13 @@ async function checkBrowser({ url, steps, signal, runAgent, onFrame = () => {} }
       await new Promise(resolve => setTimeout(resolve, 100));
       trace('checking errors and layout');
       const overflow = await frame.executeJavaScript('document.documentElement.scrollWidth > innerWidth + 2');
-      if (overflow) errors.push('Page overflows the 1280px acceptance viewport.');
+      const observations = await frame.executeJavaScript('({theme: document.documentElement.dataset.theme, background: getComputedStyle(document.body).backgroundColor, hasHostBridge: typeof window.researchDesk !== \"undefined\"})');
+      const expectedBackground = await window.webContents.executeJavaScript('getComputedStyle(document.body).backgroundColor');
+      if (researchApp?.frontend && observations.background !== expectedBackground) errors.push('App background does not match the Archimedes host theme. Use --surface-ground.');
+      if (overflow) errors.push('Page overflows its acceptance viewport.');
       if (errors.length) throw new Error(errors.slice(0, 5).join(' '));
       await onFrame(await window.webContents.capturePage());
-      return { passed: true, checks, viewport: { width: 1280, height: 900 } };
+      return { passed: true, checks, observations, viewport };
     };
     return await Promise.race([work(), timeout]);
   } catch (error) { return { passed: false, checks, error: String(error.message).slice(0, 2000) }; }

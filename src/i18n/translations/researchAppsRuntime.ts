@@ -6,6 +6,8 @@ export const researchAppsRuntime: Record<string, string> = {
   "Archimedes manages this app's process. Local code runs with your user permissions; Agent requests require approval.": "Archimedes 托管此应用的运行进程。本地代码使用你的用户权限运行；Agent 请求需要获得批准。",
   "Ask Create to save an app with research-app.json inside research-apps/<app-id>. Refresh here when it is ready.": "让 Create 将应用和 research-app.json 保存到 research-apps/<app-id>，完成后在此刷新。",
   "Back to created apps": "返回已创建应用",
+  "Build and validate this app": "构建并验收此应用",
+  "Build required": "需要构建",
   "Cancel validation": "取消验收",
   "CREATE / YOUR WORKSPACE": "创建 / 当前工作区",
   "Created Research Apps": "已创建的科研应用",

@@ -17,7 +17,7 @@ test("App IPC resolves only the sender window's active workspace", async (t) => 
     fs, { fromWebContents: (sender) => sender }, (owner) => owner?.workspace,
     { handle: (name, handler) => handlers.set(name, handler) }, runtime, () => ({ setup: (...args) => { calls.push({ method: 'setup', args }); return 'setup'; } }),
     () => ({ run: (...args) => { calls.push({ method: 'agent', args }); return 'agent'; } }), {}, {}, {}, undefined,
-    name => { if (name.includes('research-app-repair')) return { createAppRepair: () => async () => {} }; assert.match(name, /research-app-delivery/); return { createDelivery: () => ({ validate: (...args) => { calls.push({ method: 'validate', args }); return 'validate'; }, cancel: (...args) => { calls.push({ method: 'cancel-validation', args }); return 'cancel-validation'; }, restore: (...args) => { calls.push({ method: 'restore', args }); return 'restore'; } }) }; },
+    name => { if (name.includes('research-app-frontend')) return { createFrontend: () => ({ build: async () => ({ built: true }) }) }; if (name.includes('research-app-repair')) return { createAppRepair: () => async () => {} }; assert.match(name, /research-app-delivery/); return { createDelivery: () => ({ validate: (...args) => { calls.push({ method: 'validate', args }); return 'validate'; }, cancel: (...args) => { calls.push({ method: 'cancel-validation', args }); return 'cancel-validation'; }, restore: (...args) => { calls.push({ method: 'restore', args }); return 'restore'; } }) }; },
     ({ run }) => run({}), { showMessageBox: async () => ({ response: 1 }) },
   );
   assert.equal(handlers.size, 12);

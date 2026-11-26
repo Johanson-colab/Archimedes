@@ -11,7 +11,7 @@ const { readAcceptance } = require('./research-app-acceptance.cjs');
 const success = { passed: true, scope: 'host-http-and-browser', checks: [{ path: '/', status: 200, passed: true }], browser: { passed: true, checks: [{ action: 'click', passed: true }, { action: 'expect', passed: true }] } };
 function fixture(t, kind = 'static') {
   const workspace = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'app-delivery-')));
-  const app = scaffoldApp({ workspace, appId: 'sample', kind });
+  const app = scaffoldApp({ frontend: 'plain', workspace, appId: 'sample', kind });
   const planFile = path.join(app.directory, 'research-app.checks.json');
   const plan = JSON.parse(fs.readFileSync(planFile)); delete plan.starter; plan.description = 'Verify the requested input processing workflow'; fs.writeFileSync(planFile, JSON.stringify(plan));
   t.after(() => fs.rmSync(workspace, { recursive: true, force: true }));
@@ -21,9 +21,9 @@ function delivery(options = {}) { return createDelivery({ approve: async () => t
 
 test('scaffold refuses overwrite and path traversal; starter-only workflows cannot be delivered', t => {
   const f = fixture(t);
-  assert.throws(() => scaffoldApp({ workspace: f.workspace, appId: 'sample' }), /already exists/);
-  assert.throws(() => scaffoldApp({ workspace: f.workspace, appId: '../other' }), /Invalid/);
-  scaffoldApp({ workspace: f.workspace, appId: 'starter' });
+  assert.throws(() => scaffoldApp({ frontend: 'plain', workspace: f.workspace, appId: 'sample' }), /already exists/);
+  assert.throws(() => scaffoldApp({ frontend: 'plain', workspace: f.workspace, appId: '../other' }), /Invalid/);
+  scaffoldApp({ frontend: 'plain', workspace: f.workspace, appId: 'starter' });
   assert.throws(() => readAcceptance(readApp(f.workspace, 'starter')), /starter workflow/);
   const planFile = path.join(f.dir, 'research-app.checks.json'), plan = JSON.parse(fs.readFileSync(planFile));
   plan.http[0].path = '//example.com'; fs.writeFileSync(planFile, JSON.stringify(plan));

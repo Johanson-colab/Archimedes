@@ -10,6 +10,7 @@ async function verifyApp({ workspace, appId, paths = ['/'], httpChecks = [], bro
   const trace = value => { if (process.env.ARCHIMEDES_DELIVERY_TRACE) console.error('[verify]', value); };
   const app = readApp(workspace, appId);
   const result = { appId, scope: 'host-startup-and-http', passed: false, checks: [], remainingChecks: ['Interactive page behavior and visual layout are not verified by this command.'] };
+  if (app.needsBuild) return { ...result, blocked: 'frontend', error: 'Typecheck and build this App frontend before verification.' };
   if (app.needsSetup) return { ...result, blocked: 'environment', error: 'App-local Python environment is missing. Set it up before claiming this App is ready.' };
   if (app.environment.length && app.environment.some(name => !readSecret(name))) return { ...result, blocked: 'credentials', error: 'Verify this App in the host with explicitly approved Environment keys. This command does not read the vault.' };
   const temporary = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'research-app-check-')));
@@ -18,6 +19,7 @@ async function verifyApp({ workspace, appId, paths = ['/'], httpChecks = [], bro
   let isolatedApp;
   try {
     for (const file of sourceFiles(app)) { const destination = path.join(isolatedDir, file.path); fs.mkdirSync(path.dirname(destination), { recursive: true }); fs.writeFileSync(destination, file.content, { mode: file.mode }); }
+    if (app.frontend) for (const file of require('./research-app-frontend.cjs').artifacts(app)) { const destination = path.join(isolatedDir, file.path); fs.mkdirSync(path.dirname(destination), { recursive: true }); fs.writeFileSync(destination, file.content); }
     if (app.runtime.kind === 'python-http') fs.symlinkSync(path.join(app.directory, '.venv'), path.join(isolatedDir, '.venv'), process.platform === 'win32' ? 'junction' : 'dir');
     isolatedApp = readApp(temporary, appId);
   } catch (error) { fs.rmSync(temporary, { recursive: true, force: true }); throw error; }

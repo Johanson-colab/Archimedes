@@ -29,7 +29,7 @@ function identity(app) {
   const { fingerprint } = require('./research-app-runtime.cjs');
   const interpreter = path.join(app.directory, '.venv', process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python');
   const stat = app.runtime.kind === 'python-http' ? fs.statSync(interpreter, { throwIfNoEntry: false }) : null;
-  return { fingerprint: fingerprint(app), environment: JSON.stringify({ platform: process.platform, arch: process.arch, runtime: app.runtime.kind, python: stat ? [fs.realpathSync(interpreter), stat.size, stat.mtimeMs] : null, host: 1 }) };
+  return { fingerprint: fingerprint(app), environment: JSON.stringify({ platform: process.platform, arch: process.arch, runtime: app.runtime.kind, python: stat ? [fs.realpathSync(interpreter), stat.size, stat.mtimeMs] : null, ...(app.frontend ? { frontend: require("./research-app-frontend.cjs").buildStatus(app).identity } : {}), host: 1 }) };
 }
 function same(a, b) { return a?.fingerprint === b?.fingerprint && a?.environment === b?.environment; }
 function deliveryStatus(app) {
@@ -55,7 +55,7 @@ function saveState(app, state) {
 function snapshot(app) {
   const { sourceFiles, fingerprint } = require('./research-app-runtime.cjs');
   const files = sourceFiles(app), id = fingerprint(app);
-  write(app, `${id}.snapshot.json`, { fingerprint: id, files: files.map(f => ({ path: f.path, content: f.content.toString('base64'), mode: f.mode })) });
+  write(app, `${id}.snapshot.json`, { fingerprint: id, frontend: app.frontend, files: files.map(f => ({ path: f.path, content: f.content.toString('base64'), mode: f.mode })) });
   return id;
 }
 function markVerified(app, evidence, expected) {
@@ -94,7 +94,7 @@ function replaceSource(app, saved, expectedFingerprint) {
       if (bytes > 16000000) throw new Error('Snapshot exceeds the source limit.');
       const target = path.join(stage, file.path); fs.mkdirSync(path.dirname(target), { recursive: true }); fs.writeFileSync(target, content, { flag: 'wx', mode: file.mode & 0o777 });
     }
-    if (fingerprint({ directory: stage }) !== saved.fingerprint) throw new Error('Snapshot integrity check failed.');
+    if (fingerprint({ directory: stage, frontend: app.frontend || saved.frontend }) !== saved.fingerprint) throw new Error('Snapshot integrity check failed.');
     if (expectedFingerprint && fingerprint(readApp(app.workspace, app.id)) !== expectedFingerprint) throw new Error('App source changed during repair. Generated changes were not applied.');
     fs.renameSync(app.directory, backup); oldMoved = true;
     // Keep environment, data, repositories and caches; never restore them from a code snapshot.
@@ -112,4 +112,4 @@ function replaceSource(app, saved, expectedFingerprint) {
     throw error;
   } finally { fs.rmSync(stage, { recursive: true, force: true }); }
 }
-module.exports = { recoveryAvailable, identity, same, deliveryStatus, requireVerified, saveState, markVerified, snapshot, restoreVerified, replaceSource };
+module.exports = { recoveryAvailable, identity, same, deliveryStatus, requireVerified, saveState, markVerified, snapshot, restoreVerified, replaceSource, readRecord: read, writeRecord: write };

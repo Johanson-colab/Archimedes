@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowLeft, FileCode, LoaderCircle, Pin, PinOff, Play, RefreshCw, Square, Terminal, Trash, Check, Undo2 } from "lucide-react";
 import { useUISettings } from "./i18n";
 import { researchAppCategories } from "./research-apps";
+import { researchAppContext } from "./research-app-context";
 import { StateView } from "./StateView";
 import "./research-app-runtime.css";
 
@@ -14,7 +15,7 @@ export default function ResearchAppsView({ bridge, workspace, apps, appId, onRef
   onOpen: (id: string) => void;
   onBack: () => void;
 }) {
-  const { t } = useUISettings();
+  const { t, language } = useUISettings();
   const app = apps.find((item) => item.id === appId);
   const [runtime, setRuntime] = useState<ResearchAppRuntimeStatus | null>(null);
   const [busy, setBusy] = useState(false);
@@ -71,12 +72,18 @@ export default function ResearchAppsView({ bridge, workspace, apps, appId, onRef
   const state = runtime ?? app;
   const agentsKey = app?.agents?.join(",") || "";
   useEffect(() => {
-    if (!state?.url || state.status !== "running" || !appId || !app?.agents?.length) return;
+    if (!state?.url || state.status !== "running" || !appId) return;
     const origin = new URL(state.url).origin;
     let current = true;
+    const sendContext = () => frame.current?.contentWindow?.postMessage(researchAppContext(language), origin);
+    const observer = new MutationObserver(sendContext);
+    observer.observe(document.documentElement, { attributes: true }); observer.observe(document.body, { attributes: true });
+    const element = frame.current; element?.addEventListener("load", sendContext); sendContext();
     const receive = (event: MessageEvent) => {
       const data = event.data;
-      if (event.origin !== origin || event.source !== frame.current?.contentWindow || !data || data.type !== "archimedes:agent-request" || typeof data.requestId !== "string" || !/^[A-Za-z0-9_-]{1,80}$/.test(data.requestId) || typeof data.backend !== "string" || !app.agents?.includes(data.backend) || typeof data.prompt !== "string" || !data.prompt.trim() || data.prompt.length > 12000) return;
+      if (event.origin !== origin || event.source !== frame.current?.contentWindow || !data) return;
+      if (data.type === "archimedes:context-request") { sendContext(); return; }
+      if (data.type !== "archimedes:agent-request" || typeof data.requestId !== "string" || !/^[A-Za-z0-9_-]{1,80}$/.test(data.requestId) || typeof data.backend !== "string" || !app?.agents?.includes(data.backend) || typeof data.prompt !== "string" || !data.prompt.trim() || data.prompt.length > 12000) return;
       const target = frame.current?.contentWindow;
       void bridge.runResearchAppAgent(workspace, appId, { backend: data.backend, prompt: data.prompt }).then(
         (result) => { if (current && target === frame.current?.contentWindow) target?.postMessage({ type: "archimedes:agent-result", requestId: data.requestId, result }, origin); },
@@ -84,8 +91,8 @@ export default function ResearchAppsView({ bridge, workspace, apps, appId, onRef
       );
     };
     window.addEventListener("message", receive);
-    return () => { current = false; window.removeEventListener("message", receive); };
-  }, [state?.url, state?.status, appId, agentsKey, bridge, workspace]);
+    return () => { current = false; observer.disconnect(); element?.removeEventListener("load", sendContext); window.removeEventListener("message", receive); };
+  }, [state?.url, state?.status, appId, agentsKey, bridge, workspace, language]);
   if (!appId) return <section className="created-apps-view">
     <header className="created-apps-heading"><div><p>{t("CREATE / YOUR WORKSPACE")}</p><h1>{t("Created Research Apps")}</h1><span>{t("Preview an app, then choose whether to install and pin it.")}</span></div><button className="created-apps-action" onClick={onRefresh}><RefreshCw size={14} />{t("Refresh")}</button></header>
     {!apps.length ? <StateView icon={<FileCode size={24} />} title={t("No Research Apps yet")} description={t("Ask Create to save an app with research-app.json inside research-apps/<app-id>. Refresh here when it is ready.")} /> : <div className="created-apps-list">{apps.map((item) => <button key={item.id} className="created-app-card" onClick={() => onOpen(item.id)}>
@@ -97,13 +104,13 @@ export default function ResearchAppsView({ bridge, workspace, apps, appId, onRef
   return <section className="research-app-host">
     <header className="research-app-toolbar">
       <button className="created-apps-action" onClick={onBack} aria-label={t("Back to created apps")}><ArrowLeft size={15} /></button>
-      <div className="research-app-title"><h1>{app?.name || appId}</h1><span>{t(settingUp ? "Preparing environment…" : app?.needsSetup ? "Setup required" : state?.status === "running" ? "Running" : state?.status === "starting" ? "Starting…" : state?.status === "failed" ? "Failed" : "Stopped")}</span></div>
+      <div className="research-app-title"><h1>{app?.name || appId}</h1><span>{t(settingUp ? "Preparing environment…" : app?.needsSetup ? "Setup required" : app?.needsBuild ? "Build required" : state?.status === "running" ? "Running" : state?.status === "starting" ? "Starting…" : state?.status === "failed" ? "Failed" : "Stopped")}</span></div>
       <div className="research-app-controls">
         {app?.needsSetup && state?.status !== "running" && state?.status !== "starting" && <button className="created-apps-action primary" disabled={busy || deliveryBusy} onClick={() => void action("setup")}>{t(settingUp ? "Preparing environment…" : "Set up dependencies")}</button>}
         <button className="created-apps-action" onClick={() => setLogsOpen((value) => !value)} aria-pressed={logsOpen}><Terminal size={14} />{t("Logs")}</button>
         {state?.status === "running" && <button className="created-apps-action" onClick={() => setFrameVersion((value) => value + 1)}><RefreshCw size={14} />{t("Reload preview")}</button>}
-        {state?.status === "running" || state?.status === "starting" ? <button className="created-apps-action" onClick={() => void action("stop")}><Square size={13} />{t("Stop app")}</button> : !app?.needsSetup && <button className="created-apps-action" disabled={busy || deliveryBusy || !app || (app.installed && !verified) || app.status === "invalid"} onClick={() => void action("start")}><Play size={13} />{t("Start preview")}</button>}
-        {app?.installed ? <><button className="created-apps-action" disabled={busy} onClick={() => void action("pin")}>{app.pinned ? <PinOff size={14} /> : <Pin size={14} />}{t(app.pinned ? "Unpin app" : "Pin app")}</button><button className="created-apps-action" disabled={busy} onClick={() => void action("remove")} title={t("Uninstall app; keep its files")} aria-label={t("Uninstall app; keep its files")}><Trash size={14} /></button></> : <button className="created-apps-action primary" disabled={busy || deliveryBusy || !verified || !app || app.needsSetup || app.status === "invalid"} onClick={() => void action("install")}><Pin size={14} />{t("Install and pin")}</button>}
+        {state?.status === "running" || state?.status === "starting" ? <button className="created-apps-action" onClick={() => void action("stop")}><Square size={13} />{t("Stop app")}</button> : !app?.needsSetup && <button className="created-apps-action" disabled={busy || deliveryBusy || !app || (app.installed && !verified) || app.needsBuild || app.status === "invalid"} onClick={() => void action("start")}><Play size={13} />{t("Start preview")}</button>}
+        {app?.installed ? <><button className="created-apps-action" disabled={busy} onClick={() => void action("pin")}>{app.pinned ? <PinOff size={14} /> : <Pin size={14} />}{t(app.pinned ? "Unpin app" : "Pin app")}</button><button className="created-apps-action" disabled={busy} onClick={() => void action("remove")} title={t("Uninstall app; keep its files")} aria-label={t("Uninstall app; keep its files")}><Trash size={14} /></button></> : <button className="created-apps-action primary" disabled={busy || deliveryBusy || !verified || !app || app.needsSetup || app.needsBuild || app.status === "invalid"} onClick={() => void action("install")}><Pin size={14} />{t("Install and pin")}</button>}
       </div>
     </header>
     <div className="research-app-validation" role="region" aria-label={t("App validation")}>
@@ -126,7 +133,7 @@ export default function ResearchAppsView({ bridge, workspace, apps, appId, onRef
       {state?.status === "running" && state.url ? <iframe ref={frame} key={`${state.url}:${frameVersion}`} src={state.url} title={app?.name || appId} sandbox="allow-scripts allow-same-origin allow-forms allow-downloads" allow="camera 'none'; microphone 'none'; geolocation 'none'; clipboard-read 'none'; clipboard-write 'none'" referrerPolicy="no-referrer" /> : <StateView
         tone={settingUp || state?.status === "starting" ? "loading" : app?.needsSetup ? "empty" : state?.status === "failed" || state?.status === "invalid" ? "error" : "empty"}
         icon={settingUp || state?.status === "starting" ? <LoaderCircle size={23} className="spin" /> : <FileCode size={23} />}
-        title={t(settingUp ? "Preparing environment…" : app?.needsSetup ? "Set up this app first" : state?.status === "starting" ? "Starting app…" : state?.status === "failed" ? "App could not start" : state?.status === "invalid" ? "App manifest is invalid" : "Ready to preview")}
+        title={t(settingUp ? "Preparing environment…" : app?.needsSetup ? "Set up this app first" : app?.needsBuild ? "Build and validate this app" : state?.status === "starting" ? "Starting app…" : state?.status === "failed" ? "App could not start" : state?.status === "invalid" ? "App manifest is invalid" : "Ready to preview")}
         description={t(app?.needsSetup ? "Prepare this app's Python environment, then start the preview." : "Archimedes manages this app's process. Local code runs with your user permissions; Agent requests require approval.")}
       />}
     </div>

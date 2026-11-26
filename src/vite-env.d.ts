@@ -486,6 +486,8 @@ interface GeneratedResearchApp extends ResearchAppRuntimeStatus {
   agents?: string[];
   skills?: string[];
   needsSetup?: boolean;
+  frontend?: { kind: "react-vite" };
+  needsBuild?: boolean;
   delivery?: ResearchAppDeliveryStatus;
   workspace: string;
   directory: string;
