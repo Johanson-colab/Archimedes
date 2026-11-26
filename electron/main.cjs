@@ -2068,6 +2068,7 @@ app.whenReady().then(async () => {
     if (input.nativeModel !== undefined) {
       if (input.origin !== "research" || selectedBackend === "api" || typeof input.nativeModel !== "string" || input.nativeModel.length > 160 || /[\r\n\0]/.test(input.nativeModel)) throw new Error("Choose a model for the active native agent.");
       backend.model = input.nativeModel.trim();
+      if (backend.model !== configuredBackend.profiles[selectedBackend]?.model) backend.effort = "";
     }
     const externalBackend = input.origin === "research" && selectedBackend !== "api" ? backend : null;
     let remoteServer = null;

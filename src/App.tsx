@@ -3094,6 +3094,10 @@ function App() {
       if (submittedThreadId === null) await moveDraftWorkbenchNote(draftNoteKey, result.threadId);
       const stillViewingSubmittedThread = activeThreadIdRef.current === result.threadId
         || (submittedThreadId === null && activeThreadIdRef.current === null);
+      if (!backendOverride && selectedChatModel !== undefined) {
+        const scope = JSON.stringify([workspace, result.threadId, selectedHarness]);
+        setChatModelChoices(current => ({ ...current, [scope]: selectedChatModel }));
+      }
       if (stillViewingSubmittedThread) {
         clearPendingAssistantDeltas();
         activeThreadIdRef.current = result.threadId;
@@ -3101,10 +3105,6 @@ function App() {
         setTrajectoryEvents(result.thread.events ?? []);
         setEvents([]);
         setActiveThreadId(result.threadId);
-        if (!backendOverride && selectedChatModel !== undefined) {
-          const scope = JSON.stringify([workspace, result.threadId, selectedHarness]);
-          setChatModelChoices(current => ({ ...current, [scope]: selectedChatModel }));
-        }
         setBoundHarness(result.thread.harness ?? backendOverride ?? selectedHarness);
         setActiveProjectId(result.thread.project_id);
         if (result.thread.workspace_id) setActiveWorkspaceId(result.thread.workspace_id);
