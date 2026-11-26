@@ -57,13 +57,24 @@ export default function BrowserView({ active = true, onOpenExternal }: { active?
   const [addressError, setAddressError] = useState("");
   const hostRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<BrowserWebview | null>(null);
+  const cleanupRef = useRef<(() => void) | null>(null);
   const attachedRef = useRef(false);
   const urlRef = useRef(url);
   const activeRef = useRef(active);
+  const translateRef = useRef(t);
 
   useEffect(() => {
     urlRef.current = url;
   }, [url]);
+
+  useEffect(() => {
+    translateRef.current = t;
+  }, [t]);
+
+  useEffect(() => () => {
+    cleanupRef.current?.();
+    cleanupRef.current = null;
+  }, []);
 
   useEffect(() => {
     activeRef.current = active;
@@ -81,7 +92,7 @@ export default function BrowserView({ active = true, onOpenExternal }: { active?
     view.setAttribute("partition", BROWSER_PARTITION);
     view.setAttribute("allowpopups", "");
     view.setAttribute("webpreferences", "contextIsolation=yes, sandbox=yes, nodeIntegration=no");
-    view.setAttribute("aria-label", t("Browser page"));
+    view.setAttribute("aria-label", translateRef.current("Browser page"));
     view.style.width = "100%";
     view.style.height = "100%";
 
@@ -123,14 +134,15 @@ export default function BrowserView({ active = true, onOpenExternal }: { active?
     };
     const describeError = (detail: WebviewEvent) => {
       const description = detail.errorDescription || "";
-      if (/ERR_NAME_NOT_RESOLVED/.test(description) || detail.errorCode === -105) return t("This address could not be resolved. Check the URL or your connection.");
-      if (/ERR_CONNECTION_REFUSED/.test(description) || detail.errorCode === -102) return t("The site refused the connection.");
-      if (/ERR_INTERNET_DISCONNECTED/.test(description) || detail.errorCode === -106) return t("You appear to be offline.");
-      if (/ERR_CONNECTION_CLOSED|ERR_CONNECTION_RESET/.test(description)) return t("The connection closed before the page loaded.");
-      if (/ERR_CONNECTION_TIMED_OUT|ERR_TIMED_OUT/.test(description)) return t("The site took too long to respond.");
-      if (/ERR_ADDRESS_UNREACHABLE/.test(description) || detail.errorCode === -109) return t("The site could not be reached.");
-      if (/ERR_CERT_|ERR_SSL_/.test(description)) return t("The secure connection to this site failed.");
-      return description || t("This page could not be loaded.");
+      const translate = translateRef.current;
+      if (/ERR_NAME_NOT_RESOLVED/.test(description) || detail.errorCode === -105) return translate("This address could not be resolved. Check the URL or your connection.");
+      if (/ERR_CONNECTION_REFUSED/.test(description) || detail.errorCode === -102) return translate("The site refused the connection.");
+      if (/ERR_INTERNET_DISCONNECTED/.test(description) || detail.errorCode === -106) return translate("You appear to be offline.");
+      if (/ERR_CONNECTION_CLOSED|ERR_CONNECTION_RESET/.test(description)) return translate("The connection closed before the page loaded.");
+      if (/ERR_CONNECTION_TIMED_OUT|ERR_TIMED_OUT/.test(description)) return translate("The site took too long to respond.");
+      if (/ERR_ADDRESS_UNREACHABLE/.test(description) || detail.errorCode === -109) return translate("The site could not be reached.");
+      if (/ERR_CERT_|ERR_SSL_/.test(description)) return translate("The secure connection to this site failed.");
+      return description || translate("This page could not be loaded.");
     };
     const onFail = (event: Event) => {
       const detail = event as WebviewEvent;
@@ -149,9 +161,21 @@ export default function BrowserView({ active = true, onOpenExternal }: { active?
     view.addEventListener("did-navigate-in-page", onNavigate);
     view.addEventListener("page-title-updated", onTitle);
     view.addEventListener("did-fail-load", onFail);
+    cleanupRef.current = () => {
+      view.removeEventListener("dom-ready", onReady);
+      view.removeEventListener("did-start-loading", onStart);
+      view.removeEventListener("did-stop-loading", onStop);
+      view.removeEventListener("did-navigate", onNavigate);
+      view.removeEventListener("did-navigate-in-page", onNavigate);
+      view.removeEventListener("page-title-updated", onTitle);
+      view.removeEventListener("did-fail-load", onFail);
+      view.remove();
+      if (viewRef.current === view) viewRef.current = null;
+      attachedRef.current = false;
+    };
     host.replaceChildren(view);
     viewRef.current = view;
-  }, [t, url]);
+  }, [url]);
 
   useEffect(() => {
     const view = viewRef.current;
