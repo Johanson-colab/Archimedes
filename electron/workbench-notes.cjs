@@ -1,5 +1,6 @@
 const fs = require("node:fs");
 const path = require("node:path");
+const { writeTextFileAtomically } = require("./atomic-text-file.cjs");
 
 const NOTES_FILE = "workbench-notes.json";
 const MAX_KEY_LENGTH = 240;
@@ -25,10 +26,12 @@ function initialize(userDataPath) {
   return {};
 }
 
-function persist() {
-  if (!notesPath) return;
-  fs.mkdirSync(path.dirname(notesPath), { recursive: true });
-  fs.writeFileSync(notesPath, `${JSON.stringify(notes, null, 2)}\n`, "utf8");
+function persist(next) {
+  if (notesPath) {
+    const target = fs.lstatSync(notesPath, { throwIfNoEntry: false }) ? fs.realpathSync(notesPath) : notesPath;
+    writeTextFileAtomically(target, `${JSON.stringify(next, null, 2)}\n`);
+  }
+  notes = next;
 }
 
 function getNote(key) {
@@ -42,14 +45,15 @@ function getNote(key) {
 function saveNote(key, content) {
   const normalizedKey = normalizeKey(key);
   const text = String(content ?? "").slice(0, MAX_CONTENT_LENGTH);
+  const next = { ...notes };
   if (!text.trim()) {
-    delete notes[normalizedKey];
-    persist();
+    delete next[normalizedKey];
+    persist(next);
     return { content: "", updatedAt: null };
   }
   const updatedAt = new Date().toISOString();
-  notes[normalizedKey] = { content: text, updatedAt };
-  persist();
+  next[normalizedKey] = { content: text, updatedAt };
+  persist(next);
   return { content: text, updatedAt };
 }
 
@@ -57,8 +61,9 @@ function deleteNote(key) {
   const normalizedKey = normalizeKey(key);
   const deleted = Boolean(notes[normalizedKey]);
   if (deleted) {
-    delete notes[normalizedKey];
-    persist();
+    const next = { ...notes };
+    delete next[normalizedKey];
+    persist(next);
   }
   return { deleted };
 }

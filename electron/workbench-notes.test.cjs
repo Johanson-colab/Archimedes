@@ -42,3 +42,41 @@ test("workbench notes reject empty keys", () => {
   assert.throws(() => notes.saveNote("", "content"), /note key/i);
   assert.throws(() => notes.getNote("   "), /note key/i);
 });
+
+test("a failed note change preserves all existing notes on disk and in memory", async (t) => {
+  for (const [name, change, content] of [
+    ["update", () => notes.saveNote("thread-1", "revised experiment note"), "revised experiment note"],
+    ["clear", () => notes.saveNote("thread-1", " "), ""],
+    ["delete", () => notes.deleteNote("thread-1"), ""],
+  ]) {
+    await t.test(name, (t) => {
+      const directory = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-workbench-notes-"));
+      t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+      const file = path.join(directory, "workbench-notes.json");
+      const original = {
+        "thread-1": { content: "original experiment note", updatedAt: "2026-11-25T12:00:00.000Z" },
+        "thread-2": { content: "unrelated literature note", updatedAt: "2026-11-24T12:00:00.000Z" },
+      };
+      const originalJson = `${JSON.stringify(original, null, 2)}\n`;
+      const readNotes = () => Object.fromEntries(Object.keys(original).map((key) => [key, notes.getNote(key)]));
+      const write = fs.writeFileSync;
+      write(file, originalJson);
+      notes.initialize(directory);
+      t.mock.method(fs, "writeFileSync", (target, text, options) => {
+        write(target, text.slice(0, 12), options);
+        throw new Error("Simulated partial write");
+      });
+
+      assert.throws(change, /Simulated partial write/);
+      assert.deepEqual({ notes: readNotes(), json: fs.readFileSync(file, "utf8") }, { notes: original, json: originalJson });
+      notes.initialize(directory);
+      assert.deepEqual(readNotes(), original);
+
+      t.mock.restoreAll();
+      change();
+      notes.initialize(directory);
+      assert.equal(notes.getNote("thread-1").content, content);
+      assert.deepEqual(notes.getNote("thread-2"), original["thread-2"]);
+    });
+  }
+});

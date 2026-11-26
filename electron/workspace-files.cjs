@@ -3,6 +3,7 @@ const path = require("node:path");
 const { createHash } = require("node:crypto");
 const { resolveWorkspaceTarget } = require("./security/path-sandbox.cjs");
 const { diffLines } = require("diff");
+const { writeTextFileAtomically } = require("./atomic-text-file.cjs");
 
 const IGNORED_NAMES = new Set([".archimedes", ".git", "node_modules", "dist", "build", ".next", ".DS_Store"]);
 const TEXT_EXTENSIONS = new Set([
@@ -137,9 +138,9 @@ function writeWorkspaceTextFile(root, relative, content) {
   }
   const normalized = normalizeRelative(relative);
   if (!normalized || normalized === ".") throw new Error("A workspace-relative file path is required.");
-  const target = workspacePath(root, normalized, { mustExist: false });
-  fs.mkdirSync(path.dirname(target), { recursive: true });
-  fs.writeFileSync(target, content, "utf8");
+  const requested = workspacePath(root, normalized, { mustExist: false });
+  const target = fs.lstatSync(requested, { throwIfNoEntry: false }) ? workspacePath(root, normalized) : requested;
+  writeTextFileAtomically(target, content);
   return readWorkspaceFile(root, normalized);
 }
 
