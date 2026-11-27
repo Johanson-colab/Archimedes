@@ -1,0 +1,75 @@
+import { useLayoutEffect, useRef, type FormEventHandler, type ReactNode, type Ref } from "react";
+import DialogPortal from "./DialogPortal";
+import { useDialogFocus } from "./useDialogFocus";
+
+export type DialogSize = "compact" | "sm" | "md" | "lg" | "gallery" | "preview" | "settings" | "full" | "palette" | "lightbox";
+
+export function Dialog({
+  open,
+  onClose,
+  blocking = false,
+  children,
+  role = "dialog",
+  ariaLabel,
+  ariaLabelledBy,
+  ariaDescribedBy,
+  size,
+  className = "",
+  overlayClassName = "modal-backdrop app-dialog-overlay",
+  as = "section",
+  onSubmit,
+}: {
+  open: boolean;
+  onClose?: () => void;
+  blocking?: boolean;
+  children: ReactNode;
+  role?: "dialog" | "alertdialog";
+  ariaLabel?: string;
+  ariaLabelledBy?: string;
+  ariaDescribedBy?: string;
+  size?: DialogSize;
+  className?: string;
+  overlayClassName?: string;
+  as?: "section" | "form";
+  onSubmit?: FormEventHandler<HTMLFormElement>;
+}) {
+  const dialogRef = useDialogFocus<HTMLElement>(open && !blocking, () => onClose?.());
+  const nativeRef = useRef<HTMLDialogElement>(null);
+  useLayoutEffect(() => {
+    if (!open || !blocking) return;
+    const dialog = nativeRef.current;
+    dialog?.showModal();
+    return () => dialog?.close();
+  }, [open, blocking]);
+  if (!open) return null;
+
+  const dialogClassName = ["app-dialog", size ? `app-dialog-${size}` : "", className].filter(Boolean).join(" ");
+  const shared = {
+    ref: dialogRef as Ref<HTMLElement>,
+    tabIndex: -1,
+    className: dialogClassName,
+    role,
+    "aria-modal": true,
+    "aria-label": ariaLabel,
+    "aria-labelledby": ariaLabelledBy,
+    "aria-describedby": ariaDescribedBy,
+  };
+
+  if (blocking) return <DialogPortal>
+    <dialog {...shared} ref={nativeRef} onCancel={(event) => event.preventDefault()} onKeyDown={(event) => event.stopPropagation()}>
+      {children}
+    </dialog>
+  </DialogPortal>;
+
+  return <DialogPortal>
+    <div
+      className={overlayClassName}
+      role="presentation"
+      onMouseDown={(event) => { if (event.target === event.currentTarget) onClose?.(); }}
+    >
+      {as === "form"
+        ? <form {...shared} ref={dialogRef as unknown as Ref<HTMLFormElement>} onSubmit={onSubmit}>{children}</form>
+        : <section {...shared}>{children}</section>}
+    </div>
+  </DialogPortal>;
+}

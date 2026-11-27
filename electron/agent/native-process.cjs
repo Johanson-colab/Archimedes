@@ -7,13 +7,15 @@ const { StringDecoder } = require('node:string_decoder');
 const clients = new Set();
 const LINE_LIMIT = 8 * 1024 * 1024;
 function nativeExecutable(backend, binary = backend) {
-  if (binary !== backend) {
+  const executable = backend === 'antigravity' ? 'agy' : backend;
+  if (binary !== executable) {
     if (!path.isAbsolute(binary) || !fs.statSync(binary, { throwIfNoEntry: false })?.isFile()) throw new Error(`Choose an existing absolute ${backend} executable path.`);
     return binary;
   }
-  const dirs = [...String(process.env.PATH || '').split(path.delimiter), '/opt/homebrew/bin', '/usr/local/bin', path.join(os.homedir(), '.local/bin'), path.join(os.homedir(), '.opencode/bin')];
-  const file = dirs.filter(path.isAbsolute).map(dir => path.join(dir, process.platform === 'win32' ? `${backend}.exe` : backend)).find(file => fs.statSync(file, { throwIfNoEntry: false })?.isFile());
-  if (!file) throw new Error(`${backend} CLI was not found. Install it and sign in through its native CLI.`);
+  const dirs = [...String(process.env.PATH || '').split(path.delimiter), '/opt/homebrew/bin', '/usr/local/bin', path.join(os.homedir(), '.local/bin'), path.join(os.homedir(), '.npm-global/bin'), path.join(os.homedir(), '.opencode/bin')];
+  if (process.platform === 'win32' && process.env.LOCALAPPDATA) dirs.push(path.join(process.env.LOCALAPPDATA, 'agy', 'bin'));
+  const file = [...dirs.filter(path.isAbsolute).map(dir => path.join(dir, process.platform === 'win32' ? `${executable}.exe` : executable)), require('./managed-clis.cjs').binaryPath(backend)].filter(Boolean).find(file => fs.statSync(file, { throwIfNoEntry: false })?.isFile());
+  if (!file) throw new Error(`${executable} CLI was not found. Install it and sign in through its native CLI.`);
   return file;
 }
 class NativeProcess extends EventEmitter {
@@ -54,7 +56,9 @@ class NativeProcess extends EventEmitter {
         const pending = this.pending.get(id); this.pending.delete(id); clearTimeout(pending.timer);
         if (error) {
           // Use recognized error codes, never raw provider errors/configuration.
-          const hint = this.backend === 'opencode' && message.error?.code === -32000
+          const hint = this.backend === 'antigravity' && message.error?.code === -32000
+            ? 'Antigravity authentication required. Sign in with agy or agy acp --login, then retry.'
+            : this.backend === 'opencode' && message.error?.code === -32000
             ? 'Provider authentication required. Sign in through OpenCode, then retry this turn explicitly.'
             : message.error?.data?.errorName === 'provider.free-limit'
             ? 'The OpenCode free usage limit has been reached. Choose another configured native model or connect a provider in OpenCode.'

@@ -310,11 +310,123 @@
     ]
   },
   {
+    "id": "colm-2026",
+    "name": "COLM 2026",
+    "category": "Conference",
+    "year": "2026",
+    "track": "Main conference",
+    "description": "Official COLM style files and anonymized sample paper.",
+    "sourceUrl": "https://github.com/COLM-org/Template/releases/tag/2026",
+    "officialSourceUrl": "https://colm.cc/Conferences/2026/CallForPapers",
+    "revision": "963ddd1d5756b6155a4fc6f2404fb941a9c0ca17",
+    "delivery": "download",
+    "assets": [
+      {
+        "path": "README.md",
+        "url": "https://raw.githubusercontent.com/COLM-org/Template/963ddd1d5756b6155a4fc6f2404fb941a9c0ca17/README.md",
+        "sha256": "d61355b19c321543868f62f5ce23ba84bcdc6153f6484c49bfbe59a7d545b59b"
+      },
+      {
+        "path": "colm2026_conference.bib",
+        "url": "https://raw.githubusercontent.com/COLM-org/Template/963ddd1d5756b6155a4fc6f2404fb941a9c0ca17/colm2026_conference.bib",
+        "sha256": "c5fabf46cc7d7a6e527b82860b9a9d658eb07f63abaafa9b7beb631d8abb91bd"
+      },
+      {
+        "path": "colm2026_conference.bst",
+        "url": "https://raw.githubusercontent.com/COLM-org/Template/963ddd1d5756b6155a4fc6f2404fb941a9c0ca17/colm2026_conference.bst",
+        "sha256": "2d67552db7ed38ccfccb5957b52f95656e25c249724761d3cf5f7922ad1844c5"
+      },
+      {
+        "path": "colm2026_conference.sty",
+        "url": "https://raw.githubusercontent.com/COLM-org/Template/963ddd1d5756b6155a4fc6f2404fb941a9c0ca17/colm2026_conference.sty",
+        "sha256": "55962ae80c25a50335825c85d23eb5f1cd9015aa8e77f7af32b483b646c7483e"
+      },
+      {
+        "path": "main.tex",
+        "url": "https://raw.githubusercontent.com/COLM-org/Template/963ddd1d5756b6155a4fc6f2404fb941a9c0ca17/colm2026_conference.tex",
+        "sha256": "a0e12bd90047bfb3f18ae30f339d62c4cbdd6f61958770328dc45bc77a2022be"
+      },
+      {
+        "path": "fancyhdr.sty",
+        "url": "https://raw.githubusercontent.com/COLM-org/Template/963ddd1d5756b6155a4fc6f2404fb941a9c0ca17/fancyhdr.sty",
+        "sha256": "b56ec4434b9f4607529a4b23dc68ad8d4b94f1f631c8cddaf7da78140d53a5ea"
+      },
+      {
+        "path": "math_commands.tex",
+        "url": "https://raw.githubusercontent.com/COLM-org/Template/963ddd1d5756b6155a4fc6f2404fb941a9c0ca17/math_commands.tex",
+        "sha256": "90473c4d0542070db244cea73ef962d6cddc5b2a746757e6a40ddf5fdfb90ba9"
+      },
+      {
+        "path": "natbib.sty",
+        "url": "https://raw.githubusercontent.com/COLM-org/Template/963ddd1d5756b6155a4fc6f2404fb941a9c0ca17/natbib.sty",
+        "sha256": "88bc70c0e48461934cab5b2accef06b74a8b3ac45ad03ccd3f2a6b7e0d6d530d"
+      }
+    ]
+  },
+  {
+    "id": "aaai-2027",
+    "name": "AAAI 2027",
+    "category": "Conference",
+    "year": "2027",
+    "track": "Main Technical Track",
+    "description": "Official AAAI-27 Author Kit for anonymous submissions.",
+    "requirements": "Unzip the Author Kit and import AuthorKit27. Compile AnonymousSubmission2027.tex with a local pdfLaTeX installation.",
+    "sourceUrl": "https://aaai.org/authorkit27/",
+    "officialSourceUrl": "https://aaai.org/conference/aaai/aaai-27/submission-instructions/",
+    "delivery": "external"
+  },
+  {
+    "id": "kdd-2027-research",
+    "name": "KDD 2027",
+    "category": "Conference",
+    "year": "2027",
+    "track": "Research Track · Cycle 1",
+    "description": "Anonymous review starter using the ACM class options in the KDD 2027 call for papers.",
+    "sourceUrl": "https://github.com/borisveytsman/acmart/tree/v2.21",
+    "sourceKind": "publisher",
+    "officialSourceUrl": "https://kdd2027.kdd.org/research-track-call-for-papers/",
+    "revision": "0537b243395b23ad85c5036929f4b1f28429b3a5",
+    "delivery": "bundled",
+    "assets": [],
+    "starterFiles": {
+      "main.tex": "% KDD 2027 Research Track (Cycle 1), anonymous submission.\n% See ARCHIMEDES-SOURCE.txt for the call for papers and ACM class source.\n\\documentclass[sigconf,anonymous,review]{acmart}\n\\setcopyright{none}\n\\settopmatter{printacmref=false}\n\n\\title{Untitled Research Paper}\n\n\\begin{document}\n\\begin{abstract}\nSummarize the research question, approach, and results.\n\\end{abstract}\n\\maketitle\n\n\\section{Introduction}\nDescribe the problem and your contributions.\n\n\\section{Method}\nExplain the approach and the choices needed to reproduce it.\n\n\\section{Experiments}\nReport datasets, baselines, evaluation, and results.\n\n% Add a citation and entries to references.bib before uncommenting.\n% \\bibliographystyle{ACM-Reference-Format}\n% \\bibliography{references}\n\\end{document}\n",
+      "references.bib": "% Add BibTeX entries here and uncomment the bibliography in main.tex.\n"
+    },
+    "bundledAssets": [
+      {
+        "path": "acmart.cls",
+        "resource": "acmart/acmart.cls",
+        "sha256": "cb641fdfe8a6b9bbe171a0794218657c737c4b622c584dab09115a9e269eb296"
+      },
+      {
+        "path": "acmart.dtx",
+        "resource": "acmart/acmart.dtx",
+        "sha256": "60d819ce2c75a0a5fa78e1fbdfd6f967e6635d9c36e8badc6d8193c3d1dc7595"
+      },
+      {
+        "path": "acmart.ins",
+        "resource": "acmart/acmart.ins",
+        "sha256": "fa7daaa9375775ce699f33f909667bdb83c0408fd8d67606926df86c346c4044"
+      },
+      {
+        "path": "ACM-Reference-Format.bst",
+        "resource": "acmart/ACM-Reference-Format.bst",
+        "sha256": "4342d27456645567ef1a027f6474e894715bc31d468f040142fa54540440ad04"
+      },
+      {
+        "path": "README",
+        "resource": "acmart/README",
+        "sha256": "07ed2223a3e8af3612a575d9d8b46a8dee0c639ec035c7caf194c129d78f5975"
+      }
+    ]
+  },
+  {
     "id": "acm-sigconf",
     "name": "ACM · sigconf",
     "category": "Conference",
     "description": "ACM acmart v2.21 sigconf starter. Change class options to match the target venue.",
     "sourceUrl": "https://github.com/borisveytsman/acmart/tree/v2.21",
+    "sourceKind": "publisher",
     "revision": "0537b243395b23ad85c5036929f4b1f28429b3a5",
     "delivery": "bundled",
     "previewUrl": "paper-templates/acm-sigconf.png",

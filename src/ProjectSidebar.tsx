@@ -6,8 +6,9 @@ import { MenuDivider, MenuItem, MenuSurface } from "./Menu";
 import { workspaceName } from "./workspace-name";
 import WorkspaceMenuActions from "./WorkspaceMenuActions";
 import { orderSidebarIds, type SidebarOrder, type SidebarOrderGroup } from "./sidebar-order";
+import SidebarSectionHeader from "./SidebarSectionHeader";
 
-export default function ProjectSidebar({ projects, archivedProjects, workspaces, order, onReorder, activeProjectId, activeWorkspaceId, disabled, onNewProject, onNewWorkspace, onRenameProject, onArchiveProject, onRemoveProject, onChangeProjectWorkspace, onOpenWorkspace, onRenameWorkspace, onDeleteWorkspace, filterError }: {
+export default function ProjectSidebar({ projects, archivedProjects, workspaces, order, onReorder, activeProjectId, activeWorkspaceId, disabled, onNewProject, onNewWorkspace, onRenameProject, onArchiveProject, onRemoveProject, onChangeProjectWorkspace, onOpenWorkspace, onRenameWorkspace, onDeleteWorkspace, filterError, sectionCollapsed, onToggleSection }: {
   projects: ResearchProject[];
   archivedProjects: ResearchProject[];
   workspaces: ProjectWorkspace[];
@@ -26,6 +27,8 @@ export default function ProjectSidebar({ projects, archivedProjects, workspaces,
   onRenameWorkspace: (workspace: ProjectWorkspace) => void;
   onDeleteWorkspace: (workspace: ProjectWorkspace) => void;
   filterError?: string;
+  sectionCollapsed: boolean;
+  onToggleSection: () => void;
 }) {
   const { t } = useUISettings();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -130,16 +133,20 @@ export default function ProjectSidebar({ projects, archivedProjects, workspaces,
   }
 
   return <section className="sidebar-group projects-group work-group">
-    <div className="work-heading">
-      <span>{t("Projects")}</span>
-      <div className="work-heading-actions">
+    <SidebarSectionHeader
+      id="projects"
+      title={t("Projects")}
+      collapsed={sectionCollapsed}
+      onToggle={onToggleSection}
+      className="work-heading"
+      actionsClassName="work-heading-actions"
+    >
         <button className="work-new-project" onClick={onNewProject} title={t("New project")} aria-label={t("New project")} disabled={disabled}>
           <Plus size={15} />
         </button>
-      </div>
-    </div>
+    </SidebarSectionHeader>
 
-    <div className="project-tree work-tree">
+    <div className="project-tree work-tree" id="sidebar-section-content-projects" hidden={sectionCollapsed}>
       {orderedProjects.map((project) => {
           const projectWorkspaces = orderSidebarIds(workspaces.filter((workspace) => workspace.project_id === project.id), order.workspaces[project.id]);
           const projectIds = orderedProjects.map((item) => item.id);
