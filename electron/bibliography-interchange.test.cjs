@@ -421,6 +421,15 @@ test("BibTeX preview and import keep distinct same-title works and match author 
   } finally { if (unmount) await unmount(); data.close(); }
 });
 
+test("a title-skipped duplicate still teaches its strong identifier to later rows", () => {
+  const batch = scope.parseBibliography([
+    "@article{a,title={Shared result},doi={10.5555/shared}}",
+    "@article{b,title={Shared result},eprint={2410.77777}}",
+    "@article{c,title={Different title},eprint={2410.77777}}",
+  ].join("\n"));
+  assert.deepEqual([...scope.indexBibliographyBatch(batch.entries).repeatedRows], [1, 2]);
+});
+
 test("a DOI-matched row can connect a subsequent arXiv alias without hiding a conflicting DOI", () => {
   const batch = scope.parseBibliography([
     "@article{a,title={First title},doi={10.1000/first}}",

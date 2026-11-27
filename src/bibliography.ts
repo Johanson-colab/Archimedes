@@ -277,7 +277,7 @@ export function indexBibliographyBatch(entries: BibliographyEntry[]) {
     }
     if (representative) {
       repeatedRows.add(index);
-      if (titleKey) addIdentity(titleKey, representative);
+      if (titleKey) addIdentity(titleKey, { ...representative, ...paper });
       for (const [field, normalize] of identifierFields) {
         if (!paper[field] || representative[field]) continue;
         representative[field] = paper[field];
@@ -285,8 +285,14 @@ export function indexBibliographyBatch(entries: BibliographyEntry[]) {
       }
       return;
     }
-    if (titleKey && matchBibliographyPaper(paper, [...(byIdentity.get(titleKey) || [])], { titleAlreadyMatched: true })) {
+    const titleMatch = titleKey && matchBibliographyPaper(paper, [...(byIdentity.get(titleKey) || [])], { titleAlreadyMatched: true });
+    if (titleMatch) {
       repeatedRows.add(index);
+      for (const [field, normalize] of identifierFields) {
+        if (!paper[field] || titleMatch[field]) continue;
+        titleMatch[field] = paper[field];
+        addIdentity(field + ":" + normalize(paper[field]), titleMatch);
+      }
       return;
     }
     representative = { ...paper };
