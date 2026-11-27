@@ -1,0 +1,54 @@
+$ node --test --test-name-pattern="surname first|without a year" electron/paper-writing-citations.test.cjs  # PR #413 head
+✖ reuses an entry whose authors are written surname first (67.383292ms)
+✖ reuses a generated entry for a reference without a year (0.226792ms)
+ℹ tests 2
+ℹ suites 0
+ℹ pass 0
+ℹ fail 2
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 197.394208
+
+✖ failing tests:
+
+test at electron/paper-writing-citations.test.cjs:58:1
+✖ reuses an entry whose authors are written surname first (67.383292ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+    {
+  +   content: '@article{local, title={Measured Models}, author={Doe, Jane}, year={2025}}\n' +
+  +     '\n' +
+  +     '@article{doe2025,\n' +
+  +     '  title = {Measured Models},\n' +
+  +     '  author = {Jane Doe},\n' +
+  +     '  year = {2025},\n' +
+  +     '  journal = {Research Notes},\n' +
+  +     '  doi = {10.1000/measured}\n' +
+  +     '}\n',
+  +   key: 'doe2025'
+  -   content: '@article{local, title={Measured Models}, author={Doe, Jane}, year={2025}}',
+  -   key: 'local'
+    }
+  
+      at TestContext.<anonymous> (/Users/fei/Desktop/Archimedes/electron/paper-writing-citations.test.cjs:60:10)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: { content: '@article{local, title={Measured Models}, author={Doe, Jane}, year={2025}}\n\n@article{doe2025,\n  title = {Measured Models},\n  author = {Jane Doe},\n  year = {2025},\n  journal = {Research Notes},\n  doi = {10.1000/measured}\n}\n', key: 'doe2025' },
+    expected: { content: '@article{local, title={Measured Models}, author={Doe, Jane}, year={2025}}', key: 'local' },
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at electron/paper-writing-citations.test.cjs:63:1
+✖ reuses a generated entry for a reference without a year (0.226792ms)
+  Error: The citation key belongs to a different bibliography entry.
+      at Object.prepareManuscriptCitation (eval at <anonymous> (/Users/fei/Desktop/Archimedes/electron/paper-writing-citations.test.cjs:13:9), <anonymous>:31:10)
+      at TestContext.<anonymous> (/Users/fei/Desktop/Archimedes/electron/paper-writing-citations.test.cjs:67:24)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
