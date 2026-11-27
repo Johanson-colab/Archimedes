@@ -33,6 +33,7 @@ export const writing: Record<string, string> = {
   "Compiling paper": "正在编译论文",
   "Conference": "学术会议",
   "Continue writing": "继续写作",
+  "Could not save notes.": "无法保存笔记。",
   "Create a new manuscript or import an existing folder.": "新建稿件，或导入已有文件夹。",
   "Deleted": "已删除",
   "Download from source": "前往官网下载",

@@ -30,7 +30,7 @@ test("thread visibility and snapshot APIs are exposed", () => {
   assert.match(preload, /setResearchThreadVisibility/);
   assert.match(preload, /createResearchThreadSnapshot/);
   assert.match(bridge, /setResearchThreadVisibility: \(threadId: string/);
-  assert.match(bridge, /createResearchThreadSnapshot: \(threadId: string\)/);
+  assert.match(bridge, /createResearchThreadSnapshot: \(threadId: string,/);
 });
 
 test("thread snapshots can be inspected and downloaded from a share dialog", () => {

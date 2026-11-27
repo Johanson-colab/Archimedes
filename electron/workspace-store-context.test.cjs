@@ -4,6 +4,7 @@ const { test } = require("node:test");
 const store = require("./store.cjs");
 const agent = require("./agent.cjs");
 const model = require("./model-config.cjs");
+const { registerLibraryReads } = require("./ipc/library.cjs");
 const { DatabaseSync } = require("node:sqlite");
 const { spawn } = require("node:child_process");
 const { randomUUID } = require("node:crypto");
@@ -27,6 +28,35 @@ test("an in-flight window request retains its database through another selection
   a.close(); gate.resolve(); await pending;
   assert.deepEqual(store.createWorkspaceStore(f.a).getSnapshot().tasks.map(task => task.prompt), ["Origin A"]);
   assert.deepEqual(b.getSnapshot().tasks.map(task => task.prompt), ["Origin B"]);
+});
+
+test("library read handlers resolve identical paper and project IDs in the invoking window's database", t => {
+  const roots = fixture(t);
+  const initial = store.createWorkspaceStore(roots.a);
+  const project = initial.createResearchProject({ name: "Shared project" });
+  const library = initial.listLibraries(project.id)[0];
+  const paper = initial.addPaper(library.id, { title: "Shared paper" });
+  initial.close();
+  fs.cpSync(path.join(roots.a, ".archimedes"), path.join(roots.b, ".archimedes"), { recursive: true });
+
+  const handlers = new Map();
+  const ipc = createWorkspaceIpc({
+    ipcMain: { handle: (name, callback) => handlers.set(name, callback) }, store,
+    workspaceForEvent: event => event.dataRoot,
+  });
+  registerLibraryReads(ipc, store);
+  for (const [root, key] of [[roots.b, "copy"], [roots.a, "original"]]) {
+    const owner = store.createWorkspaceStore(root);
+    owner.setPaperBibliography(paper.id, { citekey: key });
+  }
+  for (const [dataRoot, key] of [[roots.a, "original"], [roots.b, "copy"]]) {
+    const event = { dataRoot, sender: {} };
+    assert.ok(handlers.get("library:list-projects")(event).some(row => row.project_id === project.id));
+    assert.ok(handlers.get("library:list")(event, { projectId: project.id }).some(row => row.id === library.id));
+    assert.equal(handlers.get("library:list-papers")(event, { libraryId: library.id })[0].citekey, key);
+    assert.equal(handlers.get("library:get-bibliography")(event, { paperId: paper.id }).citekey, key);
+    assert.throws(() => handlers.get("library:list-papers")(event, {}), /library ID and a short search query/);
+  }
 });
 
 test("canonical aliases share one data store and same-ID runtime identities remain distinct across roots", t => {
