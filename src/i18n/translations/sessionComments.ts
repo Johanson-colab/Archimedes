@@ -1,10 +1,13 @@
 // Anchored session comments; internal resource identifiers remain compatible.
 export const sessionComments: Record<string, string> = {
   "Add a comment": "添加批注",
+  "Choose turns for a snapshot": "选择要导出的对话轮次",
   "Click anywhere in this session to add a comment. Esc to finish.": "点击会话中的任意位置添加批注，按 Esc 结束。",
   "Comments are saved locally. Collaboration sync is unavailable.": "批注已保存在本机，协作同步暂不可用。",
   "Could not save comment.": "无法保存批注。",
+  "Diagnostic events are excluded from partial snapshots. If a selection is too large, omit sources or choose fewer turns.": "部分会话快照不包含诊断事件。如果所选内容仍然过大，可取消包含来源或减少轮次。",
   "Loading comments…": "正在加载批注…",
+  "Loading conversation turns…": "正在加载对话轮次…",
   "Open a research session to start a shared run.": "打开研究会话以开始共享运行。",
   "Reopen": "重新打开",
   "Research session": "研究会话",
@@ -15,8 +18,14 @@ export const sessionComments: Record<string, string> = {
   "Sessions and comments synced.": "会话和批注已同步。",
   "Share session snapshot": "分享会话快照",
   "Show resolved": "显示已解决",
+  "Showing the latest 2,000 turns.": "显示最近的 2,000 轮对话。",
   "Start a shared run for the current session.": "为当前会话开始共享运行。",
   "Sync sessions": "同步会话",
+  "The partial snapshot includes selected turns and source events. Diagnostic events are excluded.": "部分会话快照包含所选对话和来源事件，不包含诊断事件。",
+  "The selected turns are still too large. Choose fewer turns and try again.": "所选轮次仍然过大，请减少选择后重试。",
   "The snapshot freezes the session at sequence {sequence}.": "此快照保留会话在序号 {sequence} 时的状态。",
+  "This partial snapshot excludes sources and diagnostic events.": "此部分会话快照不包含来源和诊断事件。",
+  "This partial snapshot includes selected turns and source events; diagnostic events are excluded.": "此部分会话快照包含所选对话和来源事件，不包含诊断事件。",
+  "This session is too large for one snapshot. Select turns to export; the latest turn is selected by default.": "会话内容过多，请选择要导出的轮次；默认选中最新一轮。",
   "{count} comments at this position": "此位置有 {count} 条批注",
 };

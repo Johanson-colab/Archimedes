@@ -1,0 +1,621 @@
+{
+  "schemaVersion": 1,
+  "items": [
+    {
+      "id": "paper-lookup",
+      "name": "Paper lookup",
+      "categories": [
+        "discovery"
+      ],
+      "keywords": "论文检索 文献追踪 订阅 预印本 arxiv openalex pubmed DOI citation tracking",
+      "inputs": "research query or identifier",
+      "outputs": "papers, metadata and source links",
+      "integration": "api"
+    },
+    {
+      "id": "research-lookup",
+      "name": "Research evidence lookup",
+      "categories": [
+        "discovery"
+      ],
+      "keywords": "背景调研 研究证据 文献检索 evidence research brief",
+      "inputs": "research question",
+      "outputs": "source-linked evidence packet",
+      "integration": "api"
+    },
+    {
+      "id": "exa-search",
+      "name": "Web research search",
+      "categories": [
+        "discovery"
+      ],
+      "keywords": "网络搜索 网站检索 web search semantic search",
+      "inputs": "search query",
+      "outputs": "ranked web sources",
+      "integration": "api"
+    },
+    {
+      "id": "parallel-web",
+      "name": "Web extraction and monitoring",
+      "categories": [
+        "discovery"
+      ],
+      "keywords": "网页提取 网页监测 网站追踪 web extract monitor",
+      "inputs": "query or URLs",
+      "outputs": "extracted web evidence",
+      "integration": "api"
+    },
+    {
+      "id": "bgpt-paper-search",
+      "name": "Full-text experimental search",
+      "categories": [
+        "discovery"
+      ],
+      "keywords": "全文检索 实验数据 文献 full text experimental evidence",
+      "inputs": "scientific query",
+      "outputs": "structured study evidence",
+      "integration": "mcp"
+    },
+    {
+      "id": "database-lookup",
+      "name": "Scientific database lookup",
+      "categories": [
+        "evidence"
+      ],
+      "keywords": "科学数据库 生物 医学 药物 数据资源 database retrieval",
+      "inputs": "database query and identifiers",
+      "outputs": "records with retrieval provenance",
+      "integration": "api"
+    },
+    {
+      "id": "citation-management",
+      "name": "Citation management",
+      "categories": [
+        "evidence"
+      ],
+      "keywords": "参考文献 引用 bibtex DOI 去重 bibliography citation",
+      "inputs": "references or identifiers",
+      "outputs": "verified bibliography",
+      "integration": "script"
+    },
+    {
+      "id": "pyzotero",
+      "name": "Zotero library integration",
+      "categories": [
+        "evidence"
+      ],
+      "keywords": "zotero 文献库 同步 收藏 library sync",
+      "inputs": "Zotero library and query",
+      "outputs": "library records and attachments",
+      "integration": "api"
+    },
+    {
+      "id": "markitdown",
+      "name": "Document conversion",
+      "categories": [
+        "evidence"
+      ],
+      "keywords": "文件转换 文档提取 office PDF word excel markdown",
+      "inputs": "documents",
+      "outputs": "structured text or Markdown",
+      "integration": "script"
+    },
+    {
+      "id": "liteparse",
+      "name": "Local document parsing",
+      "categories": [
+        "evidence"
+      ],
+      "keywords": "本地解析 PDF OCR 表格提取 离线 parser",
+      "inputs": "PDF, image or Office file",
+      "outputs": "text and layout evidence",
+      "integration": "script"
+    },
+    {
+      "id": "datalad",
+      "name": "Dataset versioning",
+      "categories": [
+        "evidence"
+      ],
+      "keywords": "数据版本 数据谱系 dataset git annex provenance",
+      "inputs": "dataset repository",
+      "outputs": "versioned data records",
+      "integration": "script"
+    },
+    {
+      "id": "lamindb",
+      "name": "Scientific data catalog",
+      "categories": [
+        "evidence"
+      ],
+      "keywords": "数据目录 数据追溯 生物数据 provenance lineage",
+      "inputs": "datasets and metadata",
+      "outputs": "searchable data catalog",
+      "integration": "script"
+    },
+    {
+      "id": "protocolsio-integration",
+      "name": "Research protocol library",
+      "categories": [
+        "evidence"
+      ],
+      "keywords": "实验协议 实验步骤 protocols methods",
+      "inputs": "protocol query or identifier",
+      "outputs": "protocol records and steps",
+      "integration": "api"
+    },
+    {
+      "id": "experimental-design",
+      "name": "Experimental design",
+      "categories": [
+        "experiments"
+      ],
+      "keywords": "实验设计 因子设计 对照 随机化 DOE design experiment",
+      "inputs": "hypothesis, factors and constraints",
+      "outputs": "experimental design and allocation",
+      "integration": "script"
+    },
+    {
+      "id": "statistical-power",
+      "name": "Sample size and power",
+      "categories": [
+        "experiments"
+      ],
+      "keywords": "样本量 功效分析 样本设计 power sample size",
+      "inputs": "effect size and design assumptions",
+      "outputs": "power and sample-size estimates",
+      "integration": "script"
+    },
+    {
+      "id": "hypothesis-generation",
+      "name": "Hypothesis development",
+      "categories": [
+        "experiments"
+      ],
+      "keywords": "假设生成 科研假设 可证伪 hypothesis generation",
+      "inputs": "research question and evidence",
+      "outputs": "testable hypotheses",
+      "integration": "agent"
+    },
+    {
+      "id": "scientific-brainstorming",
+      "name": "Research ideation",
+      "categories": [
+        "experiments"
+      ],
+      "keywords": "科研想法 头脑风暴 idea brainstorm",
+      "inputs": "research question and constraints",
+      "outputs": "candidate research ideas",
+      "integration": "agent"
+    },
+    {
+      "id": "scientific-critical-thinking",
+      "name": "Evidence assessment",
+      "categories": [
+        "experiments"
+      ],
+      "keywords": "批判性思考 偏差 因果 证据评估 bias causal validity",
+      "inputs": "claim and supporting evidence",
+      "outputs": "limitations and validity assessment",
+      "integration": "agent"
+    },
+    {
+      "id": "scholar-evaluation",
+      "name": "Research quality evaluation",
+      "categories": [
+        "experiments"
+      ],
+      "keywords": "研究评价 论文评分 证据质量 rubric evaluation",
+      "inputs": "research work and rubric",
+      "outputs": "structured evaluation",
+      "integration": "script"
+    },
+    {
+      "id": "get-available-resources",
+      "name": "Compute resource planning",
+      "categories": [
+        "experiments"
+      ],
+      "keywords": "计算资源 显存 内存 GPU CPU 资源规划 memory compute",
+      "inputs": "planned local workload",
+      "outputs": "bounded resource inventory",
+      "integration": "script"
+    },
+    {
+      "id": "scikit-learn",
+      "name": "Machine learning evaluation",
+      "categories": [
+        "experiments"
+      ],
+      "keywords": "机器学习 分类 回归 聚类 交叉验证 sklearn machine learning",
+      "inputs": "dataset and evaluation protocol",
+      "outputs": "fitted model and validation metrics",
+      "integration": "script"
+    },
+    {
+      "id": "pytorch-lightning",
+      "name": "Model training workflows",
+      "categories": [
+        "experiments"
+      ],
+      "keywords": "模型训练 深度学习 训练循环 checkpoint lightning",
+      "inputs": "training code and dataset",
+      "outputs": "training runs and checkpoints",
+      "integration": "script"
+    },
+    {
+      "id": "transformers",
+      "name": "Transformer model workflows",
+      "categories": [
+        "experiments"
+      ],
+      "keywords": "大模型 微调 transformer huggingface tokenizer finetune",
+      "inputs": "model, data and task",
+      "outputs": "model predictions or training outputs",
+      "integration": "script"
+    },
+    {
+      "id": "stable-baselines3",
+      "name": "Reinforcement learning evaluation",
+      "categories": [
+        "experiments"
+      ],
+      "keywords": "强化学习 PPO DQN RL benchmark",
+      "inputs": "environment and training configuration",
+      "outputs": "policy and evaluation results",
+      "integration": "script"
+    },
+    {
+      "id": "exploratory-data-analysis",
+      "name": "Exploratory data analysis",
+      "categories": [
+        "analysis"
+      ],
+      "keywords": "数据分析台 数据探索 数据质量 CSV Excel exploratory data analysis",
+      "inputs": "local dataset",
+      "outputs": "profile, quality checks and analysis plan",
+      "integration": "script"
+    },
+    {
+      "id": "statistical-analysis",
+      "name": "Statistical analysis",
+      "categories": [
+        "analysis"
+      ],
+      "keywords": "统计分析 显著性 差异检验 t-test anova hypothesis testing",
+      "inputs": "research data and statistical question",
+      "outputs": "tests, effect sizes and interpretation",
+      "integration": "script"
+    },
+    {
+      "id": "statsmodels",
+      "name": "Statistical modeling",
+      "categories": [
+        "analysis"
+      ],
+      "keywords": "回归 计量 时间序列 残差 regression econometrics",
+      "inputs": "tabular or time-series data",
+      "outputs": "statistical models and diagnostics",
+      "integration": "script"
+    },
+    {
+      "id": "pymc",
+      "name": "Bayesian modeling",
+      "categories": [
+        "analysis"
+      ],
+      "keywords": "贝叶斯 后验 MCMC 概率模型 bayesian posterior",
+      "inputs": "data and probabilistic model",
+      "outputs": "posterior estimates and diagnostics",
+      "integration": "script"
+    },
+    {
+      "id": "matplotlib",
+      "name": "Scientific plotting",
+      "categories": [
+        "analysis"
+      ],
+      "keywords": "科研绘图 折线图 散点图 子图 matplotlib plot chart",
+      "inputs": "data and plot specification",
+      "outputs": "PNG, PDF or SVG figures",
+      "integration": "script"
+    },
+    {
+      "id": "seaborn",
+      "name": "Statistical visualization",
+      "categories": [
+        "analysis"
+      ],
+      "keywords": "统计绘图 热力图 小提琴图 箱线图 seaborn heatmap",
+      "inputs": "tabular data",
+      "outputs": "statistical charts",
+      "integration": "script"
+    },
+    {
+      "id": "scientific-visualization",
+      "name": "Publication figure workflows",
+      "categories": [
+        "analysis"
+      ],
+      "keywords": "论文配图 科研可视化 多面板 出版 图表 visualization publication figure",
+      "inputs": "data, figures and publication requirements",
+      "outputs": "publication figures and checks",
+      "integration": "script"
+    },
+    {
+      "id": "sympy",
+      "name": "Symbolic mathematics",
+      "categories": [
+        "analysis"
+      ],
+      "keywords": "符号计算 公式 推导 积分 微分 sympy symbolic mathematics",
+      "inputs": "expressions and assumptions",
+      "outputs": "symbolic results and derivations",
+      "integration": "script"
+    },
+    {
+      "id": "networkx",
+      "name": "Network and graph analysis",
+      "categories": [
+        "analysis"
+      ],
+      "keywords": "网络分析 图算法 引用网络 关系图 network graph",
+      "inputs": "nodes and edges",
+      "outputs": "graph metrics and layouts",
+      "integration": "script"
+    },
+    {
+      "id": "polars",
+      "name": "Tabular data processing",
+      "categories": [
+        "analysis"
+      ],
+      "keywords": "数据清洗 表格处理 大表 polars dataframe parquet",
+      "inputs": "tabular files and transformations",
+      "outputs": "processed tables",
+      "integration": "script"
+    },
+    {
+      "id": "dask",
+      "name": "Large dataset processing",
+      "categories": [
+        "analysis"
+      ],
+      "keywords": "大数据 并行计算 分块 dask distributed dataset",
+      "inputs": "larger-than-memory dataset",
+      "outputs": "partitioned processing results",
+      "integration": "script"
+    },
+    {
+      "id": "umap-learn",
+      "name": "Dimensionality reduction",
+      "categories": [
+        "analysis"
+      ],
+      "keywords": "降维 嵌入 可视化 UMAP embedding",
+      "inputs": "feature matrix",
+      "outputs": "low-dimensional embeddings",
+      "integration": "script"
+    },
+    {
+      "id": "shap",
+      "name": "Model explanation",
+      "categories": [
+        "analysis"
+      ],
+      "keywords": "可解释性 特征归因 SHAP feature importance",
+      "inputs": "trained model and evaluation data",
+      "outputs": "attribution results and figures",
+      "integration": "script"
+    },
+    {
+      "id": "geopandas",
+      "name": "Geospatial analysis",
+      "categories": [
+        "analysis"
+      ],
+      "keywords": "地理 空间分析 地图 GIS geospatial shapefile",
+      "inputs": "geospatial data and coordinate system",
+      "outputs": "spatial results and maps",
+      "integration": "script"
+    },
+    {
+      "id": "astropy",
+      "name": "Astronomical data analysis",
+      "categories": [
+        "analysis"
+      ],
+      "keywords": "天文 FITS 坐标 astronomy astropy",
+      "inputs": "astronomy data and units",
+      "outputs": "astronomical calculations and tables",
+      "integration": "script"
+    },
+    {
+      "id": "biopython",
+      "name": "Biological sequence analysis",
+      "categories": [
+        "analysis"
+      ],
+      "keywords": "生物 序列 DNA 蛋白 fasta BLAST sequence",
+      "inputs": "sequences or biological identifiers",
+      "outputs": "sequence analyses and records",
+      "integration": "script"
+    },
+    {
+      "id": "scanpy",
+      "name": "Single-cell analysis",
+      "categories": [
+        "analysis"
+      ],
+      "keywords": "单细胞 RNA 细胞聚类 single cell scanpy",
+      "inputs": "single-cell expression data",
+      "outputs": "QC, embeddings and marker results",
+      "integration": "script"
+    },
+    {
+      "id": "anndata",
+      "name": "Annotated biological matrices",
+      "categories": [
+        "analysis"
+      ],
+      "keywords": "注释矩阵 h5ad 单细胞 数据管理 anndata",
+      "inputs": "annotated matrix",
+      "outputs": "validated annotated datasets",
+      "integration": "script"
+    },
+    {
+      "id": "pydeseq2",
+      "name": "Differential expression analysis",
+      "categories": [
+        "analysis"
+      ],
+      "keywords": "差异表达 RNA测序 bulk RNA DESeq2",
+      "inputs": "count matrix and sample metadata",
+      "outputs": "differential expression results",
+      "integration": "script"
+    },
+    {
+      "id": "rdkit",
+      "name": "Molecular data analysis",
+      "categories": [
+        "analysis"
+      ],
+      "keywords": "化学 分子 SMILES 药物 指纹 RDKit molecule",
+      "inputs": "molecular structures and analysis request",
+      "outputs": "descriptors, structures and molecular results",
+      "integration": "script"
+    },
+    {
+      "id": "pymatgen",
+      "name": "Materials data analysis",
+      "categories": [
+        "analysis"
+      ],
+      "keywords": "材料 晶体 结构 pymatgen materials crystal",
+      "inputs": "material structures or identifiers",
+      "outputs": "structure analyses and material records",
+      "integration": "script"
+    },
+    {
+      "id": "timesfm-forecasting",
+      "name": "Time-series forecasting",
+      "categories": [
+        "analysis"
+      ],
+      "keywords": "时间序列预测 预测台 timesfm forecasting",
+      "inputs": "time series and horizon",
+      "outputs": "forecasts and evaluation",
+      "integration": "script"
+    },
+    {
+      "id": "uncertainty-and-units",
+      "name": "Measurement uncertainty and units",
+      "categories": [
+        "analysis"
+      ],
+      "keywords": "不确定度 单位 误差传播 uncertainty units measurement",
+      "inputs": "measurements, units and uncertainty",
+      "outputs": "unit-aware results and error propagation",
+      "integration": "script"
+    },
+    {
+      "id": "literature-review",
+      "name": "Literature review",
+      "categories": [
+        "writing"
+      ],
+      "keywords": "文献综述 系统综述 检索筛选 literature review systematic review",
+      "inputs": "review question and sources",
+      "outputs": "evidence synthesis and review",
+      "integration": "agent"
+    },
+    {
+      "id": "scientific-writing",
+      "name": "Scientific manuscript writing",
+      "categories": [
+        "writing"
+      ],
+      "keywords": "科研写作 论文写作 手稿 scientific writing manuscript",
+      "inputs": "evidence, outline and manuscript",
+      "outputs": "evidence-grounded draft and checks",
+      "integration": "agent"
+    },
+    {
+      "id": "peer-review",
+      "name": "Manuscript review",
+      "categories": [
+        "writing"
+      ],
+      "keywords": "论文评审 审稿 回复审稿 peer review reviewer",
+      "inputs": "manuscript and review criteria",
+      "outputs": "structured review and revision priorities",
+      "integration": "agent"
+    },
+    {
+      "id": "scientific-slides",
+      "name": "Scientific presentations",
+      "categories": [
+        "writing"
+      ],
+      "keywords": "科研汇报 论文转PPT 幻灯片 scientific slides presentation",
+      "inputs": "research content and audience",
+      "outputs": "slide deck and validation artifacts",
+      "integration": "script"
+    },
+    {
+      "id": "scientific-schematics",
+      "name": "Scientific diagrams",
+      "categories": [
+        "writing"
+      ],
+      "keywords": "机制图 流程图 示意图 scientific schematic diagram",
+      "inputs": "scientific structure and visual requirements",
+      "outputs": "scientific diagram",
+      "integration": "api"
+    },
+    {
+      "id": "markdown-mermaid-writing",
+      "name": "Markdown and Mermaid documents",
+      "categories": [
+        "writing"
+      ],
+      "keywords": "技术文档 markdown mermaid 流程图 架构图",
+      "inputs": "structured content or process",
+      "outputs": "Markdown documents and diagrams",
+      "integration": "script"
+    },
+    {
+      "id": "latex-posters",
+      "name": "Research posters",
+      "categories": [
+        "writing"
+      ],
+      "keywords": "学术海报 科研海报 poster latex",
+      "inputs": "research content and poster dimensions",
+      "outputs": "LaTeX poster and PDF",
+      "integration": "script"
+    },
+    {
+      "id": "venue-templates",
+      "name": "Publication templates",
+      "categories": [
+        "writing"
+      ],
+      "keywords": "期刊模板 会议模板 格式 排版 venue template latex",
+      "inputs": "target venue and manuscript",
+      "outputs": "venue-specific template and checks",
+      "integration": "script"
+    },
+    {
+      "id": "research-grants",
+      "name": "Research grant preparation",
+      "categories": [
+        "writing"
+      ],
+      "keywords": "科研基金 项目申请 经费 资助 grant proposal",
+      "inputs": "funding call and research plan",
+      "outputs": "grant outline and compliance checks",
+      "integration": "agent"
+    }
+  ]
+}

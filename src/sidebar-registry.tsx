@@ -15,7 +15,7 @@ export type SidebarSection = "knowledge" | "create" | "evaluate";
 export type SidebarModuleId = "library" | "literature-review" | "daily" | "news" | "benchmark-radar" | "extensions" | "reproduce" | "writing" | "image-creation" | "data-charts" | "data-analysis" | "paper-review" | "paper-to-slides";
 
 /** Main sections that are not modules: they stay hardcoded in App. */
-export type MainSection = "chat" | "files" | SidebarModuleId | `plugin:${string}`;
+export type MainSection = "chat" | "files" | "created-apps" | SidebarModuleId | `plugin:${string}` | `research-app:${string}`;
 
 /** A loaded plugin module contributes one view through its activate() return. */
 export type PluginContribution = {
@@ -39,7 +39,7 @@ export type SidebarEntry = {
   destination: { type: "section"; section: MainSection };
   badge?: string;
   disabled?: boolean;
-  source?: "core" | `plugin:${string}`;
+  source?: "core" | `plugin:${string}` | `research-app:${string}`;
   /** Keep the view mounted (hidden) while another module is active. */
   keepMounted?: boolean;
   /** Wrapper class used while `keepMounted`. */
@@ -76,6 +76,16 @@ export const coreSidebarEntries: SidebarEntry[] = ([
 
 /** Runtime plugin modules register here; the projection below merges them. */
 const pluginEntriesStore: SidebarEntry[] = [];
+const generatedAppEntriesStore: SidebarEntry[] = [];
+
+export function registerGeneratedAppEntries(apps: GeneratedResearchApp[]) {
+  generatedAppEntriesStore.splice(0, generatedAppEntriesStore.length, ...apps.map((app, index): SidebarEntry => ({
+    id: `research-app:${app.id}`, commandId: `open-research-app-${app.id}`, section: "create",
+    labelKey: app.name, titleKey: app.name, researchCategory: app.category, icon: Puzzle, order: 2000 + index,
+    destination: { type: "section", section: `research-app:${app.id}` }, source: `research-app:${app.id}`,
+    disabled: !app.pinned || app.status === "invalid", requiresWorkspace: true,
+  })));
+}
 
 export function registerPluginEntries(entries: SidebarEntry[]) {
   pluginEntriesStore.splice(0, pluginEntriesStore.length, ...entries);
@@ -86,12 +96,12 @@ export function pluginSidebarEntries(): readonly SidebarEntry[] {
 }
 
 export function sidebarEntries(section?: SidebarSection) {
-  return [...coreSidebarEntries, ...pluginEntriesStore]
+  return [...coreSidebarEntries, ...pluginEntriesStore, ...generatedAppEntriesStore]
     .filter((entry) => !section || entry.section === section)
     .slice()
     .sort((left, right) => left.order - right.order);
 }
 
 export function sidebarModule(id: string): SidebarEntry | undefined {
-  return coreSidebarEntries.find((entry) => entry.id === id) ?? pluginEntriesStore.find((entry) => entry.id === id);
+  return coreSidebarEntries.find((entry) => entry.id === id) ?? pluginEntriesStore.find((entry) => entry.id === id) ?? generatedAppEntriesStore.find((entry) => entry.id === id);
 }
