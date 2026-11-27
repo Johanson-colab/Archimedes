@@ -48,6 +48,7 @@ function baseInstructions(mode) {
     "Never claim an action completed until its tool result confirms completion.",
     "Keep the final response focused, evidence-aware, and explicit about uncertainty.",
     modeInstructions[mode] || modeInstructions["standard"],
+    ...(mode === "create" ? [require("./creator-capabilities.cjs").creatorInstructions()] : []),
   ].join(" ");
 }
 

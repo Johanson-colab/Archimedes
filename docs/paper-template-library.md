@@ -1,17 +1,17 @@
 # Paper Writing template library
 
-Open Paper Writing → Projects to browse the library. Search by name or year,
-select a template, enter a project folder, then create it. The sidebar contains
-only All templates (which resets search) and Import existing folder; its labels
-use 13px text.
-The existing folder import remains available for Overleaf exports and other kits.
+In Paper Writing, open **Projects**. **Minimal article** is
+selected by default. It contains one `main.tex` file using LaTeX's standard
+`article` class and can be created offline. On first compile, the managed engine
+may need Internet access to set up its fonts and packages.
 
-The chooser contains six conference kits plus five publisher/journal starters. Official author kits and clearly labelled community mirrors are downloaded on first
-use from raw.githubusercontent.com at pinned upstream commits. Their text assets
-are SHA-256 verified before use and cached under Electron's userData directory
+Search by venue, year or track. Select a template, name the project folder, and
+click **Create project**. The downloadable conference kits and community mirrors
+come from pinned upstream commits. Archimedes verifies their assets against
+SHA-256 digests before use and caches them under Electron's userData directory
 in `latex-template-cache`. Subsequent project creation can use that cache offline.
-No upstream style files are modified. The original main document is renamed to
-`main.tex`; an `ARCHIMEDES-SOURCE.txt` file records the source and revision.
+Archimedes preserves the upstream style files. Each downloaded project starts
+with `main.tex` and records its source and revision in `ARCHIMEDES-SOURCE.txt`.
 
 ## Sources
 
@@ -22,14 +22,28 @@ No upstream style files are modified. The original main document is renamed to
 | ACL / EMNLP / NAACL / EACL current style | https://github.com/acl-org/acl-style-files | Download and cache |
 | NeurIPS 2026 | https://github.com/WuizaKaseiyo/paper-templates | Community mirror; download and cache |
 | ICML 2026 | https://github.com/lunatila/icml-paper-skill | Community mirror; download and cache |
+| COLM 2026 Main conference | [2026 release](https://github.com/COLM-org/Template/releases/tag/2026) · [Call for papers](https://colm.cc/Conferences/2026/CallForPapers) | Download and cache the pinned submission kit |
+| AAAI 2027 Main Technical Track | [Author Kit ZIP](https://aaai.org/authorkit27/) · [Submission instructions](https://aaai.org/conference/aaai/aaai-27/submission-instructions/) | Download in the browser and import the extracted folder |
+| KDD 2027 Research Track, Cycle 1 | [ACM acmart class](https://github.com/borisveytsman/acmart/tree/v2.21) · [Call for papers](https://kdd2027.kdd.org/research-track-call-for-papers/) | Bundled Archimedes starter with the ACM `sigconf,anonymous,review` options |
+
+For AAAI, select **AAAI 2027** and click **Download official author kit**.
+Unzip the download, then use **Import existing folder** to select `AuthorKit27`.
+Open `AnonymousSubmission2027.tex` as the main document. The official style file
+requires pdfTeX. To build the sample, run `pdflatex AnonymousSubmission2027.tex`,
+`bibtex AnonymousSubmission2027`, then `pdflatex AnonymousSubmission2027.tex`
+twice in the imported `AuthorKit27` folder with a local TeX distribution.
+The Paper Writing **Recompile** button uses managed Tectonic (XeTeX), which the
+AAAI style file rejects with `pdfTeX is required to compile this document.`
+
+KDD also matches the generic **ACM · sigconf** card in search. The **KDD 2027**
+card names the track and cycle and links the corresponding call for papers.
 
 Exact immutable revisions, asset URLs and checksums are stored in
 `shared/official-latex-templates.json`. Upstream terms and venue submission rules
-continue to apply. These kits are fetched on the user's machine rather than
-redistributed as bundled third-party source. Years identify specific kits, not a
-promise that the kit matches a venue's next submission deadline. The NeurIPS and ICML websites remain blocked by this cloud network policy.
-The 2026 kits are fetched from GitHub community mirrors, not from the conference
-organizations. The cards expose both the mirror and official venue instructions.
+continue to apply. Use the year to identify the kit and check the instructions
+for your submission deadline.
+The NeurIPS 2026 and ICML 2026 kits come from GitHub community mirrors. Their
+cards link to both the mirror and official venue instructions.
 No usable 2027 kit was found in this search, so the UI labels them as 2026.
 Hashes verify the pinned mirror contents, not equivalence to the latest official
 ZIP. Different mirror snapshots can contain different revisions (for example,
@@ -40,6 +54,24 @@ The ACL kit is shared by ACL, EMNLP, NAACL and EACL. They share one card so it
 does not imply different style files; every venue name is searchable.
 
 ## Verification
+
+Electron 43.4.1 on macOS arm64 created and saved a minimal article, a COLM 2026
+paper, and a KDD 2027 Research Track paper and displayed their PDFs. The minimal
+article built with the managed engine and dependency cache populated and an
+unreachable proxy. COLM's checked assets were reused with the downloader
+disabled. The AAAI kit imported with `AnonymousSubmission2027.tex` selected and
+the managed compiler reported the pdfTeX requirement above. The existing
+manuscript fixture stayed byte-for-byte identical.
+
+The comparisons use Electron at 1440 × 900 with the Paper theme and English UI.
+
+| Surface | Before | After |
+| --- | --- | --- |
+| Default template | ![NeurIPS selected by default](assets/paper-templates/chooser-before.png) | ![Minimal article selected by default](assets/paper-templates/chooser-after.png) |
+| KDD search | ![Generic ACM search result](assets/paper-templates/venue-before.png) | ![KDD 2027 and generic ACM search results](assets/paper-templates/venue-after.png) |
+| Resulting manuscript | ![NeurIPS default manuscript](assets/paper-templates/manuscript-before.png) | ![Minimal article default manuscript](assets/paper-templates/manuscript-after.png) |
+
+### Earlier template library validation
 
 - Real upstream download, checksum and creation checks passed for all six kits.
 - The original ICLR 2026, ICLR 2027, CVPR 2026, NeurIPS 2026 and ICML 2026 sample papers compiled with latexmk.
@@ -54,9 +86,8 @@ does not imply different style files; every venue name is searchable.
   as UTF-8.
 - Legacy general-layout templates remain covered by compilation regression tests;
   they no longer appear in the template chooser.
-- UI screenshots use the real PaperWritingView in a local Vite fixture at
-  1440 × 1000. The Electron window was not tested because this cloud session's
-  desktop startup remains unavailable. See the before/after evidence below.
+- The earlier UI screenshots use PaperWritingView in a local Vite fixture at
+  1440 × 1000.
 
 ![Before](assets/paper-template-library/before.png)
 ![After](assets/paper-template-library/after.png)

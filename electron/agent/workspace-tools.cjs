@@ -1,7 +1,8 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { createHash } = require('node:crypto');
-const { workspacePath, fileChangeForContent } = require('../workspace-files.cjs');
+const { isWithinRoot, resolveWorkspaceTarget } = require('../security/path-sandbox.cjs');
+const { fileChangeForContent } = require('../workspace-files.cjs');
 
 const MAX_READ_BYTES = 8 * 1024 * 1024;
 const MAX_OUTPUT_CHARS = 64_000;
@@ -19,8 +20,7 @@ function visibleRelative(value, allowRoot = false) {
 
 function visibleExisting(root, value, allowRoot = false) {
   const relative = visibleRelative(value, allowRoot);
-  const target = workspacePath(root, relative);
-  const realRoot = fs.realpathSync(root);
+  const { target, root: realRoot } = resolveWorkspaceTarget(root, relative);
   visibleRelative(path.relative(realRoot, target).split(path.sep).join('/'), allowRoot);
   return { root: realRoot, target, relative: path.relative(realRoot, target).split(path.sep).join('/') || '.' };
 }
@@ -71,7 +71,7 @@ function searchWorkspace(root, { query, directory = '', caseSensitive = false, s
     let handle;
     try {
       const real = fs.realpathSync(current);
-      if (fs.lstatSync(current).isSymbolicLink() || (real !== resolved.root && !real.startsWith(resolved.root + path.sep))) { skipped += 1; continue; }
+      if (fs.lstatSync(current).isSymbolicLink() || !isWithinRoot(resolved.root, real)) { skipped += 1; continue; }
       handle = fs.opendirSync(current);
       directories += 1;
     }
