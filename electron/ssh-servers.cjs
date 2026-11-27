@@ -9,7 +9,7 @@
  * the machine you are sitting at, not to one project.
  */
 
-const { spawn } = require("node:child_process");
+const { spawn, execFileSync } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
 const { randomUUID } = require("node:crypto");
@@ -51,10 +51,34 @@ function write(data) {
   const target = requirePath();
   fs.mkdirSync(path.dirname(target), { recursive: true });
   const temporary = `${target}.${process.pid}.tmp`;
-  // 0600: the file names hosts and users, which is not secret but is nobody
-  // else's business on a shared machine.
-  fs.writeFileSync(temporary, JSON.stringify(data, null, 2), { mode: 0o600 });
-  fs.renameSync(temporary, target);
+  // Protect the empty temporary file before writing connection metadata.
+  let ownsTemporary = false;
+  try {
+    fs.writeFileSync(temporary, "", { mode: 0o600, flag: "wx" });
+    ownsTemporary = true;
+    if (process.platform === "win32") {
+      const script = `
+        $ErrorActionPreference = 'Stop'
+        $sid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User
+        $acl = New-Object System.Security.AccessControl.FileSecurity
+        $acl.SetAccessRuleProtection($true, $false)
+        $acl.SetOwner($sid)
+        $rule = New-Object System.Security.AccessControl.FileSystemAccessRule($sid, 'FullControl', 'Allow')
+        $acl.AddAccessRule($rule)
+        Set-Acl -LiteralPath $env:ARCHIMEDES_SSH_SETTINGS_TEMP -AclObject $acl
+      `;
+      execFileSync(path.join(process.env.SystemRoot || "C:\\Windows", "System32", "WindowsPowerShell", "v1.0", "powershell.exe"),
+        ["-NoProfile", "-NonInteractive", "-Command", script], {
+          windowsHide: true, timeout: 10_000, stdio: "pipe",
+          env: { ...process.env, ARCHIMEDES_SSH_SETTINGS_TEMP: temporary },
+        });
+    }
+    fs.writeFileSync(temporary, JSON.stringify(data, null, 2));
+    fs.renameSync(temporary, target);
+  } catch (error) {
+    if (ownsTemporary) fs.rmSync(temporary, { force: true });
+    throw error;
+  }
 }
 
 function text(value, limit) {
@@ -169,7 +193,13 @@ function ensureAskpass() {
 function run(command, args, { timeoutMs = 25_000, env = {} } = {}) {
   return new Promise((resolve) => {
     let settled = false;
-    const finish = (value) => { if (!settled) { settled = true; resolve(value); } };
+    let timer;
+    const finish = (value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(value);
+    };
     let child;
     try { child = spawn(command, args, { windowsHide: true, env: { ...process.env, ...env } }); }
     catch (error) { finish({ ok: false, detail: error?.message || "ssh could not start" }); return; }
@@ -178,7 +208,10 @@ function run(command, args, { timeoutMs = 25_000, env = {} } = {}) {
     child.stderr.on("data", (chunk) => output.push(chunk));
     child.once("error", (error) => finish({ ok: false, detail: error?.message || "ssh could not start" }));
     child.once("close", (code) => finish({ ok: code === 0, detail: Buffer.concat(output).toString("utf8").trim() }));
-    const timer = setTimeout(() => { child.kill("SIGKILL"); finish({ ok: false, detail: "The connection timed out." }); }, timeoutMs);
+    timer = setTimeout(() => {
+      finish({ ok: false, detail: "The connection timed out." });
+      try { child.kill("SIGKILL"); } catch { /* The process may already have exited. */ }
+    }, timeoutMs);
     if (timer.unref) timer.unref();
   });
 }
