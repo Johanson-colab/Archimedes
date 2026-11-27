@@ -65,6 +65,28 @@ test("Responses replays reasoning and call IDs in memory and streams the final t
   assert.equal(final.content, "OK");
 });
 
+test("aborted Responses streams retain text already delivered", async t => {
+  const controller = new AbortController();
+  let delivered;
+  const firstDelta = new Promise((resolve) => { delivered = resolve; });
+  t.mock.method(global, "fetch", async (_url, options) => {
+    const encoder = new TextEncoder();
+    let streamController;
+    const stream = new ReadableStream({
+      start(current) {
+        streamController = current;
+        current.enqueue(encoder.encode('data: {"type":"response.output_text.delta","delta":"partial answer"}\n\n'));
+        options.signal.addEventListener("abort", () => streamController.error(new DOMException("Aborted", "AbortError")), { once: true });
+      },
+    });
+    return new Response(stream, { headers: { "content-type": "text/event-stream" } });
+  });
+  const pending = complete(official, prompt, { signal: controller.signal, onTextDelta: delivered });
+  await firstDelta;
+  controller.abort();
+  await assert.rejects(pending, error => error.name === "AbortError" && error.partialResponse === "partial answer");
+});
+
 test("Responses surfaces an incomplete stream and a rejected schema without another POST", async t => {
   let response;
   const fetch = t.mock.method(global, "fetch", async () => response);

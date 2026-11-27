@@ -47,7 +47,11 @@ async function readStream(response, onTextDelta) {
       if (done || terminal) break;
     }
   } catch (error) {
-    if (error.name === "AbortError" || error instanceof ModelIncompleteError) throw error;
+    if (error.name === "AbortError") {
+      error.partialResponse = text;
+      throw error;
+    }
+    if (error instanceof ModelIncompleteError) throw error;
     throw new ModelIncompleteError({ provider: "openai", reason: "stream_error", partialResponse: text });
   } finally {
     // An aborted connection can already have errored the readable stream.
