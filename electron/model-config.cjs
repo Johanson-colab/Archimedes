@@ -1,3 +1,5 @@
+const { completeResponses } = require("./agent/openai-responses.cjs");
+const { isOfficialOpenAI, openAIWorkModel } = require("./agent/openai-work-models.cjs");
 const fs = require("node:fs");
 const path = require("node:path");
 
@@ -139,7 +141,8 @@ async function listProviderModels(input = {}, role = "agent") {
     }
     const response = await fetch(modelListUrl(provider, baseUrl), { headers, signal: controller.signal });
     if (!response.ok) throw new Error(`Model catalog request failed (${response.status}).`);
-    const models = extractModelIds(await response.json());
+    const ids = extractModelIds(await response.json());
+    const models = input.purpose === "work" && isOfficialOpenAI({ provider, baseUrl }) ? ids.filter(openAIWorkModel) : ids;
     if (!models.length) throw new Error("The provider returned no compatible chat models.");
     return { models, source: "live" };
   } catch (error) {
@@ -202,6 +205,13 @@ async function testModelConfig(input = null, role = "agent") {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 25_000);
   try {
+    const profile = isOfficialOpenAI(candidate) ? openAIWorkModel(candidate.model) : null;
+    if (profile?.endpoint === "responses") {
+      const result = await completeResponses(candidate, { ...profile, stream: false }, [{ role: "user", content: "Reply with OK." }], {
+        signal: controller.signal, tools: [], effort: profile.efforts[0], onTextDelta: () => {},
+      });
+      return { ok: true, latencyMs: Date.now() - startedAt, resolvedModel: result.resolvedModel };
+    }
     const anthropic = candidate.provider === "anthropic";
     const response = await fetch(`${candidate.baseUrl.replace(/\/+$/, "")}/${anthropic ? "messages" : "chat/completions"}`, {
       method: "POST",
@@ -212,8 +222,7 @@ async function testModelConfig(input = null, role = "agent") {
       signal: controller.signal,
     });
     if (!response.ok) {
-      const detail = (await response.text()).slice(0, 500);
-      throw new Error(`Connection failed (${response.status}): ${detail}`);
+      throw new Error(`Connection failed (${response.status}).`);
     }
     const body = await response.json();
     if (anthropic ? !Array.isArray(body?.content) : !body?.choices?.[0]?.message) throw new Error("The endpoint responded, but did not return a compatible message.");

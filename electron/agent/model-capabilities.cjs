@@ -1,3 +1,4 @@
+const { isOfficialOpenAI, openAIWorkModel } = require("./openai-work-models.cjs");
 const THINKING_EFFORTS = ["low", "medium", "high"];
 const CONTEXT_LENGTHS = ["standard", "extra-long"];
 const STANDARD_CONTEXT_CHARS = 500_000;
@@ -12,6 +13,7 @@ function normalizedConfig(config = {}) {
 
 function isNativeThinkingModel(config = {}) {
   const { provider, model } = normalizedConfig(config);
+  if (isOfficialOpenAI(config)) return Boolean(openAIWorkModel(model)?.efforts.length);
   if (provider === "openai" || provider === "gemini") return true;
   if (provider === "openrouter") return /^(openai\/)?(gpt-[56]|o[134])/.test(model);
   return provider === "custom" && /^(gpt-[56]|o[134])/.test(model);
@@ -28,7 +30,7 @@ function getModelCapabilities(config = {}) {
   const nativeThinking = isNativeThinkingModel(config);
   const extraLongContext = supportsExtraLongContext(config);
   return {
-    thinkingEfforts: nativeThinking ? THINKING_EFFORTS : [],
+    thinkingEfforts: isOfficialOpenAI(config) ? openAIWorkModel(config.model)?.efforts ?? [] : nativeThinking ? THINKING_EFFORTS : [],
     contextLengths: extraLongContext ? CONTEXT_LENGTHS : ["standard"],
     nativeThinking,
     contextCharacterLimits: {
