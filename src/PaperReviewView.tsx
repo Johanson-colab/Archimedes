@@ -252,15 +252,21 @@ export default function PaperReviewView({ bridge, workspace, projectId, active, 
       setError(t("Choose a PDF first."));
       return;
     }
-    if (manuscript && !await confirm({
+    let handoff = manuscript;
+    if (manuscript && bridge.prepareManuscriptReview) {
+      // Re-resolve the destination after any in-page settings change so the
+      // consent prompt and the submitted run describe the same provider.
+      handoff = await bridge.prepareManuscriptReview({ projectId: projectId ?? "", workspaceId: manuscript.origin.workspaceId, manifestPath: manuscript.origin.manifestPath }) ?? manuscript;
+    }
+    if (handoff && !await confirm({
       title: "Send manuscript text for simulated review?",
       description: t("Send extracted text from this PDF to {provider} at {endpoint}, using {model}. The PDF file stays on this machine.", {
-        provider: manuscript.destination.provider, endpoint: manuscript.destination.baseUrl, model: manuscript.destination.model,
+        provider: handoff.destination.provider, endpoint: handoff.destination.baseUrl, model: handoff.destination.model,
       }),
       confirmLabel: "Send manuscript text",
     })) return;
-    const source: PaperReviewSource = manuscript
-      ? { kind: "manuscript", manifestPath: manuscript.origin.manifestPath, workspaceId: manuscript.origin.workspaceId, buildId: manuscript.origin.buildId, destination: manuscript.destination }
+    const source: PaperReviewSource = handoff
+      ? { kind: "manuscript", manifestPath: handoff.origin.manifestPath, workspaceId: handoff.origin.workspaceId, buildId: handoff.origin.buildId, destination: handoff.destination }
       : sourceKind === "library"
       ? { kind: "library", paperId }
       : sourceKind === "arxiv"
