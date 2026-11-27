@@ -5,7 +5,7 @@ const { createHash, randomUUID } = require('node:crypto');
 
 const SOURCE = path.join(__dirname, '../assets/research-skills/idea-spark');
 const SKILL_NAME = 'archimedes-idea-spark';
-const SKILL_DIRS = { codex: '.agents/skills', claude: '.claude/skills', opencode: '.opencode/skills', api: '.archimedes/skills' };
+const SKILL_DIRS = { codex: '.agents/skills', claude: '.claude/skills', opencode: '.opencode/skills', antigravity: '.agents/skills', api: '.archimedes/skills' };
 const OWNER = '.archimedes-skill.json';
 const digest = content => createHash('sha256').update(content).digest('hex');
 

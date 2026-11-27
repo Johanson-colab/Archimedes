@@ -1,5 +1,5 @@
 import { forwardRef, memo, useEffect, useRef, useState } from "react";
-import { type Dataset, type PlotConfig, type PlotResult } from "./data-analysis";
+import { groupPlotPoints, type Dataset, type PlotConfig, type PlotResult } from "./data-analysis";
 
 export function formatAnalysisNumber(value: number | null) {
   if (value === null || !Number.isFinite(value)) return "—";
@@ -31,6 +31,7 @@ export const DataAnalysisPlot = memo(forwardRef<SVGSVGElement, { dataset: Datase
   if (!points.length) return <div className="analysis-no-plot">{t("Choose numeric fields to create a chart. Text columns can still be explored in the data table.")}</div>;
   const bar = config.type === "bar";
   const columns = bar || config.type === "histogram";
+  const line = config.type === "line";
   let minY = points.reduce((min, p) => Math.min(min, p.y), Infinity);
   let maxY = points.reduce((max, p) => Math.max(max, p.y), -Infinity);
   if (columns) { minY = Math.min(0, minY); maxY = Math.max(0, maxY); }
@@ -47,18 +48,22 @@ export const DataAnalysisPlot = memo(forwardRef<SVGSVGElement, { dataset: Datase
   const left = Math.max(85, fontSize * 5), right = 925, top = 30, bottom = 415;
   const xp = (point: typeof points[number], i: number) => bar ? left + (i + .5) / points.length * (right - left) : left + (point.x - minX) / (maxX - minX) * (right - left);
   const yp = (value: number) => bottom - (value - minY) / (maxY - minY) * (bottom - top);
-  const series = [...new Set(points.map((p) => p.group))];
+  const pointsByGroup = groupPlotPoints(points);
+  const series = [...pointsByGroup.keys()];
   const color = (group: string) => `var(--analysis-series-${series.indexOf(group) % 6 + 1})`;
   const xLabel = config.type === "histogram" ? dataset.headers[config.y] : dataset.headers[config.x];
   const yLabel = config.type === "histogram" ? t("Observations") : config.type === "bar" ? `${t("Mean")} · ${dataset.headers[config.y]}` : dataset.headers[config.y];
   const tick = (value: number) => dateAxis ? new Date(value).toISOString().slice(0, 7) : formatAnalysisNumber(value);
   return <div ref={wrapper} className="analysis-plot-area"><svg ref={ref} className="analysis-plot" style={{ fontSize }} viewBox="0 0 960 500" role="img" aria-label={`${yLabel} / ${xLabel}`}>
     {yDomain.ticks.map((value) => <g key={value}><line className="analysis-grid" x1={left} x2={right} y1={yp(value)} y2={yp(value)} /><text x={left - 14} y={yp(value) + 4} textAnchor="end">{formatAnalysisNumber(value)}</text></g>)}
-    {config.type === "line" && series.map((group) => <polyline key={group} fill="none" stroke={color(group)} strokeWidth="2" points={points.filter((p) => p.group === group).map((p, i) => `${xp(p, i)},${yp(p.y)}`).join(" ")} />)}
+    {line && [...pointsByGroup].filter(([, group]) => group.length > 1).map(([name, group]) => (
+      <polyline key={name} fill="none" stroke={color(name)} strokeWidth="2" points={group.map((p, i) => `${xp(p, i)},${yp(p.y)}`).join(" ")} />
+    ))}
     {points.map((point, i) => {
       const tooltip = `${point.label}\n${yLabel}: ${formatAnalysisNumber(point.y)}${point.group ? `\n${point.group}` : ""}${point.count !== undefined ? `\nn = ${point.count}` : ""}`;
       if (columns) { const width = bar ? (right - left) / points.length * .72 : binWidth / (maxX - minX) * (right - left) * .94; return <rect key={i} className="analysis-mark" x={xp(point, i) - width / 2} y={Math.min(yp(0), yp(point.y))} width={width} height={Math.max(0, Math.abs(yp(0) - yp(point.y)))} fill={bar ? color(point.group) : "var(--analysis-series-1)"}><title>{tooltip}</title></rect>; }
-      return <circle key={i} className="analysis-mark" cx={xp(point, i)} cy={yp(point.y)} r={config.type === "line" ? 2.4 : 4.1} opacity={config.type === "line" && points.length > 1 ? 0 : .72} fill={color(point.group)}><title>{tooltip}</title></circle>;
+      const hasLine = line && pointsByGroup.get(point.group)!.length > 1;
+      return <circle key={i} className="analysis-mark" cx={xp(point, i)} cy={yp(point.y)} r={line ? 2.4 : 4.1} opacity={hasLine ? 0 : .72} fill={color(point.group)}><title>{tooltip}</title></circle>;
     })}
     {config.type === "bar" ? points.map((point, i) => <text key={i} x={xp(point, i)} y={bottom + fontSize + 10} textAnchor="middle">{point.label.slice(0, points.length > 10 ? 7 : 18)}</text>) : xDomain.ticks.map((value, i, ticks) => <text key={i} x={left + (value - minX) / (maxX - minX) * (right - left)} y={bottom + fontSize + 10} textAnchor={i === 0 ? "start" : i === ticks.length - 1 ? "end" : "middle"}>{tick(value)}</text>)}
     <text className="analysis-axis-title" x={(left + right) / 2} y="493" textAnchor="middle">{xLabel}</text><text className="analysis-axis-title" transform={`translate(${fontSize * .8} 225) rotate(-90)`} textAnchor="middle">{yLabel}</text>

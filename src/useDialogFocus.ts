@@ -33,6 +33,7 @@ export function useDialogFocus<T extends HTMLElement>(open: boolean, onClose: ()
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
+        if (event.isComposing || event.keyCode === 229) return;
         event.preventDefault();
         closeRef.current();
         return;
