@@ -2575,7 +2575,7 @@ function DailyDiscovery({ storageKey, initialMode = "latest", active = true, bri
   const targetLibrary = libraries.find((library) => library.id === targetLibraryId) ?? libraries[0];
   const destinationId = targetLibrary?.id ?? "";
   useEffect(() => {
-    if (!loadingLibraries && targetLibraryId !== destinationId) setTargetLibraryId(destinationId);
+    if (!loadingLibraries && libraries.length && targetLibraryId !== destinationId) setTargetLibraryId(destinationId);
   }, [loadingLibraries, targetLibraryId, destinationId]);
   useEffect(() => {
     writeDiscoveryControls(storageKey, { mode, range, topic, query, submittedQuery, targetLibraryId });

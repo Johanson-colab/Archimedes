@@ -126,3 +126,15 @@ test("conference controls restore through the existing official catalog cache", 
     assert.deepEqual(results.at(-1), { conference: "icml", year: 2024, presentation: "oral", topic: "all", query: "retrieval", offset: 0, limit: 40 });
   } finally { await React.act(async () => root.unmount()); }
 });
+
+test("a failed library load keeps the saved save destination", async () => {
+  const root = createRoot(document.getElementById("root"));
+  const key = scope.discoveryStorageKey("/data/root", "failed-load");
+  const defaults = { mode: "latest", range: "7d", topic: "all", query: "", submittedQuery: "", targetLibraryId: "saved-library" };
+  scope.writeDiscoveryControls(key, defaults);
+  const bridge = { getCachedDailyPapers: async () => ({ ...fixture.feed({}), stale: false }), discoverDailyPapers: async () => ({ ...fixture.feed({}), stale: false }) };
+  try {
+    await React.act(async () => root.render(React.createElement(scope.DailyDiscovery, { storageKey: key, bridge, libraries: [], loadingLibraries: false, onImported: async () => {} })));
+    assert.equal(scope.readDiscoveryControls(key, defaults).targetLibraryId, "saved-library");
+  } finally { await React.act(async () => root.unmount()); }
+});

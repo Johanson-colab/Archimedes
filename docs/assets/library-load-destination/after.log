@@ -1,0 +1,12 @@
+$ node --test electron/discovery-project-state.test.cjs
+✔ daily controls restore per project and switching during Save preserves the original library (85.595208ms)
+✔ conference controls restore through the existing official catalog cache (28.22575ms)
+✔ a failed library load keeps the saved save destination (3.676084ms)
+ℹ tests 3
+ℹ suites 0
+ℹ pass 3
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 759.12875
