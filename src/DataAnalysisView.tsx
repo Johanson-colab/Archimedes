@@ -13,6 +13,7 @@ const PAGE_SIZE = 50;
 
 function analysisError(reason: unknown) {
   return String(reason)
+    .replace(/^Error:\s*/, "")
     .replace(/^Error invoking remote method '[^']+':\s*(?:Error:\s*)?/, "")
     .replace(/^Error:\s*/, "");
 }
