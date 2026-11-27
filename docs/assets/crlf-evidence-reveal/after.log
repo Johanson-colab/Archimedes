@@ -1,0 +1,37 @@
+$ node --test electron/ui-audit-crlf-evidence-reveal.test.cjs electron/paper-writing-workspace.test.cjs
+✔ same-named papers keep their owner and autosave on departure without replaying an old open request (190.450667ms)
+✔ a delayed save preserves later keystrokes and drains the newest snapshot to its old root (859.7245ms)
+✔ late reads, compile progress and build results update only their owner scope (64.747292ms)
+✔ a late LaTeX failure stays in its source project instead of suggesting a fix in another project (32.520292ms)
+✔ failed departure autosaves keep the original draft and expose its save error on return (24.173542ms)
+✔ switching source files during an in-flight save retains and saves the final edit to the old file (835.192625ms)
+✔ the actual preload preserves compile ownership and rejects writing over newer source (6.744583ms)
+✔ Writing opens existing manuscripts before templates and restores the chosen document after remount (38.981042ms)
+✔ returning to Writing while the main document reopens restores the remembered source (39.059209ms)
+✔ a tree selection wins over the remembered source while the main document is reopening (26.781ms)
+✔ returning to Writing reloads the manuscript root and expanded source directories (41.8825ms)
+✔ re-entering a scope does not replace its explicitly opening manuscript with a cached file (24.811625ms)
+✔ a main document at the execution root opens in place and a removed recent document returns to the chooser (14.371167ms)
+✔ compiling main waits for a pending save of another source file in the same manuscript (17.256042ms)
+✔ typing during the compile save barrier retains the new edit and does not compile an older source set (20.570709ms)
+✔ projects sharing one execution folder restore their own manuscript selection (19.302833ms)
+✔ shared cached source keeps the latest read when the older read resolves first (42.759833ms)
+✔ shared uncached source keeps the latest read when the older read resolves first (21.337ms)
+✔ shared cached source keeps the latest read when the newer read resolves first (41.374333ms)
+✔ shared uncached source keeps the latest read when the newer read resolves first (22.056709ms)
+✔ sharing a document keeps dirty text and retains the preview after an unchanged refresh (42.733875ms)
+✔ returning to a clean cached manuscript reloads external edits before the next save (18.008375ms)
+✔ a delayed clean tree selection commits the fresh source before allowing edits (21.002958ms)
+✔ a failed source read leaves the previous selection and a newer selection supersedes a slow read (19.998875ms)
+✔ opening supporting sources preserves or resolves the actual manuscript compile target (22.7755ms)
+✔ a root-level manuscript can create files and folders through the Writing dialog (20.657292ms)
+✔ preview addresses stay with the execution folder that produced the manuscript (1.059417ms)
+✔ evidence links reveal the same range in a CRLF source as in the LF textarea (2.024375ms)
+ℹ tests 28
+ℹ suites 0
+ℹ pass 28
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 3154.198708

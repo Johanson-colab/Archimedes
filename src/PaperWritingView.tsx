@@ -861,7 +861,8 @@ export default function PaperWritingView({ bridge, workspace, projectId = null, 
       initialRun={evidenceRunId} dirty={manuscriptDirty} onClose={() => setEvidenceDialog(null)} onOpenSource={(source) => {
         setEvidenceDialog(null);
         void (source.sourcePath === file?.path ? Promise.resolve() : openFile(source.sourcePath)).then(() => requestAnimationFrame(() => {
-          const content = owner.documents.get(source.sourcePath)?.draft ?? "";
+          const saved = owner.documents.get(source.sourcePath)?.draft ?? "";
+          const content = saved.replace(/\r\n?/g, "\n");
           const start = lineStart(content, source.line) + source.column - 1;
           if (content.slice(start, start + source.text.length) !== source.text) return;
           editorRef.current?.focus();

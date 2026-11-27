@@ -1,0 +1,16 @@
+{
+  "stage": "before",
+  "viewport": [
+    900,
+    260
+  ],
+  "expected": [
+    33,
+    35
+  ],
+  "observed": [
+    35,
+    37
+  ],
+  "highlighted": "\\%"
+}
