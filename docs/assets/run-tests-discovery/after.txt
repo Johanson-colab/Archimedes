@@ -1,0 +1,17 @@
+$ grep -n globSync scripts/run-tests.cjs
+9:  const all = [...fs.globSync(["electron/*.test.cjs", "electron/figure-forge-upstream-*.mjs", "electron/agent/*.test.cjs", "electron/runtime/*.test.cjs", "server/*.test.cjs"], { cwd: root })].map(file => file.replaceAll("\\", "/")).sort();
+
+$ node --test electron/test-discovery.test.cjs electron/runtime/active-runs.test.cjs
+✔ declining the quit prompt restores a window instead of leaving a windowless process (10.931791ms)
+✔ the quit prompt uses the current interface language (10.413625ms)
+✔ accepting the quit prompt stops without restoring a window (10.69175ms)
+✔ automatic discovery includes runtime quit-guard tests (7.499833ms)
+✔ core and all modes discover the same runtime tests (4.724542ms)
+ℹ tests 5
+ℹ suites 0
+ℹ pass 5
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 156.049416
