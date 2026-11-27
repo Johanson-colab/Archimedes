@@ -30,7 +30,7 @@ test("the welcome writing card opens the paper writing module", () => {
   const welcome = fs.readFileSync(path.resolve(__dirname, "..", "src", "ResearchWelcome.tsx"), "utf8");
   assert.match(welcome, /id: "writing"/);
   assert.match(welcome, /title: "Create a paper"/);
-  assert.match(app, /action === "writing"\)\s*\{\s*setMainSection\("writing"\)/);
+  assert.match(app, /action === "writing"\)\s*\{\s*void openResearchApp\("writing"\)/);
 });
 
 test("all welcome images resolve inside the app for file and web deployments", async () => {
@@ -83,7 +83,7 @@ test("clicking the writing card opens the same section as Paper writing in both 
   try {
     for (const language of ["en", "zh"]) {
       let destination = "";
-      const onSelect = new Function("setResearchMode", "setMainSection", "setDailyOpened", "setDailyStartMode", "setImageCreationOpened", `${handler.code}\nreturn openWelcomeWorkflow;`)(() => {}, value => { destination = value; }, () => {}, () => {}, () => {});
+      const onSelect = new Function("setResearchMode", "openResearchApp", `${handler.code}\nreturn openWelcomeWorkflow;`)(() => {}, value => { destination = value; });
       const translations = { "Create a paper": "创建论文", "Draft and refine your manuscript.": "撰写与完善你的论文。" };
       const Component = new Function("React", "ArrowUpRight", "useUISettings", `${code}\nreturn ResearchWelcome;`)(React, () => null, () => ({ t: key => language === "zh" ? translations[key] || key : key }));
       const mount = createRoot(document.getElementById("root"));

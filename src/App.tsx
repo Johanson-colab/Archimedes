@@ -1,3 +1,4 @@
+import { InlineNotice } from "./InlineNotice";
 import { Fragment, lazy, memo, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent as ReactClipboardEvent, type ReactNode } from "react";
 import { flushSync } from "react-dom";
 import { startApprovalCountdown } from "./approval-countdown.mjs";
@@ -38,7 +39,7 @@ import { type ExtensionsTab } from "./ExtensionsView";
 import { useConfirm } from "./ConfirmDialog";
 import { Dialog } from "./Dialog";
 import CommandPalette, { type PaletteCommand } from "./CommandPalette";
-import { defaultDisabledResearchApps, researchAppMetadata } from "./research-apps";
+import { defaultDisabledResearchApps, legacyResearchAppLabel, researchAppMetadata } from "./research-apps";
 import { registerGeneratedAppEntries, sidebarEntries, sidebarModule, type MainSection, type SidebarEntry, type SidebarModuleId } from "./sidebar-registry";
 import { loadSidebarPlugins, PluginModuleView } from "./plugin-runtime";
 import RightWorkbench, { clampWorkbenchWidth, defaultWorkbenchWidth } from "./RightWorkbench";
@@ -1215,6 +1216,7 @@ const previewBridge = {
   runPaperPresentation: async () => { throw new Error("Paper presentations run in the desktop app."); },
   revealPaperPresentation: async () => undefined,
   listReproductions: async () => [],
+  listSshServers: async () => [],
   getSidebarSettings: async () => readPreviewSidebarSettings(),
   setCoreModuleEnabled: async (id: string, enabled: boolean) => {
     if (!Object.hasOwn(researchAppMetadata, id)) throw new Error(`Unknown research app: ${id}`);
@@ -1378,6 +1380,20 @@ function readContextLength(): ContextLength {
   return window.localStorage.getItem("archimedes-context-length") === "extra-long" ? "extra-long" : "standard";
 }
 
+type AgentHarness = AgentBackendConfig["backend"];
+
+function effectiveResearchHarness(bound: AgentHarness | null, configured: AgentHarness | null | undefined): AgentHarness {
+  return bound || configured || "api";
+}
+
+function researchModelSetupNeeded(harness: AgentHarness, config: PublicModelConfig | null): boolean {
+  return harness === "api" && config !== null && !config.hasApiKey;
+}
+
+function ResearchAppEntryNotice({ message, onDismiss, dismissLabel }: { message: string; onDismiss: () => void; dismissLabel: string }) {
+  return <InlineNotice tone="danger" className="app-entry-notice" onDismiss={onDismiss} dismissLabel={dismissLabel}>{message}</InlineNotice>;
+}
+
 function App() {
   const confirm = useConfirm();
   const { t } = useUISettings();
@@ -1405,7 +1421,8 @@ function App() {
   const [sidebarAppDropTarget, setSidebarAppDropTarget] = useState<string | null>(null);
   const [sidebarHidden, setSidebarHidden] = useState(readSidebarHidden);
   const sidebarDragRef = useRef<{ startX: number; startWidth: number } | null>(null);
-  const [mainSection, setMainSection] = useState<MainSection>("chat");
+  const [mainSection, updateMainSection] = useState<MainSection>("chat");
+  const mainNavigationRef = useRef(0);
   const [pluginEntries, setPluginEntries] = useState<SidebarEntry[]>([]);
   const [generatedApps, setGeneratedApps] = useState<GeneratedResearchApp[]>([]);
   const generatedAppsRequest = useRef(0);
@@ -1512,7 +1529,7 @@ function App() {
   const refreshRemoteServers = useCallback(() => { void desktopBridge.listSshServers().then(setRemoteServers).catch(() => setRemoteServers([])); }, []);
   useEffect(() => { refreshRemoteServers(); }, [refreshRemoteServers]);
   const [boundHarness, setBoundHarness] = useState<AgentBackendConfig["backend"] | null>(null);
-  const selectedHarness = boundHarness || nativeBackend?.backend || "api";
+  const selectedHarness = effectiveResearchHarness(boundHarness, nativeBackend?.backend);
   const selectedNativeBackend = selectedHarness !== "api"
     ? { binary: selectedHarness, model: "", ...nativeBackend, ...nativeBackend?.profiles?.[selectedHarness], backend: selectedHarness }
     : null;
@@ -2134,6 +2151,7 @@ function App() {
   }, [refreshSidebarPlugins]);
 
   const [disabledCoreModules, setDisabledCoreModules] = useState<string[]>(defaultDisabledResearchApps);
+  const [appEntryError, setAppEntryError] = useState("");
   const refreshSidebarSettings = useCallback(() => {
     desktopBridge.getSidebarSettings().then((settings) => {
       setDisabledCoreModules(settings.disabledCore);
@@ -2144,7 +2162,7 @@ function App() {
     refreshSidebarSettings();
   }, [refreshSidebarSettings]);
 
-  // Core modules hidden in Settings disappear from the nav, palette, and view
+  // Core modules hidden in Settings disappear from the sidebar and view
   // host; the chat section is not a module and can never be hidden.
   const hiddenCoreModules = useMemo(() => new Set(disabledCoreModules), [disabledCoreModules]);
   useEffect(() => {
@@ -2161,15 +2179,35 @@ function App() {
     setWorkbenchOpen(true);
   }
 
+  function setMainSection(section: MainSection) {
+    mainNavigationRef.current += 1;
+    updateMainSection(section);
+  }
+
+  async function openResearchApp(section: MainSection, dailyMode?: typeof dailyStartMode) {
+    const request = ++mainNavigationRef.current;
+    try {
+      if (hiddenCoreModules.has(section)) await setCoreModuleEnabled(section, true);
+      if (request !== mainNavigationRef.current) return false;
+      if (section === "daily") {
+        setDailyOpened(true);
+        if (dailyMode) setDailyStartMode(dailyMode);
+      }
+      if (section === "image-creation") setImageCreationOpened(true);
+      if (section === "data-charts") setDataChartsOpened(true);
+      if (section === "data-analysis") setDataAnalysisOpened(true);
+      if (section === "literature-review") setLiteratureReviewOpened(true);
+      setAppEntryError("");
+      setMainSection(section);
+      return true;
+    } catch (error) {
+      if (request === mainNavigationRef.current) setAppEntryError(`${t("Could not open this Research App. Try again.")} ${String(error)}`);
+      return false;
+    }
+  }
+
   function activateSidebarEntry(entry: SidebarEntry) {
-    if (entry.disabled) return;
-    const section = entry.destination.section;
-    if (section === "daily") setDailyOpened(true);
-    if (section === "image-creation") setImageCreationOpened(true);
-    if (section === "data-charts") setDataChartsOpened(true);
-    if (section === "data-analysis") setDataAnalysisOpened(true);
-    if (section === "literature-review") setLiteratureReviewOpened(true);
-    setMainSection(section);
+    if (!entry.disabled) void openResearchApp(entry.destination.section);
   }
 
   function openTrajectoryAt(ordinal?: number) {
@@ -3426,17 +3464,14 @@ function App() {
       return;
     }
     if (action === "writing") {
-      setMainSection("writing");
+      void openResearchApp("writing");
       return;
     }
     if (action === "literature") {
-      setDailyOpened(true);
-      setDailyStartMode("latest");
-      setMainSection("daily");
+      void openResearchApp("daily", "latest");
       return;
     }
-    setImageCreationOpened(true);
-    setMainSection("image-creation");
+    void openResearchApp("image-creation");
   }
 
   async function runProactiveSuggestion(suggestion: ProactiveSuggestion) {
@@ -3447,7 +3482,7 @@ function App() {
       return;
     }
     if (action.kind === "open") {
-      setMainSection(action.target);
+      void openResearchApp(action.target);
       return;
     }
     setMainSection("chat");
@@ -3549,13 +3584,19 @@ function App() {
   const toggleSidebarSection = (sectionId: SidebarSectionId) => {
     setCollapsedSidebarSections((current) => ({ ...current, [sectionId]: !current[sectionId] }));
   };
-  const moduleCommands: PaletteCommand[] = flatModuleEntries.map((entry) => ({
-    id: entry.commandId,
-    group: t("Research Apps"),
-    label: t(entry.labelKey),
-    icon: <entry.icon size={15} />,
-    run: () => activateSidebarEntry(entry),
-  }));
+  const moduleCommands: PaletteCommand[] = registeredSidebarEntries.map((entry) => {
+    const legacyLabel = legacyResearchAppLabel(entry.id);
+    const alias = legacyLabel ? t(legacyLabel) : undefined;
+    return {
+      id: entry.commandId,
+      group: t("Research Apps"),
+      label: t(entry.labelKey),
+      alias,
+      detail: alias,
+      icon: <entry.icon size={15} />,
+      run: () => activateSidebarEntry(entry),
+    };
+  });
   const moduleButton = (entry: SidebarEntry) => {
     const ids = flatModuleEntries.map((item) => item.id);
     const reorderByKeyboard = (event: React.KeyboardEvent<HTMLButtonElement>) => {
@@ -3588,9 +3629,9 @@ function App() {
     { id: "proactive-agent", group: t("Panels"), label: t("Proactive agent"), detail: proactive.settings.mode === "off" ? (proactive.modelReady ? t("Start proactive suggestions") : t("Set up proactive suggestions")) : t("Review suggestions"), icon: <Sparkle size={15} />, run: toggleProactiveDock },
     { id: "proactive-settings", group: t("System"), label: t("Proactive settings"), icon: <Shield size={15} />, run: () => { setSettingsSection("proactive"); setSettingsOpen(true); } },
     ...moduleCommands,
-    { id: "extensions-installed", group: t("Extensions"), label: t("Installed extensions"), icon: <Puzzle size={15} />, run: () => { setExtensionsTab("installed"); setMainSection("extensions"); } },
-    { id: "extensions-available", group: t("Extensions"), label: t("Browse extensions"), icon: <Puzzle size={15} />, run: () => { setExtensionsTab("available"); setMainSection("extensions"); } },
-    { id: "extensions-updates", group: t("Extensions"), label: t("Extension updates"), icon: <Puzzle size={15} />, run: () => { setExtensionsTab("updates"); setMainSection("extensions"); } },
+    { id: "extensions-installed", group: t("Extensions"), label: t("Installed extensions"), icon: <Puzzle size={15} />, run: () => { setExtensionsTab("installed"); void openResearchApp("extensions"); } },
+    { id: "extensions-available", group: t("Extensions"), label: t("Browse extensions"), icon: <Puzzle size={15} />, run: () => { setExtensionsTab("available"); void openResearchApp("extensions"); } },
+    { id: "extensions-updates", group: t("Extensions"), label: t("Extension updates"), icon: <Puzzle size={15} />, run: () => { setExtensionsTab("updates"); void openResearchApp("extensions"); } },
     { id: "files", group: t("Panels"), label: t("Files"), detail: t("Open the workbench file browser"), icon: <FolderOpen size={15} />, run: () => openWorkbench("files") },
     { id: "terminal", group: t("Panels"), label: t("Terminal"), detail: executionWorkspace, icon: <SquareTerminal size={15} />, run: () => openWorkbench("terminal") },
     { id: "journey", group: t("Panels"), label: t("Journey"), icon: <Flag size={15} />, run: () => openWorkbench("journey") },
@@ -3606,14 +3647,14 @@ function App() {
   // mount gating (keepMounted · cacheClass · requiresWorkspace · open gate)
   // comes from the module registry, not from scattered conditions.
   const sidebarModuleContent: Record<string, ReactNode> = {
-    library: <LibraryView key={workspace} bridge={desktopBridge} mode="library" active={mainSection === "library"} workspace={workspace} projectId={activeProjectId} libraryRefreshVersion={libraryRefreshVersion} onInternalReviewThreadsDeleted={(threadIds) => setThreads((current) => current.filter((thread) => !threadIds.includes(thread.id)))} onReproduceOpened={(id) => { setReproduceId(id); setMainSection("reproduce"); }} onOpenProject={(id) => setActiveProjectId(id)} />,
-    daily: <LibraryView key={`${workspace}:${activeProjectId || ""}:${dailyStartMode}`} bridge={desktopBridge} mode="daily" active={mainSection === "daily"} initialDailyMode={dailyStartMode} workspace={workspace} projectId={activeProjectId} onLibraryImported={() => setLibraryRefreshVersion((version) => version + 1)} onInternalReviewThreadsDeleted={(threadIds) => setThreads((current) => current.filter((thread) => !threadIds.includes(thread.id)))} onReproduceOpened={(id) => { setReproduceId(id); setMainSection("reproduce"); }} onOpenProject={(id) => setActiveProjectId(id)} />,
+    library: <LibraryView key={workspace} bridge={desktopBridge} mode="library" active={mainSection === "library"} workspace={workspace} projectId={activeProjectId} libraryRefreshVersion={libraryRefreshVersion} onInternalReviewThreadsDeleted={(threadIds) => setThreads((current) => current.filter((thread) => !threadIds.includes(thread.id)))} onReproduceOpened={(id) => { setReproduceId(id); void openResearchApp("reproduce"); }} onOpenProject={(id) => setActiveProjectId(id)} />,
+    daily: <LibraryView key={`${workspace}:${activeProjectId || ""}:${dailyStartMode}`} bridge={desktopBridge} mode="daily" active={mainSection === "daily"} initialDailyMode={dailyStartMode} workspace={workspace} projectId={activeProjectId} onLibraryImported={() => setLibraryRefreshVersion((version) => version + 1)} onInternalReviewThreadsDeleted={(threadIds) => setThreads((current) => current.filter((thread) => !threadIds.includes(thread.id)))} onReproduceOpened={(id) => { setReproduceId(id); void openResearchApp("reproduce"); }} onOpenProject={(id) => setActiveProjectId(id)} />,
     "benchmark-radar": <BenchmarkRadarView />,
     news: <NewsView bridge={desktopBridge} projectId={activeProjectId} active={mainSection === "news"} onSendToChat={sendNoteToChat} />,
     "paper-review": <PaperReviewView bridge={desktopBridge} workspace={executionWorkspace} projectId={activeProjectId} active={mainSection === "paper-review"} />,
     extensions: <ExtensionsView bridge={desktopBridge} workspace={executionWorkspace} tab={extensionsTab} onTabChange={setExtensionsTab} attachedIds={new Set(contextItems.map((item) => item.id))} onAttach={(item) => setContextItems((current) => current.some((candidate) => candidate.id === item.id) ? current : [...current, item].slice(0, 12))} />,
     reproduce: <ReproduceView bridge={desktopBridge} selectedId={reproduceId} onSelect={setReproduceId} />,
-    "image-creation": <ImageCreationView active={mainSection === "image-creation"} onBrowseProceedings={() => { setDailyOpened(true); setDailyStartMode("conference"); setMainSection("daily"); }} />,
+    "image-creation": <ImageCreationView active={mainSection === "image-creation"} mainModel={activeModelConfig} onOpenModelSettings={() => { setSettingsSection("models"); setSettingsOpen(true); }} onBrowseChartReferences={() => void openResearchApp("data-charts")} onBrowseProceedings={() => { void openResearchApp("daily", "conference"); }} />,
     "data-charts": <DataChartsView active={mainSection === "data-charts"} />,
     "literature-review": <LiteratureReviewView key={`${workspace}:${activeProjectId || ""}`} bridge={desktopBridge} workspace={executionWorkspace} projectId={activeProjectId || ""} onLibraryImported={() => setLibraryRefreshVersion((version) => version + 1)} />,
     "data-analysis": <DataAnalysisView onAskAI={(text) => sendNoteToChat(text, "replace")} />,
@@ -3823,6 +3864,7 @@ function App() {
               }}
               reasoningEffort={reasoningEffort}
               contextLength={contextLength}
+              modelSetupHint={researchModelSetupNeeded(selectedHarness, activeModelConfig) ? t("Configure an API model to send research messages. Local files, PDF reading and data analysis remain available.") : undefined}
               modelCapabilities={modelCapabilities}
               contextItems={contextItems}
               onAddContext={(added) => setContextItems((current) => [...current, ...added.filter((item) => !current.some((candidate) => candidate.id === item.id))].slice(0, 12))}
@@ -3867,6 +3909,7 @@ function App() {
               onRestore={() => { setMainSection("chat"); openWorkbench("files"); }} />
           )}
         </div>
+        {appEntryError && <ResearchAppEntryNotice message={appEntryError} onDismiss={() => setAppEntryError("")} dismissLabel={t("Dismiss")} />}
         <AgentLayer
           proactiveOpen={proactive.open}
           researchOpen={researchPanelOpen}
@@ -4349,7 +4392,7 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
   </div>;
 });
 
-function ConversationView({ onOpenCreatedApps, messages, events, trajectoryEvents, remoteServers, remoteServerId, onRemoteServerChange, onRefreshRemoteServers, onOpenSshSettings, nativeBackend, harnessBound, onHarnessChange, nativeQuestions, onNativeAnswer, onNativeSteer, workspace, projectId, agentBusy, interrupting, canInterrupt, pendingAction, changeSets, researchMode, researchGraphOpen, onToggleResearchGraph, onResearchGraphAvailability, reasoningEffort, contextLength, modelCapabilities, contextItems, onOpenWorkspaceSettings, onCommand, contextSummary, compactedThroughTurnId, onSubmit, onInterrupt, onResearchMode, onAddContext, onRemoveContext, onApprove, onReject, onOpenFile, showWelcome, onWelcomeAction, composerRequest, draftKey, currentFile, currentSelection, onComposerRequestApplied, initialScrollTop, onScrollTop, commentScope, addingComment, commentsShowResolved, onExitComments }: {
+function ConversationView({ onOpenCreatedApps, messages, events, trajectoryEvents, remoteServers, remoteServerId, onRemoteServerChange, onRefreshRemoteServers, onOpenSshSettings, nativeBackend, harnessBound, onHarnessChange, nativeQuestions, onNativeAnswer, onNativeSteer, workspace, projectId, agentBusy, interrupting, canInterrupt, pendingAction, changeSets, researchMode, researchGraphOpen, onToggleResearchGraph, onResearchGraphAvailability, reasoningEffort, contextLength, modelSetupHint, modelCapabilities, contextItems, onOpenWorkspaceSettings, onCommand, contextSummary, compactedThroughTurnId, onSubmit, onInterrupt, onResearchMode, onAddContext, onRemoveContext, onApprove, onReject, onOpenFile, showWelcome, onWelcomeAction, composerRequest, draftKey, currentFile, currentSelection, onComposerRequestApplied, initialScrollTop, onScrollTop, commentScope, addingComment, commentsShowResolved, onExitComments }: {
   onOpenCreatedApps: () => void;
   commentScope: SessionCommentsScope | null;
   addingComment: boolean;
@@ -4382,6 +4425,7 @@ function ConversationView({ onOpenCreatedApps, messages, events, trajectoryEvent
   onResearchGraphAvailability: (available: boolean) => void;
   reasoningEffort: ReasoningEffort;
   contextLength: ContextLength;
+  modelSetupHint?: string;
   modelCapabilities: ModelCapabilities;
   contextItems: ContextAttachment[];
   onOpenWorkspaceSettings: () => void;
@@ -4875,6 +4919,7 @@ function ConversationView({ onOpenCreatedApps, messages, events, trajectoryEvent
     </WorkspaceMarkdownProvider>
 
     <div className="conversation-composer-wrap" data-ui="research-composer">
+      {modelSetupHint && <InlineNotice tone="info">{modelSetupHint}<button type="button" className="secondary-button" onClick={() => { void onCommand("model"); }}>{t("Configure model")}</button></InlineNotice>}
       {(showWelcome ? newChatMode === "create" : researchMode === "create") && <button className="creator-apps-button" type="button" onClick={onOpenCreatedApps}><Puzzle size={13} />{t("Preview Research Apps")}</button>}
       {showWelcome && <NewChatModePicker value={newChatMode} onChange={(mode) => {
           if (mode !== "research" && researchGraphOpen) onToggleResearchGraph(false);

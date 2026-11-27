@@ -6,6 +6,7 @@ import { StateView } from "./StateView";
 export type PaletteCommand = {
   id: string;
   label: string;
+  alias?: string;
   detail?: string;
   group: string;
   shortcut?: string;
@@ -32,9 +33,10 @@ export default function CommandPalette({ open, commands, onClose }: {
   const filtered = useMemo(() => {
     const terms = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
     if (!terms.length) return commands.filter((command) => !command.disabled);
+    const exactQuery = terms.join(" ");
     const ranking = (command: PaletteCommand) => {
       const label = command.label.toLowerCase();
-      if (label === terms.join(" ")) return 0;
+      if (label === exactQuery || command.alias?.toLowerCase() === exactQuery) return 0;
       if (label.startsWith(terms[0])) return 1;
       if (label.split(/\s+/).some((word) => word.startsWith(terms[0]))) return 2;
       if (terms.every((term) => label.includes(term))) return 3;

@@ -161,7 +161,7 @@ function FigureDialog({ figure, index, total, onClose, onStep }: {
   </Dialog>;
 }
 
-export default function ImageCreationView({ active, onBrowseProceedings }: { active: boolean; onBrowseProceedings: () => void }) {
+export default function ImageCreationView({ active, mainModel, onOpenModelSettings, onBrowseProceedings, onBrowseChartReferences }: { active: boolean; mainModel?: PublicModelConfig | null; onOpenModelSettings?: () => void; onBrowseProceedings: () => void; onBrowseChartReferences?: () => void }) {
   const { t, language } = useUISettings();
   const [figures, setFigures] = useState<Figure[]>([]);
   const [error, setError] = useState("");
@@ -226,6 +226,7 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
   const [aspect, setAspect] = useState<Aspect>("1:1");
   const pageRef = useRef<HTMLElement>(null);
   const filterTriggerRef = useRef<HTMLButtonElement>(null);
+  const modelSettingsRef = useRef<HTMLDetailsElement>(null);
   const connection = forgeProvider === "configured" ? undefined : { provider: forgeProvider, baseUrl: forgeBaseUrl, apiKey: forgeApiKey, model: parseModel };
 
   async function refresh(force = false) {
@@ -540,20 +541,22 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
   const referenceFloor = forgeMethod === "two-stage" ? 4 : 2;
   const referenceCeiling = forgeMethod === "two-stage" ? 10 : 4;
   const hasPaperInput = Boolean(pdfFile) || paperContent.trim().length >= 100;
-  const analyzeBlockedReason = hasPaperInput ? "" : t("Add a PDF, or at least 100 characters of paper text.");
+  const modelSetupMessage = forgeProvider === "configured" ? mainModel && !mainModel.hasApiKey ? t("Configure an API model to use AI planning and generation. Local reference browsing remains available.") : "" : !forgeApiKey.trim() || !parseModel.trim() ? t("Add an API key and a paper-analysis model in Model settings to use AI planning and generation.") : "";
+  const modelSetupBlockedReason = modelSetupMessage ? t("Configure a model first.") : "";
+  const analyzeBlockedReason = modelSetupBlockedReason || (hasPaperInput ? "" : t("Add a PDF, or at least 100 characters of paper text."));
   const currentSearchQuery = (figurePlan || paperContent || composerText).slice(0, 10_000);
   const resultsStale = searchedQuery !== null && searchedQuery !== currentSearchQuery && recommendations.length > 0;
   const needsContract = forgeMethod === "two-stage" && !(designContract && contractIsUsable(designContract));
   const analyzeReferencesBlockedReason =
-    selectedReferenceCount < referenceFloor ? t("Select at least {n} references in step 2.", { n: referenceFloor })
-      : !figurePlan.trim() ? t("Draft a figure plan in step 1 first.") : "";
+    modelSetupBlockedReason || (selectedReferenceCount < referenceFloor ? t("Select at least {n} references in step 2.", { n: referenceFloor })
+      : !figurePlan.trim() ? t("Draft a figure plan in step 1 first.") : "");
   const generateBlockedReason =
-    !figurePlan.trim() ? t("Draft a figure plan in step 1 first.")
+    modelSetupBlockedReason || (!figurePlan.trim() ? t("Draft a figure plan in step 1 first.")
       : selectedReferenceCount < referenceFloor ? t("Select at least {n} references in step 2.", { n: referenceFloor })
         : selectedReferenceCount > referenceCeiling ? t("This mode accepts at most {n} references.", { n: referenceCeiling })
           : needsContract ? t("Analyze the references first.")
             : outputMode === "bitmap" && !imageModel.trim() ? t("Enter an image model for bitmap output.")
-              : "";
+              : "");
   const generateReady = !generationBusy && !reconstructionBusy && !uploadingReferences && !contractBusy && !generateBlockedReason;
   const forgeSteps = [
     { index: 1, label: t("Paper content"), detail: figurePlan.trim() ? t("Plan drafted") : t("Not analyzed"), tone: figurePlan.trim() ? "done" : "idle" },
@@ -612,10 +615,11 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
     {active && selectedIndex >= 0 && <FigureDialog figure={result[selectedIndex]} index={selectedIndex} total={result.length} onClose={() => setSelectedId(null)} onStep={step} />}
     {active && forgeOpen && <section className="figure-forge-page" aria-label={t("FigureForge planning workspace")}>
       <div className="forge-topbar">
-        <button type="button" className="figure-forge-back" onClick={() => showForge(false)}><ArrowLeft size={15} />{t("Back to gallery")}</button>
+        <button type="button" className="figure-forge-back" onClick={() => showForge(false)}><ArrowLeft size={15} />{t("Back to gallery")}</button>{onBrowseChartReferences && <button type="button" className="figure-forge-back" onClick={onBrowseChartReferences}><GraduationCap size={15} />{t("Paper chart references")}</button>}
         <div className="forge-title"><strong>FigureForge</strong><span>{t("Plan a paper figure with references")}</span></div>
       </div>
 
+      {modelSetupMessage && <InlineNotice tone="info" action={<button className="forge-secondary" onClick={() => { if (forgeProvider === "configured" && onOpenModelSettings) onOpenModelSettings(); else if (modelSettingsRef.current) modelSettingsRef.current.open = true; }}>{t("Configure model")}</button>}>{modelSetupMessage}</InlineNotice>}
       <nav className="forge-steps" aria-label={t("FigureForge steps")}>
         {forgeSteps.map((step) => <button type="button" key={step.index} className={`forge-steps-item is-${step.tone}`} onClick={() => goToStep(step.index)}>
           <span className="forge-steps-index" aria-hidden="true">{step.index}</span>
@@ -676,7 +680,7 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
               <textarea rows={2} value={composerText} disabled={analysisBusy} onChange={(event) => { setComposerText(event.target.value); }} placeholder={t("Optional: layout wishes, must-have modules, terms to use.")} />
             </label>
 
-            <details className="forge-disclosure">
+            <details className="forge-disclosure" ref={modelSettingsRef}>
               <summary>{t("Model settings")}<span className="forge-disclosure-value">{forgeProvider === "configured" ? t("Archimedes main model") : forgeProvider}</span></summary>
               <div className="forge-disclosure-body">
                 <label className="forge-field">
