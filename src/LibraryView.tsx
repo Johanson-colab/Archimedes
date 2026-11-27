@@ -2606,7 +2606,7 @@ function DailyDiscovery({ storageKey, initialMode = "latest", active = true, bri
     } catch (discoverError) {
       if (requestId !== feedRequestId.current) return;
       const message = readableError(discoverError, "The daily paper feed could not be refreshed.");
-      setError(responseRef.current ? `${message} Showing the previous results.` : message);
+      setError(responseRef.current ? `${message} ${t("Showing the previous results.")}` : message);
     } finally {
       if (requestId === feedRequestId.current) setLoading(false);
     }
