@@ -1,4 +1,4 @@
-import { citationKeyIdentity, exportBibliography, matchBibliographyPaper, parseBibliography, type BibliographyPaper } from "./bibliography";
+import { authorIdentity, citationKeyIdentity, exportBibliography, matchBibliographyPaper, parseBibliography, type BibliographyPaper } from "./bibliography";
 
 export function manuscriptBibliographyPaths(content: string, mainPath: string) {
   const base = mainPath.split("/").slice(0, -1).join("/");
@@ -16,8 +16,9 @@ export function manuscriptBibliographyPaths(content: string, mainPath: string) {
 function sameReference(paper: AcademicSearchResult, existing: AcademicSearchResult) {
   const candidates = [existing];
   if (matchBibliographyPaper(paper, candidates, { strongOnly: true })) return true;
-  if (!paper.year || paper.year !== existing.year || !paper.authors.length) return false;
-  const names = (value: AcademicSearchResult) => value.authors.map(author => author.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim()).sort().join("|");
+  if (!paper.authors.length) return false;
+  if (paper.year && existing.year && paper.year !== existing.year) return false;
+  const names = (value: AcademicSearchResult) => authorIdentity(value.authors);
   return names(paper) === names(existing) && Boolean(matchBibliographyPaper(paper, candidates));
 }
 

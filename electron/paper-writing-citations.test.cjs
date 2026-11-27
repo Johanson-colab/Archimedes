@@ -54,3 +54,15 @@ test("suggests only bibliography paths declared inside the manuscript folder", (
   const main = "% \\bibliography{unused}\n\\bibliography {references,../outside}\n\\addbibresource\n{more.bib}";
   assert.deepEqual(api.manuscriptBibliographyPaths(main, "paper/main.tex"), ["paper/references.bib", "paper/more.bib"]);
 });
+
+test("reuses an entry whose authors are written surname first", () => {
+  const current = "@article{local, title={Measured Models}, author={Doe, Jane}, year={2025}}";
+  assert.deepEqual(api.prepareManuscriptCitation(current, paper), { content: current, key: "local" });
+});
+
+test("reuses a generated entry for a reference without a year", () => {
+  const withoutYear = { ...paper, year: undefined, citekey: "doe", doi: "", arxiv_id: "", s2_id: "" };
+  const generated = api.prepareManuscriptCitation("", withoutYear);
+  assert.equal(generated.key, "doe");
+  assert.deepEqual(api.prepareManuscriptCitation(generated.content, withoutYear), generated);
+});

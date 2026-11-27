@@ -60,7 +60,7 @@ const arxivUrl = (value: string) => /^https?:\/\/(?:www\.)?arxiv\.org\/(?:abs|pd
 const arxivId = (value: string) => /^(?:\d{4}\.\d{4,5}|[a-z-]+(?:\.[a-z]{2})?\/\d{7})$/.test(arxiv(value));
 const title = (value: string) => value.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 
-function authorIdentity(authors: string[] = []) {
+export function authorIdentity(authors: string[] = []) {
   return authors.map(author => title(author).split(" ").sort().join(" ")).filter(Boolean).join("\n");
 }
 
