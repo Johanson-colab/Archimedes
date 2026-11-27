@@ -12,6 +12,7 @@ import {
   Trash,
   X,
 } from "lucide-react";
+import { useUISettings } from "./i18n";
 import { Dialog } from "./Dialog";
 import { InlineNotice } from "./InlineNotice";
 import { StateView } from "./StateView";
@@ -587,11 +588,16 @@ function SourceManager({ bridge, sources, onClose, onSaved }: {
   onClose: () => void;
   onSaved: (sources: ExtensionSource[]) => void;
 }) {
+  const { t } = useUISettings();
   const [draft, setDraft] = useState<ExtensionSource[]>(sources);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [newSource, setNewSource] = useState({ name: "", type: "json" as ExtensionSourceType, url: "", token: "" });
   const [adding, setAdding] = useState(false);
+
+  const readableError = (reason: unknown) => t(String(reason)
+    .replace(/^Error invoking remote method '[^']+':\s*(?:Error:\s*)?/, "")
+    .replace(/^Error:\s*/, ""));
 
   useEffect(() => {
     if (sources.length) {
@@ -602,7 +608,7 @@ function SourceManager({ bridge, sources, onClose, onSaved }: {
     bridge.listExtensionSources().then((items) => {
       if (active) setDraft(items);
     }).catch((reason) => {
-      if (active) setError(String(reason).replace(/^Error:\s*/, ""));
+      if (active) setError(readableError(reason));
     });
     return () => { active = false; };
   }, [bridge, sources]);
@@ -614,7 +620,7 @@ function SourceManager({ bridge, sources, onClose, onSaved }: {
   function addSource() {
     const name = newSource.name.trim();
     if (!name) {
-      setError("Give the source a name.");
+      setError(t("Give the source a name."));
       return;
     }
     const id = `custom-${Date.now().toString(36)}`;
@@ -639,7 +645,7 @@ function SourceManager({ bridge, sources, onClose, onSaved }: {
       const next = await bridge.saveExtensionSources(draft);
       onSaved(next);
     } catch (reason) {
-      setError(String(reason).replace(/^Error:\s*/, ""));
+      setError(readableError(reason));
     } finally {
       setSaving(false);
     }
@@ -653,7 +659,7 @@ function SourceManager({ bridge, sources, onClose, onSaved }: {
       setDraft(next);
       onSaved(next);
     } catch (reason) {
-      setError(String(reason).replace(/^Error:\s*/, ""));
+      setError(readableError(reason));
     } finally {
       setSaving(false);
     }
@@ -663,11 +669,20 @@ function SourceManager({ bridge, sources, onClose, onSaved }: {
       <header className="app-dialog-header"><div><h2 id="extensions-sources-title">Sources</h2><p>Enable public registries or add a JSON index. Results are deduplicated across sources.</p></div><button className="app-dialog-close" onClick={onClose} aria-label="Close"><X size={15} /></button></header>
       <div className="app-dialog-body extensions-sources-body">
       <div className="extensions-source-list">
-        {draft.map((source) => <div className="extensions-source-row" key={source.id}>
-          <label className="extensions-source-toggle"><input type="checkbox" checked={source.enabled} onChange={(event) => updateSource(source.id, { enabled: event.target.checked })} /><span>{source.name}</span></label>
-          <span className="extensions-source-kind">{SOURCE_TYPE_LABEL[source.type]}</span>
-          <span className="extensions-source-state">{source.error ? <span className="error">{source.error}</span> : source.count ? `${source.count} results` : "Not synced"}</span>
-          {!source.builtin && <button className="extensions-icon-button" onClick={() => setDraft((current) => current.filter((candidate) => candidate.id !== source.id))} aria-label={`Remove ${source.name}`}><Trash size={13} /></button>}
+        {draft.map((source) => <div className="extensions-source-entry" key={source.id}>
+          <div className="extensions-source-row">
+            <label className="extensions-source-toggle"><input type="checkbox" checked={source.enabled} onChange={(event) => updateSource(source.id, { enabled: event.target.checked })} /><span>{source.name}</span></label>
+            <span className="extensions-source-kind">{SOURCE_TYPE_LABEL[source.type]}</span>
+            <span className="extensions-source-state">{source.error ? <span className="error">{t(source.error)}</span> : source.count ? `${source.count} results` : "Not synced"}</span>
+            {!source.builtin && <button className="extensions-icon-button" onClick={() => setDraft((current) => current.filter((candidate) => candidate.id !== source.id))} aria-label={`Remove ${source.name}`}><Trash size={13} /></button>}
+          </div>
+          {source.hasToken && <div className="extensions-new-source extensions-source-token">
+            <label>{t("Saved token")}<input aria-label={t("Replace token")} type="password" autoComplete="new-password"
+              placeholder={t("Replace token")} value={source.token || ""} onChange={event => updateSource(source.id, { token: event.target.value || undefined })} /></label>
+            <div className="extensions-form-actions">
+              <button type="button" className="secondary-button" onClick={() => updateSource(source.id, { token: "", hasToken: false })}>{t("Clear saved token")}</button>
+            </div>
+          </div>}
         </div>)}
       </div>
       {adding ? <div className="extensions-new-source">

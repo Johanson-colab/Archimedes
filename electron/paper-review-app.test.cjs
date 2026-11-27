@@ -1,11 +1,15 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
+const { EventEmitter } = require("node:events");
+const https = require("node:https");
 const os = require("node:os");
 const path = require("node:path");
+const { Readable } = require("node:stream");
 
 const paperReview = require("./paper-review.cjs");
 const paperReviewStore = require("./paper-review-store.cjs");
+const modelConfig = require("./model-config.cjs");
 
 function tempDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-paper-review-app-"));
@@ -59,11 +63,125 @@ const run = {
 };
 
 test("arXiv references accept IDs, abs URLs and pdf URLs", () => {
-  assert.equal(paperReview.parseArxivRef("2511.05421"), "2511.05421");
-  assert.equal(paperReview.parseArxivRef("arXiv:2511.05421v2"), "2511.05421");
-  assert.equal(paperReview.parseArxivRef("https://arxiv.org/abs/2511.05421"), "2511.05421");
-  assert.equal(paperReview.parseArxivRef("https://arxiv.org/pdf/2511.05421v1.pdf"), "2511.05421");
-  assert.equal(paperReview.parseArxivRef("not a paper"), "");
+  for (const [input, expected] of [
+    ["2501.01234", "2501.01234"],
+    ["2501.01234v1", "2501.01234v1"],
+    ["arXiv:2501.01234v2", "2501.01234v2"],
+    ["https://arxiv.org/v1/abs/2501.01234", "2501.01234"],
+    ["https://arxiv.org/abs/2501.01234", "2501.01234"],
+    ["https://arxiv.org/abs/2501.01234v2", "2501.01234v2"],
+    ["https://arxiv.org/abs/2501.01234V12", "2501.01234v12"],
+    ["https://arxiv.org/pdf/2501.01234v1.pdf", "2501.01234v1"],
+    ["not a paper", ""],
+  ]) assert.equal(paperReview.parseArxivRef(input), expected, input);
+});
+
+// The pre-change parser, kept here only to make the behavioral difference
+// explicit: every explicit version was silently stripped before downloading.
+function legacyParseArxivRef(value) {
+  const source = String(value || "").trim();
+  if (!source) return "";
+  const match = source.match(/(?:arxiv\.org\/(?:abs|pdf)\/|arxiv:)?\s*([0-9]{4}\.[0-9]{4,5})(?:v\d+)?/i);
+  return match ? match[1] : "";
+}
+
+test("the version suffix is the only parsing difference from the previous reviewer", () => {
+  for (const [input, previous, current] of [
+    ["2501.01234", "2501.01234", "2501.01234"],
+    ["2501.01234v1", "2501.01234", "2501.01234v1"],
+    ["arXiv:2501.01234v2", "2501.01234", "2501.01234v2"],
+    ["https://arxiv.org/abs/2501.01234v2", "2501.01234", "2501.01234v2"],
+    ["https://arxiv.org/abs/2501.01234V12", "2501.01234", "2501.01234v12"],
+    ["https://arxiv.org/pdf/2501.01234v1.pdf", "2501.01234", "2501.01234v1"],
+    ["not a paper", "", ""],
+  ]) {
+    assert.equal(legacyParseArxivRef(input), previous, `previous parser: ${input}`);
+    assert.equal(paperReview.parseArxivRef(input), current, `current parser: ${input}`);
+  }
+});
+
+function arxivFixture(t, missingPath) {
+  const dir = tempDir();
+  t.after(() => { paperReviewStore.close(); cleanup(dir); });
+  modelConfig.initializeModelConfig(dir);
+  paperReview.initialize(dir);
+  paperReview.saveSettings({ model: { mode: "custom", provider: "openai", model: "fixture", apiKey: "synthetic" } });
+  const lines = Array(24).fill("(A paper about research methods.) Tj");
+  const content = `BT /F1 12 Tf 40 280 Td ${lines.join("\n0 -11 Td\n")} ET`;
+  const objects = [
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 300] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+    `<< /Length ${content.length} >>\nstream\n${content}\nendstream`,
+  ];
+  let data = "%PDF-1.4\n";
+  const offsets = objects.map((object, index) => {
+    const offset = String(data.length).padStart(10, "0");
+    data += `${index + 1} 0 obj\n${object}\nendobj\n`;
+    return `${offset} 00000 n \n`;
+  });
+  const xref = `xref\n0 6\n0000000000 65535 f \n${offsets.join("")}trailer\n<< /Size 6 /Root 1 0 R >>`;
+  const pdf = Buffer.from(`${data}${xref}\nstartxref\n${data.length}\n%%EOF\n`);
+  const calls = { downloads: [], model: 0 };
+  t.mock.method(https, "request", (url, _options, receive) => {
+    calls.downloads.push(url.pathname);
+    const request = new EventEmitter();
+    request.end = () => {
+      const missing = url.pathname === missingPath;
+      receive(Object.assign(Readable.from(missing ? [] : [pdf]), { statusCode: missing ? 404 : 200, headers: {} }));
+    };
+    return request;
+  });
+  t.mock.method(globalThis, "fetch", async () => {
+    calls.model++;
+    const content = JSON.stringify({ isResearchPaper: false, isResearchPaperConfidence: 1 });
+    return Response.json({ choices: [{ finish_reason: "stop", message: { content } }] });
+  });
+  return { dir, calls };
+}
+
+async function startArxivReview(value) {
+  let finish;
+  const finished = new Promise(resolve => { finish = resolve; });
+  const { runId } = await paperReview.createRun({ source: { kind: "arxiv", value } }, {
+    emit: event => { if (event.type === "complete" || event.type === "error") finish(); },
+  });
+  await finished;
+  return runId;
+}
+
+test("same PDF bytes retain distinct versioned and unversioned review sources after reopen", async t => {
+  const { dir, calls } = arxivFixture(t);
+  const ids = [await startArxivReview("2501.01234"), await startArxivReview("2501.01234v1")];
+  paperReviewStore.close();
+  paperReview.initialize(dir);
+  const runs = ids.map(id => paperReview.getRun(id));
+  assert.deepEqual(calls.downloads, ["/pdf/2501.01234", "/pdf/2501.01234v1"]);
+  for (const run of runs) assert.equal(run.status, "complete", run.error);
+  assert.equal(calls.model, 2);
+  assert.notEqual(runs[0].documentId, runs[1].documentId);
+  const sources = ["https://arxiv.org/abs/2501.01234", "https://arxiv.org/abs/2501.01234v1"];
+  assert.deepEqual(runs.map(run => run.sourceRef), sources);
+  assert.deepEqual(runs.map(run => run.result.document.sourceRef), sources);
+  assert.deepEqual(runs.map(run => paperReviewStore.getDocument(run.documentId).sourceRef), sources);
+});
+
+test("unavailable arXiv version reports its identifier without downloading the unversioned PDF or calling the model", async t => {
+  const { calls } = arxivFixture(t, "/pdf/2501.01234v1");
+  const saved = paperReview.getRun(await startArxivReview("2501.01234v1"));
+  assert.deepEqual(calls, { downloads: ["/pdf/2501.01234v1"], model: 0 });
+  assert.equal(saved.status, "error");
+  assert.match(saved.error, /2501\.01234v1.*404/);
+});
+
+test("an unavailable unversioned arXiv source keeps the original download error", async t => {
+  const { calls } = arxivFixture(t, "/pdf/2501.01234");
+  const saved = paperReview.getRun(await startArxivReview("2501.01234"));
+  assert.deepEqual(calls, { downloads: ["/pdf/2501.01234"], model: 0 });
+  assert.equal(saved.status, "error");
+  assert.match(saved.error, /404/);
+  assert.doesNotMatch(saved.error, /^Could not download/);
 });
 
 test("Markdown export includes scores, evidence and the simulation disclaimer", () => {

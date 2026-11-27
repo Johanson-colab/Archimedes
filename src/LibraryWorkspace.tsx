@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { BookOpen, ChevronDown, ChevronRight, Cloud, FilePen, FileText, Folder, FolderOpen, FolderPlus, Library, ListFilter, LoaderCircle, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Pencil, Plus, Search, Star, Trash, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, BookOpen, ChevronDown, ChevronRight, Cloud, FilePen, FileText, Folder, FolderOpen, FolderPlus, Library, ListFilter, LoaderCircle, MoreHorizontal, Pencil, Plus, Search, Star, Trash, X } from "lucide-react";
 import { useUISettings } from "./i18n";
 import { useConfirm } from "./ConfirmDialog";
 import { Dialog } from "./Dialog";
@@ -284,7 +284,7 @@ export default function LibraryWorkspace({ bridge, workspace, projectId, active,
 
   return <section className={`library-workspace${navigationOpen ? "" : " navigation-closed"}`} aria-label={t("Library workspace")}>
     <aside className="library-workspace-tree" aria-label={t("Library folders")}>
-      <header><strong>{t("Library")}</strong><div><button className="icon-button" onClick={() => setEditor("new")} title={t("New folder")} aria-label={t("New folder")}><FolderPlus size={16} /></button><button className="icon-button" onClick={() => setNavigationOpen(false)} title={t("Hide library folders")} aria-label={t("Hide library folders")}><PanelLeftClose size={15} /></button></div></header>
+      <header><strong>{t("Library")}</strong><div><button className="icon-button" onClick={() => setEditor("new")} title={t("New folder")} aria-label={t("New folder")}><FolderPlus size={16} /></button><button className="icon-button" onClick={() => setNavigationOpen(false)} title={t("Hide library folders")} aria-label={t("Hide library folders")}><ArrowLeft size={15} /></button></div></header>
       <label className="library-tree-search"><Search size={14} /><input value={query} onChange={(event) => setQuery(event.target.value)} aria-label={t("Search library")} placeholder={t("Search library…")} /></label>
       <div className="library-tree-scroll">
         <button className={`library-tree-row${!activeDocument && scope === null ? " active" : ""}`} onClick={() => browse(null)}><Library size={16} /><span>{t("Library overview")}</span></button>
@@ -311,7 +311,7 @@ export default function LibraryWorkspace({ bridge, workspace, projectId, active,
     </aside>
     <div className="library-workspace-content">
       <div className="library-workspace-tabs">
-        {!navigationOpen && <button className="icon-button library-show-folders" onClick={() => setNavigationOpen(true)} aria-label={t("Show library folders")} title={t("Show library folders")}><PanelLeftOpen size={16} /></button>}
+        {!navigationOpen && <button className="icon-button library-show-folders" onClick={() => setNavigationOpen(true)} aria-label={t("Show library folders")} title={t("Show library folders")}><ArrowRight size={16} /></button>}
         <button aria-pressed={!activeDocument} className={`library-document-tab${!activeDocument ? " active" : ""}`} onClick={() => { if (canNavigate()) setActiveDocument(null); }}><Library size={14} /><span>{t("Library")}</span></button>
         <div className="library-document-tabs" role="tablist" aria-label={t("Open documents")}>{documents.map((document) => {
           const key = libraryDocumentKey(document);

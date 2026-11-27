@@ -7,7 +7,6 @@
   "license": "MIT",
   "files": {
     "LICENSE": "db60a6df93f1786929a223558ca0c202ef61095600785cf7503fbcd4bac1bd02",
-    "SKILL.md": "e52779eb2a9546865fd9d923f1508420555b3309c99308658a349aa47acc1b07",
     "references/anti-patterns.md": "bdb25ffe55796ec6f2b3e8296fec53141fcca81c33ea50696f20ae5101256555",
     "references/design-notes.md": "306864454ceeaa47db9666b47d5898c0cf2704d6b573ae9015e77108956895f0",
     "references/ideation-patterns/adapt_via_conditioning.md": "b5aac2a729f2c46ae2a7a593823115fec9749da30477c6aeb75a2c36325f085b",
@@ -73,6 +72,7 @@
     "references/system-prompts/ideate_select.txt": "0e02654fbb7c6cc878cf38ceca38bb899821b627ae176f91a472b68aa7e60d1c",
     "references/system-prompts/implementability_audit.txt": "ee0a06956a42963915cbabae0384a3dd3e9097cb55166576d43bd42a94650221",
     "references/system-prompts/revise.txt": "1e88d6ebb44edcd31ea27a6c9f339e5069160f43a823d886e8eee88d7347d005",
+    "scripts/__init__.py": "dcc57d056bfbb1d72835b0fcf70526bef2f016951996b304333a588756cdd702",
     "scripts/_time_guard.py": "32bffce7ff793053198af53189d8d648e32c699c4f515d481883d0523dd618ea",
     "scripts/dedup_merge.py": "996ac76b23a0012104d5aee963a1b9b6e7067e0c56f1612023e0f58bb7a777e3",
     "scripts/extract_user_refs.py": "74434c4813ad1a75178b0ced294e2adb7b241d18cac709ffca9c15f70d7894e6",
@@ -96,6 +96,7 @@
     "scripts/validators/implementability_completeness.py": "6acb49ab95644d0f0334fdf547a0c58133d101200b510f4195957619da6f5f6f",
     "scripts/validators/implementability_readability.py": "95bda123d7cb982a8c7d7b32060811e731781c0d4967aaf779b3b52171e94123",
     "scripts/validators/kill_switch_integrity.py": "ca7a3dbdfe664710deaa1d59df6f32f6209fb2b889bb397a54da89ff215658af",
-    "scripts/validators/subpattern_citation_consistency.py": "dd9b2962f5286c8c2ac615cd0bb25a6e2c2c22f4d04669ae28f3f99900256336"
+    "scripts/validators/subpattern_citation_consistency.py": "dd9b2962f5286c8c2ac615cd0bb25a6e2c2c22f4d04669ae28f3f99900256336",
+    "SKILL.md": "e52779eb2a9546865fd9d923f1508420555b3309c99308658a349aa47acc1b07"
   }
 }

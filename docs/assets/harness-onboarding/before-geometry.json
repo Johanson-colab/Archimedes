@@ -1,0 +1,146 @@
+[
+  {
+    "theme": "paper",
+    "viewport": 1100,
+    "name": "Codex",
+    "width": 876,
+    "overflow": false,
+    "setup": false,
+    "permissionSelect": false
+  },
+  {
+    "theme": "paper",
+    "viewport": 1100,
+    "name": "Claude Code",
+    "width": 876,
+    "overflow": false,
+    "setup": false,
+    "permissionSelect": false
+  },
+  {
+    "theme": "paper",
+    "viewport": 1100,
+    "name": "Antigravity",
+    "width": 876,
+    "overflow": false,
+    "setup": false,
+    "permissionSelect": false
+  },
+  {
+    "theme": "paper",
+    "viewport": 1100,
+    "name": "OpenCode",
+    "width": 876,
+    "overflow": false,
+    "setup": false,
+    "permissionSelect": false
+  },
+  {
+    "theme": "paper",
+    "viewport": 680,
+    "name": "Codex",
+    "width": 618,
+    "overflow": false,
+    "setup": false,
+    "permissionSelect": false
+  },
+  {
+    "theme": "paper",
+    "viewport": 680,
+    "name": "Claude Code",
+    "width": 618,
+    "overflow": false,
+    "setup": false,
+    "permissionSelect": false
+  },
+  {
+    "theme": "paper",
+    "viewport": 680,
+    "name": "Antigravity",
+    "width": 618,
+    "overflow": false,
+    "setup": false,
+    "permissionSelect": false
+  },
+  {
+    "theme": "paper",
+    "viewport": 680,
+    "name": "OpenCode",
+    "width": 618,
+    "overflow": false,
+    "setup": false,
+    "permissionSelect": false
+  },
+  {
+    "theme": "charcoal",
+    "viewport": 1100,
+    "name": "Codex",
+    "width": 876,
+    "overflow": false,
+    "setup": false,
+    "permissionSelect": false
+  },
+  {
+    "theme": "charcoal",
+    "viewport": 1100,
+    "name": "Claude Code",
+    "width": 876,
+    "overflow": false,
+    "setup": false,
+    "permissionSelect": false
+  },
+  {
+    "theme": "charcoal",
+    "viewport": 1100,
+    "name": "Antigravity",
+    "width": 876,
+    "overflow": false,
+    "setup": false,
+    "permissionSelect": false
+  },
+  {
+    "theme": "charcoal",
+    "viewport": 1100,
+    "name": "OpenCode",
+    "width": 876,
+    "overflow": false,
+    "setup": false,
+    "permissionSelect": false
+  },
+  {
+    "theme": "charcoal",
+    "viewport": 680,
+    "name": "Codex",
+    "width": 618,
+    "overflow": false,
+    "setup": false,
+    "permissionSelect": false
+  },
+  {
+    "theme": "charcoal",
+    "viewport": 680,
+    "name": "Claude Code",
+    "width": 618,
+    "overflow": false,
+    "setup": false,
+    "permissionSelect": false
+  },
+  {
+    "theme": "charcoal",
+    "viewport": 680,
+    "name": "Antigravity",
+    "width": 618,
+    "overflow": false,
+    "setup": false,
+    "permissionSelect": false
+  },
+  {
+    "theme": "charcoal",
+    "viewport": 680,
+    "name": "OpenCode",
+    "width": 618,
+    "overflow": false,
+    "setup": false,
+    "permissionSelect": false
+  }
+]

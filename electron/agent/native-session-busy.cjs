@@ -1,4 +1,4 @@
-const names = { codex: "Codex", claude: "Claude Code", opencode: "OpenCode" };
+const names = { codex: "Codex", claude: "Claude Code", opencode: "OpenCode", antigravity: "Antigravity" };
 
 class NativeSessionBusyError extends Error {
   constructor(backend) {
