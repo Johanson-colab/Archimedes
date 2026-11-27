@@ -1,0 +1,20 @@
+✔ imports a local PDF into a library and indexes it without duplicating identical files (644.039958ms)
+✔ opening a project hydrates only the first folder; project-wide browsing deduplicates shared papers (123.174708ms)
+✔ document switching mounts one reader and protects a running paper conversation (40.454666ms)
+✔ more than eight papers remain open and keep their reading positions (73.325417ms)
+✔ removing a paper removes only that folder membership; sync still includes annotations (25.977667ms)
+✔ a late folder refresh cannot overwrite a completed paper-state update (30.389583ms)
+✔ notes survive unmounting and failed saves; editing during save keeps the newer draft (7.513959ms)
+✔ metadata queue bounds concurrency, continues after errors and cancels queued work (3.249334ms)
+✔ search keeps a pasted title together, includes tags, and sorting leaves cache order intact (0.570084ms)
+✔ library API exposes project libraries, papers, and per-user paper state (0.468167ms)
+✔ desktop library view can push and pull shared libraries (0.430333ms)
+✔ canonical papers are shared without cross-project metadata overwrites (0.136833ms)
+ℹ tests 12
+ℹ suites 0
+ℹ pass 12
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1227.032208

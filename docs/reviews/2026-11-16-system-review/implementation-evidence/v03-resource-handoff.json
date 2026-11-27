@@ -1,0 +1,16 @@
+{
+  "cache": "/private/var/folders/y6/7f277x5n4z14sqwsw21h8ffm0000gn/T/archimedes-v03-resources-6KgBeb/tex-cache",
+  "cache_files": 254,
+  "cache_bytes": 42865788,
+  "bundle_hash": "6ffe055852f8faf66c0acbe1a7fb27f87b869a90bad1204f3bf4d9683f597c7c",
+  "bundle_directory": "/private/var/folders/y6/7f277x5n4z14sqwsw21h8ffm0000gn/T/archimedes-v03-resources-6KgBeb/tex-cache/bundles/data/6ffe055852f8faf66c0acbe1a7fb27f87b869a90bad1204f3bf4d9683f597c7c",
+  "has_phvb_tfm": false,
+  "real_article_and_cache_only_compile": "passed",
+  "official_managed_archive_execution": "not yet run",
+  "task_processes_running": false,
+  "temporary_manuscript_fixtures": "removed",
+  "retained_cache": "Keep until unified TeX acceptance; remove this task-owned archimedes-v03-resources directory afterwards.",
+  "resume_command": "ARCHIMEDES_TEX_CACHE=/private/var/folders/y6/7f277x5n4z14sqwsw21h8ffm0000gn/T/archimedes-v03-resources-6KgBeb/tex-cache node docs/reviews/2026-11-16-system-review/implementation-evidence/v03-real-tex.cjs",
+  "original_managed_live_command": "ARCHIMEDES_TEX_TEST_BUNDLE=/absolute/path/to/real-flat-bundle ARCHIMEDES_TEX_TEST_RESOURCES=/absolute/path/to/resources node --test electron/managed-latex-engine.live.test.cjs",
+  "live_fixture_note": "The current real default-bundle cache can seed a flat fixture, but Helvetica dependencies used by the existing live test have not yet been fetched. Do not count that test as passed."
+}

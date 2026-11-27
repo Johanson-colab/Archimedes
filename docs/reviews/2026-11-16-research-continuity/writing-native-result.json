@@ -1,0 +1,28 @@
+{
+  "nativeManagedCompile": {
+    "engine": "tectonic",
+    "buildId": "6c2064b2-13fe-4b98-b9ec-c38529e91aeb",
+    "statusAtBuild": "current",
+    "manifestPath": ".archimedes/latex-build/defc3a7a99c3/6c2064b2-13fe-4b98-b9ec-c38529e91aeb/source-snapshot.json",
+    "pdf": {
+      "path": ".archimedes/latex-build/defc3a7a99c3/6c2064b2-13fe-4b98-b9ec-c38529e91aeb/main.pdf",
+      "bytes": 16348,
+      "sha256": "39edf226f6e60206f69fb18d3dcad5cf53b453bd8356d68a4e7a8db0f3e16eed"
+    },
+    "durationMsObservedInUI": 474805,
+    "compiledTextObserved": [
+      "Evidence continuity study",
+      "Continued after restoring the named draft.",
+      "Ada Example. Tracing evidence through a research workflow."
+    ]
+  },
+  "bibliographyUpdate": {
+    "path": "paper/references.bib",
+    "key": "evidence2026",
+    "keyCount": 1,
+    "year": 2027,
+    "manualFieldPreserved": true
+  },
+  "fixtureFinalState": "Main source reset to original pre-citation text for toolbar comparison after functional acceptance. This does not relabel the historical compiled PDF as current after subsequent edits.",
+  "runtimeCache": "/Users/fei/Library/Application Support/Archimedes/latex-runtime"
+}

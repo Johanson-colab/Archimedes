@@ -1,0 +1,16 @@
+✔ CSV quoting, BOM, CRLF, multiline cells and TSV retain original values (63.634041ms)
+✔ missing tokens are excluded from numeric statistics without rewriting source data (0.284417ms)
+✔ real bundled examples retain documented shape, missingness, group sizes and full-data calculations (2.755ms)
+✔ time-series dates are real dates, sorted and not truncated to the first 100 rows (8.806833ms)
+✔ display sampling retains endpoints and unsupported numeric fields return an empty plot (2.947125ms)
+✔ field inspection does not empty a valid plot; examples, pagination and bounded chat draft work (376.316375ms)
+✔ analysis owner changes retain each dataset and question, and delayed handoffs identify stale input (441.761333ms)
+✔ the actual analysis component saves full CSV plus SVG, reopens its configuration, and links an explicit source handoff (441.879167ms)
+ℹ tests 8
+ℹ suites 0
+ℹ pass 8
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1985.868333

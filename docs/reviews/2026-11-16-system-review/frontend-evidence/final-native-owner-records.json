@@ -1,0 +1,32 @@
+{
+  "data-a": [
+    {
+      "id": "b6774615-9c2f-4199-96ca-601bf06bd678",
+      "thread_id": "ce38fa2a-527b-45c1-98fc-20f547845c3f",
+      "status": "completed",
+      "user_message": "Local workflow fixture",
+      "assistant_message": "Local fixture. [Open existing manuscript](paper/main.tex). [Open source section](paper/section.tex)."
+    },
+    {
+      "id": "ccca2dd4-8804-4fe8-8782-b4299a2aa985",
+      "thread_id": "ce38fa2a-527b-45c1-98fc-20f547845c3f",
+      "status": "completed",
+      "user_message": "NATIVE_OWNER_CHECK: write the local A fixture artifact after approval, then respond.",
+      "assistant_message": "A_ONLY_NATIVE_FINAL_REPLY"
+    }
+  ],
+  "data-b": [
+    {
+      "id": "b6774615-9c2f-4199-96ca-601bf06bd678",
+      "thread_id": "ce38fa2a-527b-45c1-98fc-20f547845c3f",
+      "status": "completed",
+      "user_message": "Local workflow fixture",
+      "assistant_message": "Local fixture. [Open existing manuscript](paper/main.tex). [Open source section](paper/section.tex)."
+    }
+  ],
+  "files": {
+    "A": "A_ONLY_NATIVE_DISK_RESULT\n",
+    "BExists": false,
+    "newDefaultBExists": false
+  }
+}

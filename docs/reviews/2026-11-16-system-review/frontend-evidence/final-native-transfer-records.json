@@ -1,0 +1,27 @@
+{
+  "projectId": "31c44da2-14da-4035-acad-b71c59512cc7",
+  "restoredRoot": "/private/var/folders/y6/7f277x5n4z14sqwsw21h8ffm0000gn/T/archimedes-final-journeys-mi137r7a/restored/Restored Workflow-31c44da2",
+  "threads": [
+    {
+      "id": "1459bd70-de83-424d-a820-aa360fcbbc1f",
+      "title": "Shared cloud task",
+      "workspace_path": "/private/var/folders/y6/7f277x5n4z14sqwsw21h8ffm0000gn/T/archimedes-final-journeys-mi137r7a/restored/Restored Workflow-31c44da2/history/root-1"
+    },
+    {
+      "id": "7a26d2d0-50e4-4c76-b062-b3ddcc5877d5",
+      "title": "Manuscript revision: paper/main.tex",
+      "workspace_path": "/private/var/folders/y6/7f277x5n4z14sqwsw21h8ffm0000gn/T/archimedes-final-journeys-mi137r7a/restored/Restored Workflow-31c44da2/history/root-1"
+    },
+    {
+      "id": "e75ccae2-51d1-4bd4-89f7-d3f96caeb528",
+      "title": "Data analysis: observations.csv",
+      "workspace_path": "/private/var/folders/y6/7f277x5n4z14sqwsw21h8ffm0000gn/T/archimedes-final-journeys-mi137r7a/restored/Restored Workflow-31c44da2/history/root-1"
+    }
+  ],
+  "resultIds": [
+    "b9c6664c-adbe-4d42-9cd6-df9ebb5a4616"
+  ],
+  "restoredSource": "\\documentclass{article}\n\\usepackage{graphicx}\n\\begin{document}\n\\section{A}\n\\input{section}\nNative unsent paragraph retained.\n\n\\begin{figure}[htbp]\n\\centering\n\\includegraphics[width=\\linewidth]{figures/results/native-original-analysis-497cb3d53ae3-plot.png}\n\\caption{}\n\\end{figure}\nRestored manuscript continuation.\n\\end{document}\n",
+  "continuedOnDisk": true,
+  "originalAChanged": false
+}

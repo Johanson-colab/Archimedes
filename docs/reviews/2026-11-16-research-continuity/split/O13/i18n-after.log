@@ -1,0 +1,31 @@
+✔ translation shards cover every string exactly once (8.251334ms)
+✖ keys stay sorted inside each shard so concurrent additions do not collide (2.446834ms)
+✔ the shell merges every shard and keeps the surfaces translated (2.481ms)
+ℹ tests 3
+ℹ suites 0
+ℹ pass 2
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 126.370209
+
+✖ failing tests:
+
+test at electron/i18n-translations.test.cjs:36:1
+✖ keys stay sorted inside each shard so concurrent additions do not collide (2.446834ms)
+  AssertionError [ERR_ASSERTION]: library.ts is out of order at "back to reading"
+      at TestContext.<anonymous> (/Users/fei/Desktop/Archimedes-pr-splits/bibtex-interchange/electron/i18n-translations.test.cjs:40:14)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }

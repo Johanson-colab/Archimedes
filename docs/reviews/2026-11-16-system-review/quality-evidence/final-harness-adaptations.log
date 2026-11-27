@@ -1,0 +1,12 @@
+✔ shared note editor never reports edits before the document loads (0.411667ms)
+✔ paper writing only mounts the co-edit pane for a loaded document (0.125708ms)
+✔ a clicked directory link expands nested Files entries and can still open a skill file (394.307667ms)
+✔ newer path requests win over slower directory inspection (0.977667ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1016.174375

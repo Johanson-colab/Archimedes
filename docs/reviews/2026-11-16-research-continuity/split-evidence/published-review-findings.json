@@ -1,0 +1,129 @@
+[
+  {
+    "repo": "Johanson-colab/Archimedes",
+    "pr_number": 341,
+    "comments": [
+      {
+        "id": 4584587596,
+        "url": "https://github.com/Johanson-colab/Archimedes/pull/341#discussion_r4584587596",
+        "path": "electron/main.cjs",
+        "line": 646,
+        "body": "**<sub><sub>![P1 Badge](https://img.shields.io/badge/P1-orange?style=flat)</sub></sub>  Bind IPC to the accepted data root, not menu or preview state**\n\nWhen a native Open Folder choice is ignored during a run or declined at the dirty-file confirmation, `openFolderFromMenu()` has already changed `windowWorkspaces` (`main.cjs:418`), but `App.tsx:2265–2282` keeps the UI in A. A delayed reader callback can similarly restore A after B opens through `readerStateForWindow()` (`main.cjs:394,1751`). This new resolver makes those map changes authoritative for every subsequent IPC, silently routing operations to the wrong database: updating notes on the shared seeded paper `seed-react` changes the other workspace, and interrupt/approval requests no longer reach A's run. Keep menu proposals and reader-preview callbacks separate from the accepted data root, updating that root only when `workspace:open` succeeds.\n\nUseful? React with 👍 / 👎.\n\n<!-- codex-code-review-finding:v1 -->"
+      },
+      {
+        "id": 4584587611,
+        "url": "https://github.com/Johanson-colab/Archimedes/pull/341#discussion_r4584587611",
+        "path": "electron/workspace-context.cjs",
+        "line": 8,
+        "body": "**<sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub>  Exempt workspace-independent recovery IPCs from opening a store**\n\nIf the current data directory is renamed, removed, or disconnected, `createWorkspaceStore()` throws during path validation before invoking any handler, including `workspace:choose`, `terminal:stop`, and settings/auth handlers that do not access research data. In particular, the normal folder chooser can no longer open to let the user select a replacement workspace; previously that handler had no database dependency. Exempt workspace-independent and recovery channels from eagerly opening the current store so an unavailable old directory does not disable these operations.\n\nUseful? React with 👍 / 👎.\n\n<!-- codex-code-review-finding:v1 -->"
+      }
+    ]
+  },
+  {
+    "repo": "feiiiiii5/Archimedes",
+    "pr_number": 1,
+    "comments": [
+      {
+        "id": 4584915394,
+        "url": "https://github.com/feiiiiii5/Archimedes/pull/1#discussion_r4584915394",
+        "path": "src/App.tsx",
+        "line": 2453,
+        "body": "**<sub><sub>![P1 Badge](https://img.shields.io/badge/P1-orange?style=flat)</sub></sub>  Pass the newly created project into the task selection**\n\nAfter creating a project, `createProject()` updates React state and immediately calls `startNewTask(project.id, ...)`, but that callback still closes over the previous `projects` and `workspaces` arrays. Consequently, this lookup returns null and selects a task with no project or workspace and the data folder as its execution root. The first conversation can therefore be created in the default project instead of the newly created one, or fail folder validation. Pass the returned project and workspace records explicitly, as the other snapshot-based callers do.\n\nUseful? React with 👍 / 👎.\n\n<!-- codex-code-review-finding:v1 -->"
+      },
+      {
+        "id": 4584915401,
+        "url": "https://github.com/feiiiiii5/Archimedes/pull/1#discussion_r4584915401",
+        "path": "electron/main.cjs",
+        "line": 1884,
+        "body": "**<sub><sub>![P1 Badge](https://img.shields.io/badge/P1-orange?style=flat)</sub></sub>  Update paper-chat callers before enforcing execution-root equality**\n\nFor a project whose execution folder differs from its data folder, starting a paper conversation now fails with “The execution folder does not match this conversation or project workspace.” In the inspected Library flow, `App.tsx` still passes `workspace={workspace}` to `LibraryView`, and `LibraryView.tsx` passes that data folder directly to `bridge.runAgent()` in `askPaper()`. This new unconditional resolver instead requires the project's execution folder, so the request is rejected before the agent starts. Update the paper-chat context wiring while preserving its data-folder-based PDF access.\n\nUseful? React with 👍 / 👎.\n\n<!-- codex-code-review-finding:v1 -->"
+      },
+      {
+        "id": 4584915407,
+        "url": "https://github.com/feiiiiii5/Archimedes/pull/1#discussion_r4584915407",
+        "path": "src/App.tsx",
+        "line": 1562,
+        "body": "**<sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub>  Refresh an unstarted task when its project folder changes**\n\nIf the user changes the active project's folder before starting a conversation, `changeProjectWorkspace()` updates only `projects` and `workspaces`; the new `taskSelection.executionRoot` remains the old folder. Unlike an existing session, this unstarted task has no historical folder to preserve. Its next submission sends the stale root and is rejected by `resolveResearchContext()` against the updated default workspace, while the file and terminal surfaces also keep using the old folder. Recompute the selection for an affected threadless default-workspace task when the folder change succeeds.\n\nUseful? React with 👍 / 👎.\n\n<!-- codex-code-review-finding:v1 -->"
+      },
+      {
+        "id": 4584915415,
+        "url": "https://github.com/feiiiiii5/Archimedes/pull/1#discussion_r4584915415",
+        "path": "electron/thread-commands.cjs",
+        "line": 59,
+        "body": "**<sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub>  Forward the selected workspace when creating a side conversation**\n\nInvoking `/side` from an empty sandbox or worktree now fails: `runConversationCommand()` calls `createResearchThread()` with the selected execution path but without `workspaceId`. This resolver consequently selects the project's shared workspace and rejects the supplied sandbox/worktree path as a mismatch. Existing-thread side conversations use the fork path and are unaffected. Forward the task's workspace ID in the threadless side-conversation creation path so the new validation can resolve the selected workspace.\n\nUseful? React with 👍 / 👎.\n\n<!-- codex-code-review-finding:v1 -->"
+      }
+    ]
+  },
+  {
+    "repo": "feiiiiii5/Archimedes",
+    "pr_number": 3,
+    "comments": [
+      {
+        "id": 4585067387,
+        "url": "https://github.com/feiiiiii5/Archimedes/pull/3#discussion_r4585067387",
+        "path": "src/NewsView.tsx",
+        "line": 485,
+        "body": "**<sub><sub>![P1 Badge](https://img.shields.io/badge/P1-orange?style=flat)</sub></sub>  Add matched screenshots for the changed News surface**\n\nThe News header now displays the target conversation, but this commit adds only the Notes/composer screenshot pair. The existing images under `docs/assets/news-micro-app/` do not document this change. `AGENTS.md` requires a matched before/after pair for each changed UI surface; add News screenshots showing the new target label, or explain why capturing them is genuinely impossible.\n\nAGENTS.md reference: [AGENTS.md:L27-L27](https://github.com/feiiiiii5/Archimedes/blob/9a879c6febe7c0211c001fb0dfd596038d7c035d/AGENTS.md#L27-L27)\n\nUseful? React with 👍 / 👎.\n\n<!-- codex-code-review-finding:v1 -->"
+      },
+      {
+        "id": 4585067398,
+        "url": "https://github.com/feiiiiii5/Archimedes/pull/3#discussion_r4585067398",
+        "path": "src/App.tsx",
+        "line": 2015,
+        "body": "**<sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub>  Redirect late attachment updates after assigning a thread ID**\n\nIf an attachment operation starts in a new conversation and resolves after its first run finishes, its retained `onAddContext` callback still updates the original new-conversation key. This migration moves only the items already present and does not redirect subsequent updates, so the late attachment disappears from the saved conversation and instead appears in the next new conversation for that workspace. This occurs through the asynchronous `attachDroppedFiles` or `ContextPicker.chooseLocal` paths. Preserve an owner-key alias or otherwise redirect outstanding updates to the saved thread when migrating.\n\nUseful? React with 👍 / 👎.\n\n<!-- codex-code-review-finding:v1 -->"
+      }
+    ]
+  },
+  {
+    "repo": "Johanson-colab/Archimedes",
+    "pr_number": 343,
+    "comments": [
+      {
+        "id": 4584589544,
+        "url": "https://github.com/Johanson-colab/Archimedes/pull/343#discussion_r4584589544",
+        "path": "scripts/check-toolchain.cjs",
+        "line": 14,
+        "body": "**<sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub>  Use a Windows-compatible invocation for the npm fallback**\n\nWhen the checker is invoked directly on Windows without `npm_config_user_agent`, this fallback fails even with a supported toolchain installed: `execFileSync` cannot execute the `npm.cmd` batch shim without a shell, so it throws before version validation runs. The documented `npm run check:env` path normally supplies the user agent and avoids this, but the explicit Windows fallback is unusable. Invoke npm through a Windows shell or execute its JavaScript entrypoint with Node.\n\nUseful? React with 👍 / 👎.\n\n<!-- codex-code-review-finding:v1 -->"
+      }
+    ]
+  },
+  {
+    "repo": "Johanson-colab/Archimedes",
+    "pr_number": 345,
+    "comments": [
+      {
+        "id": 4584683351,
+        "url": "https://github.com/Johanson-colab/Archimedes/pull/345#discussion_r4584683351",
+        "path": "scripts/electron-runtime.cjs",
+        "line": 14,
+        "body": "**<sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub>  Require a completed installation before accepting the default dist**\n\nIf a fresh preparation attempt times out after creating the Electron executable but before writing `path.txt`, this fallback accepts the partial distribution as ready. The next `prepareDesktop()` returns immediately without rerunning `install.js`, so following the timeout error's instruction to retry produces a false success instead of repairing the runtime. This is reproducible with an installer fixture that writes `dist/electron` and then stalls. Require the normal installation's completion marker before accepting the default distribution, handling explicit overrides separately.\n\nUseful? React with 👍 / 👎.\n\n<!-- codex-code-review-finding:v1 -->"
+      },
+      {
+        "id": 4584683357,
+        "url": "https://github.com/Johanson-colab/Archimedes/pull/345#discussion_r4584683357",
+        "path": "scripts/electron-runtime.cjs",
+        "line": 22,
+        "body": "**<sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub>  Terminate the detached installer when preparation is interrupted**\n\nOn macOS/Linux, cancelling preparation with SIGINT or SIGTERM leaves this detached installer running in its own process group. There is no signal or exit cleanup, and the timeout belongs to the now-dead parent, so a stalled installer can continue indefinitely after preparation has stopped. I reproduced the child surviving parent cancellation beyond the configured timeout. A retry can then start another installer against the same distribution. Reuse the process-group termination logic when the parent is interrupted, rather than relying solely on its timer.\n\nUseful? React with 👍 / 👎.\n\n<!-- codex-code-review-finding:v1 -->"
+      }
+    ]
+  },
+  {
+    "repo": "Johanson-colab/Archimedes",
+    "pr_number": 349,
+    "comments": [
+      {
+        "id": 4584821807,
+        "url": "https://github.com/Johanson-colab/Archimedes/pull/349#discussion_r4584821807",
+        "path": "scripts/build-info.cjs",
+        "line": 12,
+        "body": "**<sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub>  Include bundled skill resources in the source fingerprint**\n\nWhen a build contains local edits only to bundled skills, this extension whitelist excludes their `.md` prompts and `.py` code. For example, `electron/paper-deep-reading.cjs:117–119` reads `electron/assets/research-skills/paper-deep-reading/SKILL.md` into the model's system prompt, but two different edits to that file produce the same `commit`, `sourceDirty: true`, and `sourceFingerprint`, as reproduced in a temporary Git repository. Builds with different research prompts can therefore have identical diagnostic identities, including after packaging. Include these runtime-consumed skill resources in the digest.\n\nUseful? React with 👍 / 👎.\n\n<!-- codex-code-review-finding:v1 -->"
+      },
+      {
+        "id": 4584821817,
+        "url": "https://github.com/Johanson-colab/Archimedes/pull/349#discussion_r4584821817",
+        "path": "electron/build-info.cjs",
+        "line": 9,
+        "body": "**<sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub>  Preserve the built renderer identity in unpackaged launches**\n\nFor an unpackaged launch using the built renderer, `createWindow` loads `dist/index.html` (`electron/main.cjs:309–313`), but this branch always recollects identity from the live checkout. If the checkout is updated or locally edited after the renderer build, About reports the newer checkout's commit, fingerprint, and default-app policy even though the renderer still runs the earlier build; the identity saved by `prebuild` is ignored. Use the recorded renderer identity for dist-backed launches, or report it separately from live checkout metadata, reserving live collection for the Vite dev-server path.\n\nUseful? React with 👍 / 👎.\n\n<!-- codex-code-review-finding:v1 -->"
+      }
+    ]
+  }
+]

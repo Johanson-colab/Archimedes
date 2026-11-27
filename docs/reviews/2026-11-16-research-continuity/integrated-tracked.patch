@@ -1,0 +1,1302 @@
+diff --git a/electron/composer-session.test.cjs b/electron/composer-session.test.cjs
+index 7fe3dde..58c6bed 100644
+--- a/electron/composer-session.test.cjs
++++ b/electron/composer-session.test.cjs
+@@ -34,6 +34,10 @@ async function callbacks(names, overrides = {}) {
+     desktopBridge: {}, ...overrides,
+   };
+   const { transformWithOxc } = await import('vite');
++  const handoffSource = fs.readFileSync(path.join(__dirname, '../src/research-handoffs.ts'), 'utf8').replace(/^import .*;$/gm, '').replace(/^export /gm, '');
++  const handoffCode = (await transformWithOxc(handoffSource, 'research-handoffs.ts')).code;
++  scope.researchHandoffs = new Function(...Object.keys(helpers), `${handoffCode}; return createResearchHandoffService();`)(...Object.values(helpers));
++  scope.researchHandoffContext = () => ({ bridge: scope.desktopBridge, workspaces: scope.workspaces, getSelection: () => scope.taskSelectionRef.current, isDataFolderLoading: () => scope.dataFolderLoadingRef.current, t: scope.t });
+   const { code } = await transformWithOxc(names.map(extract).join('\n'), 'composer-callbacks.ts');
+   const actual = new Function('scope', `with(scope) { ${code}; return { ${names.join(', ')} }; }`)(scope);
+   return { ...actual, state, scope, key: project => helpers.taskDraftKey(owner(project)), threadKey: (id, project = id) => helpers.taskDraftKey(helpers.threadTaskSelection("/data", thread(id, project), [])) };
+diff --git a/electron/library-workspace.test.cjs b/electron/library-workspace.test.cjs
+index a469845..35fb099 100644
+--- a/electron/library-workspace.test.cjs
++++ b/electron/library-workspace.test.cjs
+@@ -80,6 +80,18 @@ async function input(node, text) {
+   });
+ }
+ 
++test("project research opens the exact paper from an unloaded folder and forwards the requested reading view", async () => {
++  const data = fixture(), request = { paperId: "paper2", libraryId: "lib2", token: "index-paper", review: true };
++  const ui = await mount(data.bridge, { openRequest: request, renderReader: ({ paper, openRequest }) => React.createElement("div", { "data-reader": paper.id, "data-review": openRequest?.review ? "yes" : "no" }, paper.title) });
++  try {
++    await React.act(async () => { await tick(); });
++    assert.equal(document.querySelector('[data-reader="paper2"]')?.getAttribute("data-review"), "yes");
++    assert.ok(data.calls.some(call => call[0] === "list" && call[1] === "lib2"));
++    await ui.render({ openRequest: { paperId: "paper0", libraryId: "lib0", token: "index-next-paper" } });
++    assert.equal(document.querySelector('[data-reader="paper0"]')?.getAttribute("data-review"), "no");
++  } finally { await ui.unmount(); }
++});
++
+ test("opening a project hydrates only the first folder; project-wide browsing deduplicates shared papers", async () => {
+   const data = fixture(); data.catalog.lib1.push({ ...data.catalog.lib0[0] });
+   const ui = await mount(data.bridge);
+diff --git a/electron/main.cjs b/electron/main.cjs
+index 23d2e6e..1dc2e82 100644
+--- a/electron/main.cjs
++++ b/electron/main.cjs
+@@ -73,6 +73,9 @@ const speech = require("./speech.cjs");
+ const store = require("./store.cjs");
+ const { createWorkspaceIpc, resolveResearchContext } = require("./workspace-context.cjs");
+ const { registerProjectResultCommands } = require("./project-result-commands.cjs");
++const { registerProjectResearchCommands } = require("./project-research-commands.cjs");
++const { registerPaperWritingCommands } = require("./paper-writing-commands.cjs");
++const { listProjectManuscriptVersions, listProjectManuscriptVersionOwners } = require("./paper-writing-history.cjs");
+ const { registerProjectTransferCommands } = require("./project-transfer-commands.cjs");
+ const { registerMetricComparisonCommands } = require("./metric-comparison-commands.cjs");
+ const workspaceFiles = require("./workspace-files.cjs");
+@@ -1216,6 +1219,8 @@ app.whenReady().then(async () => {
+   ipcMain.handle("web-search:save-config", (_event, input = {}) => webSearch.saveWebSearchConfig(input));
+ 
+   registerProjectResultCommands({ ipcMain, store });
++  registerPaperWritingCommands({ ipcMain, store });
++  registerProjectResearchCommands({ ipcMain, store, reviewDbPath: path.join(app.getPath("userData"), "paper-review.sqlite"), listManuscriptVersions: listProjectManuscriptVersions, listManuscriptVersionOwners: listProjectManuscriptVersionOwners });
+   registerProjectTransferCommands({ ipcMain, store, dialog, BrowserWindow, reviewDbPath: path.join(app.getPath("userData"), "paper-review.sqlite") });
+   registerMetricComparisonCommands({ ipcMain, store, dialog, BrowserWindow });
+ 
+diff --git a/electron/manuscript-snapshot.cjs b/electron/manuscript-snapshot.cjs
+index e78febb..fd02a28 100644
+--- a/electron/manuscript-snapshot.cjs
++++ b/electron/manuscript-snapshot.cjs
+@@ -23,9 +23,9 @@ function fileDigest(file) {
+ }
+ 
+ /** Version the manuscript directory, including sections, bibliography and assets. */
+-function captureManuscriptSources(root, sourcePath) {
++function captureManuscriptSources(root, sourcePath, { allowMissing = false } = {}) {
+   const workspace = workspacePath(root);
+-  const source = workspacePath(workspace, sourcePath);
++  const source = workspacePath(workspace, sourcePath, { mustExist: !allowMissing });
+   const directory = path.dirname(source);
+   const files = [], observations = [], untracked = [];
+   let bytes = 0;
+@@ -43,7 +43,8 @@ function captureManuscriptSources(root, sourcePath) {
+       observations.push([name, digest.observation]);
+     }
+   }
+-  visit(directory);
++  if (fs.existsSync(directory)) { workspacePath(workspace, relative(workspace, directory)); visit(directory); }
++  else if (!allowMissing) throw new Error("The manuscript folder is missing.");
+   return { workspace, source_path: sourcePath, project_path: relative(workspace, directory), coverage: "manuscript-directory", source_version: hash(JSON.stringify({ files, untracked })), observation_version: hash(JSON.stringify(observations)), files, total_bytes: bytes, untracked_inputs: untracked, excluded_directories: [...EXCLUDED_DIRECTORIES] };
+ }
+ 
+diff --git a/electron/manuscript-workflow-ui.test.cjs b/electron/manuscript-workflow-ui.test.cjs
+index 885e133..1ab20d0 100644
+--- a/electron/manuscript-workflow-ui.test.cjs
++++ b/electron/manuscript-workflow-ui.test.cjs
+@@ -30,6 +30,10 @@ async function fixture(t) {
+   database.setResearchProjectWorkspace(project.id, newRoot);
+   const workspaces = database.listProjectWorkspaces(project.id), selection = task.threadTaskSelection(dataRoot, original, workspaces);
+   const origin = { dataRoot, projectId: project.id, workspaceId: workspace.id, threadId: original.id, workspace: oldRoot, mainPath: "paper/main.tex", selectedPath: "paper/section.tex", manifestPath: build.source_snapshot.manifest_path, sourceVersion: build.source_snapshot.requested_source.source_version, pdfPath: build.source_snapshot.pdf.path, pdfSha256: build.source_snapshot.pdf.sha256, buildId: build.source_snapshot.build_id };
++  const { transformWithOxc } = await import("vite");
++  const handoffSource = fs.readFileSync(path.join(__dirname, "../src/research-handoffs.ts"), "utf8").replace(/^import .*;$/gm, "").replace(/^export /gm, "");
++  const handoffCode = (await transformWithOxc(handoffSource, "research-handoffs.ts")).code;
++  const researchHandoffs = new Function(...Object.keys(task), `${handoffCode}; return createResearchHandoffService();`)(...Object.values(task));
+   const drafts = new Map([[task.taskDraftKey(selection), { text: "ORIGINAL_UNSENT_PLAN", selectionStart: 0, selectionEnd: 0 }]]), contexts = new Map(), settings = new Map(), sent = [], shown = [];
+   let threads = [];
+   const scope = { ...task, t: (value) => value, workspaces, dataFolderLoadingRef: { current: false }, taskSelectionRef: { current: selection }, activeRunRef: { current: null }, commandLockRef: { current: false }, threadOpenRequestRef: { current: 0 }, reasoningEffort: "medium", contextLength: "standard",
+@@ -42,6 +46,8 @@ async function fixture(t) {
+     desktopBridge: { createResearchThread: async (input) => database.createResearchThread(input), getResearchThread: async (id) => database.getResearchThread(id), stagePaperToSlidesPdf: async (target, input, options) => stageManuscriptPdf(database, target, input, options) },
+     displayThread: (thread, data) => { scope.taskSelectionRef.current = task.threadTaskSelection(data, thread, workspaces); },
+   };
++  scope.researchHandoffs = researchHandoffs;
++  scope.researchHandoffContext = () => ({ bridge: scope.desktopBridge, workspaces, getSelection: () => scope.taskSelectionRef.current, isDataFolderLoading: () => scope.dataFolderLoadingRef.current, t: scope.t });
+   t.after(() => { database.close(); fs.rmSync(root, { recursive: true, force: true }); });
+   return { ...task, scope, database, project, workspace, root, dataRoot, oldRoot, newRoot, origin, selection, drafts, contexts, sent, shown };
+ }
+@@ -108,6 +114,5 @@ test("a reopened unlinked analysis creates its session at its registered old roo
+   assert.match(require("./agent/workspace-tools.cjs").readLines(f.oldRoot, result.files[0].path, 3, 3).content, /ORIGINAL_LAST_ROW/);
+   assert.match(f.drafts.get(key).text, /Explain the full file/);
+   assert.equal(f.drafts.get(f.taskDraftKey(f.selection)).text, "ORIGINAL_UNSENT_PLAN");
+-  await continueAnalysis("Append a follow-up", { id: "original-input", name: "original.csv", resultId: result.id }, owner, () => true);
+-  assert.equal(scope.analysisSessionsRef.current.size, 1); assert.match(f.drafts.get(key).text, /Append a follow-up/);
++  assert.equal(await continueAnalysis("Append a follow-up", { id: "original-input", name: "original.csv", resultId: result.id }, owner, () => true), id); assert.match(f.drafts.get(key).text, /Append a follow-up/);
+ });
+diff --git a/electron/paper-writing-workspace.test.cjs b/electron/paper-writing-workspace.test.cjs
+index 63fb5bf..2cfaf81 100644
+--- a/electron/paper-writing-workspace.test.cjs
++++ b/electron/paper-writing-workspace.test.cjs
+@@ -26,6 +26,12 @@ before(async () => {
+     PaperTemplateLibrary: () => null, paperTemplates: [{ id: "fake" }], SharedNoteEditor: () => null,
+     fingerprintFor: () => "fake", emitProactiveSignal() {},
+   };
++  Object.assign(scope, await import("../src/bibliography.ts"));
++  for (const [file, exported] of [["paper-writing-citations.ts", ["citationKeyFor", "prepareManuscriptCitation", "manuscriptBibliographyPaths"]], ["PaperWritingCitations.tsx", ["PaperWritingCitations"]], ["PaperWritingVersions.tsx", ["PaperWritingVersions"]]]) {
++    const content = fs.readFileSync(path.join(__dirname, "../src", file), "utf8").replace(/^import[\s\S]*?from\s+"[^"]+";\r?\n/gm, "").replace(/^import "[^"]+";\r?\n/gm, "").replace(/export default function/g, "function").replace(/export function/g, "function");
++    const compiled = await transformWithOxc(content, file, { jsx: { runtime: "classic" } });
++    Object.assign(scope, new Function(...Object.keys(scope), `${compiled.code.replace(/^export \{\};?$/gm, "")}\nreturn {${exported.join(",")}};`)(...Object.values(scope)));
++  }
+   const tabsSource = fs.readFileSync(path.join(__dirname, "../src/Tabs.tsx"), "utf8").replace(/^import .*;\r?\n/gm, "").replace(/export /g, "");
+   const tabs = await transformWithOxc(tabsSource, "Tabs.tsx", { jsx: { runtime: "classic" } });
+   Object.assign(scope, new Function(...Object.keys(scope), `${tabs.code}\nreturn { Tabs, Tab };`)(...Object.values(scope)));
+@@ -55,6 +61,7 @@ async function fixture(t, overrides = {}) {
+   const preview = (root, name) => ({ name: path.basename(name), path: name, kind: "text", size: 100, modifiedAt: "now", content: fs.readFileSync(path.join(root, name), "utf8") });
+   let progress;
+   const bridge = {
++    ...overrides.bridge,
+     stageProjectResultFigure: async (input) => overrides.stage(input),
+     listLatexProjects: async root => overrides.listProjects ? overrides.listProjects(root) : require("./latex-workspace.cjs").listLatexProjects(root),
+     listWorkspaceFiles: async (root, parent) => require("./workspace-files.cjs").listWorkspaceDirectory(root, parent),
+@@ -77,7 +84,7 @@ async function fixture(t, overrides = {}) {
+     bridge, workspace, projectId: overrides.projectId || (workspace === a ? "a" : "b"), workspaceId: overrides.workspaceId, threadId: overrides.threadId, figureRequest: overrides.figureRequest, openRequest: token === null ? null : { path: filePath, token }, onRefresh() {}, onAskAI() {}, onHandoff: overrides.handoff, onReturnToResult: overrides.returnResult,
+   })));
+   t.after(async () => { await React.act(async () => reactRoot.unmount()); fs.rmSync(directory, { recursive: true, force: true }); });
+-  return { a, b, render, restart: async workspace => { await React.act(async () => reactRoot.unmount()); reactRoot = createRoot(document.getElementById("root")); await render(workspace, null); }, reads, writes, compiles, disk: root => fs.readFileSync(path.join(root, "paper/main.tex"), "utf8"), progress: event => progress?.(event) };
++  return { a, b, bridge, render, restart: async workspace => { await React.act(async () => reactRoot.unmount()); reactRoot = createRoot(document.getElementById("root")); await render(workspace, null); }, reads, writes, compiles, disk: root => fs.readFileSync(path.join(root, "paper/main.tex"), "utf8"), progress: event => progress?.(event) };
+ }
+ async function autoCompileOff() {
+   const checkbox = document.querySelector('.paper-auto-compile input');
+@@ -99,6 +106,73 @@ async function click(label) {
+ }
+ const settle = () => React.act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
+ 
++async function clickText(label) {
++  const button = [...document.querySelectorAll("button")].find(node => node.textContent.trim() === label);
++  assert.ok(button, label); assert.equal(button.disabled, false, label);
++  await React.act(async () => button.click());
++}
++async function changeInput(node, value) {
++  assert.ok(node);
++  await React.act(async () => {
++    Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, "value").set.call(node, value);
++    node.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
++  });
++}
++
++test("Writing inserts a project-library citation and explicitly refreshes its bibliography without replacing manual content", async t => {
++  let db;
++  const options = { bridge: {
++    listLibraries: async id => db.listLibraries(id), listLibraryPapers: async id => db.listPapers(id), setPaperBibliography: async (...args) => db.setPaperBibliography(...args),
++  } };
++  const f = await fixture(t, options);
++  db = require("./store.cjs").createWorkspaceStore(f.a);
++  t.after(() => db.close());
++  const project = db.createResearchProject({ name: "Citation manuscript", workspacePath: f.a }); options.projectId = project.id;
++  const library = db.listLibraries(project.id)[0], paper = db.addPaper(library.id, require("./test-support/discovery-fixture.cjs").paper);
++  db.setPaperBibliography(paper.id, { citekey: "evidence2026", entryType: "article" });
++  const manual = "% Keep this manuscript annotation\n@book{manual, title={Existing hand-written reference}, note={My note}}\n";
++  fs.writeFileSync(path.join(f.a, "paper/references.bib"), manual);
++  await f.render(f.a); await autoCompileOff();
++  const editor = document.querySelector('.latex-editor-textarea'); editor.setSelectionRange(editor.value.indexOf("\\end{document}"), editor.value.indexOf("\\end{document}"));
++  await click("Insert citation"); await clickText("Insert citation and update .bib");
++  assert.match(f.disk(f.a), /\\cite\{evidence2026\}/);
++  const first = fs.readFileSync(path.join(f.a, "paper/references.bib"), "utf8"); assert.ok(first.startsWith(manual)); assert.match(first, /Evidence handoff fixture/);
++  db.repairLibraryPaperMetadata(paper.id, { title: "Corrected source metadata" });
++  await click("Close citations");
++  await click("Insert citation"); await clickText("Update .bib only");
++  const updated = fs.readFileSync(path.join(f.a, "paper/references.bib"), "utf8");
++  assert.ok(updated.startsWith(manual)); assert.match(updated, /Corrected source metadata/); assert.equal((updated.match(/@article\{/g) || []).length, 1);
++  assert.equal((f.disk(f.a).match(/\\cite\{evidence2026\}/g) || []).length, 1, "metadata updates do not insert another citation");
++});
++
++test("Writing names current drafts, compares modified sections, restores and continues through its owner save queue", async t => {
++  const history = require("./paper-writing-history.cjs");
++  const f = await fixture(t, { workspaceId: "workspace-a", bridge: {
++    listManuscriptVersions: async input => history.listProjectManuscriptVersions(input),
++    saveManuscriptVersion: async input => history.saveManuscriptVersion(input),
++    compareManuscriptVersion: async input => history.compareManuscriptVersion(input),
++    restoreManuscriptVersion: async input => history.restoreManuscriptVersion(input),
++  } });
++  await f.render(f.a); await autoCompileOff();
++  await edit(source("Draft saved by the key-version action"));
++  await click("Key versions");
++  await changeInput(document.querySelector('.paper-version-save input'), "First complete draft");
++  await React.act(async () => document.querySelector('.paper-version-save').dispatchEvent(new dom.window.Event("submit", { bubbles: true, cancelable: true })));
++  assert.equal(f.disk(f.a), source("Draft saved by the key-version action"));
++  await click("Close key versions");
++  await edit(source("Later writing to restore"));
++  await click("Key versions");
++  await React.act(async () => document.querySelector('.paper-version-row').click());
++  assert.match(document.querySelector('.paper-version-comparison pre').textContent, /Later writing to restore/);
++  await clickText("Restore this key version");
++  assert.equal(document.querySelector('.latex-editor-textarea').value, source("Draft saved by the key-version action"));
++  assert.equal(document.querySelectorAll('.paper-version-row').length, 2);
++  await click("Close key versions");
++  await edit(source("Continued after returning to the milestone")); await click("Recompile");
++  assert.equal(f.disk(f.a), source("Continued after returning to the milestone"));
++  assert.equal(f.compiles.at(-1).root, f.a);
++});
++
+ test("same-named papers keep their owner and autosave on departure without replaying an old open request", async t => {
+   const f = await fixture(t);
+   await f.render(f.b, 1); await autoCompileOff();
+diff --git a/electron/preload.cjs b/electron/preload.cjs
+index 73243ac..214287b 100644
+--- a/electron/preload.cjs
++++ b/electron/preload.cjs
+@@ -1,6 +1,13 @@
+ const { contextBridge, ipcRenderer, webUtils } = require("electron");
+ 
+ contextBridge.exposeInMainWorld("researchDesk", {
++  listProjectResearchIndex: (input) => ipcRenderer.invoke("project-research:list", input),
++  saveProjectResearchNote: (input) => ipcRenderer.invoke("project-research:save-note", input),
++  deleteProjectResearchNote: (input) => ipcRenderer.invoke("project-research:delete-note", input),
++  listManuscriptVersions: (input) => ipcRenderer.invoke("paper-writing:versions:list", input),
++  saveManuscriptVersion: (input) => ipcRenderer.invoke("paper-writing:versions:save", input),
++  compareManuscriptVersion: (input) => ipcRenderer.invoke("paper-writing:versions:compare", input),
++  restoreManuscriptVersion: (input) => ipcRenderer.invoke("paper-writing:versions:restore", input),
+   platform: process.platform,
+   getBuildInfo: () => ipcRenderer.invoke("app:build-info"),
+   getInitialWorkspace: () => ipcRenderer.invoke("window:initial-workspace"),
+diff --git a/electron/project-transfer.cjs b/electron/project-transfer.cjs
+index bfca985..3607ff5 100644
+--- a/electron/project-transfer.cjs
++++ b/electron/project-transfer.cjs
+@@ -4,12 +4,13 @@ const { randomUUID, createHash } = require('node:crypto');
+ const { DatabaseSync } = require('node:sqlite');
+ const { fileDigest } = require('./manuscript-snapshot.cjs');
+ const resultFiles = require('./project-results.cjs');
++const manuscriptHistory = require('./paper-writing-history.cjs');
+ 
+ const VERSION = 1;
+ const MAX_BYTES = 500 * 1024 * 1024;
+ const MAX_RECORD_BYTES = 25 * 1024 * 1024;
+ const MAX_FILES = 10000;
+-const DEFAULT_SELECTION = { pdfs: true, annotations: true, reports: true, conversations: true, results: true, artifacts: true, reproductions: true, sourceFiles: [] };
++const DEFAULT_SELECTION = { pdfs: true, annotations: true, reports: true, conversations: true, results: true, artifacts: true, reproductions: true, milestones: true, sourceFiles: [] };
+ const EXCLUDED = new Set(['.git', '.archimedes', 'node_modules', '.venv', 'venv', '__pycache__', '.cache', 'dist', 'build']);
+ const FIELDS = Object.fromEntries(Object.entries({
+   research_projects: 'id owner_id name description workspace_path environment_id created_at updated_at archived_at',
+@@ -35,6 +36,8 @@ const FIELDS = Object.fromEntries(Object.entries({
+   comments: 'id project_id resource_type resource_id parent_id anchor_json body author_id resolved_at created_at updated_at',
+   research_artifacts: 'id project_id thread_id turn_id path title kind storage sha256 size_bytes modified_at version source created_at updated_at seen',
+   project_results: 'id project_id workspace_id thread_id execution_root kind title manifest_path created_at updated_at',
++  project_research_notes: 'id project_id kind body evidence_json created_at updated_at',
++  manuscript_versions: 'id project_id workspace_id execution_root manifest_json created_at',
+   reproductions: 'id project_id workspace_id execution_root paper_id repo_url title status source_json contract_json budget_json error created_at updated_at',
+   reproduction_runs: 'id reproduction_id status backend image steps_json log error started_at finished_at created_at updated_at snapshot_json',
+   reproduction_attempts: 'id reproduction_id run_id attempt_no step_id class confidence evidence cause fix_json status created_at',
+@@ -75,7 +78,7 @@ function excludedResource(name) {
+   const parts = name.split('/');
+   if (parts.some(part => ['.git', 'node_modules', '.venv', 'venv', '__pycache__', '.cache', '.ssh', '.aws', '.kube'].includes(part) || /^\.env(?:\.|$)|\.(?:pem|key)$|^\.(?:npmrc|pypirc)$/i.test(part))) return true;
+   const internal = parts.indexOf('.archimedes');
+-  return internal >= 0 && !['papers', 'latex-build', 'reproduction-logs', 'paper-to-slides', 'metric-comparisons'].includes(parts[internal + 1]);
++  return internal >= 0 && !['papers', 'latex-build', 'reproduction-logs', 'paper-to-slides', 'metric-comparisons', 'manuscript-history'].includes(parts[internal + 1]);
+ }
+ function regular(root, name) {
+   relative(name);
+@@ -123,6 +126,23 @@ function collect(db, projectId, options) {
+   const projectThreads = rows(db, 'research_threads', row => row.project_id === projectId && visible(row));
+   for (const thread of projectThreads) if (thread.workspace_path) rootKey(thread.workspace_path);
+   const sourceRoots = [...workspaces.map(row => ({ workspaceId: row.id, root: row.root })), ...projectThreads.filter(row => row.workspace_path).map(row => ({ workspaceId: row.workspace_id || workspaces[0].id, threadId: row.id, root: row.workspace_path }))];
++  const notes = add('project_research_notes', rows(db, 'project_research_notes', row => row.project_id === projectId));
++  for (const note of notes) for (const ref of json(note.evidence_json) || []) if (ref.projectId === projectId && ref.executionRoot) rootKey(ref.executionRoot);
++  if (choice.milestones) {
++    add('manuscript_versions', []);
++    const owners = new Map(sourceRoots.map(owner => [`${owner.workspaceId}:${owner.root}`, owner]));
++    for (const owner of manuscriptHistory.listProjectManuscriptVersionOwners({ dataRoot, projectId })) owners.set(`${owner.workspaceId}:${owner.executionRoot}`, { workspaceId: owner.workspaceId, root: owner.executionRoot });
++    for (const row of rows(db, 'project_results', row => row.project_id === projectId)) owners.set(`${row.workspace_id}:${row.execution_root}`, { workspaceId: row.workspace_id, root: row.execution_root });
++    for (const owner of owners.values()) {
++      if (!fs.existsSync(owner.root)) continue;
++      const bundle = manuscriptHistory.exportManuscriptVersions({ dataRoot, projectId, workspaceId: owner.workspaceId, executionRoot: owner.root });
++      rootKey(owner.root);
++      for (const version of bundle.versions) {
++        records.manuscript_versions.push({ id: version.id, project_id: projectId, workspace_id: version.workspaceId, execution_root: owner.root, manifest_json: JSON.stringify(clean(version)), created_at: version.createdAt });
++      }
++      for (const blob of bundle.blobs) addFile('milestones', owner.root, blob.path, { table: 'manuscript_versions', id: blob.versionId });
++    }
++  }
+   const libraries = add('libraries', rows(db, 'libraries', row => row.project_id === projectId)), libraryIds = new Set(libraries.map(row => row.id));
+   const links = add('library_papers', rows(db, 'library_papers', row => libraryIds.has(row.library_id))), paperIds = new Set(links.map(row => row.paper_id));
+   for (const table of ['project_paper_selections', 'paper_highlights', 'paper_reviews', 'paper_presentations', 'reproductions']) for (const row of rows(db, table, row => row.project_id === projectId)) if (row.paper_id) paperIds.add(row.paper_id);
+@@ -273,7 +293,7 @@ function readPackage(packagePath) {
+   if (!records.research_projects || records.research_projects.length !== 1 || records.research_projects[0].id !== manifest.projectId) throw new Error('Invalid project record.');
+   if (!Array.isArray(records.project_workspaces) || !records.project_workspaces.length) throw new Error('The package needs a local project workspace.');
+   const registeredRoots = new Set(manifest.roots.flatMap(root => [root.original, ...(root.aliases || [])].map(sourceKey)));
+-  for (const table of ['project_workspaces', 'research_threads', 'project_results', 'reproductions']) for (const row of records[table] || []) {
++  for (const table of ['project_workspaces', 'research_threads', 'project_results', 'reproductions', 'manuscript_versions']) for (const row of records[table] || []) {
+     const root = row.root || row.workspace_path || row.execution_root;
+     if (root && (!sourceAbsolute(root) || !registeredRoots.has(sourceKey(root)))) throw new Error('A project record references an unregistered source root.');
+   }
+@@ -288,7 +308,7 @@ function readPackage(packagePath) {
+   for (const file of manifest.files) {
+     relative(file.path);
+     if (excludedResource(file.path)) throw new Error('The package contains excluded configuration or runtime files.');
+-    if (!rootKeys.has(file.root) || !['pdfs', 'annotations', 'reports', 'artifacts', 'results', 'sources', 'reproductions', 'comparisons'].includes(file.category) || !/^[a-f0-9]{64}$/.test(file.sha256) || !Number.isSafeInteger(file.bytes) || file.bytes < 0) throw new Error('Invalid project file inventory.');
++    if (!rootKeys.has(file.root) || !['pdfs', 'annotations', 'reports', 'artifacts', 'results', 'sources', 'reproductions', 'comparisons', 'milestones'].includes(file.category) || !/^[a-f0-9]{64}$/.test(file.sha256) || !Number.isSafeInteger(file.bytes) || file.bytes < 0) throw new Error('Invalid project file inventory.');
+     const destination = `${file.root}/${file.path}`;
+     if (destinations.has(destination)) {
+       const other = manifest.files.find(candidate => candidate !== file && `${candidate.root}/${candidate.path}` === destination);
+@@ -314,7 +334,7 @@ function insert(db, table, record, schema = 'main') {
+ 
+ function importProject(db, packagePath, options) {
+   const { directory, manifest, records } = readPackage(packagePath), dataRoot = fs.realpathSync(options.dataRoot), parent = fs.realpathSync(options.targetParent);
+-  const idMap = new Map(), now = new Date().toISOString(), createdPdfs = [], newId = id => id ? (idMap.has(id) ? idMap.get(id) : (idMap.set(id, randomUUID()), idMap.get(id))) : null;
++  const idMap = new Map(), now = new Date().toISOString(), createdPdfs = [], importedVersionIds = [], newId = id => id ? (idMap.has(id) ? idMap.get(id) : (idMap.set(id, randomUUID()), idMap.get(id))) : null;
+   idMap.set(manifest.exporterUserId, options.userId);
+   for (const values of Object.values(records)) for (const row of values) if (row.id) newId(row.id);
+   const knownIds = new Set(idMap.keys());
+@@ -354,7 +374,7 @@ function importProject(db, packagePath, options) {
+   fs.mkdirSync(destination); // Exclusive, outside rollback: never remove a pre-existing directory.
+   try {
+     for (const root of new Set(rootMap.values())) fs.mkdirSync(root, { recursive: true });
+-    for (const file of manifest.files.filter(file => file.category !== 'pdfs' && file.category !== 'results' && file.category !== 'reproductions' && file.category !== 'comparisons' && !relativePaths.some(([old]) => file.category === 'artifacts' && file.path.startsWith(`${old}/`)))) {
++    for (const file of manifest.files.filter(file => file.category !== 'pdfs' && file.category !== 'results' && file.category !== 'reproductions' && file.category !== 'comparisons' && file.category !== 'milestones' && !relativePaths.some(([old]) => file.category === 'artifacts' && file.path.startsWith(`${old}/`)))) {
+       const root = rootMap.get(sourceKey(manifest.roots.find(entry => entry.key === file.root).original)), output = path.join(root, relative(file.path));
+       fs.mkdirSync(path.dirname(output), { recursive: true });
+       if (!fs.existsSync(output)) fs.copyFileSync(path.join(directory, 'blobs', file.sha256), output, fs.constants.COPYFILE_EXCL);
+@@ -377,7 +397,7 @@ function importProject(db, packagePath, options) {
+       insert(db, 'project_environments', { id: project.environment_id, project_id: projectId, kind: 'local', provider: 'local', binding_json: '{}', created_at: now, updated_at: now });
+       insert(db, 'project_members', { project_id: projectId, user_id: options.userId, role: 'owner', source: 'local', joined_at: now, invited_by: null });
+       for (const row of workspaceRows) insert(db, 'project_workspaces', { ...transform(row), root: rootMap.get(sourceKey(row.root)) || destination, kind: row.id === primary.id ? 'shared' : 'sandbox', base_ref: null, last_session_id: knownIds.has(row.last_session_id) ? idMap.get(row.last_session_id) : null });
+-      for (const table of ['libraries', 'papers', 'library_papers', 'project_paper_selections', 'paper_bibliography', 'paper_user_state', 'paper_reader_assets', 'paper_reader_pages', 'paper_highlights', 'paper_reviews', 'paper_presentations', 'research_threads', 'paper_chat_threads', 'task_runs', 'research_turns', 'research_turn_attachments', 'research_events', 'comments', 'research_artifacts', 'reproductions', 'reproduction_runs', 'reproduction_attempts']) {
++      for (const table of ['libraries', 'papers', 'library_papers', 'project_paper_selections', 'paper_bibliography', 'paper_user_state', 'paper_reader_assets', 'paper_reader_pages', 'paper_highlights', 'paper_reviews', 'paper_presentations', 'research_threads', 'paper_chat_threads', 'task_runs', 'research_turns', 'research_turn_attachments', 'research_events', 'comments', 'research_artifacts', 'reproductions', 'reproduction_runs', 'reproduction_attempts', 'project_research_notes']) {
+         for (const row of records[table] || []) {
+           const copy = transform(row);
+           if (copy.canonical_key) copy.canonical_key = `restored:${projectId}:${copy.canonical_key}`;
+@@ -403,6 +423,13 @@ function importProject(db, packagePath, options) {
+           insert(db, table, copy);
+         }
+       }
++      for (const row of records.manuscript_versions || []) {
++        const original = json(row.manifest_json);
++        if (!original || original.id !== row.id || original.projectId !== manifest.projectId || original.workspaceId !== row.workspace_id || sourceKey(original.executionRoot) !== sourceKey(row.execution_root)) throw new Error('A manuscript version does not belong to its packaged project workspace.');
++        const executionRoot = rootMap.get(sourceKey(row.execution_root)), blobs = manifest.files.filter(file => file.category === 'milestones' && file.reference?.id === row.id).map(file => ({ sha256: file.sha256, bytes: file.bytes, path: path.join(directory, 'blobs', file.sha256) }));
++        importedVersionIds.push(newId(row.id));
++        manuscriptHistory.importManuscriptVersions({ dataRoot, projectId, workspaceId: newId(row.workspace_id), executionRoot, threadId: knownIds.has(original.threadId) ? newId(original.threadId) : null }, { versions: [original], blobs }, { mapId: newId, mapPath: remapPath });
++      }
+       for (const row of records.project_results || []) {
+         const files = manifest.files.filter(file => file.reference?.table === 'project_results' && file.reference.id === row.id);
+         if (!row.transfer_files?.length) continue;
+@@ -461,6 +488,7 @@ function importProject(db, packagePath, options) {
+     } catch (error) { db.exec('ROLLBACK TO import_project_package'); db.exec('RELEASE import_project_package'); throw error; }
+     return { projectId, name: restoredName, workspacePath: destination, counts: { ...manifest.counts, project_results: restoredResults }, unavailable: manifest.unavailable || [], localOnly: true };
+   } catch (error) {
++    if (importedVersionIds.length) manuscriptHistory.removeManuscriptVersionRegistrations({ dataRoot, ids: importedVersionIds });
+     fs.rmSync(destination, { recursive: true, force: true });
+     // Reader PDFs use new IDs, so rollback can remove only this import's files.
+     for (const file of createdPdfs) fs.rmSync(file, { force: true });
+diff --git a/electron/reproduction-owner-view.test.cjs b/electron/reproduction-owner-view.test.cjs
+index b44789e..3858304 100644
+--- a/electron/reproduction-owner-view.test.cjs
++++ b/electron/reproduction-owner-view.test.cjs
+@@ -28,7 +28,7 @@ test("actual Reproduce view keeps copied same-id events within their data root,
+     planReproduction: async (id, context) => { const data = current; planInputs.push({ id, context, data }); await gates[data].promise; records[data] = { ...records[data], project_id: "project", workspace_id: "workspace", execution_root: `/execution/${data}`, status: "planned", contract }; return records[data]; },
+   };
+   const root = createRoot(document.getElementById("root"));
+-  const render = (data) => React.act(async () => { current = data; root.render(element(View, { bridge, dataRoot: `/data/${data}`, ownerKey: `/data/${data}`, projectId: "project", projectName: `Project ${data}`, workspaceId: "workspace", active: true, selectedId: "copied-id", onSelect() {} })); await tick(); });
++  const render = (data, extra = {}) => React.act(async () => { current = data; root.render(element(View, { bridge, dataRoot: `/data/${data}`, ownerKey: `/data/${data}`, projectId: "project", projectName: `Project ${data}`, workspaceId: "workspace", active: true, selectedId: "copied-id", onSelect() {}, ...extra })); await tick(); });
+   const shown = () => document.querySelector('.reproduction-owner-workspace:not([hidden])');
+   const plan = () => React.act(async () => { [...shown().querySelectorAll("button")].find((button) => button.textContent.trim() === "Generate plan").click(); await tick(); });
+   const event = (data, fields) => ({ reproductionId: "copied-id", dataRoot: `/data/${data}`, projectId: "project", workspaceId: "workspace", ...fields });
+@@ -50,6 +50,8 @@ test("actual Reproduce view keeps copied same-id events within their data root,
+     await React.act(async () => { select.value = history.id; select.dispatchEvent(new dom.window.Event("change", { bubbles: true })); await tick(); });
+     const historyPanel = shown().querySelector('.reproduction-run-history');
+     assert.ok(historyPanel.textContent.includes("ORIGINAL_RECORDED_COMMAND")); assert.ok(historyPanel.textContent.includes("ORIGINAL_RECORDED_OUTPUT")); assert.ok(historyPanel.textContent.includes("not executed in this folder"));
++    await render("b", { runOpenRequest: { id: history.id, token: "project-index-run" } });
++    assert.equal(shown().querySelector('.reproduction-run-history').open, true, "a project-index run link reveals the requested history rather than leaving it collapsed");
+     await render("a"); gates.a.resolve(); await React.act(async () => { await gates.a.promise; await tick(); });
+     assert.ok(shown().textContent.includes("Legacy a")); assert.ok(!shown().textContent.includes("B_ONLY_LATE_OUTPUT"));
+   } finally { gates.a.resolve(); gates.b.resolve(); await React.act(async () => root.unmount()); dom.window.close(); for (const [key, value] of Object.entries(previous)) value === undefined ? delete global[key] : global[key] = value; }
+diff --git a/electron/store.cjs b/electron/store.cjs
+index 8dd7a79..e232b84 100644
+--- a/electron/store.cjs
++++ b/electron/store.cjs
+@@ -14,6 +14,7 @@ const { applyApprovedWrite } = require("./agent/workspace-tools.cjs");
+ const libraryRecords = require("./library-records.cjs");
+ const cloudLibraryState = require("./cloud-sync-store.cjs");
+ const { mergeCloudThread } = require("../shared/cloud-sync.cjs");
++const projectResearch = require("./project-research.cjs");
+ 
+ const OUTPUT_LIMIT = 200_000;
+ const GIT_STATES = new Set(["none", "empty", "ready", "nested", "suspicious"]);
+@@ -693,6 +694,7 @@ function schema(db) {
+   db.prepare("UPDATE research_threads SET visibility = 'project' WHERE visibility IS NULL OR visibility NOT IN ('project', 'private')").run();
+   db.prepare("UPDATE libraries SET project_id = ? WHERE project_id IS NULL").run(projectId);
+   migrateProjectScopedPaperData(db, projectId);
++  projectResearch.ensureSchema(db);
+ }
+ 
+ function tableColumns(db, table) {
+@@ -3520,6 +3522,22 @@ function artifactSha256(thread, normalizedPath) {
+   }
+ }
+ 
++function projectResearchOptions(options = {}) {
++  return { ...options, dataRoot: activeWorkspace(), userId: localIdentity.userId, canAccessProject };
++}
++
++function listProjectResearchIndex(input, options) {
++  return projectResearch.listProjectResearchIndex(requireDatabase(), input, projectResearchOptions(options));
++}
++
++function saveProjectResearchNote(input, options) {
++  return projectResearch.saveProjectResearchNote(requireDatabase(), input, projectResearchOptions(options));
++}
++
++function deleteProjectResearchNote(input) {
++  return projectResearch.deleteProjectResearchNote(requireDatabase(), input, projectResearchOptions());
++}
++
+ function projectResultSummary(row) {
+   return row && { id: row.id, projectId: row.project_id, workspaceId: row.workspace_id, threadId: row.thread_id,
+     executionRoot: row.execution_root, kind: row.kind, title: row.title, manifestPath: row.manifest_path,
+@@ -3960,6 +3978,9 @@ function listReproductionAttempts(runId) {
+ }
+ 
+ module.exports = {
++  listProjectResearchIndex,
++  saveProjectResearchNote,
++  deleteProjectResearchNote,
+   previewProjectTransfer,
+   exportProjectTransfer,
+   importProjectTransfer,
+diff --git a/src/App.tsx b/src/App.tsx
+index 61dbd9b..37a6546 100644
+--- a/src/App.tsx
++++ b/src/App.tsx
+@@ -2,6 +2,8 @@ import { InlineNotice } from "./InlineNotice";
+ import { Fragment, lazy, memo, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent as ReactClipboardEvent, type ReactNode } from "react";
+ import type { AnalysisChatInput, ProjectResultsBridge, ProjectResultDetail, ProjectResultOpenRequest, ResultFigureRequest } from "./project-results";
+ import type { ManuscriptChatSource, ManuscriptOpenRequest, ManuscriptOrigin, ManuscriptSource, ManuscriptTarget } from "./manuscript-handoff";
++import { createResearchHandoffService, manuscriptHandoffOrigin, manuscriptRevisionPrompt } from "./research-handoffs";
++import type { ProjectResearchNote, ResearchIndexItem, SaveProjectResearchNoteInput } from "./project-research";
+ import type { PaperToSlidesStartInput } from "./PaperToSlidesView";
+ import "./workflow-continuity.css";
+ import ReactMarkdown from "react-markdown";
+@@ -471,6 +473,7 @@ function previewDefaultWorkspaceName(projectId: string) {
+ const previewThreads: ResearchThreadDetail[] = [];
+ const previewThreadSnapshots: Array<{ id: string; thread_id: string; project_id: string; sequence: number; created_at: string; manifest: Record<string, unknown> }> = [];
+ const previewComments: ResearchComment[] = [];
++const previewResearchNotes: ProjectResearchNote[] = [];
+ const previewProjectMembers: ProjectMember[] = [{ project_id: "preview-general", user_id: "usr_preview_local", role: "owner", joined_at: new Date("2026-01-01T00:00:00.000Z").toISOString(), invited_by: null, display_name: "Local researcher", email: "", avatar_color: "" }];
+ const previewAuditEvents: AuditEvent[] = [];
+ const previewArchivedThreads: ResearchThreadDetail[] = [];
+@@ -575,6 +578,25 @@ function readPreviewSidebarSettings() {
+ 
+ const previewBridge = {
+   ...previewLibraryBridge,
++  listProjectResearchIndex: async ({ projectId }: { projectId: string }) => {
++    const project = previewProjects.find(project => project.id === projectId);
++    if (!project) throw new Error("Project not found.");
++    return { project: { id: project.id, name: project.name, description: project.description }, dataRoot: previewWorkspace, canEdit: true,
++      items: previewThreads.filter(thread => thread.project_id === projectId).map(thread => ({ kind: "session" as const, id: thread.id, projectId, dataRoot: previewWorkspace, threadId: thread.id, workspaceId: thread.workspace_id, executionRoot: thread.workspace_path || undefined, title: thread.title, summary: "", status: thread.status, updatedAt: thread.updated_at, available: true })),
++      notes: structuredClone(previewResearchNotes.filter(note => note.projectId === projectId)) };
++  },
++  saveProjectResearchNote: async (input: SaveProjectResearchNoteInput) => {
++    const previous = previewResearchNotes.find(note => note.id === input.id && note.projectId === input.projectId);
++    const now = new Date().toISOString();
++    const note: ProjectResearchNote = { id: previous?.id || crypto.randomUUID(), projectId: input.projectId, kind: input.kind, text: input.text, evidenceRefs: input.evidenceRefs.map(ref => ({ ...ref, title: ref.id, available: true })), createdAt: previous?.createdAt || now, updatedAt: now };
++    if (previous) previewResearchNotes.splice(previewResearchNotes.indexOf(previous), 1, note); else previewResearchNotes.push(note);
++    return structuredClone(note);
++  },
++  deleteProjectResearchNote: async ({ projectId, id }: { projectId: string; id: string }) => {
++    const index = previewResearchNotes.findIndex(note => note.projectId === projectId && note.id === id);
++    if (index >= 0) previewResearchNotes.splice(index, 1);
++    return { deleted: index >= 0 };
++  },
+   getInitialWorkspace: async () => null,
+   getLocalIdentity: async () => structuredClone(previewLocalIdentity),
+   getAuthState: async () => structuredClone(previewAuthState),
+@@ -1250,6 +1272,7 @@ const ReproduceView = lazy(() => import("./ReproduceView"));
+ const ExtensionsView = lazy(() => import("./ExtensionsView"));
+ const PaperWritingView = lazy(() => import("./PaperWritingView"));
+ const ProjectTransferDialog = lazy(() => import("./ProjectTransferDialog"));
++const ProjectResearchView = lazy(() => import("./ProjectResearchView"));
+ 
+ const ACTIVE_PROJECT_STORAGE_PREFIX = "archimedes-active-project:";
+ 
+@@ -1418,8 +1441,7 @@ function App() {
+   const [selectionError, setSelectionError] = useState("");
+   const activeRunRef = useRef<{ id: string; ownerKey: string; selection: TaskSelection; threadId: string | null; pendingAction?: PendingAction | null; finished?: boolean } | null>(null);
+   const [runningOwnerKey, setRunningOwnerKey] = useState<string | null>(null);
+-  const analysisSessionsRef = useRef(new Map<string, string>());
+-  const analysisHandoffsRef = useRef(new Map<string, Promise<ResearchThreadDetail>>());
++  const [researchHandoffs] = useState(createResearchHandoffService);
+   const [creatingWorkspace, setCreatingWorkspace] = useState(false);
+   const [workspaceDialog, setWorkspaceDialog] = useState<
+     | { mode: "create"; projectId: string; kind: ProjectWorkspaceKind }
+@@ -1521,10 +1543,13 @@ function App() {
+   const [fileLoading, setFileLoading] = useState(false);
+   const [fileError, setFileError] = useState("");
+   const [paperOpenRequest, setPaperOpenRequest] = useState<PaperOpenRequest>(null);
++  const [libraryOpenRequest, setLibraryOpenRequest] = useState<{ dataRoot: string; projectId: string; paperId: string; libraryId?: string; token: string; review?: boolean }>();
++  const [reviewRunOpenRequest, setReviewRunOpenRequest] = useState<{ dataRoot: string; projectId: string; id: string; token: string }>();
++  const [reproductionRunOpenRequest, setReproductionRunOpenRequest] = useState<{ dataRoot: string; projectId: string; id: string; token: string }>();
++  const [researchFileRequest, setResearchFileRequest] = useState<{ dataRoot: string; executionRoot: string; path: string; token: string }>();
+   const [figureRequest, setFigureRequest] = useState<ResultFigureRequest>();
+   const [resultOpenRequests, setResultOpenRequests] = useState<Partial<Record<"analysis" | "figure", ProjectResultOpenRequest>>>({});
+   const [manuscriptRequests, setManuscriptRequests] = useState<Partial<Record<ManuscriptTarget, ManuscriptOpenRequest>>>({});
+-  const manuscriptChatsRef = useRef(new Map<string, Promise<ResearchThreadDetail>>());
+   const [changeSets, setChangeSets] = useState<WorkspaceChangeSet[]>([]);
+   const [papers, setPapers] = useState(initialPapers);
+   const [modal, setModal] = useState<Modal>(null);
+@@ -1599,9 +1624,16 @@ function App() {
+   const analysisSelection = newTaskSelection(workspace, activeProject, workspaces, activeWorkspaceId);
+   const currentAnalysisOwner = analysisOwnerKey(analysisSelection);
+   const reproduceId = reproduceSelections[currentAnalysisOwner] ?? null;
+-  const setReproduceId = (id: string | null) => setReproduceSelections((current) => ({ ...current, [currentAnalysisOwner]: id }));
++  const setReproduceId = (id: string | null, ownerKey = currentAnalysisOwner) => setReproduceSelections((current) => ({ ...current, [ownerKey]: id }));
+   const viewingRunningTask = agentBusy && (runningOwnerKey === composerDraftKey || Boolean(activeThreadId && activeThreadId === runningThreadId));
+   const executionWorkspaceRef = useRef(executionWorkspace);
++  useEffect(() => {
++    if (!researchFileRequest || researchFileRequest.dataRoot !== workspace || researchFileRequest.executionRoot !== executionWorkspace) return;
++    const request = researchFileRequest;
++    setResearchFileRequest(undefined);
++    void openChangedFile(request.path);
++  }, [researchFileRequest, workspace, executionWorkspace]);
++
+   const fileWorkspaceVersionRef = useRef(0);
+   if (executionWorkspaceRef.current !== executionWorkspace) fileWorkspaceVersionRef.current += 1;
+   executionWorkspaceRef.current = executionWorkspace;
+@@ -2010,36 +2042,15 @@ function App() {
+     } }));
+   }
+ 
++  function researchHandoffContext() {
++    return { bridge: desktopBridge, workspaces, getSelection: () => taskSelectionRef.current,
++      isDataFolderLoading: () => dataFolderLoadingRef.current, t };
++  }
++
+   async function continueAnalysisInChat(text: string, input: AnalysisChatInput, owner: TaskSelection, isCurrentInput: () => boolean) {
+-    if (!owner.projectId) throw new Error(t("Select a project before continuing the analysis."));
+     const originKey = taskDraftKey(taskSelectionRef.current);
+-    if (dataFolderLoadingRef.current || taskSelectionRef.current.dataRoot !== owner.dataRoot || taskSelectionRef.current.projectId !== owner.projectId) throw new Error(t("Select a project before continuing the analysis."));
+-    const result = input.resultId ? await (desktopBridge as ResearchDeskBridge & ProjectResultsBridge).getProjectResult(input.resultId) : null;
+-    if (result && (result.kind !== "analysis" || result.projectId !== owner.projectId || result.workspaceId !== owner.workspaceId || result.fileState !== "ready")) throw new Error(t("The saved source does not match this analysis workspace."));
+-    const sessionOwner = result ? { ...owner, executionRoot: result.executionRoot } : owner;
+-    const sessionKey = `${analysisOwnerKey(sessionOwner)}:${input.id}`;
+-    if (dataFolderLoadingRef.current || taskSelectionRef.current.dataRoot !== owner.dataRoot) throw new Error(t("Return to the analysis data folder before attaching its source."));
+-    let pending = analysisHandoffsRef.current.get(sessionKey);
+-    if (!pending) {
+-      const threadId = input.threadId || analysisSessionsRef.current.get(sessionKey);
+-      pending = threadId
+-        ? desktopBridge.getResearchThread(threadId, owner.dataRoot)
+-        : desktopBridge.createResearchThread({ projectId: owner.projectId, workspaceId: owner.workspaceId || undefined, workspacePath: sessionOwner.executionRoot, basedOnResultId: result?.id, mode: "free-chat", title: `${t("Data analysis")}: ${input.name}` });
+-      analysisHandoffsRef.current.set(sessionKey, pending);
+-    }
+-    let thread: ResearchThreadDetail;
+-    try { thread = await pending; }
+-    finally { if (analysisHandoffsRef.current.get(sessionKey) === pending) analysisHandoffsRef.current.delete(sessionKey); }
+-    const target = threadTaskSelection(owner.dataRoot, thread, workspaces);
+-    if (target.projectId !== owner.projectId || target.workspaceId !== owner.workspaceId || target.executionRoot !== sessionOwner.executionRoot) throw new Error(t("The analysis session does not match its project workspace."));
+-    analysisSessionsRef.current.set(sessionKey, thread.id);
+-    if (input.resultId && input.attachSource && result) {
+-      if (taskSelectionRef.current.dataRoot !== owner.dataRoot) throw new Error(t("Return to the analysis data folder before attaching its source."));
+-      const source = result.files.find((file) => file.role === "source" && file.path === input.sourcePath);
+-      if (result.kind !== "analysis" || result.projectId !== target.projectId || result.workspaceId !== target.workspaceId || result.executionRoot !== target.executionRoot || result.fileState !== "ready" || !source) throw new Error(t("The saved source does not match this analysis workspace."));
+-      const attachment: ContextAttachment = { id: `result:${result.id}:${source.name}`, type: "file", name: input.name, path: `${target.executionRoot.replace(/[\\/]$/, "")}/${source.path}`, size: source.sizeBytes, detail: t("Complete original dataset. Workspace tools can read this file; the message contains only a summary and sample.") };
+-      setContextItems((current) => current.some((item) => item.id === attachment.id) ? current : [...current, attachment].slice(0, 12), taskDraftKey(target));
+-    }
++    const { thread, selection: target, attachment } = await researchHandoffs.analysisDiscussion(input, owner, researchHandoffContext());
++    if (attachment) setContextItems((current) => current.some((item) => item.id === attachment.id) ? current : [...current, attachment].slice(0, 12), taskDraftKey(target));
+     if (!dataFolderLoadingRef.current && taskSelectionRef.current.dataRoot === owner.dataRoot) setThreads((current) => [thread, ...current.filter((item) => item.id !== thread.id)]);
+     queueComposerText(taskDraftKey(target), text);
+     // A delayed creation must not take over a different task selected meanwhile.
+@@ -2691,6 +2702,46 @@ function App() {
+     }
+   }
+ 
++  async function openProjectResearch(project: ResearchProject) {
++    const dataRoot = taskSelectionRef.current.dataRoot;
++    await selectProject(project.id);
++    if (!dataFolderLoadingRef.current && taskSelectionRef.current.dataRoot === dataRoot && taskSelectionRef.current.projectId === project.id) setMainSection("project-research");
++  }
++
++  async function openResearchIndexItem(item: ResearchIndexItem) {
++    const current = taskSelectionRef.current;
++    if (dataFolderLoadingRef.current || current.dataRoot !== item.dataRoot || current.projectId !== item.projectId) throw new Error(t("Return to this research project before opening its evidence."));
++    if (!item.available) throw new Error(t("This evidence is no longer available."));
++    const originKey = taskDraftKey(current);
++    const isCurrent = () => !dataFolderLoadingRef.current && taskDraftKey(taskSelectionRef.current) === originKey;
++    if (item.kind === "analysis" || item.kind === "figure") { await returnToProjectResult(item.id); return; }
++    const thread = item.threadId ? await desktopBridge.getResearchThread(item.threadId, item.dataRoot) : null;
++    if (!isCurrent()) return;
++    if (thread) displayThread(thread, item.dataRoot);
++    else {
++      startNewTask(item.projectId, item.workspaceId || current.workspaceId);
++      if (item.executionRoot) applyTaskSelection({ ...taskSelectionRef.current, executionRoot: item.executionRoot });
++    }
++    const ownerKey = taskDraftKey(taskSelectionRef.current);
++    const stillSelected = () => !dataFolderLoadingRef.current && taskDraftKey(taskSelectionRef.current) === ownerKey;
++    const token = crypto.randomUUID();
++    if (item.kind === "paper" || item.kind === "review" && item.reviewSource === "paper") {
++      setLibraryOpenRequest({ dataRoot: item.dataRoot, projectId: item.projectId, paperId: item.paperId || item.id, libraryId: item.libraryId, token, review: item.kind === "review" });
++      await openResearchApp("library", stillSelected);
++    } else if (item.kind === "manuscript" || item.kind === "milestone") {
++      setPaperOpenRequest({ path: item.mainPath || item.path || "", token: Date.now(), ...(item.kind === "milestone" ? { milestoneId: item.id } : {}) });
++      await openResearchApp("writing", stillSelected);
++    } else if (item.kind === "review") {
++      setReviewRunOpenRequest({ dataRoot: item.dataRoot, projectId: item.projectId, id: item.id, token });
++      await openResearchApp("paper-review", stillSelected);
++    } else if (item.kind === "reproduction" || item.kind === "run") {
++      setReproduceId(item.reproductionId || item.id, analysisOwnerKey(newTaskSelection(item.dataRoot, activeProject, workspaces, taskSelectionRef.current.workspaceId)));
++      if (item.kind === "run") setReproductionRunOpenRequest({ dataRoot: item.dataRoot, projectId: item.projectId, id: item.id, token });
++      await openResearchApp("reproduce", stillSelected);
++    } else if (item.kind === "session") setMainSection("chat");
++    else if (item.path && item.executionRoot) setResearchFileRequest({ dataRoot: item.dataRoot, executionRoot: item.executionRoot, path: item.path, token });
++  }
++
+   function openNewProject() {
+     if (agentBusy) return;
+     setNewProjectName("");
+@@ -3150,33 +3201,10 @@ function App() {
+   }
+ 
+   async function openManuscriptChat(source: ManuscriptChatSource, text = "", kind: "discussion" | "revision" = "discussion") {
+-    if (dataFolderLoadingRef.current || taskSelectionRef.current.dataRoot !== source.dataRoot) throw new Error(t("Return to the manuscript data folder before continuing."));
+     const originKey = taskDraftKey(taskSelectionRef.current);
+-    const cacheKey = `archimedes-manuscript-chat:${JSON.stringify([source.dataRoot, source.projectId, source.workspaceId, source.workspace, source.mainPath, kind])}`;
+-    let pending = manuscriptChatsRef.current.get(cacheKey);
+-    if (!pending) {
+-      pending = (async () => {
+-        let stored: string | null = null;
+-        try { stored = window.localStorage.getItem(cacheKey); } catch { /* Session persistence is optional. */ }
+-        if (stored) {
+-          try { return await desktopBridge.getResearchThread(stored, source.dataRoot); }
+-          catch (reason) { if (!/not found|no longer exists/i.test(String(reason))) throw reason; }
+-        }
+-        if (taskSelectionRef.current.dataRoot !== source.dataRoot || dataFolderLoadingRef.current) throw new Error(t("Return to the manuscript data folder before continuing."));
+-        return desktopBridge.createResearchThread({ projectId: source.projectId, workspaceId: source.workspaceId, workspacePath: source.workspace, basedOnThreadId: source.threadId || undefined, mode: "paper-generation", title: `${kind === "revision" ? t("Manuscript revision") : t("Manuscript discussion")}: ${source.mainPath}` });
+-      })();
+-      manuscriptChatsRef.current.set(cacheKey, pending);
+-    }
+-    let thread: ResearchThreadDetail;
+-    try { thread = await pending; }
+-    finally { if (manuscriptChatsRef.current.get(cacheKey) === pending) manuscriptChatsRef.current.delete(cacheKey); }
+-    const target = threadTaskSelection(source.dataRoot, thread, workspaces);
+-    if (target.projectId !== source.projectId || target.workspaceId !== source.workspaceId || target.executionRoot !== source.workspace) throw new Error(t("The manuscript session does not match its source workspace."));
+-    try { window.localStorage.setItem(cacheKey, thread.id); } catch { /* The in-memory task still works. */ }
++    const { thread, selection: target, attachment } = await researchHandoffs.manuscriptDiscussion(source, kind, researchHandoffContext(), { getItem: key => window.localStorage.getItem(key), setItem: (key, value) => window.localStorage.setItem(key, value) });
+     if (text.trim()) queueComposerText(taskDraftKey(target), text);
+-    const filePath = source.selectedPath || source.mainPath;
+-    const attachment: ContextAttachment = { id: `file:${source.workspace}/${filePath}`, type: "file", name: filePath.split("/").at(-1) || filePath, path: `${source.workspace.replace(/[\\/]$/, "")}/${filePath}`, detail: `LaTeX manuscript source · ${filePath}` };
+-    setContextItems((current) => current.some((item) => item.id === attachment.id) ? current : [...current, attachment].slice(0, 12), taskDraftKey(target));
++    if (attachment) setContextItems((current) => current.some((item) => item.id === attachment.id) ? current : [...current, attachment].slice(0, 12), taskDraftKey(target));
+     if (!dataFolderLoadingRef.current && taskSelectionRef.current.dataRoot === source.dataRoot) setThreads((current) => [thread, ...current.filter((item) => item.id !== thread.id)]);
+     if (!dataFolderLoadingRef.current && taskDraftKey(taskSelectionRef.current) === originKey && taskSelectionRef.current.dataRoot === source.dataRoot) {
+       threadOpenRequestRef.current += 1; displayThread(thread, source.dataRoot); setMainSection("chat");
+@@ -3190,13 +3218,13 @@ function App() {
+   }
+ 
+   async function useProjectResultFigure(result: ProjectResultDetail, fileName: string) {
+-    const selected = taskSelectionRef.current, key = taskDraftKey(selected);
+-    if (!selected.projectId || result.projectId !== selected.projectId || result.fileState !== "ready" || !result.files.some((file) => file.name === fileName && file.role === "output" && file.fileState === "ready")) throw new Error(t("Save a current figure in the selected project before inserting it."));
+-    const checked = await desktopBridge.getProjectResult(result.id);
+-    if (taskDraftKey(taskSelectionRef.current) !== key || checked.projectId !== selected.projectId || checked.fileState !== "ready") return;
+-    setFigureRequest({ dataRoot: selected.dataRoot, projectId: checked.projectId, resultId: checked.id, fileName, title: checked.title, token: crypto.randomUUID() });
++    const key = taskDraftKey(taskSelectionRef.current);
++    const request = await researchHandoffs.figureInsertion(result, fileName, researchHandoffContext());
++    if (!request) return;
++    setFigureRequest(request);
+     await openResearchApp("writing", () => taskDraftKey(taskSelectionRef.current) === key);
+   }
++
+   async function returnToProjectResult(id: string) {
+     const selected = taskSelectionRef.current, key = taskDraftKey(selected);
+     const result = await desktopBridge.getProjectResult(id);
+@@ -3211,8 +3239,7 @@ function App() {
+   }
+   async function prepareManuscriptHandoff(target: ManuscriptTarget, source: ManuscriptSource) {
+     const selection = taskSelectionRef.current;
+-    if (dataFolderLoadingRef.current || !selection.workspaceId || selection.projectId !== source.projectId || selection.executionRoot !== source.workspace) throw new Error(t("Return to the source manuscript project before handing it off."));
+-    const origin: ManuscriptOrigin = { ...source, dataRoot: selection.dataRoot, workspaceId: selection.workspaceId, threadId: selection.threadId };
++    const origin = manuscriptHandoffOrigin(source, selection, dataFolderLoadingRef.current, t);
+     const ownerKey = taskDraftKey(selection);
+     setManuscriptRequests((current) => ({ ...current, [target]: { origin, token: crypto.randomUUID() } }));
+     if (!await openResearchApp(target, () => !dataFolderLoadingRef.current && taskDraftKey(taskSelectionRef.current) === ownerKey)) throw new Error(t("Return to the source manuscript project before handing it off."));
+@@ -3236,7 +3263,7 @@ function App() {
+   async function draftManuscriptRevision(run: PaperReviewRunSummary, findings: PaperReviewFinding[]) {
+     if (!run.manuscript || !findings.length) throw new Error(t("This review has no recorded manuscript source."));
+     const origin = run.manuscript;
+-    const text = ["Plan a manuscript revision using this selected simulated-review feedback. Preserve the current manuscript until I approve specific edits.", `Reviewed manuscript: ${origin.mainPath}`, `Reviewed source version: ${origin.sourceVersion}`, `Reviewed PDF SHA256: ${origin.pdfSha256}`, `Review run: ${run.id}`, `Source snapshot: ${origin.manifestPath}`, "Compare the current sources with the reviewed version before proposing changes.", ...findings.map((finding, index) => `${index + 1}. ${finding.text}${finding.page ? `\nPDF page: ${finding.page}` : ""}${finding.quote ? `\nEvidence quote: ${finding.quote}` : ""}${finding.severity ? `\nSeverity: ${finding.severity}` : ""}`)].join("\n\n");
++    const text = manuscriptRevisionPrompt(run, findings);
+     await openManuscriptChat(origin, text, "revision");
+   }
+ 
+@@ -3632,13 +3659,13 @@ function App() {
+   // mount gating (keepMounted · cacheClass · requiresWorkspace · open gate)
+   // comes from the module registry, not from scattered conditions.
+   const sidebarModuleContent: Record<string, ReactNode> = {
+-    library: <LibraryView key={workspace} bridge={desktopBridge} mode="library" active={mainSection === "library"} dataRoot={workspace} workspace={workspace} projectId={activeProjectId} workspaceId={analysisSelection.workspaceId} libraryRefreshVersion={libraryRefreshVersion} onInternalReviewThreadsDeleted={(threadIds) => setThreads((current) => current.filter((thread) => !threadIds.includes(thread.id)))} onReproduceOpened={(id) => { setReproduceId(id); void openResearchApp("reproduce"); }} onOpenProject={(id) => void selectProject(id)} />,
++    library: <LibraryView key={workspace} bridge={desktopBridge} mode="library" openRequest={libraryOpenRequest && libraryOpenRequest.dataRoot === workspace && libraryOpenRequest.projectId === activeProjectId ? libraryOpenRequest : undefined} active={mainSection === "library"} dataRoot={workspace} workspace={workspace} projectId={activeProjectId} workspaceId={analysisSelection.workspaceId} libraryRefreshVersion={libraryRefreshVersion} onInternalReviewThreadsDeleted={(threadIds) => setThreads((current) => current.filter((thread) => !threadIds.includes(thread.id)))} onReproduceOpened={(id) => { setReproduceId(id); void openResearchApp("reproduce"); }} onOpenProject={(id) => void selectProject(id)} />,
+     daily: <LibraryView key={dailyStartMode} bridge={desktopBridge} mode="daily" active={mainSection === "daily"} initialDailyMode={dailyStartMode} dataRoot={workspace} workspace={workspace} projectId={activeProjectId} workspaceId={analysisSelection.workspaceId} onLibraryImported={() => setLibraryRefreshVersion((version) => version + 1)} onInternalReviewThreadsDeleted={(threadIds) => setThreads((current) => current.filter((thread) => !threadIds.includes(thread.id)))} onReproduceOpened={(id) => { setReproduceId(id); void openResearchApp("reproduce"); }} onOpenProject={(id) => void selectProject(id)} />,
+     "benchmark-radar": <BenchmarkRadarView />,
+     news: <NewsView chatTargetLabel={activeThread?.title || t("New conversation")} bridge={desktopBridge} projectId={activeProjectId} active={mainSection === "news"} onSendToChat={sendNoteToChat} />,
+-    "paper-review": <PaperReviewView bridge={desktopBridge} workspace={executionWorkspace} dataRoot={workspace} projectId={activeProjectId} active={mainSection === "paper-review"} manuscriptRequest={manuscriptRequests["paper-review"]} onReturnToManuscript={returnToManuscript} onDraftRevision={draftManuscriptRevision} mainModel={activeModelConfig} onOpenModelSettings={() => { setSettingsSection("models"); setSettingsOpen(true); }} />,
++    "paper-review": <PaperReviewView bridge={desktopBridge} workspace={executionWorkspace} dataRoot={workspace} projectId={activeProjectId} active={mainSection === "paper-review"} runOpenRequest={reviewRunOpenRequest && reviewRunOpenRequest.dataRoot === workspace && reviewRunOpenRequest.projectId === activeProjectId ? reviewRunOpenRequest : undefined} manuscriptRequest={manuscriptRequests["paper-review"]} onReturnToManuscript={returnToManuscript} onDraftRevision={draftManuscriptRevision} mainModel={activeModelConfig} onOpenModelSettings={() => { setSettingsSection("models"); setSettingsOpen(true); }} />,
+     extensions: <ExtensionsView bridge={desktopBridge} workspace={executionWorkspace} tab={extensionsTab} onTabChange={setExtensionsTab} attachedIds={new Set(contextItems.map((item) => item.id))} onAttach={(item) => setContextItems((current) => current.some((candidate) => candidate.id === item.id) ? current : [...current, item].slice(0, 12))} />,
+-    reproduce: <ReproduceView bridge={desktopBridge} dataRoot={workspace} ownerKey={currentAnalysisOwner} projectId={analysisSelection.projectId} projectName={activeProject?.name} workspaceId={analysisSelection.workspaceId} active={mainSection === "reproduce"} selectedId={reproduceId} onSelect={setReproduceId} />,
++    reproduce: <ReproduceView bridge={desktopBridge} dataRoot={workspace} ownerKey={currentAnalysisOwner} projectId={analysisSelection.projectId} projectName={activeProject?.name} workspaceId={analysisSelection.workspaceId} active={mainSection === "reproduce"} runOpenRequest={reproductionRunOpenRequest && reproductionRunOpenRequest.dataRoot === workspace && reproductionRunOpenRequest.projectId === activeProjectId ? reproductionRunOpenRequest : undefined} selectedId={reproduceId} onSelect={setReproduceId} />,
+     "image-creation": <ImageCreationView openRequest={mainSection === "image-creation" && resultOpenRequests.figure?.dataRoot === workspace && resultOpenRequests.figure?.projectId === activeProjectId ? resultOpenRequests.figure : undefined} onUseInManuscript={useProjectResultFigure} mainModel={activeModelConfig} onOpenModelSettings={() => { setSettingsSection("models"); setSettingsOpen(true); }} active={mainSection === "image-creation"} ownerKey={currentAnalysisOwner} owner={analysisSelection.projectId && analysisSelection.workspaceId ? { projectId: analysisSelection.projectId, workspaceId: analysisSelection.workspaceId, executionRoot: analysisSelection.executionRoot } : undefined} bridge={typeof (desktopBridge as ResearchDeskBridge & Partial<ProjectResultsBridge>).saveProjectResult === "function" ? desktopBridge as ResearchDeskBridge & ProjectResultsBridge : undefined} onBrowseProceedings={() => { setDailyStartMode("conference"); setMainSection("daily"); }} onBrowseChartReferences={() => void openResearchApp("data-charts")} />,
+     "data-charts": <DataChartsView active={mainSection === "data-charts"} />,
+     "data-analysis": <DataAnalysisView openRequest={mainSection === "data-analysis" && resultOpenRequests.analysis?.dataRoot === workspace && resultOpenRequests.analysis?.projectId === activeProjectId ? resultOpenRequests.analysis : undefined} onUseInManuscript={useProjectResultFigure} ownerKey={currentAnalysisOwner} owner={analysisSelection.projectId && analysisSelection.workspaceId ? { projectId: analysisSelection.projectId, workspaceId: analysisSelection.workspaceId, executionRoot: analysisSelection.executionRoot } : undefined} bridge={typeof (desktopBridge as ResearchDeskBridge & Partial<ProjectResultsBridge>).saveProjectResult === "function" ? desktopBridge as ResearchDeskBridge & ProjectResultsBridge : undefined} onAskAI={(text, input, isCurrentInput) => continueAnalysisInChat(text, input, analysisSelection, isCurrentInput)} />,
+@@ -3690,6 +3717,7 @@ function App() {
+           onRemoveProject={setProjectToRemove}
+           onChangeProjectWorkspace={(project) => void changeProjectWorkspace(project)}
+           onTransferProject={(project) => setProjectTransfer({ dataRoot: workspace, project })}
++          onOpenProjectResearch={(project) => void openProjectResearch(project)}
+           onOpenWorkspace={(workspaceToOpen) => void selectWorkspace(workspaceToOpen)}
+           onRenameWorkspace={openWorkspaceRename}
+           onDeleteWorkspace={(workspaceToDelete) => void deleteWorkspace(workspaceToDelete)}
+@@ -3846,6 +3874,7 @@ function App() {
+           {sideThread && <div className={mainSection === "chat" ? "side-chat-host" : "side-chat-host hidden"}><SideConversation key={sideThread.id} bridge={desktopBridge} initialThread={sideThread} dataWorkspace={workspace} reasoningEffort={reasoningEffort} contextLength={contextLength} onBusyChange={setSideBusy} onClose={() => setSideThread(null)} onOpenMain={(thread) => { setSideThread(null); void openResearchThread(thread); }} onUpdated={(thread) => { setSideThread((current) => current?.id === thread.id ? thread : current); setThreads((current) => [thread, ...current.filter((item) => item.id !== thread.id)]); }} /></div>}
+           {selectionError && <div className="composer-attachment-error" role="alert">{selectionError}<button className="quiet-button" onClick={() => setSelectionError("")}>{t("Dismiss")}</button></div>}
+           <Suspense fallback={null}>
++            {mainSection === "project-research" && activeProjectId && <ProjectResearchView bridge={desktopBridge} projectId={activeProjectId} dataRoot={workspace} onOpenItem={openResearchIndexItem} />}
+             {/* View host sidebar-modules: one looping projection, semantics derived from the module registry (keepMounted/cacheClass/requiresWorkspace/open gate). */}
+             {(Object.entries(sidebarModuleContent) as [string, ReactNode][]).map(([id, content]) => {
+               const entry = sidebarModule(id);
+diff --git a/src/LibraryView.tsx b/src/LibraryView.tsx
+index 3920f2a..fa36a81 100644
+--- a/src/LibraryView.tsx
++++ b/src/LibraryView.tsx
+@@ -185,6 +185,7 @@ type LibraryViewProps = {
+   projectId?: string | null;
+   workspaceId?: string | null;
+   libraryRefreshVersion?: number;
++  openRequest?: { paperId: string; libraryId?: string; token: string; review?: boolean };
+   onLibraryImported?: () => void;
+   onInternalReviewThreadsDeleted?: (threadIds: string[]) => void;
+   onReproduceOpened?: (reproductionId: string) => void;
+@@ -196,6 +197,7 @@ export default function LibraryView(props: LibraryViewProps) {
+   if (mode === "library") return <LibraryWorkspace
+     key={`${workspace}:${projectId || "local"}`}
+     bridge={bridge} projectId={projectId} active={active} refreshVersion={libraryRefreshVersion}
++    openRequest={props.openRequest}
+     onLibraryImported={onLibraryImported} onOpenProject={onOpenProject}
+     renderReader={(readerProps) => <PaperReadingWorkbench {...readerProps} bridge={bridge} workspace={workspace} projectId={projectId} workspaceId={workspaceId} onInternalReviewThreadsDeleted={onInternalReviewThreadsDeleted} onReproduceOpened={onReproduceOpened} />}
+     renderInspector={(inspectorProps) => <PaperInspector {...inspectorProps} bridge={bridge} projectId={projectId} />}
+@@ -464,9 +466,10 @@ const PaperChatComposer = memo(function PaperChatComposer({ busy, cancelling, ca
+   </div>;
+ });
+ 
+-function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, workspace, projectId, workspaceId, onInternalReviewThreadsDeleted, onReproduceOpened, session, onSessionSave, onActivityChange, noteDrafts }: {
++function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, workspace, projectId, workspaceId, onInternalReviewThreadsDeleted, onReproduceOpened, session, onSessionSave, onActivityChange, noteDrafts, openRequest }: {
+   paper: ReaderLibraryPaper; library: ResearchLibrary; onBack: () => void;
+   session?: PaperReaderSession; onSessionSave: (session: PaperReaderSession) => void; onActivityChange: (busy: boolean) => void; noteDrafts: LibraryNoteDrafts;
++  openRequest?: { paperId: string; token: string; review?: boolean };
+   onUpdate: (patch: Parameters<ResearchDeskBridge["updateLibraryPaper"]>[1]) => Promise<void>;
+   bridge: ResearchDeskBridge; workspace: string; projectId?: string | null; workspaceId?: string | null; onInternalReviewThreadsDeleted?: (threadIds: string[]) => void; onReproduceOpened?: (reproductionId: string) => void;
+ }) {
+@@ -520,6 +523,11 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
+   const [detectedProjectUrl, setDetectedProjectUrl] = useState("");
+   const [readerView, setReaderView] = useState<"paper" | "canvas" | "review" | "project" | "codebase">(session?.readerView === "canvas" || session?.readerView === "review" ? session.readerView : "paper");
+   const [reviewVisited, setReviewVisited] = useState(session?.readerView === "review");
++  useEffect(() => {
++    if (openRequest?.paperId !== paper.id) return;
++    setReaderView(openRequest.review ? "review" : "paper");
++    if (openRequest.review) { setReviewVisited(true); setChatOpen(false); }
++  }, [openRequest?.token]);
+   const [returnToReading, setReturnToReading] = useState(false);
+   const [canvasInsert, setCanvasInsert] = useState<PaperCanvasInsert | null>(null);
+   const [canvasFocusHighlight, setCanvasFocusHighlight] = useState<PaperHighlight | null>(null);
+diff --git a/src/LibraryWorkspace.tsx b/src/LibraryWorkspace.tsx
+index e57b59b..a136893 100644
+--- a/src/LibraryWorkspace.tsx
++++ b/src/LibraryWorkspace.tsx
+@@ -20,12 +20,14 @@ type ReaderProps = {
+   onSessionSave: (session: PaperReaderSession) => void;
+   onActivityChange: (busy: boolean) => void;
+   noteDrafts: LibraryNoteDrafts;
++  openRequest?: { paperId: string; token: string; review?: boolean };
+ };
+ type Props = {
+   bridge: ResearchDeskBridge;
+   projectId?: string | null;
+   active: boolean;
+   refreshVersion: number;
++  openRequest?: { paperId: string; libraryId?: string; token: string; review?: boolean };
+   onLibraryImported?: () => void;
+   onOpenProject?: (id: string) => void;
+   renderReader: (props: ReaderProps) => ReactNode;
+@@ -34,7 +36,7 @@ type Props = {
+   renderImport: (props: { library: ResearchLibrary; open: boolean; onClose: () => void; onImport: (paper: AcademicSearchResult) => Promise<void>; onLocalImported: () => Promise<void> }) => ReactNode;
+ };
+ 
+-export default function LibraryWorkspace({ bridge, projectId, active, refreshVersion, onLibraryImported, onOpenProject, renderReader, renderInspector, renderEditor, renderImport }: Props) {
++export default function LibraryWorkspace({ bridge, projectId, active, refreshVersion, openRequest, onLibraryImported, onOpenProject, renderReader, renderInspector, renderEditor, renderImport }: Props) {
+   const { t } = useUISettings();
+   const confirm = useConfirm();
+   const [libraries, setLibraries] = useState<ResearchLibrary[]>([]);
+@@ -73,6 +75,7 @@ export default function LibraryWorkspace({ bridge, projectId, active, refreshVer
+   const requestQueue = useRef(createLibraryRequestQueue());
+   const sessions = useRef(new Map<string, PaperReaderSession>());
+   const drafts = useRef<LibraryNoteDrafts>(new Map());
++  const appliedOpenRequest = useRef("");
+   const projectPaperCount = libraries.reduce((sum, library) => sum + library.paper_count, 0);
+   catalogRef.current = catalog;
+ 
+@@ -198,6 +201,20 @@ export default function LibraryWorkspace({ bridge, projectId, active, refreshVer
+   function paperLibraryId(paper: LibraryPaper) {
+     return library?.id || libraries.find((candidate) => catalog[candidate.id]?.some((item) => item.id === paper.id))?.id || "";
+   }
++  useEffect(() => {
++    if (!active || !openRequest || appliedOpenRequest.current === openRequest.token || loadingLibraries || readerBusy) return;
++    let cancelled = false;
++    const candidates = [...libraries].sort((a, b) => Number(b.id === openRequest.libraryId) - Number(a.id === openRequest.libraryId));
++    void (async () => {
++      for (const candidate of candidates) {
++        const papers = await loadPapers(candidate.id), paper = papers.find(item => item.id === openRequest.paperId);
++        if (cancelled) return;
++        if (paper) { appliedOpenRequest.current = openRequest.token; openPaper(paper, candidate.id); return; }
++      }
++      if (!cancelled) { appliedOpenRequest.current = openRequest.token; setError(t("This paper is no longer in the project library.")); }
++    })();
++    return () => { cancelled = true; };
++  }, [active, openRequest?.token, libraries, loadingLibraries, readerBusy, loadPapers]);
+   function closeDocument(document: LibraryDocument) {
+     const key = libraryDocumentKey(document);
+     if (activeDocument === key && !canNavigate()) return;
+@@ -322,7 +339,7 @@ export default function LibraryWorkspace({ bridge, projectId, active, refreshVer
+       </div>
+       {(error || notice) && <div className="library-workspace-notices"><InlineNotice tone={error ? "danger" : "info"}>{error || notice}</InlineNotice><button className="icon-button" aria-label={t("Dismiss notice")} onClick={() => { setError(""); setNotice(""); }}><X size={14} /></button></div>}
+       {currentDocument && documentPaper && documentLibrary ? <div className="library-document-content" key={libraryDocumentKey(currentDocument)}>
+-        {currentDocument.kind === "notes" ? <LibraryPaperNotes key={documentPaper.id} paper={documentPaper} drafts={drafts.current} onSave={(notes) => updatePaper(documentPaper.id, { notes })} /> : renderReader({ paper: documentPaper, library: documentLibrary, onBack: () => browse(documentLibrary.id), onUpdate: (patch) => updatePaper(documentPaper.id, patch), session: sessions.current.get(documentPaper.id), onSessionSave: (session) => { sessions.current.set(documentPaper.id, session); }, onActivityChange: setReaderBusy, noteDrafts: drafts.current })}
++        {currentDocument.kind === "notes" ? <LibraryPaperNotes key={documentPaper.id} paper={documentPaper} drafts={drafts.current} onSave={(notes) => updatePaper(documentPaper.id, { notes })} /> : renderReader({ paper: documentPaper, library: documentLibrary, onBack: () => browse(documentLibrary.id), onUpdate: (patch) => updatePaper(documentPaper.id, patch), session: sessions.current.get(documentPaper.id), onSessionSave: (session) => { sessions.current.set(documentPaper.id, session); }, onActivityChange: setReaderBusy, noteDrafts: drafts.current, openRequest: openRequest?.paperId === documentPaper.id ? openRequest : undefined })}
+       </div> : <div className="library-browser">
+         <header className="library-browser-header"><div><h1>{library?.name || t(scope === "all" ? "All papers" : "Library")}</h1><p>{library?.description || t("Your papers and reading notes, organised by research topic.")}</p></div>{!scope && <button className="secondary-button" onClick={() => setEditor("new")}><FolderPlus size={15} />{t("New folder")}</button>}{library && <button className="icon-button" ref={menuRef} onClick={() => setMenuLibrary(library)} aria-label={t("Folder actions for {name}", { name: library.name })}><MoreHorizontal size={17} /></button>}</header>
+         {!scope && !query.trim() ? <div className="library-overview">
+diff --git a/src/PaperReviewView.tsx b/src/PaperReviewView.tsx
+index d80570d..1394bdf 100644
+--- a/src/PaperReviewView.tsx
++++ b/src/PaperReviewView.tsx
+@@ -122,6 +122,7 @@ type PaperReviewViewProps = {
+   active: boolean;
+   dataRoot?: string;
+   manuscriptRequest?: ManuscriptOpenRequest;
++  runOpenRequest?: { id: string; token: string };
+   onReturnToManuscript?: (origin: ManuscriptOrigin) => Promise<void>;
+   onDraftRevision?: (run: PaperReviewRunSummary, findings: PaperReviewFinding[]) => Promise<void>;
+   mainModel?: PublicModelConfig | null;
+@@ -131,10 +132,10 @@ export default function PaperReviewView(props: PaperReviewViewProps) {
+   const key = JSON.stringify([props.dataRoot ?? props.workspace, props.projectId, props.workspace]);
+   const [visited, setVisited] = useState<Record<string, Pick<PaperReviewViewProps, "dataRoot" | "workspace" | "projectId">>>({});
+   useEffect(() => { setVisited((current) => ({ ...current, [key]: { dataRoot: props.dataRoot, workspace: props.workspace, projectId: props.projectId } })); }, [key]);
+-  return <>{Object.entries({ ...visited, [key]: { dataRoot: props.dataRoot, workspace: props.workspace, projectId: props.projectId } }).map(([ownerKey, owner]) => <div key={ownerKey} className="manuscript-owner-workspace" hidden={ownerKey !== key || !props.active}><PaperReviewWorkspace {...props} {...owner} active={ownerKey === key && props.active} manuscriptRequest={ownerKey === key ? props.manuscriptRequest : undefined} /></div>)}</>;
++  return <>{Object.entries({ ...visited, [key]: { dataRoot: props.dataRoot, workspace: props.workspace, projectId: props.projectId } }).map(([ownerKey, owner]) => <div key={ownerKey} className="manuscript-owner-workspace" hidden={ownerKey !== key || !props.active}><PaperReviewWorkspace {...props} {...owner} active={ownerKey === key && props.active} manuscriptRequest={ownerKey === key ? props.manuscriptRequest : undefined} runOpenRequest={ownerKey === key ? props.runOpenRequest : undefined} /></div>)}</>;
+ }
+ 
+-function PaperReviewWorkspace({ bridge, workspace, projectId, dataRoot, active, manuscriptRequest, onReturnToManuscript, onDraftRevision, mainModel, onOpenModelSettings }: PaperReviewViewProps) {
++function PaperReviewWorkspace({ bridge, workspace, projectId, dataRoot, active, manuscriptRequest, runOpenRequest, onReturnToManuscript, onDraftRevision, mainModel, onOpenModelSettings }: PaperReviewViewProps) {
+   const { t, language } = useUISettings();
+   const confirm = useConfirm();
+   const [settings, setSettings] = useState<PublicPaperReviewSettings | null>(null);
+@@ -145,6 +146,8 @@ function PaperReviewWorkspace({ bridge, workspace, projectId, dataRoot, active,
+   const selectedRunRef = useRef(selectedRun); selectedRunRef.current = selectedRun;
+   const activeRef = useRef(active); activeRef.current = active;
+   const requestRef = useRef(manuscriptRequest); requestRef.current = manuscriptRequest;
++  const requestedRunRef = useRef(runOpenRequest); requestedRunRef.current = runOpenRequest;
++  const appliedRunRequest = useRef("");
+   const runLoadSequence = useRef(0);
+   const [sourceKind, setSourceKind] = useState<SourceKind>("library");
+   const [paperId, setPaperId] = useState("");
+@@ -207,7 +210,9 @@ function PaperReviewWorkspace({ bridge, workspace, projectId, dataRoot, active,
+       setVenueId((current) => current || nextSettings.defaultVenueId || nextVenues[0]?.id || "");
+       setPaperId((current) => current || nextPapers[0]?.id || "");
+       const first = nextRuns[0];
+-      if (selectedRunRef.current && activeRef.current) await loadRun(selectedRunRef.current.id);
++      if (requestedRunRef.current && appliedRunRequest.current !== requestedRunRef.current.token && activeRef.current) {
++        await loadRun(requestedRunRef.current.id); appliedRunRequest.current = requestedRunRef.current.token;
++      } else if (selectedRunRef.current && activeRef.current) await loadRun(selectedRunRef.current.id);
+       else if (first && !requestRef.current && activeRef.current) await loadRun(first.id);
+       const tracked = nextRuns.find((run) => run.id === activeRunRef.current);
+       if (tracked) { runningRef.current = tracked.status === "running"; setRunning(runningRef.current); }
+@@ -223,6 +228,11 @@ function PaperReviewWorkspace({ bridge, workspace, projectId, dataRoot, active,
+     if (!active) return;
+     void bootstrap();
+   }, [active, bootstrap]);
++  useEffect(() => {
++    if (!active || loading || !runOpenRequest || appliedRunRequest.current === runOpenRequest.token) return;
++    appliedRunRequest.current = runOpenRequest.token;
++    void loadRun(runOpenRequest.id).then(() => setTab("review")).catch(reason => setError(String(reason)));
++  }, [active, loading, runOpenRequest?.token, loadRun]);
+ 
+   useEffect(() => {
+     if (!selectedRun || selectedRun.sourceKind !== "library" || !papers.length) return;
+diff --git a/src/PaperWritingView.tsx b/src/PaperWritingView.tsx
+index bfa622d..debd3fb 100644
+--- a/src/PaperWritingView.tsx
++++ b/src/PaperWritingView.tsx
+@@ -1,5 +1,5 @@
+ import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+-import { AlertTriangle, ArrowDown, ArrowUp, Check, ChevronDown, ChevronRight, CircleDot, Cloud, FileCode2, FileImage, FilePlus2, FileText, Folder, FolderOpen, FolderPlus, FolderUp, LoaderCircle, MessageCircle, PanelLeftClose, PanelLeftOpen, Play, RefreshCw, Search, X } from "lucide-react";
++import { AlertTriangle, ArrowDown, ArrowUp, BookOpen, Check, ChevronDown, ChevronRight, CircleDot, Cloud, FileCode2, FileImage, FilePlus2, FileText, Folder, FolderOpen, FolderPlus, FolderUp, History, LoaderCircle, MessageCircle, PanelLeftClose, PanelLeftOpen, Play, RefreshCw, Search, X } from "lucide-react";
+ import { useUISettings } from "./i18n";
+ import SharedNoteEditor from "./SharedNoteEditor";
+ import PaperTemplateLibrary, { paperTemplates } from "./PaperTemplateLibrary";
+@@ -14,6 +14,11 @@ import "./paper-source-search.css";
+ import "./workflow-continuity.css";
+ import type { ResultFigureRequest, StageProjectResultFigureReceipt } from "./project-results";
+ import type { ManuscriptSource, ManuscriptTarget } from "./manuscript-handoff";
++import PaperWritingCitations, { type CitationAction } from "./PaperWritingCitations";
++import { manuscriptBibliographyPaths, prepareManuscriptCitation } from "./paper-writing-citations";
++import type { BibliographyPaper } from "./bibliography";
++import PaperWritingVersions from "./PaperWritingVersions";
++import type { ManuscriptVersionComparison, ManuscriptVersionOwner } from "./paper-writing-history";
+ 
+ 
+ const EDITABLE = new Set(["tex", "bib", "bst", "cls", "sty", "cfg"]);
+@@ -131,7 +136,7 @@ function HighlightLine({ text, problem, marks, activeMatch }: { text: string; pr
+   }) : " "}</span>;
+ }
+ 
+-export type PaperOpenRequest = { path: string; token: number } | null;
++export type PaperOpenRequest = { path: string; token: number; milestoneId?: string } | null;
+ 
+ export default function PaperWritingView({ bridge, workspace, projectId, openRequest, onRefresh, onAskAI, onHandoff, figureRequest, onReturnToResult, workspaceId, threadId, dataRoot, active = true }: {
+   bridge: ResearchDeskBridge; workspace: string; projectId?: string | null; openRequest: PaperOpenRequest; onRefresh: () => Promise<void> | void; onAskAI: (path: string, manuscript?: { workspace: string; projectId: string | null; mainPath: string; selectedPath: string }) => void | Promise<void>; onHandoff?: (target: ManuscriptTarget, source: ManuscriptSource) => Promise<void>; dataRoot?: string; workspaceId?: string | null; threadId?: string | null; figureRequest?: ResultFigureRequest; onReturnToResult?: (id: string) => void | Promise<void>; active?: boolean;
+@@ -158,7 +163,7 @@ export default function PaperWritingView({ bridge, workspace, projectId, openReq
+   const draft = currentDocument?.draft || "";
+   const savedDraft = currentDocument?.savedDraft || "";
+   const saveState = currentDocument?.saveState || "saved";
+-  const setDraft = (content: string) => { if (currentDocument) { editWritingDocument(currentDocument, content); refreshScope(); } };
++  const setDraft = (content: string) => { if (currentDocument && !owner.fileOperationBusy) { editWritingDocument(currentDocument, content); refreshScope(); } };
+   const [expanded, setExpanded] = scoped("expanded");
+   const [activeDirectory, setActiveDirectory] = scoped("activeDirectory");
+   const [searchOpen, setSearchOpen] = scoped("searchOpen");
+@@ -198,6 +203,8 @@ export default function PaperWritingView({ bridge, workspace, projectId, openReq
+   const createOpen = Boolean(createKind) && active;
+   const [createName, setCreateName] = scoped("createName");
+   const editorRef = useRef<HTMLTextAreaElement | null>(null);
++  const [citationOwner, setCitationOwner] = useState<{ owner: WritingScope; projectId: string; mainPath: string; path: string; start: number; end: number } | null>(null);
++  const [versionOwner, setVersionOwner] = useState<{ owner: WritingScope; context: ManuscriptVersionOwner; initialId?: string } | null>(null);
+   const lineNumbersRef = useRef<HTMLDivElement | null>(null);
+   const highlightRef = useRef<HTMLPreElement | null>(null);
+   const workspaceRef = useRef<HTMLDivElement | null>(null);
+@@ -329,6 +336,76 @@ export default function PaperWritingView({ bridge, workspace, projectId, openReq
+     await openFile(path);
+   }, [loadDirectory, openFile, owner]);
+ 
++  function openCitations() {
++    if (!projectId || !currentDocument || ext(currentDocument.file.path) !== "tex" || !mainPath) return;
++    const editor = editorRef.current;
++    setCitationOwner({ owner, projectId, mainPath, path: currentDocument.file.path, start: editor?.selectionStart ?? draft.length, end: editor?.selectionEnd ?? draft.length });
++  }
++  async function applyCitation(paper: BibliographyPaper, bibPath: string, action: CitationAction) {
++    const selected = citationOwner;
++    if (!selected || selected.owner.fileOperationBusy) throw new Error(t("The manuscript is busy. Try again after saving."));
++    const targetOwner = selected.owner, directory = projectRoot(selected.mainPath);
++    if (!bibPath.endsWith(".bib") || bibPath.startsWith("/") || bibPath.split(/[\\/]/).some(part => part === ".." || part.startsWith(".")) || directory && !bibPath.startsWith(`${directory}/`)) throw new Error(t("Choose a .bib file inside this manuscript folder."));
++    targetOwner.fileOperationBusy = true; refreshScope();
++    try {
++      let bibliography = targetOwner.documents.get(bibPath);
++      if (!bibliography) {
++        let content: WorkspaceFilePreview;
++        try { content = await bridge.readWorkspaceFile(targetOwner.workspace, bibPath); }
++        catch (reason) {
++          if (!String(reason).includes("ENOENT")) throw reason;
++          content = { path: bibPath, name: bibPath.split("/").at(-1) || bibPath, kind: "text", content: "", size: 0, modifiedAt: "" };
++        }
++        bibliography = createWritingDocument(targetOwner.workspace, content); targetOwner.documents.set(bibPath, bibliography);
++      }
++      const prepared = prepareManuscriptCitation(bibliography.draft, paper, action !== "insert");
++      if (!paper.citekey) await bridge.setPaperBibliography(paper.id, { citekey: prepared.citekey, entryType: paper.entry_type || "article" });
++      if (action !== "insert") {
++        editWritingDocument(bibliography, prepared.content);
++        await saveWritingDocument(bibliography, bridge.writeWorkspaceFile, refreshScope);
++      }
++      if (action !== "update") {
++        const document = targetOwner.documents.get(selected.path);
++        if (!document) throw new Error(t("Open the manuscript source before inserting a citation."));
++        const snippet = `\\cite{${prepared.citekey}}`;
++        const position = Math.min(selected.start, document.draft.length), end = Math.min(selected.end, document.draft.length);
++        editWritingDocument(document, document.draft.slice(0, position) + snippet + document.draft.slice(end));
++        selected.start = selected.end = position + snippet.length;
++        await saveWritingDocument(document, bridge.writeWorkspaceFile, refreshScope);
++      }
++      targetOwner.compileResult = null; targetOwner.compileState = "idle"; targetOwner.compileSequence++;
++      if (owner === targetOwner) await loadDirectory(directory || ".", true);
++      return action === "insert" ? t("Citation inserted. The .bib file was kept as written.") : action === "update" ? t("Bibliography entry updated. Its citation key was preserved.") : t("Citation inserted and bibliography entry saved.");
++    } finally { targetOwner.fileOperationBusy = false; refreshScope(); }
++  }
++
++  function openVersions(initialId?: string) {
++    if (!projectId || !workspaceId || !owner.mainPath) return;
++    setVersionOwner({ owner, context: { dataRoot, projectId, workspaceId, executionRoot: owner.workspace, mainPath: owner.mainPath, threadId }, initialId });
++  }
++  async function withSavedManuscript<T>(operation: (selection: NonNullable<typeof versionOwner>) => Promise<T>) {
++    const selected = versionOwner;
++    if (!selected || selected.owner.fileOperationBusy) throw new Error(t("The manuscript is busy. Try again after saving."));
++    const target = selected.owner;
++    if (target.compileState === "compiling") throw new Error(t("Wait for the current compilation before changing key versions."));
++    target.fileOperationBusy = true; refreshScope();
++    try {
++      await Promise.all([...target.documents.values()].map(document => saveWritingDocument(document, bridge.writeWorkspaceFile, refreshScope)));
++      return await operation(selected);
++    } finally { target.fileOperationBusy = false; refreshScope(); }
++  }
++  async function restoreVersion(comparison: ManuscriptVersionComparison) {
++    await withSavedManuscript(async selected => {
++      if (!bridge.restoreManuscriptVersion) throw new Error(t("Key versions are available in the desktop app."));
++      const receipt = await bridge.restoreManuscriptVersion({ ...selected.context, id: comparison.version.id, expectedSourceVersion: comparison.currentSourceVersion });
++      const paths = new Set([...receipt.restoredPaths, ...receipt.removedPaths]);
++      for (const name of paths) selected.owner.documents.delete(name);
++      selected.owner.compileSequence++; selected.owner.compileResult = null; selected.owner.compileState = "idle"; selected.owner.compileLog = ""; selected.owner.coedit = false;
++      if (liveWritingOwner.current.owner === selected.owner) await activateProject(selected.context.mainPath);
++      await onRefresh();
++    });
++  }
++
+   const refreshProjects = useCallback(async () => {
+     const request = ++owner.projectListSequence;
+     owner.projectsLoading = true;
+@@ -386,7 +463,7 @@ export default function PaperWritingView({ bridge, workspace, projectId, openReq
+   }
+ 
+   const compile = useCallback(async (target = mainPath) => {
+-    if (!target) return;
++    if (!target || owner.fileOperationBusy) return;
+     owner.compileTarget = target;
+     const requestId = `${compileRequestPrefix}:${++compileRequestSequence.current}`;
+     owner.compileRequestId = requestId;
+@@ -451,8 +528,10 @@ export default function PaperWritingView({ bridge, workspace, projectId, openReq
+     const request = JSON.stringify([openRequest.token, openRequest.path]);
+     if (consumedOpenRequest.current === request) return;
+     consumedOpenRequest.current = request;
+-    void activateProject(openRequest.path);
+-  }, [activateProject, openRequest?.path, openRequest?.token]);
++    void activateProject(openRequest.path).then(() => {
++      if (openRequest.milestoneId && projectId && workspaceId) setVersionOwner({ owner, context: { dataRoot, projectId, workspaceId, executionRoot: owner.workspace, mainPath: openRequest.path, threadId }, initialId: openRequest.milestoneId });
++    });
++  }, [activateProject, openRequest?.path, openRequest?.token, openRequest?.milestoneId]);
+   useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
+   useEffect(() => () => {
+     // Writing autosaves on departure as well as on its debounce. Do not park an
+@@ -479,7 +558,7 @@ export default function PaperWritingView({ bridge, workspace, projectId, openReq
+     return () => observer.disconnect();
+   }, []);
+   useEffect(() => {
+-    if (!currentDocument || draft === savedDraft) return;
++    if (!currentDocument || draft === savedDraft || owner.fileOperationBusy) return;
+     const timer = window.setTimeout(async () => {
+       try {
+         await saveWritingDocument(currentDocument, bridge.writeWorkspaceFile, refreshScope);
+@@ -490,7 +569,7 @@ export default function PaperWritingView({ bridge, workspace, projectId, openReq
+       window.clearTimeout(timer);
+       if (owner.selectedPath !== currentDocument.file.path && currentDocument.draft !== currentDocument.savedDraft) void saveWritingDocument(currentDocument, bridge.writeWorkspaceFile, refreshScope).catch(() => {});
+     };
+-  }, [autoCompile, bridge, compile, currentDocument, draft, mainPath, owner, refreshScope, savedDraft]);
++  }, [autoCompile, bridge, compile, currentDocument, draft, mainPath, owner, owner.fileOperationBusy, refreshScope, savedDraft]);
+ 
+   async function createProject() {
+     if (creating) return;
+@@ -673,10 +752,12 @@ export default function PaperWritingView({ bridge, workspace, projectId, openReq
+   } as React.CSSProperties : undefined;
+ 
+   return <div className="paper-writing-page" data-surface="writing">
++    {citationOwner && active && citationOwner.owner === owner && citationOwner.projectId === projectId && citationOwner.mainPath === mainPath && <PaperWritingCitations key={`${projectId}:${citationOwner.mainPath}`} bridge={bridge} projectId={citationOwner.projectId} mainPath={citationOwner.mainPath} bibliographyPaths={[...new Set([...manuscriptBibliographyPaths(owner.documents.get(mainPath)?.draft || "", mainPath), ...[...owner.documents.keys()].filter(name => ext(name) === "bib")])]} onClose={() => setCitationOwner(null)} onApply={applyCitation} />}
++    {versionOwner && active && versionOwner.owner === owner && versionOwner.context.projectId === projectId && versionOwner.context.mainPath === mainPath && <PaperWritingVersions key={`${versionOwner.context.projectId}:${versionOwner.context.mainPath}:${versionOwner.initialId || ""}`} initialId={versionOwner.initialId} onClose={() => setVersionOwner(null)} onList={async () => bridge.listManuscriptVersions ? bridge.listManuscriptVersions(versionOwner.context) : []} onSave={name => withSavedManuscript(async selected => { if (!bridge.saveManuscriptVersion) throw new Error(t("Key versions are available in the desktop app.")); return bridge.saveManuscriptVersion({ ...selected.context, name }); })} onCompare={id => withSavedManuscript(async selected => { if (!bridge.compareManuscriptVersion) throw new Error(t("Key versions are available in the desktop app.")); return bridge.compareManuscriptVersion({ ...selected.context, id }); })} onRestore={restoreVersion} />}
+     {pendingFigure && <div className="manuscript-source-receipt" role="status"><strong>{t("Add project figure")}: {pendingFigure.request.title}</strong><span>{t("Choose an existing manuscript, then insert the saved figure at the cursor. Existing text is kept.")}</span><div>{!pendingFigure.inserted && <button disabled={pendingFigure.busy || !currentDocument || ext(currentDocument.file.path) !== "tex" || !mainPath || !workspaceId} onClick={() => void insertResultFigure()}>{pendingFigure.busy ? t("Preparing figure…") : pendingFigure.receipt ? t("Insert at current cursor") : t("Insert figure")}</button>}<button disabled={pendingFigure.busy || !mainPath} onClick={() => void addFigurePackage()}>{t("Add graphicx to main")}</button>{onReturnToResult && <button onClick={() => void onReturnToResult(pendingFigure.request.resultId)}>{t("Open source result")}</button>}<button onClick={() => { figureInsertions.current.delete(insertionKey); refreshScope(); }}>{t("Dismiss")}</button></div>{pendingFigure.error && <span>{pendingFigure.error}</span>}</div>}
+     <div className={browserCollapsed && widePanes ? "paper-writing-workspace browser-collapsed" : "paper-writing-workspace"} ref={workspaceRef} style={paneStyle}>
+       <aside className="paper-source-browser"><div className="paper-browser-title"><FolderOpen size={14} /><strong>{projectLabel}</strong>{activeProject && <div className="paper-browser-actions"><button onClick={() => { setCreateKind("file"); setCreateName("section.tex"); }} aria-label="New LaTeX file"><FilePlus2 size={14} /></button><button onClick={() => { setCreateKind("folder"); setCreateName("figures"); }} aria-label="New folder"><FolderPlus size={14} /></button></div>}</div><label className="paper-main-document">Main document<select value={mainPath} disabled={!activeProject} onChange={(event) => { setMainPath(event.target.value); void openFile(event.target.value); }}>{!activeProject && <option value="">Choose a project first</option>}{mainChoices.map((project) => <option key={project.path} value={project.path}>{project.path}</option>)}</select></label><div className="paper-tree-scroll">{activeProject ? tree.entries.map((entry) => <TreeNode key={entry.path} entry={entry} depth={0} selected={file?.path || ""} activeDirectory={activeDirectory} expanded={expanded} loading={loading} onToggle={toggleDirectory} onLoad={(path) => void loadDirectory(path)} onOpen={(path) => void openFile(path)} />) : <StateView compact className="paper-project-placeholder" icon={<FolderOpen size={20} />} title={t("No project selected")} description={t("Choose an existing manuscript or start a new one.")} />}</div><div className="paper-pane-resizer" role="separator" aria-orientation="vertical" aria-label="Resize file browser" title="Drag to resize · double-click to reset" aria-valuemin={BROWSER_MIN_WIDTH} aria-valuemax={BROWSER_MAX_WIDTH} aria-valuenow={Math.round(browserWidth)} tabIndex={0} onPointerDown={(event) => beginPaneResize("browser", event)} onPointerMove={movePaneResize} onPointerUp={endPaneResize} onPointerCancel={endPaneResize} onDoubleClick={() => setBrowserWidth(BROWSER_DEFAULT_WIDTH)} onKeyDown={(event) => handlePaneResizeKey("browser", event)} /></aside>
+-      <section className="latex-editor-pane" onKeyDown={handleSourceKey}><div className="paper-pane-toolbar"><button className="paper-browser-toggle" onClick={() => setBrowserCollapsed((collapsed) => !collapsed)} title={browserCollapsed ? "Show file browser" : "Hide file browser"} aria-label={browserCollapsed ? "Show file browser" : "Hide file browser"} aria-pressed={!browserCollapsed}>{browserCollapsed ? <PanelLeftOpen size={13} /> : <PanelLeftClose size={13} />}</button><FileCode2 size={14} /><strong>{file?.name || "No source selected"}</strong><button className={searchOpen ? "paper-pane-action icon active" : "paper-pane-action icon"} disabled={!file} onClick={() => searchOpen ? closeSearch() : openSearch()} title={`${t("Search source")} (Ctrl/Cmd+F)`} aria-label={t("Search source")} aria-expanded={searchOpen} aria-controls={searchId}><Search size={14} /></button><span className={`paper-save-state ${saveState}`}>{saveState === "saving" ? <LoaderCircle className="spin" size={11} /> : saveState === "saved" ? <Check size={11} /> : <CircleDot size={11} />}{saveState === "saving" ? "Saving" : saveState === "saved" ? "Saved" : "Unsaved"}</span><button className={coedit ? "paper-pane-action active" : "paper-pane-action"} disabled={!file || !projectId} onClick={() => { setCoedit((value) => !value); setSearchOpen(false); }} title="Co-edit this source with project members"><Cloud size={13} /><span>{coedit ? "Co-editing" : "Co-edit"}</span></button></div>
++      <section className="latex-editor-pane" onKeyDown={handleSourceKey}><div className="paper-pane-toolbar"><button className="paper-browser-toggle" onClick={() => setBrowserCollapsed((collapsed) => !collapsed)} title={browserCollapsed ? "Show file browser" : "Hide file browser"} aria-label={browserCollapsed ? "Show file browser" : "Hide file browser"} aria-pressed={!browserCollapsed}>{browserCollapsed ? <PanelLeftOpen size={13} /> : <PanelLeftClose size={13} />}</button><FileCode2 size={14} /><strong>{file?.name || "No source selected"}</strong><button className={searchOpen ? "paper-pane-action icon active" : "paper-pane-action icon"} disabled={!file} onClick={() => searchOpen ? closeSearch() : openSearch()} title={`${t("Search source")} (Ctrl/Cmd+F)`} aria-label={t("Search source")} aria-expanded={searchOpen} aria-controls={searchId}><Search size={14} /></button><span className={`paper-save-state ${saveState}`}>{saveState === "saving" ? <LoaderCircle className="spin" size={11} /> : saveState === "saved" ? <Check size={11} /> : <CircleDot size={11} />}{saveState === "saving" ? "Saving" : saveState === "saved" ? "Saved" : "Unsaved"}</span><span className="paper-continuity-tools"><button className="paper-pane-action icon" disabled={!file || !projectId || ext(file.path) !== "tex" || owner.fileOperationBusy} onClick={openCitations} title={t("Insert citation")} aria-label={t("Insert citation")}><BookOpen size={14} /></button><button className="paper-pane-action icon" disabled={!mainPath || !projectId || !workspaceId || !bridge.saveManuscriptVersion || owner.fileOperationBusy || compileState === "compiling"} onClick={() => openVersions()} title={t("Key versions")} aria-label={t("Key versions")}><History size={14} /></button></span><button className={coedit ? "paper-pane-action active" : "paper-pane-action"} disabled={!file || !projectId} onClick={() => { setCoedit((value) => !value); setSearchOpen(false); }} title="Co-edit this source with project members"><Cloud size={13} /><span>{coedit ? "Co-editing" : "Co-edit"}</span></button></div>
+         {searchOpen && file && <div className="latex-source-search" id={searchId} role="search" aria-label={t("Search source")}>
+           <Search size={14} aria-hidden="true" />
+           <input ref={searchInputRef} type="text" value={searchQuery} onChange={(event) => changeSearch(event.target.value)} onKeyDown={(event) => {
+@@ -687,7 +768,7 @@ export default function PaperWritingView({ bridge, workspace, projectId, openReq
+           <button type="button" disabled={!searchMatches.length} onClick={() => navigateSearch(1)} title={`${t("Next match")} (Enter)`} aria-label={t("Next match")}><ArrowDown size={14} /></button>
+           <button type="button" onClick={closeSearch} title={`${t("Close search")} (Esc)`} aria-label={t("Close search")}><X size={14} /></button>
+         </div>}
+-        {file ? <>{coedit && projectId && <div className="latex-coedit-pane"><SharedNoteEditor bridge={bridge} projectId={projectId} docKey={`latex:${file.path}`} initialText={draft} title={`Co-editing ${file.name}`} onTextChange={(text) => { setDraft(text); }} /></div>}<div className={coedit ? "latex-editor-body coediting" : "latex-editor-body"}><div className="latex-line-numbers" ref={lineNumbersRef}>{lines.map((_, index) => <span key={index} className={problemLines.has(index + 1) ? "diagnostic" : ""}>{problemLines.has(index + 1) ? <AlertTriangle size={10} /> : index + 1}</span>)}</div><div className="latex-editor-layer"><pre className="latex-highlight" ref={highlightRef} aria-hidden="true">{lines.map((line, index) => <HighlightLine key={index} text={line} marks={searchMarks.get(index)} activeMatch={activeMatchIndex} problem={problemLines.has(index + 1) || activeProblem === index + 1} />)}</pre><textarea className="latex-editor-textarea" ref={editorRef} value={draft} onChange={(event) => { setDraft(event.target.value); }} onKeyDown={(event) => { if (event.key === "Tab") { event.preventDefault(); const target = event.currentTarget; const next = `${draft.slice(0, target.selectionStart)}  ${draft.slice(target.selectionEnd)}`; const start = target.selectionStart; setDraft(next); window.requestAnimationFrame(() => target.setSelectionRange(start + 2, start + 2)); } if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") { event.preventDefault(); void compile(); } }} onScroll={(event) => syncScroll(event.currentTarget)} spellCheck={false} aria-label={`Edit ${file.path}`} /></div></div></> : <StateView className="paper-writing-empty" icon={<FileText size={25} />} title="No LaTeX project open" description={t("Open an existing manuscript, or create a new paper from a template.")} action={<button className="primary-button" onClick={() => { setChooserTab("existing"); setChooserOpen(true); void refreshProjects(); }}><FolderOpen size={14} />Open project</button>} />}{buildLogOpen && <section id={buildLogId} className="latex-live-log" aria-label={t("Build log")}><strong>{t("Build log")}</strong><pre tabIndex={0}>{compileState === "compiling" ? compileLog || t("Waiting for compiler output…") : compileResult?.log || compileLog || t("No build log yet.")}</pre></section>}{(error || compileResult?.diagnostics.length || (compileResult && !compileResult.ok)) && <div className="latex-diagnostics"><header><AlertTriangle size={13} /><strong>{error ? "Workspace error" : `Problems · ${compileResult?.diagnostics.length || 1}`}</strong><span>{error ? "Resolve this before compiling again." : "Select a problem to jump to the source line."}</span></header>{error && <p>{error}</p>}{compileResult?.diagnostics.map((diagnostic, index) => <button key={`${diagnostic.line}-${index}`} className={diagnostic.line === activeProblem ? "active" : ""} onClick={() => jumpToProblem(diagnostic)}><b>{diagnostic.line ? `Line ${diagnostic.line}` : "LaTeX"}</b><span>{t(diagnostic.message)}{diagnostic.help && <small className="latex-diagnostic-help">{t(diagnostic.help)}</small>}</span></button>)}{compileResult && !compileResult.ok && compileResult.log && <details><summary>Show full build log</summary><pre>{compileResult.log}</pre></details>}</div>}<div className="paper-pane-resizer" role="separator" aria-orientation="vertical" aria-label="Resize PDF preview" title="Drag to resize · double-click to reset" aria-valuemin={Math.round(PREVIEW_SPLIT_MIN * 100)} aria-valuemax={Math.round(PREVIEW_SPLIT_MAX * 100)} aria-valuenow={Math.round(effectivePreviewSplit * 100)} tabIndex={0} onPointerDown={(event) => beginPaneResize("preview", event)} onPointerMove={movePaneResize} onPointerUp={endPaneResize} onPointerCancel={endPaneResize} onDoubleClick={() => setPreviewSplit(PREVIEW_SPLIT_DEFAULT)} onKeyDown={(event) => handlePaneResizeKey("preview", event)} /></section>
++        {file ? <>{coedit && projectId && <div className="latex-coedit-pane"><SharedNoteEditor bridge={bridge} projectId={projectId} docKey={`latex:${file.path}`} initialText={draft} title={`Co-editing ${file.name}`} onTextChange={(text) => { setDraft(text); }} /></div>}<div className={coedit ? "latex-editor-body coediting" : "latex-editor-body"}><div className="latex-line-numbers" ref={lineNumbersRef}>{lines.map((_, index) => <span key={index} className={problemLines.has(index + 1) ? "diagnostic" : ""}>{problemLines.has(index + 1) ? <AlertTriangle size={10} /> : index + 1}</span>)}</div><div className="latex-editor-layer"><pre className="latex-highlight" ref={highlightRef} aria-hidden="true">{lines.map((line, index) => <HighlightLine key={index} text={line} marks={searchMarks.get(index)} activeMatch={activeMatchIndex} problem={problemLines.has(index + 1) || activeProblem === index + 1} />)}</pre><textarea className="latex-editor-textarea" ref={editorRef} value={draft} readOnly={owner.fileOperationBusy} onChange={(event) => { setDraft(event.target.value); }} onKeyDown={(event) => { if (event.key === "Tab") { event.preventDefault(); const target = event.currentTarget; const next = `${draft.slice(0, target.selectionStart)}  ${draft.slice(target.selectionEnd)}`; const start = target.selectionStart; setDraft(next); window.requestAnimationFrame(() => target.setSelectionRange(start + 2, start + 2)); } if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") { event.preventDefault(); void compile(); } }} onScroll={(event) => syncScroll(event.currentTarget)} spellCheck={false} aria-label={`Edit ${file.path}`} /></div></div></> : <StateView className="paper-writing-empty" icon={<FileText size={25} />} title="No LaTeX project open" description={t("Open an existing manuscript, or create a new paper from a template.")} action={<button className="primary-button" onClick={() => { setChooserTab("existing"); setChooserOpen(true); void refreshProjects(); }}><FolderOpen size={14} />Open project</button>} />}{buildLogOpen && <section id={buildLogId} className="latex-live-log" aria-label={t("Build log")}><strong>{t("Build log")}</strong><pre tabIndex={0}>{compileState === "compiling" ? compileLog || t("Waiting for compiler output…") : compileResult?.log || compileLog || t("No build log yet.")}</pre></section>}{(error || compileResult?.diagnostics.length || (compileResult && !compileResult.ok)) && <div className="latex-diagnostics"><header><AlertTriangle size={13} /><strong>{error ? "Workspace error" : `Problems · ${compileResult?.diagnostics.length || 1}`}</strong><span>{error ? "Resolve this before compiling again." : "Select a problem to jump to the source line."}</span></header>{error && <p>{error}</p>}{compileResult?.diagnostics.map((diagnostic, index) => <button key={`${diagnostic.line}-${index}`} className={diagnostic.line === activeProblem ? "active" : ""} onClick={() => jumpToProblem(diagnostic)}><b>{diagnostic.line ? `Line ${diagnostic.line}` : "LaTeX"}</b><span>{t(diagnostic.message)}{diagnostic.help && <small className="latex-diagnostic-help">{t(diagnostic.help)}</small>}</span></button>)}{compileResult && !compileResult.ok && compileResult.log && <details><summary>Show full build log</summary><pre>{compileResult.log}</pre></details>}</div>}<div className="paper-pane-resizer" role="separator" aria-orientation="vertical" aria-label="Resize PDF preview" title="Drag to resize · double-click to reset" aria-valuemin={Math.round(PREVIEW_SPLIT_MIN * 100)} aria-valuemax={Math.round(PREVIEW_SPLIT_MAX * 100)} aria-valuenow={Math.round(effectivePreviewSplit * 100)} tabIndex={0} onPointerDown={(event) => beginPaneResize("preview", event)} onPointerMove={movePaneResize} onPointerUp={endPaneResize} onPointerCancel={endPaneResize} onDoubleClick={() => setPreviewSplit(PREVIEW_SPLIT_DEFAULT)} onKeyDown={(event) => handlePaneResizeKey("preview", event)} /></section>
+       <section className="paper-pdf-pane"><div className="paper-pane-toolbar"><FileText size={14} /><strong>PDF preview</strong><label className="paper-auto-compile"><input type="checkbox" checked={autoCompile} onChange={(event) => setAutoCompile(event.target.checked)} />Auto compile</label><span className={`paper-compile-state ${compileState}`}>{compileState === "compiling" ? <LoaderCircle className="spin" size={11} /> : compileState === "success" ? <Check size={11} /> : compileState === "error" ? <AlertTriangle size={11} /> : null}{compileState === "success" ? `${compileResult?.duration_ms ?? 0} ms` : compileState === "error" ? "Build failed" : compileState === "compiling" ? `${t(compilePhase)} · ${compileElapsed}s` : "Not built"}</span><div className="paper-pane-actions">{onHandoff && <><button className="paper-pane-action" disabled={handoffBusy || !mainPath || compileState === "compiling"} onClick={() => void handoffManuscript("paper-review")} title={t("Review current PDF")}>{t("Review current PDF")}</button><button className="paper-pane-action" disabled={handoffBusy || !mainPath || compileState === "compiling"} onClick={() => void handoffManuscript("paper-to-slides")} title={t("Slides from current PDF")}>{t("Slides from current PDF")}</button></>}<button className={buildLogOpen ? "paper-pane-action active" : "paper-pane-action"} onClick={() => setBuildLogOpen((open) => !open)} title={t("Build log")} aria-label={t("Build log")} aria-expanded={buildLogOpen} aria-controls={buildLogId}><FileText size={13} /><span>{t("Build log")}</span></button>{file && <button className="paper-pane-action" onClick={() => void Promise.resolve(onAskAI(file.path, { workspace: owner.workspace, projectId: projectId || null, mainPath: owner.mainPath || file.path, selectedPath: file.path })).catch((reason) => setError(String(reason)))} title="Ask AI about this file"><MessageCircle size={13} /><span>Ask AI</span></button>}<button className="paper-pane-action icon" onClick={() => { setChooserTab("existing"); setChooserOpen(true); void refreshProjects(); }} title="Projects" aria-label="Projects"><FolderOpen size={13} /></button>{activeProject && <><button className="paper-pane-action icon" disabled={importing} onClick={() => void importFolder()} title="Import folder" aria-label="Import folder">{importing ? <LoaderCircle className="spin" size={13} /> : <FolderUp size={13} />}</button><button className="paper-pane-action primary" disabled={!mainPath || compileState === "compiling"} onClick={() => void compile()} title="Recompile">{compileState === "compiling" ? <LoaderCircle className="spin" size={13} /> : <Play size={13} />}<span>{compileState === "compiling" ? "Compiling…" : "Recompile"}</span></button></>}</div></div>{compileResult?.ok && compileResult.preview_url ? <iframe key={compileResult.preview_url} src={compileResult.preview_url} title="Compiled paper PDF" /> : <StateView className="paper-writing-empty" icon={<FileText size={27} />} title="Compile to preview" description="The generated PDF appears here. Any build problem is listed beside the source with its line number." action={mainPath ? <button className="primary-button" disabled={compileState === "compiling"} onClick={() => void compile()}><Play size={14} />Compile paper</button> : undefined} />}</section>
+     </div>
+     <Dialog open={dialogOpen} onClose={() => setChooserOpen(false)} size="gallery" className="paper-project-dialog" overlayClassName="paper-create-backdrop app-dialog-overlay" ariaLabelledBy="paper-project-title">
+diff --git a/src/ProjectSidebar.tsx b/src/ProjectSidebar.tsx
+index 79dfd75..4e311ab 100644
+--- a/src/ProjectSidebar.tsx
++++ b/src/ProjectSidebar.tsx
+@@ -1,5 +1,5 @@
+ import { useEffect, useMemo, useRef, useState } from "react";
+-import { Archive, ArchiveRestore, FolderOpen, MoreVertical, Pencil, Plus, Trash, X } from "lucide-react";
++import { Archive, ArchiveRestore, BookOpen, FolderOpen, MoreVertical, Pencil, Plus, Trash, X } from "lucide-react";
+ import { useUISettings } from "./i18n";
+ import { Dialog } from "./Dialog";
+ import { MenuDivider, MenuItem, MenuSurface } from "./Menu";
+@@ -7,7 +7,7 @@ import { workspaceName } from "./workspace-name";
+ import WorkspaceMenuActions from "./WorkspaceMenuActions";
+ import { orderSidebarIds, type SidebarOrder, type SidebarOrderGroup } from "./sidebar-order";
+ 
+-export default function ProjectSidebar({ projects, archivedProjects, workspaces, order, onReorder, activeProjectId, activeWorkspaceId, disabled, onNewProject, onNewWorkspace, onRenameProject, onArchiveProject, onRemoveProject, onChangeProjectWorkspace, onTransferProject, onOpenWorkspace, onRenameWorkspace, onDeleteWorkspace, filterError }: {
++export default function ProjectSidebar({ projects, archivedProjects, workspaces, order, onReorder, activeProjectId, activeWorkspaceId, disabled, onNewProject, onNewWorkspace, onRenameProject, onArchiveProject, onRemoveProject, onChangeProjectWorkspace, onTransferProject, onOpenProjectResearch, onOpenWorkspace, onRenameWorkspace, onDeleteWorkspace, filterError }: {
+   projects: ResearchProject[];
+   archivedProjects: ResearchProject[];
+   workspaces: ProjectWorkspace[];
+@@ -23,6 +23,7 @@ export default function ProjectSidebar({ projects, archivedProjects, workspaces,
+   onRemoveProject: (project: ResearchProject) => void;
+   onChangeProjectWorkspace: (project: ResearchProject) => void;
+   onTransferProject?: (project: ResearchProject) => void;
++  onOpenProjectResearch?: (project: ResearchProject) => void;
+   onOpenWorkspace: (workspace: ProjectWorkspace) => void;
+   onRenameWorkspace: (workspace: ProjectWorkspace) => void;
+   onDeleteWorkspace: (workspace: ProjectWorkspace) => void;
+@@ -173,6 +174,7 @@ export default function ProjectSidebar({ projects, archivedProjects, workspaces,
+                 <MenuItem icon={<Plus size={18} strokeWidth={1.7} />} onClick={() => { setProjectMenu(null); onNewWorkspace(project.id); }} disabled={disabled}>{t("New workspace")}</MenuItem>
+                 <MenuItem icon={<FolderOpen size={18} strokeWidth={1.7} />} onClick={() => { setProjectMenu(null); onChangeProjectWorkspace(project); }} disabled={disabled}>{t("Change project folder")}</MenuItem>
+                 {onTransferProject && <MenuItem icon={<FolderOpen size={18} strokeWidth={1.7} />} onClick={() => { setProjectMenu(null); onTransferProject(project); }} disabled={disabled}>{t("Transfer project…")}</MenuItem>}
++                {onOpenProjectResearch && <MenuItem icon={<BookOpen size={18} strokeWidth={1.7} />} onClick={() => { setProjectMenu(null); onOpenProjectResearch(project); }}>{t("Project research")}</MenuItem>}
+                 <MenuItem icon={<Pencil size={18} strokeWidth={1.7} />} onClick={() => { setProjectMenu(null); beginRename(project); }} disabled={disabled}>{t("Rename")}</MenuItem>
+                 <MenuItem icon={<Archive size={18} strokeWidth={1.7} />} onClick={() => { setProjectMenu(null); onArchiveProject(project, true); }} disabled={disabled}>{t("Archive")}</MenuItem>
+                 <MenuDivider />
+@@ -180,6 +182,7 @@ export default function ProjectSidebar({ projects, archivedProjects, workspaces,
+               </MenuSurface>
+             </div>
+             {isExpanded && <div className="project-chat-list">
++              {onOpenProjectResearch && <div className="project-chat-row"><button className="project-chat-open" onClick={() => onOpenProjectResearch(project)}><BookOpen size={13} /><span className="project-chat-title">{t("Project research")}</span></button></div>}
+               {projectWorkspaces.map((workspace) => <div
+                 className={`${activeWorkspaceId === workspace.id ? "project-chat-row active" : "project-chat-row"}${dropTarget === `workspaces:${project.id}:${workspace.id}` ? " sidebar-drop-target" : ""}`}
+                 key={workspace.id}
+diff --git a/src/ProjectTransferDialog.tsx b/src/ProjectTransferDialog.tsx
+index 2a6a753..160cb1e 100644
+--- a/src/ProjectTransferDialog.tsx
++++ b/src/ProjectTransferDialog.tsx
+@@ -9,10 +9,12 @@ const categories = [
+   ['reports', 'Reviews and presentations'], ['conversations', 'Conversations'],
+   ['results', 'Analysis and figure packages'], ['artifacts', 'Conversation artifacts'],
+   ['reproductions', 'Reproduction history'],
++  ['milestones', 'Named manuscript versions'],
+ ] as const;
+ const counts = [
+   ['papers', 'Papers'], ['paper_highlights', 'Annotations'], ['research_threads', 'Conversations'],
+   ['project_results', 'Analysis and figure packages'], ['reproductions', 'Reproduction history'], ['review_runs', 'Review runs'],
++  ['project_research_notes', 'Conclusions & questions'], ['manuscript_versions', 'Named manuscript versions'],
+   ['metric_comparisons', 'Numerical comparisons'],
+ ] as const;
+ const bytes = (value: number) => `${(value / (1024 * 1024)).toFixed(2)} MiB`;
+diff --git a/src/ReproduceView.tsx b/src/ReproduceView.tsx
+index cd6a810..87110d9 100644
+--- a/src/ReproduceView.tsx
++++ b/src/ReproduceView.tsx
+@@ -164,6 +164,7 @@ type ReproduceViewProps = {
+   projectName?: string;
+   workspaceId?: string | null;
+   active?: boolean;
++  runOpenRequest?: { id: string; token: string };
+ };
+ 
+ export default function ReproduceView(props: ReproduceViewProps) {
+@@ -173,7 +174,7 @@ export default function ReproduceView(props: ReproduceViewProps) {
+   return <>{Object.entries({ ...visited, [key]: props }).map(([ownerKey, owner]) => <div className="reproduction-owner-workspace" key={ownerKey} hidden={ownerKey !== key || props.active === false}><ReproductionWorkspace {...owner} bridge={props.bridge} active={ownerKey === key && props.active !== false} /></div>)}</>;
+ }
+ 
+-function ReproductionWorkspace({ bridge, selectedId, onSelect, dataRoot, ownerKey, projectId, projectName, workspaceId, active = true }: ReproduceViewProps) {
++function ReproductionWorkspace({ bridge, selectedId, onSelect, dataRoot, ownerKey, projectId, projectName, workspaceId, runOpenRequest, active = true }: ReproduceViewProps) {
+   const { t } = useUISettings();
+   const activeRef = useRef(active); activeRef.current = active;
+   const selectionRef = useRef({ id: selectedId, version: 0 });
+@@ -390,9 +391,13 @@ function ReproductionWorkspace({ bridge, selectedId, onSelect, dataRoot, ownerKe
+     if (!id) { setHistoricalRun(null); return; }
+     try {
+       const previous = await bridge.getReproductionRun(id);
++      if (!previous || previous.reproduction_id !== selected.id) throw new Error("The historical run does not belong to this reproduction.");
+       if (request === historyRequest.current && selected.id && isSelected(selected.id, selected.version)) setHistoricalRun(previous);
+     } catch (reason) { if (request === historyRequest.current) setError(readable(reason, "Could not open the historical run.")); }
+   }
++  useEffect(() => {
++    if (active && selectedId && runOpenRequest) void openHistoricalRun(runOpenRequest.id);
++  }, [active, selectedId, runOpenRequest?.token]);
+ 
+   const openPicker = useCallback(async () => {
+     setPicking(true);
+@@ -759,7 +764,7 @@ function ReproductionWorkspace({ bridge, selectedId, onSelect, dataRoot, ownerKe
+           running={running}
+         />
+       </>}
+-      {historyRows.length > 0 && <details className="reproduce-block reproduction-run-history"><summary>{t("Run history")}</summary><select aria-label={t("Historical run")} value={historicalRun?.id || ""} onChange={(event) => void openHistoricalRun(event.target.value)}><option value="">{t("Choose a recorded run")}</option>{historyRows.map((item) => <option key={item.id} value={item.id}>{item.started_at} · {RUN_LABELS[item.status]} · {item.id.slice(0, 8)}</option>)}</select>{historicalRun && <article><h3>{t("Historical run")} · {historicalRun.id.slice(0, 8)}</h3><ReproductionInputReceipt run={historicalRun} /><p>{historicalRun.snapshot?.final?.summary || historicalRun.error}</p><MetricComparisonPanel bridge={bridge} record={detail} run={historicalRun} projectId={projectId} workspaceId={workspaceId} ownerKey={ownerKey} /><ol>{(historicalRun.snapshot?.final?.runbook || historicalRun.snapshot?.plan.contract.steps || []).map((step) => <li key={step.id}><strong>{step.title}</strong><code>{step.command}</code></li>)}</ol><details><summary>{t("Recorded output")}</summary><pre>{historicalRun.log || t("No recorded output")}</pre></details></article>}</details>}
++      {historyRows.length > 0 && <details className="reproduce-block reproduction-run-history" open={Boolean(runOpenRequest && historicalRun?.id === runOpenRequest.id)}><summary>{t("Run history")}</summary><select aria-label={t("Historical run")} value={historicalRun?.id || ""} onChange={(event) => void openHistoricalRun(event.target.value)}><option value="">{t("Choose a recorded run")}</option>{historyRows.map((item) => <option key={item.id} value={item.id}>{item.started_at} · {RUN_LABELS[item.status]} · {item.id.slice(0, 8)}</option>)}</select>{historicalRun && <article><h3>{t("Historical run")} · {historicalRun.id.slice(0, 8)}</h3><ReproductionInputReceipt run={historicalRun} /><p>{historicalRun.snapshot?.final?.summary || historicalRun.error}</p><MetricComparisonPanel bridge={bridge} record={detail} run={historicalRun} projectId={projectId} workspaceId={workspaceId} ownerKey={ownerKey} /><ol>{(historicalRun.snapshot?.final?.runbook || historicalRun.snapshot?.plan.contract.steps || []).map((step) => <li key={step.id}><strong>{step.title}</strong><code>{step.command}</code></li>)}</ol><details><summary>{t("Recorded output")}</summary><pre>{historicalRun.log || t("No recorded output")}</pre></details></article>}</details>}
+     </section>;
+   }
+ 
+diff --git a/src/i18n.tsx b/src/i18n.tsx
+index 09458bf..9622384 100644
+--- a/src/i18n.tsx
++++ b/src/i18n.tsx
+@@ -1,4 +1,5 @@
+ import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
++import { projectResearch as projectResearchStrings } from "./i18n/translations/projectResearch";
+ import { projectTransfer as projectTransferStrings } from "./i18n/translations/projectTransfer";
+ import { metricComparison as metricComparisonStrings } from "./i18n/translations/metricComparison";
+ import { app as appStrings } from "./i18n/translations/app";
+@@ -14,6 +15,8 @@ import { settings as settingsStrings } from "./i18n/translations/settings";
+ import { runtime as runtimeStrings } from "./i18n/translations/runtime";
+ import { collab as collabStrings } from "./i18n/translations/collab";
+ import { reproduce as reproduceStrings } from "./i18n/translations/reproduce";
++import { writingCitations as writingCitationsStrings } from "./i18n/translations/writingCitations";
++import { writingVersions as writingVersionsStrings } from "./i18n/translations/writingVersions";
+ import { writing as writingStrings } from "./i18n/translations/writing";
+ import { misc as miscStrings } from "./i18n/translations/misc";
+ import { native as nativeStrings } from "./i18n/translations/native";
+@@ -53,6 +56,7 @@ export const TEXT_SIZE_SCALE: Record<TextSize, number> = { smaller: 0.8, small:
+ const translations: Record<string, string> = {
+   ...sessionCommentsStrings,
+   ...sessionSnapshotStrings,
++  ...projectResearchStrings,
+   ...projectTransferStrings,
+   ...metricComparisonStrings,
+   ...appStrings,
+@@ -68,6 +72,8 @@ const translations: Record<string, string> = {
+   ...runtimeStrings,
+   ...collabStrings,
+   ...reproduceStrings,
++  ...writingCitationsStrings,
++  ...writingVersionsStrings,
+   ...writingStrings,
+   ...miscStrings,
+   ...nativeStrings,
+diff --git a/src/paper-writing-state.ts b/src/paper-writing-state.ts
+index 19634e2..bb68a60 100644
+--- a/src/paper-writing-state.ts
++++ b/src/paper-writing-state.ts
+@@ -44,6 +44,7 @@ export function createWritingScope(workspace: string) {
+     compileState: "idle" as "idle" | "compiling" | "success" | "error",
+     compileResult: null as LatexCompileResult | null,
+     handoffBusy: false,
++    fileOperationBusy: false,
+     activeProblem: null as number | null,
+     activationSequence: 0,
+     openSequence: 0,
+diff --git a/src/project-transfer.ts b/src/project-transfer.ts
+index 76ac48c..7cff90c 100644
+--- a/src/project-transfer.ts
++++ b/src/project-transfer.ts
+@@ -1,5 +1,5 @@
+ export type TransferSourceFile = { workspaceId: string; threadId?: string; path: string };
+-export type ProjectTransferSelection = { pdfs: boolean; annotations: boolean; reports: boolean; conversations: boolean; results: boolean; artifacts: boolean; reproductions: boolean; sourceFiles: TransferSourceFile[] };
++export type ProjectTransferSelection = { pdfs: boolean; annotations: boolean; reports: boolean; conversations: boolean; results: boolean; artifacts: boolean; reproductions: boolean; milestones: boolean; sourceFiles: TransferSourceFile[] };
+ export type ProjectTransferUnavailable = { category: string; path: string; reason: string; reference?: { table?: string; id?: string } };
+ export type ProjectTransferPreview = {
+   format: 'archimedes-project'; version: 1; name: string; path?: string;
+@@ -14,4 +14,4 @@ export type ProjectTransferBridge = {
+   inspectProjectPackage(): Promise<{ canceled: boolean; package?: ProjectTransferPreview }>;
+   importProjectPackage(input: { packagePath: string; name?: string }): Promise<{ canceled: boolean; project?: ResearchProject; workspacePath?: string; unavailable?: ProjectTransferUnavailable[] }>;
+ };
+-export const DEFAULT_TRANSFER_SELECTION: ProjectTransferSelection = { pdfs: true, annotations: true, reports: true, conversations: true, results: true, artifacts: true, reproductions: true, sourceFiles: [] };
++export const DEFAULT_TRANSFER_SELECTION: ProjectTransferSelection = { pdfs: true, annotations: true, reports: true, conversations: true, results: true, artifacts: true, reproductions: true, milestones: true, sourceFiles: [] };
+diff --git a/src/sidebar-registry.tsx b/src/sidebar-registry.tsx
+index 96e8e9e..7872979 100644
+--- a/src/sidebar-registry.tsx
++++ b/src/sidebar-registry.tsx
+@@ -15,7 +15,7 @@ export type SidebarSection = "knowledge" | "create" | "evaluate";
+ export type SidebarModuleId = "library" | "daily" | "news" | "benchmark-radar" | "extensions" | "reproduce" | "writing" | "image-creation" | "data-charts" | "data-analysis" | "paper-review" | "paper-to-slides";
+ 
+ /** Main sections that are not modules: they stay hardcoded in App. */
+-export type MainSection = "chat" | "files" | SidebarModuleId | `plugin:${string}`;
++export type MainSection = "chat" | "files" | "project-research" | SidebarModuleId | `plugin:${string}`;
+ 
+ /** A loaded plugin module contributes one view through its activate() return. */
+ export type PluginContribution = {
+diff --git a/src/vite-env.d.ts b/src/vite-env.d.ts
+index 7893dda..496ea6d 100644
+--- a/src/vite-env.d.ts
++++ b/src/vite-env.d.ts
+@@ -13,6 +13,13 @@ type WorkbenchSettingsSnapshot = {
+   layout?: WorkbenchLayoutSnapshot;
+ };
+ interface ResearchDeskBridge {
++  listProjectResearchIndex: import("./project-research").ProjectResearchBridge["listProjectResearchIndex"];
++  saveProjectResearchNote: import("./project-research").ProjectResearchBridge["saveProjectResearchNote"];
++  deleteProjectResearchNote: import("./project-research").ProjectResearchBridge["deleteProjectResearchNote"];
++  listManuscriptVersions?: import("./paper-writing-history").PaperWritingBridge["listManuscriptVersions"];
++  saveManuscriptVersion?: import("./paper-writing-history").PaperWritingBridge["saveManuscriptVersion"];
++  compareManuscriptVersion?: import("./paper-writing-history").PaperWritingBridge["compareManuscriptVersion"];
++  restoreManuscriptVersion?: import("./paper-writing-history").PaperWritingBridge["restoreManuscriptVersion"];
+   chooseMetricComparisonInput?: import("./metric-comparison").MetricComparisonBridge["chooseMetricComparisonInput"];
+   saveMetricComparison?: import("./metric-comparison").MetricComparisonBridge["saveMetricComparison"];
+   listMetricComparisons?: import("./metric-comparison").MetricComparisonBridge["listMetricComparisons"];

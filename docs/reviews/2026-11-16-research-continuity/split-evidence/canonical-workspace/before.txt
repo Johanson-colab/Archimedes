@@ -1,0 +1,12 @@
+Base: 1f4b375
+Host: macOS arm64, Node 26.13.0
+Command: node --test electron/git-state.test.cjs
+Observed output excerpt (timings/stack paths omitted):
+
+✖ git state distinguishes none, empty, and ready folders
+✖ a linked worktree is reported as nested instead of a project root
+✔ a broken .git entry is suspicious
+ℹ tests 3
+ℹ pass 1
+ℹ fail 2
+Observed assertions: actual suspicious; expected empty / ready.

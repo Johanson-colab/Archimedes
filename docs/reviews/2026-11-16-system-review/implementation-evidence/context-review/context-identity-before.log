@@ -1,0 +1,33 @@
+[
+  {
+    "scenario": "same cloud thread id across two data roots",
+    "sameKey": true,
+    "leakedAttachment": true,
+    "keyA": "same-cloud-thread-id",
+    "keyB": "same-cloud-thread-id"
+  },
+  {
+    "scenario": "fresh cloud import into project whose folder differs from data root",
+    "frontendExecutionRoot": "/private/var/folders/y6/7f277x5n4z14sqwsw21h8ffm0000gn/T/archimedes-independent-context-K0RDvF/data-a",
+    "expectedExecutionRoot": "/private/var/folders/y6/7f277x5n4z14sqwsw21h8ffm0000gn/T/archimedes-independent-context-K0RDvF/project",
+    "rejection": "The execution folder does not match this conversation or project workspace."
+  }
+]
+node:internal/modules/run_main:111
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: data roots must isolate imported-thread composer identities
+
+true !== false
+
+    at file:///Users/fei/Desktop/Archimedes/docs/reviews/2026-11-16-system-review/implementation-evidence/context-review/context-identity-probe.mjs:39:10 {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: true,
+  expected: false,
+  operator: 'strictEqual',
+  diff: 'simple'
+}
+
+Node.js v26.13.0

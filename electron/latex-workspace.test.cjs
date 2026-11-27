@@ -60,8 +60,17 @@ test("creates projects from built-in templates with a bibliography", () => {
   try {
     const fallback = createLatexProject(root, "paper");
     assert.equal(fallback.path, "paper/main.tex");
-    assert.match(fs.readFileSync(path.join(root, fallback.path), "utf8"), /\\bibliography\{references\}/);
+    const existing = fs.readFileSync(path.join(root, fallback.path), "utf8");
+    assert.match(existing, /\\bibliography\{references\}/);
     assert.equal(fs.existsSync(path.join(root, "paper", "references.bib")), true);
+
+    const minimal = createLatexProject(root, "paper", "minimal-article");
+    assert.equal(minimal.path, "paper-2/main.tex");
+    const minimalSource = fs.readFileSync(path.join(root, minimal.path), "utf8");
+    assert.match(minimalSource, /^\\documentclass\{article\}/);
+    assert.doesNotMatch(minimalSource, /\\usepackage/);
+    assert.deepEqual(fs.readdirSync(path.join(root, "paper-2")), ["main.tex"]);
+    assert.equal(fs.readFileSync(path.join(root, fallback.path), "utf8"), existing);
 
     const conference = createLatexProject(root, "cvpr", "conference-two-column");
     const source = fs.readFileSync(path.join(root, conference.path), "utf8");

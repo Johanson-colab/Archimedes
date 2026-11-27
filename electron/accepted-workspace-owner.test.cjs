@@ -176,8 +176,8 @@ test("a window that vetoes Quit keeps its detached research database open", t =>
   const compile = new AbortController();
   const latexCompiles = new Map([[1, new Map([["request", compile]])]]);
   const registration = source.slice(source.lastIndexOf('app.on(', source.indexOf('  closeAllNativeClients();')));
-  new Function("app", "store", "experimentRunner", "closeAllNativeClients", "closeAllTerminals", "collaborationServer", "presence", "latexCompiles", registration)(
-    app, store, { shutdownExperimentRuns() {} }, () => {}, () => {}, null, null, latexCompiles,
+  new Function("app", "store", "experimentRunner", "closeAllNativeClients", "closeAllTerminals", "collaborationServer", "presence", "latexCompiles", "harnessSetup", registration)(
+    app, store, { shutdownExperimentRuns() {} }, () => {}, () => {}, null, null, latexCompiles, { shutdown() {} },
   );
   app.emit("before-quit");
   assert.equal(compile.signal.aborted, false);

@@ -1,0 +1,15 @@
+✔ translation shards cover every string exactly once (4.273584ms)
+✔ keys stay sorted inside each shard so concurrent additions do not collide (2.274375ms)
+✔ the shell merges every shard and keeps the surfaces translated (2.946542ms)
+✔ actual panel requires confirmed mappings, saves once, shows all four categories and never promotes the run (75.735667ms)
+✔ a late data chooser cannot inject source rows into another project scope (3.533375ms)
+✔ a user-entered fixed tolerance reaches the bridge as its exact decimal text (16.131625ms)
+✔ a changed run snapshot refreshes an open historical comparison as stale without discarding its values (15.9155ms)
+ℹ tests 7
+ℹ suites 0
+ℹ pass 7
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 566.050041

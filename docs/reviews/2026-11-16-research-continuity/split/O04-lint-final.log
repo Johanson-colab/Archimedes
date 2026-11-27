@@ -1,0 +1,4 @@
+
+> archimedes-research@0.1.0 lint
+> tsc -b --pretty false
+

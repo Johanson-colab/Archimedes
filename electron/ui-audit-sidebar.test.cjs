@@ -7,6 +7,7 @@ const { readLocale } = require("./locale-source.cjs");
 const root = path.resolve(__dirname, "..");
 const app = fs.readFileSync(path.join(root, "src", "App.tsx"), "utf8");
 const sidebar = fs.readFileSync(path.join(root, "src", "ProjectSidebar.tsx"), "utf8");
+const sectionHeader = fs.readFileSync(path.join(root, "src", "SidebarSectionHeader.tsx"), "utf8");
 const extensions = fs.readFileSync(path.join(root, "src", "ExtensionsView.tsx"), "utf8");
 const palette = fs.readFileSync(path.join(root, "src", "CommandPalette.tsx"), "utf8");
 const registry = fs.readFileSync(path.join(root, "src", "sidebar-registry.tsx"), "utf8");
@@ -35,6 +36,18 @@ test("sidebar is one Research Apps list above Work with a management entry", () 
   }
   assert.ok(!registry.includes('id: "gallery"'));
   assert.ok(app.includes('sidebarEntries().filter((entry) => !entry.disabled && !hiddenCoreModules.has(entry.id))'));
+});
+
+test("Research Apps and Projects collapse from their titles without separate controls", () => {
+  assert.match(app, /useState\(readSidebarSectionCollapse\)/);
+  assert.match(app, /writeSidebarSectionCollapse\(collapsedSidebarSections\)/);
+  assert.match(app, /hidden=\{collapsedSidebarSections\.apps\}/);
+  assert.match(sidebar, /hidden=\{sectionCollapsed\}/);
+  assert.match(sectionHeader, /role="button"/);
+  assert.match(sectionHeader, /aria-expanded=\{!collapsed\}/);
+  assert.match(sectionHeader, /onClick=\{onToggle\}/);
+  assert.match(sectionHeader, /event\.key !== "Enter" && event\.key !== " "/);
+  assert.doesNotMatch(sectionHeader, /draggable|onDragStart|onDrop|ChevronDown/);
 });
 
 test("navigation is registry-driven and every entry has a command", () => {
@@ -115,7 +128,7 @@ test("Research Apps settings groups apps into categories without a layout select
 });
 
 test("section labels match project-row typography and New project is a direct icon action", () => {
-  assert.match(css, /\.sidebar-section-label \{[^}]*font-size: 14px; font-weight: 400/);
+  assert.match(css, /\.sidebar-section-heading-row \{[^}]*font-size: 14px; font-weight: 400/);
   assert.match(css, /\.work-heading \{[^}]*font-size: 14px; font-weight: 400/);
   assert.match(css, /\.work-new-project/);
   assert.doesNotMatch(css, /\.work-filter-menu|\.work-filter-option/);

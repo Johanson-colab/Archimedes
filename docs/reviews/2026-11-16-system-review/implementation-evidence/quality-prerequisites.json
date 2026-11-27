@@ -1,0 +1,39 @@
+{
+  "date": "2026-11-16",
+  "baselineHead": "1f4b37581c446770d576440f9ebb9bca5c55bfb7",
+  "branch": "codex/research-workflow-integrity",
+  "scope": [
+    "Q01",
+    "Q02",
+    "Q03"
+  ],
+  "command": [
+    "node",
+    "--test",
+    "electron/git-state.test.cjs",
+    "electron/workspace-session-model.test.cjs",
+    "electron/terminal-shell.test.cjs",
+    "electron/i18n-translations.test.cjs"
+  ],
+  "result": {
+    "tests": 22,
+    "pass": 22,
+    "fail": 0,
+    "skip": 0,
+    "exit": 0
+  },
+  "limits": [
+    "Windows target-path simulation on macOS, not Windows hardware",
+    "Full suite is not represented by this focused check",
+    "Before log includes concurrent canonical-store contract change"
+  ],
+  "filesSha256": {
+    "electron/git-state.cjs": "d18b9b1f03418214996af7bfcb8b556becee6138bae178cdf3a88fa53c6d540d",
+    "electron/git-state.test.cjs": "718aad8f155059a848f147eae5d98e572adc514dc862c4777d4388ce8c245d74",
+    "electron/workspace-session-model.test.cjs": "c5913604901893fec41388ac8f1798af1ef19c098883864400a0f537b1e5761d",
+    "electron/terminal-shell.cjs": "689551085b5c72bc9c37a96067ba8ae153e45b667db7aaaf5f312f29d943224a",
+    "electron/terminal-shell.test.cjs": "04c6f241c703146875353562742775bdd5161f8c9b0019364341260e1e3fab36",
+    "src/i18n/translations/library.ts": "9c66506338c94c411deb0b84fbbc7f22bc43d6af513ab2a8c3e2ae1d661f02a4",
+    "src/i18n/translations/sessionSnapshot.ts": "a8538c91f9fd5ca0bf1130d93db5efa30a5198aac2d6a36a990532e9d9ca8a82"
+  }
+}

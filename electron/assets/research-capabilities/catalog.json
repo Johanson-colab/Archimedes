@@ -1,0 +1,2253 @@
+{
+  "schemaVersion": 1,
+  "source": {
+    "repository": "https://github.com/K-Dense-AI/scientific-agent-skills",
+    "commit": "c21d13b3cc2894680229ba9959a53281acb9200e",
+    "licenseFile": "LICENSE.md",
+    "licenseSha256": "09b02a3c9df3053c55531d503357a9c7cde275970e6c3ceaa1ddf5f0e90b40c1"
+  },
+  "categories": [
+    {
+      "id": "discovery",
+      "label": "Discovery & tracking",
+      "description": "Follow papers, research news and benchmark updates."
+    },
+    {
+      "id": "evidence",
+      "label": "Resources & evidence",
+      "description": "Organize literature, sources and reusable research resources."
+    },
+    {
+      "id": "experiments",
+      "label": "Experiments & evaluation",
+      "description": "Reproduce papers, run experiments and compare results."
+    },
+    {
+      "id": "analysis",
+      "label": "Analysis & visualization",
+      "description": "Analyze data and create scientific figures."
+    },
+    {
+      "id": "writing",
+      "label": "Writing & delivery",
+      "description": "Write, review and prepare research outputs."
+    }
+  ],
+  "items": [
+    {
+      "id": "paper-lookup",
+      "name": "Paper lookup",
+      "categories": [
+        "discovery"
+      ],
+      "keywords": "论文检索 文献追踪 订阅 预印本 arxiv openalex pubmed DOI citation tracking",
+      "inputs": "research query or identifier",
+      "outputs": "papers, metadata and source links",
+      "integration": "api",
+      "description": "Searches 18 scholarly APIs for papers, preprints, citations, open-access full text, repository records, and journal OA status, and returns results with reproducible provenance. Covers PubMed, PMC, Europe PMC, bioRxiv, medRxiv, arXiv, OpenAlex, Crossref, Semantic Scholar, CORE, Unpaywall, OpenCitations, PubTator3, Zenodo, Figshare, ROR, BioStudies, and DOAJ. Use when searching for papers, citations, DOI/PMID/arXiv lookups, abstracts, full text, open-access PDFs, preprints, citation graphs, author publications, biomedical entity annotations, deposited records (Zenodo, Figshare, BioStudies), institution ROR IDs, or any scholarly literature query. Triggers on mentions of any supported database or requests like \"find papers on X\", \"look up this DOI\", \"who cites this paper\", or \"get me the PDF\".",
+      "version": "2.4",
+      "license": "MIT",
+      "requirements": "Needs network access and curl. The bundled scripts require Python 3.11+ and use only the standard library. No credentials are required; NCBI_API_KEY, S2_API_KEY, CORE_API_KEY, and OPENALEX_API_KEY raise rate limits or unlock full text where noted.",
+      "environmentHints": [
+        "CORE_API_KEY",
+        "NCBI_API_KEY",
+        "OPENALEX_API_KEY",
+        "S2_API_KEY"
+      ],
+      "validation": {
+        "bundle": "integrity-checked",
+        "runtime": "not-verified"
+      },
+      "files": {
+        "references/arxiv.md": "79b76d17bbbd8bbed6fd38e2b5ec217f9ba5a8f58cbeaacf6cce25f546e6bbfa",
+        "references/biorxiv.md": "9617504b2d461c1bd8a5b373ba76fe08646151b7d06424aa8fd7e2124f697d4b",
+        "references/biostudies.md": "46693cba660c58b04f64b630c486930ce97cd86308ef9ff0d51eed5aa616a3c7",
+        "references/core.md": "295f9317145532e70210f6142a32c63b9be10a4a6aed6230e8b29075b539476e",
+        "references/crossref.md": "ad2da9d8fdf72ce920a023afdd5d659a01283f9b931ed31bc6e1522ff2ae3738",
+        "references/doaj.md": "cdbdd0c069454c4d0a56bed104183c649c86f2b8062c381e5d69b355d7f74839",
+        "references/europepmc.md": "d82114a183b7129900faff076eecebf19cdf56f0c591514059a296bba75bad75",
+        "references/figshare.md": "fb0f8dc48820f443af989543da4201f1996e1afc7ecfdb764da9962255543d08",
+        "references/medrxiv.md": "c98776db744065a7917604b1191aee3eeec8a206e436ba1cd510d1ffa17011f7",
+        "references/openalex.md": "1225cde541ceff6f6e42a65d435cf355a087a217a8a6048b6b040dc074715485",
+        "references/opencitations.md": "fc12339fa39534adbea464a14699260bfee8c3c865c8cd54ef16d2c10232c481",
+        "references/pmc.md": "0c16a75600e4ba795e83a784a94d23a7ce59066dcf660afdcfa118d1aa2c5a7e",
+        "references/pubmed.md": "98b744f3fc6663545bcd0d2f0aa8781b90f9c777878f60b5236d694c24e43f3c",
+        "references/pubtator.md": "20049fd2f2fe5954f1866c9d4b9bc8699d306de15602e7274e7a68b91b6c1e51",
+        "references/ror.md": "3b61cc80636b6696d770b4ba6609626c68ff9d3b434aa455ddeecd9c94533c37",
+        "references/semantic-scholar.md": "b2f0f4b238addf94097a58b8903463baca6fbfdc8cf15230e9720eb6ce5b1eab",
+        "references/unpaywall.md": "cdd3c21d1299e530b1b9f059bd82ae8f9bb2c52102a548a860327b9c2c13ae9d",
+        "references/zenodo.md": "10d83cc52ebd138c3934ed216fcd2e966381f164588a9d77d2cd996878cd3df1",
+        "scripts/_common.py": "4c6962ddbcb8cb89adc6c6ac02199835310f04b2ab93ffab9855adef38efd369",
+        "scripts/arxiv_atom.py": "15a62f0e4edf032f635cf1d2f17b9d5869af0def338ee0b05528e0bc1d8499d1",
+        "scripts/jats_to_text.py": "2185a4994dc41216e160ab173183cda42b5d3e5be82547f470df6dcd6fe3a53d",
+        "scripts/openalex_abstract.py": "414c681e5b89b1c8a06891d2bc69800571e7d08c4504c5496bd706738dfc2402",
+        "scripts/paginate.py": "3016350e4883535f0f9a767e5e65eec21b913ccbc9ce22d435a6fa86d330dfcf",
+        "SKILL.md": "fac99456ad404ff9a0d3043709b956b5d6383838ae8e8394f274a5693d8bd294"
+      },
+      "contentHash": "b56bc7c325691029ef6e36479eb88b8b7eb0ebc5ff3071e3b0767fcedc50a150",
+      "executableFiles": []
+    },
+    {
+      "id": "research-lookup",
+      "name": "Research evidence lookup",
+      "categories": [
+        "discovery"
+      ],
+      "keywords": "背景调研 研究证据 文献检索 evidence research brief",
+      "inputs": "research question",
+      "outputs": "source-linked evidence packet",
+      "integration": "api",
+      "description": "Compiles current scholarly evidence for a scientific manuscript or research brief when the user explicitly asks to gather literature, references, background evidence, competing findings, or a manuscript research packet. Uses Parallel Search by default, Parallel Extract for source retrieval, Parallel Research for explicitly deep/exhaustive work, optional explicit Parallel Chat, and optional Perplexity only when requested or allowed as a failure fallback.",
+      "version": "1.7",
+      "license": "MIT license",
+      "requirements": "Requires Python 3.10+ and network access; targets parallel-web-tools CLI 0.9.3 for Search, Extract, and Research. Explicit Chat requires requests and PARALLEL_API_KEY; optional Perplexity through openrouter.ai requires requests and OPENROUTER_API_KEY.",
+      "environmentHints": [
+        "OPENROUTER_API_KEY",
+        "PARALLEL_API_KEY"
+      ],
+      "validation": {
+        "bundle": "integrity-checked",
+        "runtime": "not-verified"
+      },
+      "files": {
+        "README.md": "279299d1307e84d126f90c055d2635780ceef1478af6b3668122b14e41cf53af",
+        "references/api-contracts.md": "4df0e547770fbccabb7a31d8c68a3a81343ce4f355eb6bb2c517ec3dd6d02b6f",
+        "scripts/manuscript_packet.py": "604ab0e92b6ba62de10f7a4c3bc52247a5e86e28d9e26c07fb49d215302f91cf",
+        "scripts/research_lookup.py": "626cdcd4a89f4c96ed4c117381612872fa5d65f2e1b8a5b6cbef69d5c36b9015",
+        "SKILL.md": "8da1618350bf3434e4569a180a15b7241a50118ee9b79bccc514fa1bf3b4a102"
+      },
+      "contentHash": "9c001440d4d2bf08ef88f81b4fe9388bd561260dce0283ef8253215e94fe6606",
+      "executableFiles": []
+    },
+    {
+      "id": "exa-search",
+      "name": "Web research search",
+      "categories": [
+        "discovery"
+      ],
+      "keywords": "网络搜索 网站检索 web search semantic search",
+      "inputs": "search query",
+      "outputs": "ranked web sources",
+      "integration": "api",
+      "description": "Searches scientific and technical web content with Exa and extracts page or PDF text from URLs in batches. Supports scholarly discovery with the publication category and academic domain filters. Applies to requests to search the web, look up current research, fetch a page, or extract an article using Exa.",
+      "version": "1.4",
+      "license": "MIT",
+      "requirements": "Requires Python 3.11+, exa-py>=2.23.0,<3, an EXA_API_KEY, and internet access.",
+      "environmentHints": [
+        "EXA_API_KEY"
+      ],
+      "validation": {
+        "bundle": "integrity-checked",
+        "runtime": "not-verified"
+      },
+      "files": {
+        "references/web-extract.md": "76a640173685c54e59390de78d3201ec8004868e883ffe38ca919b38f6ab73e1",
+        "references/web-search.md": "bec3632bb485083223a9868bcb4b04a6374fca3627c9c8e642d9de3356036acb",
+        "scripts/exa_extract.py": "1fad25a9a501944c07ed95a8df06bbf6c0e71819522738362a2337ee5ac0611b",
+        "scripts/exa_search.py": "0775f747cedd26abf165e008482523dc8edde652ac6d2e27410c05c244e8789e",
+        "SKILL.md": "8cdedf5648783a209593ff91024f43bd8d8e066b03f0a72a6cf36d90e1650204"
+      },
+      "contentHash": "872f65286276a045bc6e7f24a084c69ae6c24af7ff97692976b961ee51f9a9f0",
+      "executableFiles": []
+    },
+    {
+      "id": "parallel-web",
+      "name": "Web extraction and monitoring",
+      "categories": [
+        "discovery"
+      ],
+      "keywords": "网页提取 网页监测 网站追踪 web extract monitor",
+      "inputs": "query or URLs",
+      "outputs": "extracted web evidence",
+      "integration": "api",
+      "description": "Uses Parallel CLI for web search, URL extraction, deep research, structured data enrichment, entity discovery, and recurring web monitoring. Best for requests that explicitly need current web evidence, academic-source discovery, repeated entity lookups, exhaustive reports, or ongoing change tracking.",
+      "version": "1.5",
+      "license": "MIT",
+      "requirements": "Requires parallel-cli 0.9.3, internet access, and a Parallel API key or CLI login. Python package installation requires Python 3.10+.",
+      "environmentHints": [
+        "PARALLEL_API_KEY"
+      ],
+      "validation": {
+        "bundle": "integrity-checked",
+        "runtime": "not-verified"
+      },
+      "files": {
+        "references/api-contracts.md": "decfe941d2aeec6666046070234943760de0cbbe2d258929d3fea981da85f3ec",
+        "references/data-enrichment.md": "32602c6f9805dd17d1e611eff6282c385dad7cb6b56dfb2b99c2021cad669405",
+        "references/deep-research.md": "9f135149e9ed11a24ef53e294c96fddf1060985c2fb9a478b0b0ecf1cea1ae0f",
+        "references/findall.md": "c9ad18160bd5396879fd0e8d077a5fb75148482bbd7803b50bd596e587831312",
+        "references/monitor.md": "9a1b93744be7d293bff4f5ceb6b0e168b97541e961ab385b7be93b1304233914",
+        "references/web-extract.md": "07cc1b4187977b2563ae17e25eca28a33c071892b2c70d61a4e7d8f13bafa123",
+        "references/web-search.md": "e90582c976f200382f0dc9d6dda8f94da833270b752fd7fc036920443cd6f1a0",
+        "SKILL.md": "04b4873674998c4fb47de017397e753d69049609135efed43a82572b9002f52c"
+      },
+      "contentHash": "8d11d76494042ca3d7c2551a5a1bcb83576eaab4eab4fd504cb2132d0e06b2c6",
+      "executableFiles": []
+    },
+    {
+      "id": "bgpt-paper-search",
+      "name": "Full-text experimental search",
+      "categories": [
+        "discovery"
+      ],
+      "keywords": "全文检索 实验数据 文献 full text experimental evidence",
+      "inputs": "scientific query",
+      "outputs": "structured study evidence",
+      "integration": "mcp",
+      "description": "Searches BGPT scientific papers by topic or DOI and retrieves claim-level evidence extracted from full text, including experiments, reported statistics, scope, limitations, and provenance. Use for literature reviews, evidence synthesis, and finding experimental details beyond abstracts.",
+      "version": "1.3",
+      "license": "MIT",
+      "requirements": "Requires a configured remote BGPT MCP connection and internet access to bgpt.pro. A stdio bridge additionally needs Node.js/npm. Paid access requires a BGPT API key configured as an Authorization header.",
+      "environmentHints": [],
+      "validation": {
+        "bundle": "integrity-checked",
+        "runtime": "not-verified"
+      },
+      "files": {
+        "SKILL.md": "3b7db6956c13ccf24df151f0905ae579ed58230708a4ba19e6d6fb3bf9d4d6b7"
+      },
+      "contentHash": "53a176abb4f04085d7fe25d4ea87ee6e2f29caf1a73f8b13e048127ddbde172a",
+      "executableFiles": []
+    },
+    {
+      "id": "database-lookup",
+      "name": "Scientific database lookup",
+      "categories": [
+        "evidence"
+      ],
+      "keywords": "科学数据库 生物 医学 药物 数据资源 database retrieval",
+      "inputs": "database query and identifiers",
+      "outputs": "records with retrieval provenance",
+      "integration": "api",
+      "description": "Queries documented public database APIs with explicit endpoints, filters, pagination, and provenance. Used when a scientific, regulatory, financial, or other database-backed fact must be retrieved reproducibly from a named source rather than inferred from general knowledge.",
+      "version": "1.8",
+      "license": "MIT",
+      "requirements": "",
+      "environmentHints": [
+        "ADDGENE_API_KEY",
+        "ALPHAVANTAGE_API_KEY",
+        "BEA_API_KEY",
+        "BIOGRID_API_KEY",
+        "BLS_API_KEY",
+        "CENSUS_API_KEY",
+        "CLUE_API_KEY",
+        "DATACOMMONS_API_KEY",
+        "DISGENET_API_KEY",
+        "FRED_API_KEY",
+        "MP_API_KEY",
+        "NASA_API_KEY",
+        "NCBI_API_KEY",
+        "NOAA_API_KEY",
+        "OMIM_API_KEY",
+        "OPENFDA_API_KEY",
+        "OPENWEATHERMAP_API_KEY",
+        "USPTO_ODP_API_KEY"
+      ],
+      "validation": {
+        "bundle": "integrity-checked",
+        "runtime": "not-verified"
+      },
+      "files": {
+        "references/addgene.md": "f00236e01cc49c837104a0becab4c9583bf826c0d352c1f026363448954a4c25",
+        "references/alphafold.md": "887217bb9a0174a64b0d2b84475fa961e9d9c2c48dfac1e0bc7b6c0bb958b5bc",
+        "references/alphavantage.md": "d7f38702848cff7239fa1c00271dc4fff445f4eda88774ad65724468d1497f97",
+        "references/bea.md": "2ceb06d34c26bb679de7d8645b754e1da0e9461de2a595006971877a9b06b757",
+        "references/bindingdb.md": "390dabcc89dd9750bedca0b9d8d2edefc984157202b83a5e8b39138d3e26873f",
+        "references/biogrid.md": "887c72e6858db7ab113c37dcd93378ba422e7e6a195f27c466f50e45c611bf0d",
+        "references/bls.md": "711e31c51e600970a31815fd3b224d61501bb12705496c498de3379868612620",
+        "references/brenda.md": "4cb904eadbe76a2a392b5826e4eec46d9e59c4c61acddf0322059d94ca07af0c",
+        "references/cbioportal.md": "d57ec6a08a5538e38bb1b73bc1eea855b14b87bf0babdf62730a312298f6c85b",
+        "references/census.md": "ceaeae4a0c35cf87ba20de4b7405b867bb105dc7f6f82ab80685d0b1af437ff1",
+        "references/chebi.md": "657014c7416c6418c911fd710c10c02221edf17fba08f22e54dd9619ab614a43",
+        "references/chembl.md": "8b48ee10535d4df944c0a1c5bede8efe8c6a96ee39744191e7d4827ab8fcd25c",
+        "references/clinicaltrials.md": "aaa72ade4740edee237cb10371fc07e0b662145f45b03f95410f16a9e93c02e9",
+        "references/clinpgx.md": "563c95c97fbad8f5cbc4b9ff1783e32439a916beb0d579cb73215accdb8ef0a3",
+        "references/clinvar.md": "5c051b539f8df9f292cdb63f627e19d754388e627c0d891d4b0293be30d30a3c",
+        "references/cod.md": "45569fbad65309ddff67bba27f2b7f231bc6e10d715e6ccd60ae8263fb509ed1",
+        "references/cosmic.md": "06639396334327201880e26a52647c41675411c56bd6a89c22bd2bdd527a6100",
+        "references/dailymed.md": "2a4ed938cc7b2611e272a655699a0a98105b926eeb00cb68d41c9aafd306088e",
+        "references/database_selection_guide.md": "02fb77429b15d8e599f05ab5ee7de4988b8d04d815285112f2dc182e86e18d6b",
+        "references/datacommons.md": "4e080cd83e5a9fedbf8c0b1c2be71c2d4cd0cbc333810834a8c24d574138e258",
+        "references/dbsnp.md": "bdee23c89aca51a6a0e33593da3059ffca314f29e399891713cf57583d86da8d",
+        "references/disgenet.md": "0c3fda50de43234d4e213cc7c572c6edbb58b47fc5abe2458fe1a4eca7ddad4f",
+        "references/drugbank.md": "5f874bda7098c244e65b69a08894f25ced01c548ae116a49f6388ff7d465b841",
+        "references/ecb.md": "8452e47f271c9f0b6ec7f346af2c72ab296dfaa1e13a83310e1170e3f48bd372",
+        "references/emdb.md": "3d07236a2b91bed128afbab61cfb60e397e79ec17fb659359ea86029e61cb185",
+        "references/ena.md": "7ab747fbcf9be9e4f22caf88c7a6912d3e676382baf80c3bb5d699e572d18729",
+        "references/encode.md": "e11c15b74cb30f3b6222ed7bb398967027ebcaa3ca5e789e3a4022cfdc658735",
+        "references/ensembl.md": "80d118b56d9e250f69570e651d60961ddddc8ada3a117bad94c38b66d8a9a935",
+        "references/epa.md": "d5bbac5283f1caae1d6ab7013787f8abeabf85c354e1a2caf58d286e7bb882fa",
+        "references/eurostat.md": "46b125c99fb756ce62655e6a6d5d5562d0694b329844c7089ce6612daf8c9dfb",
+        "references/fda.md": "b42a94499aadea58802a6116731244d84941ba9ffca698eac31bead5ceb38331",
+        "references/federal-reserve.md": "a8b47c7925eba9cc268106a1a8bb54f2fdf849ffbda6fa2dd00f0f561473d11e",
+        "references/fred.md": "cabb0f8c96da6dd5cc53c11861ea179477800896260c9753f490079962542f96",
+        "references/gene-ontology.md": "59cdfdf414893ee82d1a51f390fe96ca3713da780e96dd2c6a3cdb354afe63a8",
+        "references/geo.md": "43fcec5baddb616903e2811bbc49fe5c5f24fda6e491498e98d775c6671015b1",
+        "references/gnomad.md": "bf319407d088b321295211aaff377db8f21d60dae0f75bd9311f2e2e65e3ed20",
+        "references/gtex.md": "ff4b57debc74a39f2e879e81a43d18193714bb75dc855d1dd9a5bb12dd09593b",
+        "references/gwas-catalog.md": "93d34d7047bfbcde62de6458814d83608a7dc99a4e0599fc32322f923cebc333",
+        "references/hca.md": "4a8afd752e835065feab3b21989f27dde56172af7fa0b79acdac7eb7536750e1",
+        "references/hpo.md": "74f281daf81f4e544b62a0a9177242816ede3de45b8b6c58ba509a2cd8642a75",
+        "references/human-protein-atlas.md": "e93b1038d79249e58aa22ea60e1c954edd32db8b8ace7aa76a14a9b88a9a11f3",
+        "references/interpro.md": "18304f87ac9c9f11d399040be52290bc2287c583bff43348bf875a50cd6ba0f4",
+        "references/jaspar.md": "53d0f4111fb7ca547062bbde4fe2f4ebc418e0088da0e401733287018a4cd837",
+        "references/kegg.md": "10af18380cd77b3651854519a60f2a28e4dec53172e8db658b7681d4cbabd99f",
+        "references/lincs-l1000.md": "ddbc6b02bd394782b824c9f084b9079bf79168dc99bd1085163778c5e91de8cb",
+        "references/materials-project.md": "0c54129b9294a9464623faa362b91bf32a73bfcdbe5b514802f3e0acd12c2d12",
+        "references/metabolomics-workbench.md": "c5d33c855da6f96c23a923703bfea13818650ce6c7755ee7e4ed6eac788c943e",
+        "references/monarch.md": "dedd349124dba2f685ab9e041e624e61ea93e3672181c2a7c7c9b3e986e75660",
+        "references/mousemine.md": "4d63c40019bc259ab6eb72cbf5ab23c14b6cb9a992ee3a18c6a7f07554ef6e21",
+        "references/myvariant.md": "4bcb1c829fdb89ad5af864135c84aa40667cbeb8271d80999c1518c223600cb0",
+        "references/nasa-exoplanet-archive.md": "9be3b02563289e9cf4351d5f4f185d022fe6e5de76450a8e1b477545c5721ffe",
+        "references/nasa.md": "bd7719904299fd8bd93a87804e1eb281388b57e7d64c984d3f7728c7c2c7c2a2",
+        "references/ncbi-gene.md": "c1d32a4eddb24e20129467adafc177366327c9e48ee5a67b78515b07c36370c1",
+        "references/ncbi-protein.md": "7b5489a99bddb357567a6287cb7630413db9e298378397e4d16f3ae0bdb8733a",
+        "references/ncbi-taxonomy.md": "f9508cebfb72825c9752fe96ef72e52d057a7ea46dd64fe8fb3aab435f85f266",
+        "references/nist.md": "8587c7dbb384718b4bc0e769b2279e355ad6acc0273bb2dedf7619feb9e67738",
+        "references/noaa.md": "54c296b7bacd0b3b0321a8889428534e6b56c9ceac126914c09016d8f09b2dcc",
+        "references/omim.md": "ea5d3063474fec788ed4fa6d0f2e1d972d843ae34ee6538456386a57c36e161a",
+        "references/opentargets.md": "e72ab37f5cd87a748c91bc9ccecde2627329523c85f6d024a9093611b3eafc52",
+        "references/openweathermap.md": "89caa890cd45dcc1b500cdc6bd927a2aac846c4bb6af3109bca51e5a0191a531",
+        "references/pdb.md": "38eaeeff4ca768c9545450233ac3942b5cf389b9347f9541cdd0267036cd30fc",
+        "references/pride.md": "cff5062cd99d22d928732383c6142408be83c95d2d166e9d265866352b94ce4d",
+        "references/pubchem.md": "93225212346b327623446874090cb458c954f5820cba66a4163e5e8eb6d75524",
+        "references/quickgo.md": "b567b7e4b17f5d91c6b09476fcbd06d2c772538805c45655f00309bae84d4de6",
+        "references/reactome.md": "c91bc6c1464005d405c5d5320d9e7527ac7c9fcd0ef8497a9e8e988e24c70424",
+        "references/regulomedb.md": "933970cc4586ec2d6d342ccda90c7378d085129b94f8654605b6bca43a9c5883",
+        "references/retrieval-contract.md": "a268604e226309c291aa7c981a99219edde25346d69645ad9d8acc3cbabbaaf2",
+        "references/rummageo.md": "1dce8be4c7ac7b3f79e59988da7cef6358176a2619bd09d56ad00ffd89ddb443",
+        "references/sdss.md": "b6c1dc13446aaad2ebd5cd6a894a69b979da4a93b047d8a48bd507a33ee2a75f",
+        "references/sec-edgar.md": "282e045e9675e309a6c720045fd10475da3b9759459d876b3a8ba10beab457e6",
+        "references/simbad.md": "d14a765a17f1de3299cdb68e5ed64a38b5790fe7529cde19b1534f78fd34ed25",
+        "references/sra.md": "f70d0b4ce1d0a2b2ce01fdbd358929ffbc99eb77256d18ae3d215d190a5fc452",
+        "references/string.md": "8d39fe9d9fb46bf7ce6830703603f07777ea21770e83f883bc98cba5ab20f699",
+        "references/tcga-gdc.md": "91f8be4bf809b9f3ac87641980fd33b6ec5f76ddf17b32e9c2f5c5b9f090d70b",
+        "references/treasury.md": "a1b4c3a4d18d1f5a55135585384c4e51705722a7b04c1e1ba151b954f01dd7f6",
+        "references/ucsc-genome.md": "8be92a6a4978a12e56c412b94195f44128837ae66528779859dd994aa57f4781",
+        "references/uniprot.md": "8e625f9f6e3becd9dde739d8937b306feafd29482af2c359b579915ea560f2de",
+        "references/usgs.md": "343bb71e510f43b54a444f486b97f1e47e957aed4f35b81fa588c3e3247bbd30",
+        "references/uspto.md": "858002e1a231ae0eae30c48b7dec00d97b80fe7e08c9305dfbec0805434c19b0",
+        "references/who.md": "9260f58512a9de4f3647207c759451931ffbd4e15415afa39b0bfdedbdb12d4b",
+        "references/worldbank.md": "673144b300cdbef6fc0a6bb995df3182f13230dd5dd83264db593c13b3e4f0c4",
+        "references/zinc.md": "7aa76cb2cd7f2cdae05c73faf95be0445f86c404259e4efabb352ed179e97274",
+        "SKILL.md": "ead247f623212ca1560486d863a2d0a8c0555d8d20b975d55053eeb4ed043d37"
+      },
+      "contentHash": "9c41c97d51ccbc26cd4d0d5753ceffaecd0006ae71193066a00887008169a315",
+      "executableFiles": []
+    },
+    {
+      "id": "citation-management",
+      "name": "Citation management",
+      "categories": [
+        "evidence"
+      ],
+      "keywords": "参考文献 引用 bibtex DOI 去重 bibliography citation",
+      "inputs": "references or identifiers",
+      "outputs": "verified bibliography",
+      "integration": "script",
+      "description": "Comprehensive citation management for academic research. Search OpenAlex, PubMed, and Google Scholar for papers, extract accurate metadata, validate citations, and generate properly formatted BibTeX entries. This skill should be used when you need to find papers, verify citation information, convert DOIs to BibTeX, or ensure reference accuracy in scientific writing.",
+      "version": "2.3",
+      "license": "MIT License",
+      "requirements": "Requires Python 3.9+ with requests. Google Scholar search additionally needs scholarly. Needs network access to api.openalex.org, api.crossref.org, eutils.ncbi.nlm.nih.gov, pmc.ncbi.nlm.nih.gov, doi.org, export.arxiv.org, and api.datacite.org.",
+      "environmentHints": [
+        "NCBI_API_KEY",
+        "OPENALEX_API_KEY"
+      ],
+      "validation": {
+        "bundle": "integrity-checked",
+        "runtime": "not-verified"
+      },
+      "files": {
+        "assets/bibtex_template.bib": "08e21647fa68cad1aa1658264798c7d24775ba89bfbd2723ea6bfe4b562e2be1",
+        "assets/citation_checklist.md": "ce7317f2983f8b7fd02949aad726ebd6188319c7e57c929fffe689d5ae18ce36",
+        "references/api_contracts.md": "3e82a14f77133a215831d2627b65c93199589782f6907fc42af3c75f2ab3c5a8",
+        "references/best_practices.md": "df90d19c8f639590a6a430a889160b478dce61f4a5c0a5a36df5ab1be749b6b1",
+        "references/bibtex_formatting.md": "6337a8d2b87de96bf0f72c076feb0fc5d61ed9c342d9c8f19b3633efbfec6fed",
+        "references/citation_validation.md": "f235f82e02db282f0abdd23fd8d2973d870d427d355979e869f736259ba95774",
+        "references/core_workflow.md": "19e8b52c43f5822163c79904236016616dc4515d21a01d29073d968c9251af8d",
+        "references/example_workflows.md": "01c0a15e08e8115e10a07623f63565d119812fd2bb68c669eac413db2f9cd482",
+        "references/google_scholar_search.md": "5b705ec8d6276ef83b819b737ed10bd991815ccb413de27e046b7bfdf4da8399",
+        "references/metadata_extraction.md": "68c27886aff0d4efbf3a6f7e0a318dedd706d4cfd0f55dd859466de36ed78d46",
+        "references/pubmed_search.md": "fab82cda700a0dfc6dccc9465c9cc60b9df68cb58d0bec9abe7b2d8748a49cd1",
+        "references/script_reference.md": "bd23683cb3a7edb932fc5a13bb9215969a834a778a8765eea82553bf1b8b3417",
+        "references/search_strategies.md": "776c0dd1cbaf0432004ae80273640ff324b570401c569413c674829436385c85",
+        "scripts/_common.py": "87540160163671b972c2fccb4d0a42db3cca2603c664d26d5da3ca5dbc7dfdd2",
+        "scripts/doi_to_bibtex.py": "1b7d1ab2e8bf9bcf5a7d49bf45496e0f8b7d8e0d0cda8efd8fce4e527082dc4b",
+        "scripts/extract_metadata.py": "bebc7835b5e659cdeee0087980e881635894330bac5eda4ce01f490fd41df781",
+        "scripts/format_bibtex.py": "cc74fdc4d5819df8db3999e59f96469cebfb353ecf406a49a5a0fc60896707cb",
+        "scripts/search_google_scholar.py": "05cfd67aea6475029d017f1b4ff68e7ba727e1fa9b52f1e614c80287940b4985",
+        "scripts/search_openalex.py": "538b2f086625fd1e9a2cb2fe8bd46ee852d888f17d2d1e889b8f50592594f693",
+        "scripts/search_pubmed.py": "4543b74bf773747bae47a2bbb18acf2a4a050071119d88d1711db6049d157116",
+        "scripts/validate_citations.py": "a08e8e0774287e9aca2bd87c3a66cd3dfc751018eafb6cdee37987e3f416d2b5",
+        "SKILL.md": "dc79fe1e8438dcf598040615d5323360c6a7ed0b868fc3ffc82512c871a1e3ff"
+      },
+      "contentHash": "d37a6f5e67af2d0d8f26a281e2680b48a645b0f07b0243978d36a82b74ba35a0",
+      "executableFiles": [
+        "scripts/extract_metadata.py",
+        "scripts/format_bibtex.py",
+        "scripts/search_google_scholar.py",
+        "scripts/search_pubmed.py",
+        "scripts/validate_citations.py"
+      ]
+    },
+    {
+      "id": "pyzotero",
+      "name": "Zotero library integration",
+      "categories": [
+        "evidence"
+      ],
+      "keywords": "zotero 文献库 同步 收藏 library sync",
+      "inputs": "Zotero library and query",
+      "outputs": "library records and attachments",
+      "integration": "api",
+      "description": "Manages Zotero reference libraries using the pyzotero Python client: retrieves, creates, updates, and deletes items, collections, tags, and attachments via the Zotero Web API v3 or local API. Applies when working with Zotero libraries programmatically, managing bibliographic references, exporting citations, searching library contents, uploading PDF attachments, or building research automation workflows that integrate with Zotero.",
+      "version": "1.4",
+      "license": "MIT License",
+      "requirements": "Requires Python 3.10+ and pyzotero 1.15.2. Remote access needs network access; private reads and writes need a Zotero API key. Local reads require Zotero 7+ with local API enabled; local writes require Zotero 10+ and separate local authorization.",
+      "environmentHints": [
+        "ZOTERO_API_KEY"
+      ],
+      "validation": {
+        "bundle": "integrity-checked",
+        "runtime": "not-verified"
+      },
+      "files": {
+        "references/authentication.md": "5a2a09a6adfad33d03f4a7e84eb16f955e4aba7fa8e29fbd81e4ee37a46bc21c",
+        "references/cli.md": "2d76df610085b177d660576a7c694f3b6fcd6dba50a2e22fd86e37ef52468f88",
+        "references/collections.md": "79950aba56a0efbd0358b3ce662bff5c67c8aa20ecda1a371e38ec5fd5b72b7a",
+        "references/error-handling.md": "a87eda6c3fccd520a8120093fedfde0fa04aa757871c9430ba117d359bda48d8",
+        "references/exports.md": "127bd01447fb2c70956f048dc87a065761603bff522be1c4eacae3638bf3bdaf",
+        "references/files-attachments.md": "ce3f3dc28d5455938698bd6553ba7a82ff28a86070cd4ec2a43a9a6969c29136",
+        "references/full-text.md": "b75d3f7dbb77a52b3688824fc6f80f17888130b54eea486d56d493c4ef676d2d",
+        "references/mcp.md": "c4a7e6e7f4dc784f156662ebd9d13919e060f4cf472f184451281193ba426032",
+        "references/pagination.md": "386cf1d84c3021143582ff557dd640e9cbcfcd4245e4fcc32ecdf0796ee80342",
+        "references/read-api.md": "4182ef44d6c4a83c2993658dfe30d23b9e7b1e5aadb32405ae514707e032e828",
+        "references/saved-searches.md": "8c891c84d023fa215920c61a385c3afc8363c5b7bc48e6b1294d84936f81329e",
+        "references/search-params.md": "d75501f2278720f02b10f58d14d3fa347366b6144497ceea333a5fb6f6e35312",
+        "references/tags.md": "31be953e7c8f9f3b93739d30fc4edbcf81ceb652f803a92e971a2ad74b49a20d",
+        "references/write-api.md": "008ee377cf20425069169c896aaefe57a14583c82ca7625ca9d9fc1e8292a0d8",
+        "SKILL.md": "82dec36c7294674f33d9b6003e523d1dc4da33ed1c7427dc4e53731119fc5f74"
+      },
+      "contentHash": "e1a5aa2a85eafe79f074d09d54a8e89aa036337b545d03a4a425b9f0420b03af",
+      "executableFiles": []
+    },
+    {
+      "id": "markitdown",
+      "name": "Document conversion",
+      "categories": [
+        "evidence"
+      ],
+      "keywords": "文件转换 文档提取 office PDF word excel markdown",
+      "inputs": "documents",
+      "outputs": "structured text or Markdown",
+      "integration": "script",
+      "description": "Converts heterogeneous documents and selected URIs to Markdown with Microsoft MarkItDown for text analysis, search, and LLM/RAG ingestion. Covers safe local conversion, streams, Office/PDF/data formats, batch workflows, plugins, vision OCR, Azure extraction, and the official MCP server.",
+      "version": "2.5",
+      "license": "MIT",
+      "requirements": "Python >=3.10,<3.15 and uv. Examples target MarkItDown 0.1.8. Core local conversion can run offline; URL, YouTube, audio transcription, LLM, Azure, and MCP workflows may use network or external services.",
+      "environmentHints": [],
+      "validation": {
+        "bundle": "integrity-checked",
+        "runtime": "not-verified"
+      },
+      "files": {
+        "references/api_reference.md": "79936dc3cc52c3954a1326e995edd43d97d1b03d3bb4d867ca861fe1a31a3f4f",
+        "references/cloud_and_ocr.md": "b6699e835f96e3a6e97d12a1a66871a68c38cbcadf9bf0e28f694d4edfadc319",
+        "references/file_formats.md": "58cc49fa63cff5ea8fd73fc7915a43d2ab822c3b338976758a933919cf0acf7e",
+        "references/mcp_and_plugins.md": "98a97fd541b1abe8edb694d8c6af73797664251d9a89c731a54ef7d216ca8e39",
+        "references/migration.md": "b2966652252d265165809f37d14db136f03ae8469dd604760a08d02f85d11de8",
+        "references/security.md": "42d01ddb6fdf601647b605b485353c8080c2d22fc45429ceb6cc302636a9fd0b",
+        "references/workflows.md": "06f81ea6888626acd667af314f7faa2ee45fd29c7d371049bd3ca9a876e934b6",
+        "scripts/batch_convert.py": "13e64df33ae0c66ebf1ca71e1650de98a4bc4491d429be9067991f1fb7aa9f4f",
+        "scripts/convert_literature.py": "6c28a9b005a252bcfbab4e1a637129f7be30f9f154bb7bb5adb67cf5361b0aed",
+        "scripts/inspect_installation.py": "4b5443c518a7d4f73bc23f0394fe3232581bcfd467f230b6c866212e20e199ce",
+        "SKILL.md": "8c165c18ceaddc9367dd74f65fd60e42c1c3de9d180828ae1ff09a001af42339"
+      },
+      "contentHash": "eda395789aea527aa5816b94d2366d31228f119be0d30924894d558e23c15496",
+      "executableFiles": []
+    },
+    {
+      "id": "liteparse",
+      "name": "Local document parsing",
+      "categories": [
+        "evidence"
+      ],
+      "keywords": "本地解析 PDF OCR 表格提取 离线 parser",
+      "inputs": "PDF, image or Office file",
+      "outputs": "text and layout evidence",
+      "integration": "script",
+      "description": "Local document and PDF parsing that returns spatial text with bounding boxes. Use for extracting text from PDFs, DOCX, Office files, and images; running OCR on scans; producing layout-preserved JSON for RAG; batch-ingesting folders of papers; or rendering pages to PNG for multimodal agents. Distinguishing capabilities are spatial text boxes, Markdown, page raster output, and local parsing with optional custom HTTP OCR.",
+      "version": "1.6",
+      "license": "Apache-2.0",
+      "requirements": "Python 3.10+ with liteparse 2.15.0. LibreOffice required for Office formats; images convert natively. Tesseract is bundled but missing language data downloads on first use. Optional HTTP OCR requires network access and server-specific authentication.",
+      "environmentHints": [],
+      "validation": {
+        "bundle": "integrity-checked",
+        "runtime": "not-verified"
+      },
+      "files": {
+        "references/api_reference.md": "2aa143daf3423f460a73c37d36441af782819d3aeae0bcf61023f8d340364973",
+        "references/choosing_a_parser.md": "12a2c9259fd057b7d981e8941a94f1331a78f38c42eae6bde6d8f1f8c4f75c5a",
+        "references/cli_reference.md": "29ea20076e374045d6bbc2219f6c5c946cc322dc43e5c60fa6d9f83a1efce158",
+        "references/ocr_and_formats.md": "406cefd0f561e6a42ec6f7851333edae07f39367498e8b099e05b93140e3d667",
+        "references/output_formats.md": "69478a672bc8312322f6a10484be98029f7ced378b5863be3b12696f2732d97f",
+        "scripts/batch_parse_dir.py": "e6250a342cd756eaf3da155cbfa3684f88cf8eedc476275e62466e299f726b93",
+        "SKILL.md": "02a789c7959670cb8898e329588a41d43fa7b270c768a70c22aed05031d042a4"
+      },
+      "contentHash": "d8c4438448f42d4ddef919168fb270153c327c1cf5d485769c22ded603f80ac6",
+      "executableFiles": []
+    },
+    {
+      "id": "datalad",
+      "name": "Dataset versioning",
+      "categories": [
+        "evidence"
+      ],
+      "keywords": "数据版本 数据谱系 dataset git annex provenance",
+      "inputs": "dataset repository",
+      "outputs": "versioned data records",
+      "integration": "script",
+      "description": "Retrieves, versions, and publishes scientific datasets with DataLad and git-annex, and captures computational provenance with datalad run, rerun, and containers-run. Use when cloning or fetching data from OpenNeuro, DANDI, datasets.datalad.org, or any DataLad dataset; when a file in a dataset reads as a broken symlink or a small pointer instead of real data; when an analysis needs a machine-readable record of how each output was produced so it can be re-executed; or when publishing a dataset to siblings such as a GitHub repository plus a storage remote. Also use to decide between DataLad and plain Git for a data-carrying repository.",
+      "version": "1.2",
+      "license": "MIT",
+      "requirements": "Requires Python 3.10+, DataLad 1.6.5, Git, and git-annex 10.x. Tested with git-annex 10.20260901 and datalad-container 1.2.6 on macOS ARM64. Containers additionally require Singularity, Apptainer, or Docker. Remote data access needs network access and may need provider credentials. Local filesystem workflows work offline.",
+      "environmentHints": [],
+      "validation": {
+        "bundle": "integrity-checked",
+        "runtime": "not-verified"
+      },
+      "files": {
+        "references/data-access.md": "f419bd39ca536562238d7404f0eaa4836c444d38df0cf7121befe936d529b1c7",
+        "references/provenance.md": "d9e56071463c5c118800ff5a800dd58ae5de38d04fc465c119ae0c690fc1c542",
+        "references/publishing.md": "a5efdceeea8086549917e9e2b3bc526c8c7ec9f1e31a8a438c5e8ba9dd18d6cd",
+        "SKILL.md": "bb902427db0c501db4187aafd3433eea67fa1071348cf07adcea2558ed49debb"
+      },
+      "contentHash": "2ca31c729f77f57362bd6f041e189dfd0994554a684d3b999cf61f6d67ff603a",
+      "executableFiles": []
+    },
+    {
+      "id": "lamindb",
+      "name": "Scientific data catalog",
+      "categories": [
+        "evidence"
+      ],
+      "keywords": "数据目录 数据追溯 生物数据 provenance lineage",
+      "inputs": "datasets and metadata",
+      "outputs": "searchable data catalog",
+      "integration": "script",
+      "description": "Manages biological datasets and models with LaminDB, including artifact registration, lineage tracking, schema validation, Bionty ontology annotation, query/search, collections, branches, storage, and workflow integrations. Use for reproducible biological data curation or a LaminDB lakehouse.",
+      "version": "2.0",
+      "license": "Apache-2.0 license",
+      "requirements": "Requires Python 3.10-3.14 and lamindb; examples tested on Python 3.12 with lamindb 2.10.0, bionty 2.5.0, and IPython. Local SQLite needs no login; public ontologies and remote storage require network access, and private instances require credentials.",
+      "environmentHints": [],
+      "validation": {
+        "bundle": "integrity-checked",
+        "runtime": "not-verified"
+      },
+      "files": {
+        "references/annotation-validation.md": "a6b0a32ca06aaa560e9b225cc2c280258a0122ad8a9d312a1cac77f82710e813",
+        "references/core-concepts.md": "8c7fcfbb000010bb0d2758e65397d7b3a78177b15c4500e93c1cb0017932ad7e",
+        "references/data-management.md": "ffbffabd27df464458a58b32918e2331d98e49c12291293f8a81484f14e33e60",
+        "references/integrations.md": "438b8366afd333cc3629a7ac769af0fe0f5e19a8dfe2f7f6fe82d900af18f014",
+        "references/ontologies.md": "cc25dd4276232decd0facc7e84b8f3804a074d76fb4fed228ac6bc3c703ad1b8",
+        "references/setup-deployment.md": "87136f6a1af049a9d34de257efd12239b362d82e5dd482fde77abaa0fd050215",
+        "references/sources.md": "3f9aeb054b1e6559cc7d0ce4f17f2ba5928b45d66edbaab537747df95631d6dd",
+        "SKILL.md": "00f1246a7f59b6ec11ca119687ccc3ff384547f40d44f2140f557ac3ddd01b35"
+      },
+      "contentHash": "675eee318cb5bc30183163aff459485a5e7719200806b2d31a1b1dcf9764d0bc",
+      "executableFiles": []
+    },
+    {
+      "id": "protocolsio-integration",
+      "name": "Research protocol library",
+      "categories": [
+        "evidence"
+      ],
+      "keywords": "实验协议 实验步骤 protocols methods",
+      "inputs": "protocol query or identifier",
+      "outputs": "protocol records and steps",
+      "integration": "api",
+      "description": "Reads, validates, and safely exports protocols.io data with current official REST/MCP contracts, or creates non-executing mutation plans. The bundled client makes bounded official-host GET requests only with explicit --execute. Use only for tasks explicitly targeting protocols.io or an exact protocols.io protocol version.",
+      "version": "1.4",
+      "license": "MIT",
+      "requirements": "Bundled CLIs require Python 3.11+ and use only the standard library. Offline validation and planning need no credentials or network. REST reads require HTTPS access to official protocols.io hosts and usually a named bearer token; network access is disabled unless --execute is supplied. The scripts never load .env files or execute mutations.",
+      "environmentHints": [
+        "PROTOCOLS_IO_ACCESS_TOKEN"
+      ],
+      "validation": {
+        "bundle": "integrity-checked",
+        "runtime": "not-verified"
+      },
+      "files": {
+        "assets/protocol-snapshot.schema.json": "ce4b4a13bbbab7e96f2e8048afd2d55fef916b6ed70156d4f3b9962f01b360c4",
+        "references/additional_features.md": "0555eadb168f027af951c23149f3e7f478172438f5ca0fc12b1fe968161177e4",
+        "references/authentication.md": "266835e7ed8453500b25e10bf1a174234babf4be3b47a3f856b0809d2caba46f",
+        "references/discussions.md": "0d56b48fa7a537680ffbfe23658cbc7cf92594ceb9a61b747d425736d0985a3e",
+        "references/file_manager.md": "d35a37ee35f1ba62a76c34d0cef100556f3ef70ab91a21ff9a7f1ffc7f2c0231",
+        "references/protocols_api.md": "e354f4cf23b2d933b9bd211d233c5cab6d084fe8af176e4f8e5c1d8ec1268792",
+        "references/workspaces.md": "b0667735e5e389f918281727f9c52f89dd8be89a753c0ecbdb01997d5521c2bc",
+        "scripts/__init__.py": "9a90481692132a90b81854de4e6380dee81e7769b5adb57ffde2cd9cb36abcf2",
+        "scripts/_common.py": "16198664bfec4862e1044e5c9132084ceb7703e3f8b5236ac6942451fb80b9c9",
+        "scripts/pagination_helper.py": "90bb406939f562223c91306738a1abf57c06a2d3933272a77a881f53ec696d41",
+        "scripts/plan_write_request.py": "d95cbfd6aff26da5337f0d4a3b10e6a7293dce87f164269e5c5127e927659601",
+        "scripts/protocols_read.py": "f31f6531e9974bdcd35886f76d0996bad109f123d520a59100072cc4ac57fb25",
+        "scripts/validate_auth_config.py": "fb3e49f7bda0f38889f79fc198232e19d3dda8bea3ea843670d508d1202eef95",
+        "scripts/validate_protocol_json.py": "817837d3c3a55013487e5fdee84dc49cc8fbf8486e15cfa08010e39133e63ca6",
+        "SKILL.md": "4439249ba8cd35a8507463f8be84db511abc23daa00be3f892c47d847d2aeda5"
+      },
+      "contentHash": "3fe756a991bc0164fe1e1788f75acea66d5f9ec523d832c852f1669260221bb1",
+      "executableFiles": []
+    },
+    {
+      "id": "experimental-design",
+      "name": "Experimental design",
+      "categories": [
+        "experiments"
+      ],
+      "keywords": "实验设计 因子设计 对照 随机化 DOE design experiment",
+      "inputs": "hypothesis, factors and constraints",
+      "outputs": "experimental design and allocation",
+      "integration": "script",
+      "description": "Designs experiments and studies BEFORE data is collected — choosing a design, randomizing, blocking, and laying out treatment combinations so results are interpretable. Use whenever someone is planning a study, asks how to assign subjects/samples to groups, mentions randomization, blocking, stratification, controls, factorial or fractional-factorial designs, design of experiments (DOE), screening many factors, response-surface optimization, crossover or repeated-measures or split-plot designs, cluster/group randomization, Latin squares, plate layouts, batch/run-order effects, replication vs. pseudoreplication, or sequential/adaptive/group-sequential designs. Trigger even for informal phrasings like \"how should I set up this experiment\", \"how do I avoid confounding\", \"what's the best way to test these 6 factors\", or \"assign these mice to conditions\". For computing the sample size or power once the design is chosen, use statistical-power; for analyzing data already collected, use statistical-analysis.",
+      "version": "1.5",
+      "license": "MIT license",
+      "requirements": "Requires Python >=3.12 with numpy, pandas, and pydoe 1.5.0 (DOE matrices). Network access is needed only to install packages; no credentials are required.",
+      "environmentHints": [],
+      "validation": {
+        "bundle": "integrity-checked",
+        "runtime": "not-verified"
+      },
+      "files": {
+        "references/design_types.md": "1f36f14160bc9895773a2922402869202866410c9130f2b32c5a54e5f5a6e71b",
+        "references/factorial_and_doe.md": "a59fa2279c439c096a66955b4923ad68c00d6046570665e6f6d36e807fa1de63",
+        "references/randomization_and_blocking.md": "fabcfae913397fb8c3018b959b67ddf8fe47322b40cbf4155d898fa11738e9ae",
+        "references/sequential_and_adaptive.md": "83085e2cde0942de23670d3aabb30768fb576a6aa99c2e4ac6f7790b00977051",
+        "scripts/doe_designs.py": "916996b5e6a5dbb9a408aa1e755a95800af70231e46d12c8c5efddb9e3e30683",
+        "scripts/randomization.py": "c7c2eab469618a4b27548058b924ec3f4aafaf635d3797af920b9058e700bce4",
+        "SKILL.md": "db2de0f3d29b7729776a91e923c9c83801298f5ad8e88fe44570045fbefcc248"
+      },
+      "contentHash": "ad7df45ce8226fee5a139cb6defe9bb9f08615b418db56be0da106817331fe9b",
+      "executableFiles": []
+    },
+    {
+      "id": "statistical-power",
+      "name": "Sample size and power",
+      "categories": [
+        "experiments"
+      ],
+      "keywords": "样本量 功效分析 样本设计 power sample size",
+      "inputs": "effect size and design assumptions",
+      "outputs": "power and sample-size estimates",
+      "integration": "script",
+      "description": "Calculates sample sizes and statistical power for study planning. Applies when someone asks \"how many subjects/samples/replicates do I need\", wants an a priori power analysis, a minimum detectable effect (MDE), a power curve, or needs to justify a sample size for a grant, IRB protocol, or pre-registration. Covers closed-form power for t-tests, ANOVA, proportions, correlations, chi-square, and regression, plus simulation-based (Monte Carlo) power for complex designs — logistic/Poisson regression, mixed models, cluster-randomized trials, survival, and interactions. Also handles requests that only mention an effect size, alpha, or \"80% power\" without saying \"power analysis\" explicitly. For laying out the study (randomization, blocking, factorial/DOE, crossover, sequential designs) use experimental-design; for analyzing data already collected and reporting it use statistical-analysis.",
+      "version": "1.3",
+      "license": "MIT license",
+      "requirements": "Requires Python >=3.12 with statsmodels, scipy, numpy, pandas, and matplotlib. Optional comparison uses pingouin; survival extensions use lifelines (requires pandas<3). Installation needs network access unless packages are cached. Calculations run locally without credentials.",
+      "environmentHints": [],
+      "validation": {
+        "bundle": "integrity-checked",
+        "runtime": "not-verified"
+      },
+      "files": {
+        "references/closed_form_recipes.md": "c303aa5b5103077304254f48309169609a3b0537748c68e0df4abd33cb9d4384",
+        "references/effect_sizes.md": "b2e3c9578dce59222797ea55e9bc2c3883764adfdfdc0eed3793fb4d71fbf0a7",
+        "references/simulation_based_power.md": "963fd56791e6db1bffb94efda7c9bef9c3195e3dec3e2a9918d17f3536ec150f",
+        "scripts/power.py": "9124b7c657ccbfe8b41c777bd9e17ae076641939e4ae93b4ba17f2de18284b7d",
+        "scripts/simulate_power.py": "bfbe75908ca071528b7b02aa1ed53949a7291f928f30634abe29b3ce23c564f4",
+        "SKILL.md": "a969660eafdc3504ac36e49bd7ded00e18b00fe5cef5699940d5d8281e24dd3d"
+      },
+      "contentHash": "0825e6bb3a306ec2c520f27ff611c1c87e43ab28a1435d3d3edb36157e6f9159",
+      "executableFiles": []
+    },
+    {
+      "id": "hypothesis-generation",
+      "name": "Hypothesis development",
+      "categories": [
+        "experiments"
+      ],
+      "keywords": "假设生成 科研假设 可证伪 hypothesis generation",
+      "inputs": "research question and evidence",
+      "outputs": "testable hypotheses",
+      "integration": "agent",
+      "description": "Formulates evidence-bounded scientific questions, candidate hypotheses, rival explanations, causal or associational claims, discriminating predictions, measurements, and preregistration-ready analysis plans. Used when turning observations or preliminary findings into transparent, testable research plans without treating hypotheses as facts.",
+      "version": "2.4",
+      "license": "MIT",
+      "requirements": "Python 3.11+ standard library. Bundled CLIs are deterministic and local-only; they accept bounded JSON, CSV, or Markdown and require no network, credentials, models, image services, or external packages.",
+      "environmentHints": [],
+      "validation": {
+        "bundle": "integrity-checked",
+        "runtime": "not-verified"
+      },
+      "files": {
+        "assets/evidence_ledger_template.csv": "1ec5cc4ada96e05041c67865bcdfd3bb0a4f7cc92f24ca1ce7a826028a41d3de",
+        "assets/falsification_controls_template.json": "beea4e2be3b5abdad1014934a7c2fe1f9f00f07b3270119cfeb8134a94603e26",
+        "assets/hypothesis_record_template.json": "73f080a6696c415f228b38100bb7b0f6bc89ad2c7997bf50d62b585b0bc8fe0c",
+        "assets/operationalization_template.json": "36ecdbd91c022554e60db646b548f5694d8409277a5b15fdf309d86f8c1e3070",
+        "assets/prediction_rival_matrix_template.csv": "ccf6cb53c048a9f4d60788a8ec73c5d683ec549dab7df95b30282f6c0963653a",
+        "assets/preregistration_scaffold_template.md": "fa577c7413435054ed927a9a925abc2f3a99373e55431eb6407425670276d87b",
+        "assets/search_boundary_template.json": "b885d4e252c0df7010d8fca3dab7e3fef49e9f386b7a1b15240531ce374bf6ec",
+        "assets/source_ledger.csv": "9543f313b9cffec9bd2cf39376edca86d39c10635b447fa7689147931d8c4813",
+        "references/causal_inference_and_claims.md": "0162cd131dd12c6235a3b78c033c685abd80e98d5f40f9fb297b4d8104f85122",
+        "references/concepts_and_workflow.md": "a86a8f464fb555212e79bf13e307f3c129e9c853069856eb3c93c3c8a60bb7fc",
+        "references/ethics_safety_and_ai.md": "81d5691cd46d646ead2db50635bdcc07755e5f738b040c2ad707ac3b0eda034d",
+        "references/experimental_design_patterns.md": "83c0c75c7b1edadc92e4ae23607624277c19955fc6a71ee0313b6efc51e4e939",
+        "references/hypothesis_quality_criteria.md": "12698b549f77a6ee64807b959093f39628fe3d47aa9a00a9b235681bf0b09269",
+        "references/literature_search_strategies.md": "2a34fa0645f854093aea2d867059bae563c795f1935ba4b9c6d494bdc389fdcb",
+        "references/preregistration_and_open_science.md": "33788e3cd4eeb62e80e9fb952e3bfb532320d373e7b00ed7c0a75b4200ccdbf4",
+        "references/security_validation.md": "71acbc8d040588f1ab879cafeb0e7d491cbed99359bde011c645d289446ba38a",
+        "references/source_ledger.md": "b0281b810134599210f905f967267f0b44638676f673fca7528275f8e5042e55",
+        "references/tool_reference.md": "db2c2f8fefc4093c0e235a309de3ee5767c672519d8c8b681e65f7ac6a9ff5d7",
+        "scripts/_common.py": "7a41a5f9b97092ee188d45959f38f92a4215d4f298dd04fd0f2817e9f607e74e",
+        "scripts/audit_evidence_ledger.py": "18fc0a947fec34ea573eb824f540ce6ccb351aed5e08fc80ae476c2150aef2bb",
+        "scripts/check_falsification_controls.py": "e56f67b92d15c93cbe9eb1b9fb89253239b6ac81328fb56fc96d9e2c3ec3ba32",
+        "scripts/check_operationalization.py": "efc093f4b58b23e095238e60badef04d34dfb012b7958e1326a1f7d58ed5edd6",
+        "scripts/generate_preregistration_scaffold.py": "12df2ad3bcd47ef172b3284e9c8c543ef01ba415d3ab21ffe3ead079cdc454da",
+        "scripts/lint_causal_claims.py": "561186e71f7c0b573f7ba45ef0009460c1398048929ed55fad53a65cda56dafe",
+        "scripts/validate_hypothesis_schema.py": "63bc1b7752d20042c2845ecb2457448ec8e2d9bc8fe1337003b222f8f4620608",
+        "scripts/validate_prediction_matrix.py": "3888802496f4e6ece5955b4fe28d6b2e6d810c5107ce6ca45ebbd70acceed317",
+        "SKILL.md": "5bccec0437d96d61821ec2095e7e32b61e8634cd8c02f11f42da953121e92719"
+      },
+      "contentHash": "d75cb75fb2943256b31bf6e0af3621ec4b9702689240488305f35780fca88b40",
+      "executableFiles": []
+    },
+    {
+      "id": "scientific-brainstorming",
+      "name": "Research ideation",
+      "categories": [
+        "experiments"
+      ],
+      "keywords": "科研想法 头脑风暴 idea brainstorm",
+      "inputs": "research question and constraints",
+      "outputs": "candidate research ideas",
+      "integration": "agent",
+      "description": "Facilitates evidence-aware scientific ideation with independent generation, structured discussion, explicit assumptions, transparent evaluation, adversarial review, and decision logs. Use for early-stage research brainstorming or prioritizing candidate directions; hand off empirical validation, study design, ethics or regulatory review, and clinical questions to appropriate experts or skills.",
+      "version": "1.4",
+      "license": "MIT",
+      "requirements": "Core guidance works in any Agent Skills-compatible host. Optional bundled CLIs require Python 3.11+ and use only the standard library; they make no network or LLM calls and require no credentials.",
+      "environmentHints": [],
+      "validation": {
+        "bundle": "integrity-checked",
+        "runtime": "not-verified"
+      },
+      "files": {
+        "references/brainstorming_methods.md": "2c3749f38c4a9ba0f310b04679b870cbf603d923aa30b82dd92720a7d2977632",
+        "references/facilitation_workflows.md": "bfb2acc43472f4649b10f2c3db02180fa9c86636f375f82d8bc36b28075a5ccc",
+        "references/idea_evaluation.md": "5a5fcb319cdcc151a9acd17e0e501d270e55f7a9fb6a829c87c43af5b5705d14",
+        "references/responsible_ai.md": "d5b61b2555b72914d1e2cfb6e84496ce80fc2d24a3001c9eefa04cca336b9830",
+        "references/sources.md": "ab4ab107ea4f94b21ce85aec6e63d3701e56a546c4840ccfd8dab5f2cdd52210",
+        "scripts/_common.py": "271bc1a013d83dc1bab41dc3fd3d70bae3d6f7549db70c678debfc50251efe19",
+        "scripts/evaluate_matrix.py": "ed38f33a7b35045217fe40b6b57ebb370c584891392899b74f4e4530e72f2215",
+        "scripts/session_scaffold.py": "0af7b297a8f92f1c7456b7e14c717a017315b4a71b603ca5402434dee98db5ba",
+        "scripts/validate_register.py": "765e57854efe9e28b4965d23b073eb67ffdc8cc0c7ac0b47d9240e4cc8ea1bd5",
+        "SKILL.md": "06f73b71556356a7f488c369b9445d7943543a3f14d159b2168fd3f621d6f8a9"
+      },
+      "contentHash": "53aa3b8cc753df2452580ea571090ffa16311e904d7a7e76c192584bada22553",
+      "executableFiles": []
+    },
+    {
+      "id": "scientific-critical-thinking",
+      "name": "Evidence assessment",
+      "categories": [
+        "experiments"
+      ],
+      "keywords": "批判性思考 偏差 因果 证据评估 bias causal validity",
+      "inputs": "claim and supporting evidence",
+      "outputs": "limitations and validity assessment",
+      "integration": "agent",
+      "description": "Evaluates scientific claims and evidence quality. Applies to experimental design validity, biases and confounders, statistical interpretation, evidence grading frameworks (GRADE, Cochrane Risk of Bias), and teaching critical analysis. Supports evidence appraisal and identifying flaws; formal peer review writing belongs to peer-review.",
+      "version": "1.5",
+      "license": "MIT license",
+      "requirements": "Analytical guidance needs no network. Optional figures via the scientific-schematics skill require OPENROUTER_API_KEY and outbound API access to OpenRouter.",
+      "environmentHints": [
+        "OPENROUTER_API_KEY"
+      ],
+      "validation": {
+        "bundle": "integrity-checked",
+        "runtime": "not-verified"
+      },
+      "files": {
+        "references/common_biases.md": "641e8e8e6dfadac1643ea8691b7d3e4e58cf013f134cd42c71301878096a5a39",
+        "references/core_capabilities.md": "0f337b96aa2d7453433a17824368fbd0638b9469d4f90a5fd23f4167c9dee180",
+        "references/evidence_hierarchy.md": "534fbe991ecfb2d162f755004dc528118ce74a78862917c2911595a522d76e6c",
+        "references/experimental_design.md": "eca7e42025393984c07676f3d4bc354d217e5604dc2209c76215d31953a7c74c",
+        "references/logical_fallacies.md": "becfc5bfac7b831dca67cc442cd0fcb42d8eea527a6fc2921c1b704e592ff593",
+        "references/review_sources.md": "71e75106f36f3e69b28959ad1fec503ccdb21b7f5361ab230173e4812accbf62",
+        "references/scientific_method.md": "5aa925b97c7a916f819dafc8b42a9c24e4bd3eb2836594e724f1e7f9ae75ea0f",
+        "references/statistical_pitfalls.md": "0c43204a0a81110cfeb7c982fa4caa89f274bdcebf096e09e5adfccf31241cb9",
+        "SKILL.md": "563af70571b7dcd6a96bf2e303bedfdcba623b4e9f082d58f04aacbc961fdae4"
+      },
+      "contentHash": "fa50828cccb00a47e7366b481fbb3731f2d6d63654ca1025a6e1243ec8e9f7f4",
+      "executableFiles": []
+    },
+    {
+      "id": "scholar-evaluation",
+      "name": "Research quality evaluation",
+      "categories": [
+        "experiments"
+      ],
+      "keywords": "研究评价 论文评分 证据质量 rubric evaluation",
+      "inputs": "research work and rubric",
+      "outputs": "structured evaluation",
+      "integration": "script",
+      "description": "Provides qualitative-first, evidence-traceable developmental review of scholarly works and audit low-stakes research-assessment rubrics with optional local quality controls. Never use for ranking people or consequential decisions.",
+      "version": "2.4",
+      "license": "MIT",
+      "requirements": "Requires Python 3.11+ for optional bundled standard-library CLIs. All tooling is local JSON/CSV processing with no network, credentials, external models, or subprocesses.",
+      "environmentHints": [],
+      "validation": {
+        "bundle": "integrity-checked",
+        "runtime": "not-verified"
+      },
+      "files": {
+        "assets/evaluation_template.json": "8b77953138471a80b2f2a6d20ab5b5a2dc7670afa492a74d92975e9f86ec4ce0",
+        "assets/evidence_manifest_template.json": "51512b9f307db9fb451c03f90be399e42d3216dcaecc22e67e037ceda3e5b0cb",
+        "assets/process_checklist_template.json": "de0897b2404f6fd32a0a9aa22406d7830f912f6ab39f3cac4dc34bdce5af8ac3",
+        "assets/ratings_template.csv": "0c518d16760d551a28ae474f65c79ded02b4a97b8121b0ef3d907201b65b1ba6",
+        "assets/rubric_template.json": "ab428fcb3cef141c5d7eaa0a206b6c89087a1593af3d953ee2ff1efb31aa79f3",
+        "references/evaluation_framework.md": "86028eb58c9fdf5a0bb34ffd37a3567c49bfafa7cb9e9ebecb3e88ddd5ecbac9",
+        "references/local_tooling.md": "762ce1f939680cc99e7f6f05964dbd1205c905e929a51adea8bb8c5809758ca8",
+        "references/responsible_assessment.md": "5730df99eb16deab151777d7bfb88253da3eb60e1d8184bb5ae39a1dd4e09406",
+        "references/security_validation.md": "093d3ff3cf7309db0a4262f77d5f3496120548dd75b169856a4a0a009ed60e22",
+        "references/source_ledger.md": "43c364cd3a2b1dbdb5845092d63396f7ee8ac384964ae447951cc5656937d4cf",
+        "scripts/_common.py": "5f90929c6cbe23c73f7b25d749be11d2fa0e6f3d6aea832bf1e313e2e450404c",
+        "scripts/calculate_scores.py": "07a1cd73cca097edd15acebe65531d9254e6e9f316b4a30e1eca5fd252cb697b",
+        "scripts/check_process.py": "12c78b6d09f76a25a7f1530e1f719f6ccbeabe03d83cb63525a09358edc1da2b",
+        "scripts/check_traceability.py": "609fe62d80638b368039cc0b2a0fb115d6a7c99e630ce0e54d117de80d4b4bb4",
+        "scripts/generate_report_scaffold.py": "3a9470d2517ced5b25ae1ca732f59a26771cada09f3e5b2d06b4ba32cdbddb3d",
+        "scripts/summarize_agreement.py": "78dc8809873242b4fa8afeb44e6384cc50b5540098cf988e277cf7cbeb3a8e6f",
+        "scripts/validate_rubric.py": "843244f4728b93b07e1c7d51ca2f22e7a6d9215af0f83247afe181920e120821",
+        "scripts/weight_sensitivity.py": "06dba6b262e2ef2c120389f662e81aec87bbb9a1141ff54bb843608c03c37953",
+        "SKILL.md": "9abc66a9ba13f6cf0f61614ddfff17822b5be2cc7118f52ef2631323dac8c94e"
+      },
+      "contentHash": "1d4be91d625d907ccd0b836cbb90cafcb692cad92c1795f8e5e62f85628f579a",
+      "executableFiles": []
+    },
+    {
+      "id": "get-available-resources",
+      "name": "Compute resource planning",
+      "categories": [
+        "experiments"
+      ],
+      "keywords": "计算资源 显存 内存 GPU CPU 资源规划 memory compute",
+      "inputs": "planned local workload",
+      "outputs": "bounded resource inventory",
+      "integration": "script",
+      "description": "Detects host inventory and effective CPU, memory, disk, scheduler, container, and accelerator limits when a user asks for resource-aware planning or before a clearly resource-sensitive local workload. Produces a redacted JSON snapshot and conservative planning helpers without stress tests or assuming visible host hardware is usable.",
+      "version": "1.5",
+      "license": "MIT",
+      "requirements": "Python 3.11+ on Linux, macOS, or Windows; standard library by default, optional psutil 7.2.2; accelerator management CLIs are optional read-only probes.",
+      "environmentHints": [],
+      "validation": {
+        "bundle": "integrity-checked",
+        "runtime": "not-verified"
+      },
+      "files": {
+        "references/resource_semantics.md": "cb31d9340e5c7da72aac1728448de61e90ff9c6022735ab90976457f6d4dbd7c",
+        "references/snapshot_schema.md": "789dde9d5d1ce0225a5a205b0d300f4d9c7442bbe687ff26a7819d5349687fd8",
+        "references/sources.md": "4499cd3a7bbeb56ba1d00d9688450128b4eba541c8dc7683cc92a654632d1af7",
+        "scripts/_common.py": "264d5ccb04790164d2c5ae53fa8b470704d2094fd17f687304ede14ba45aa1a5",
+        "scripts/accelerator_diagnostics.py": "0635a80fb128dbef7297b887ad4173f260193272e3b25ff43f14f9dad8f0f377",
+        "scripts/detect_resources.py": "91eed1feaabe1f254c1d2a0775295ed95eea710b9d3e5127b6a13310f49c49d4",
+        "scripts/plan_workload.py": "b89cfefe02422814b1b7df2942e1d4bafec24159c38b2765b869944bbe3a1a92",
+        "scripts/snapshot_tools.py": "596f7a214f5dd6f9f2a641c5ecf52cf9d851617460f2c8926318fcb5d40693f1",
+        "SKILL.md": "54044d598fce28fca2ce50e7895f44423b070493db2f9c96ff0445bee4d3689d"
+      },
+      "contentHash": "53a1d6f3040ad73af029410b1c3e9a75ca365d9e7320f9db5bd4b41fa4a43a04",
+      "executableFiles": []
+    },
+    {
+      "id": "scikit-learn",
+      "name": "Machine learning evaluation",
+      "categories": [
+        "experiments"
+      ],
+      "keywords": "机器学习 分类 回归 聚类 交叉验证 sklearn machine learning",
+      "inputs": "dataset and evaluation protocol",
+      "outputs": "fitted model and validation metrics",
+      "integration": "script",
+      "description": "Supports machine learning in Python with scikit-learn. Applies when working with supervised learning (classification, regression), unsupervised learning (clustering, dimensionality reduction), model evaluation, hyperparameter tuning, preprocessing, or building ML pipelines. Provides comprehensive reference documentation for algorithms, preprocessing techniques, pipelines, and best practices.",
+      "version": "1.5",
+      "license": "BSD-3-Clause license",
+      "requirements": "Requires Python 3.11+ and scikit-learn 1.9.1. NumPy, SciPy, and joblib are dependencies; bundled scripts also require pandas and matplotlib. Installation needs network access; bundled examples use local datasets without credentials.",
+      "environmentHints": [],
+      "validation": {
+        "bundle": "integrity-checked",
+        "runtime": "not-verified"
+      },
+      "files": {
+        "references/common_workflows.md": "dfe19c80358acb5f418a21cea4de3b7e83733481441f3c76d0a2ead4420261de",
+        "references/core_capabilities.md": "c869d9c207fcfc345207d397021a289f3820492ddf0fcd0b3a56a336bd0e1453",
+        "references/model_evaluation.md": "e6f581c0ce2abffaac2f0bafc1a7bfbe86ec18f8969c6e9b91cc732a12a5fea5",
+        "references/pipelines_and_composition.md": "a1810cd67dc9141d962fa1972e11b06be6bd437213e10a563e5ec4256fb274a9",
+        "references/preprocessing.md": "098506f0ca83e57d0c7cccd166164d025552ad7310b79d1010f5ff34e1cc4818",
+        "references/quick_reference.md": "5401b75fdaa10bf393b024f3c559631011c7be233d2313da37a3f27d7389659a",
+        "references/supervised_learning.md": "d4e5911d175c3a349dd42e33c984b05cdafce230f264b6774996d0eeef36608a",
+        "references/unsupervised_learning.md": "cb476ef499fe35ee2c0416fdc31abad42384ac0110f6d3932901e99b039ae1b1",
+        "scripts/classification_pipeline.py": "46abbb2b11095147cc31314405910b211c313d142f2480599f8508d47e5809f3",
+        "scripts/clustering_analysis.py": "5d1f962a70e049907a39a75cd7a130000a5d3e3de5a4fa4889d07f007c052a17",
+        "SKILL.md": "a1765797d072ab40094522abe68fb04505d0881f66b7dfceeb8582422dbe488d"
+      },
+      "contentHash": "fcfa8d0824d52a136f418c9f8a94f9661c42ebcc5cf0550eefa943f206e9b7d3",
+      "executableFiles": []
+    },
+    {
+      "id": "pytorch-lightning",
+      "name": "Model training workflows",
+      "categories": [
+        "experiments"
+      ],
+      "keywords": "模型训练 深度学习 训练循环 checkpoint lightning",
+      "inputs": "training code and dataset",
+      "outputs": "training runs and checkpoints",
+      "integration": "script",
+      "description": "Deep learning framework (PyTorch Lightning / lightning package). Organize PyTorch code into LightningModules, configure Trainers for multi-GPU/TPU, implement data pipelines, callbacks, logging (W&B, TensorBoard, MLflow), distributed training (DDP, FSDP, DeepSpeed), for scalable neural network training.",
+      "version": "1.4",
+      "license": "Apache-2.0 license",
+      "requirements": "Requires Python 3.10+ with lightning 2.6.6 and compatible PyTorch. CPU examples need no network after installation. CUDA/DDP/FSDP/DeepSpeed need suitable hardware; optional loggers require separate packages and online services need credentials/network.",
+      "environmentHints": [],
+      "validation": {
+        "bundle": "integrity-checked",
+        "runtime": "not-verified"
+      },
+      "files": {
+        "references/best_practices.md": "e99b13ebdd43b702b6e1fc9732a85ea2ee153c16377c7f216a3433a0cd81d325",
+        "references/callbacks.md": "84801cfe2ba309afc8b5a3a13a2a752ae9b0cd98617771fe29551dd7201e21a3",
+        "references/data_module.md": "be42f4a16a8898257834cd893f61977a6f8270828e7cae1b67dbc23a01a15549",
+        "references/distributed_training.md": "0a8b2b4a9975b170750db85c334288bd48b46fd06eb5c00589b17a187d9e4591",
+        "references/lightning_module.md": "0e33e3f04f8c9e25a8c03b51ec8e3d9ad3b968b5789eb36341e2f3198535d35b",
+        "references/logging.md": "624f90f1d0aaf7143de4ba90b855cb541065dbec1d8ac2ca3fb766a91e2d07d4",
+        "references/trainer.md": "67eb14cbdd6ffd162264d5fa6c6ffecc63f55cfad75334f1bec90ed4c5b483f4",
+        "scripts/quick_trainer_setup.py": "1b700c1dde892042252cee202fa8bcfd26b035e73eb4617362bfaa6f891126e1",
+        "scripts/template_datamodule.py": "3febf10bab4bf537ea584c351181d092fcdbd1fb6914fd90bb5bd4cd80134ffe",
+        "scripts/template_lightning_module.py": "2053136d3bc5523661dbbfce64c4b4506415e679cc34edc60ba9242c8d3dfb71",
+        "SKILL.md": "d8829e74e8a1d908f923cf0c0a850ecfdd9edcb004d2fa90ec32fb1ed0006ce8"
+      },
+      "contentHash": "d5032f3f36c4fc8f02fd1897bd4c1726127683e0bbe166802fc4f75e8aab0d60",
+      "executableFiles": []
+    },
+    {
+      "id": "transformers",
+      "name": "Transformer model workflows",
+      "categories": [
+        "experiments"
+      ],
+      "keywords": "大模型 微调 transformer huggingface tokenizer finetune",
+      "inputs": "model, data and task",
+      "outputs": "model predictions or training outputs",
+      "integration": "script",
+      "description": "Hugging Face Transformers for loading Hub models, running pipeline inference, text generation, and Trainer fine-tuning on NLP, vision, audio, and multimodal tasks. Applies when working with AutoModel, pipelines, tokenizers, generation configs, or TrainingArguments within Transformers.",
+      "version": "1.5",
+      "license": "Apache-2.0 license",
+      "requirements": "Requires Python 3.10+, PyTorch 2.5+, and transformers 5.18.0; optional librosa 1.0 requires Python 3.12+. Network access for Hub downloads. Gated or private Hub models need an HF token (`hf auth login` or `HF_TOKEN`).",
+      "environmentHints": [
+        "HF_HUB_DISABLE_IMPLICIT_TOKEN",
+        "HF_TOKEN"
+      ],
+      "validation": {
+        "bundle": "integrity-checked",
+        "runtime": "not-verified"
+      },
+      "files": {
+        "references/generation.md": "86249b51bcbae468ba36ced4685f09b20282986413733d547f6bdec248fd5d5d",
+        "references/models.md": "b9926cc003e3c625ec1dc47a7058fc4a16611ad89c8a9f0d0a714e83a97f79ba",
+        "references/pipelines.md": "0319356fc1a14050072e5506ac0413921ac6a715b44fcebea3dbbbaf5dcdb2a5",
+        "references/review.md": "289bec219e4952e508a4ecd59dbacfd11b723471463fdcf03dc65d9eafc580cc",
+        "references/tokenizers.md": "a001db31cdcd78e596f9de9a0cbe1c758eb32d6e73d4b729ab6a7731d15c7434",
+        "references/training.md": "11388a58d8f2c8c22c85a871e787273251a8799647f814f6d96c77fb132a2666",
+        "SKILL.md": "584d1c35d513f87616df9bcf7ddc8c48ab38cfbfad18d55c8481578d1c0d6f1a"
+      },
+      "contentHash": "8898d6f14f20963f729b9ea8944fd59eb1e65b657e0b28560ffcf27d38ef6c81",
+      "executableFiles": []
+    },
+    {
+      "id": "stable-baselines3",
+      "name": "Reinforcement learning evaluation",
+      "categories": [
+        "experiments"
+      ],
+      "keywords": "强化学习 PPO DQN RL benchmark",
+      "inputs": "environment and training configuration",
+      "outputs": "policy and evaluation results",
+      "integration": "script",
+      "description": "Trains and evaluates single-agent reinforcement learning with Stable Baselines3 (PPO, SAC, DQN, TD3, DDPG, A2C), Gymnasium custom environments, vectorized rollouts, callbacks, and checkpoint normalization. Applies to reproducible RL experiments, continuous control, discrete actions, and SB3-Contrib recurrent or masked policies.",
+      "version": "2.0",
+      "license": "MIT license",
+      "requirements": "Requires Python 3.10+, PyTorch >= 2.8, and stable-baselines3 2.9.0. Gymnasium environments; optional extras for TensorBoard and Atari (ale-py).",
+      "environmentHints": [],
+      "validation": {
+        "bundle": "integrity-checked",
+        "runtime": "not-verified"
+      },
+      "files": {
+        "references/algorithms.md": "e576c5d4dbdb28177291f8e52f15fe038a2950ab783a80f1e9f4249b6fc1f9f7",
+        "references/callbacks.md": "33b2111f4fad75cb125ec21dbc41ede137fa32c324efdf988dc065aac547e4ee",
+        "references/custom_environments.md": "0ceef4d36ec142d29ee8311a98ac99faa9904de3c382c22d3de8031ac6e8590f",
+        "references/vectorized_envs.md": "5a5e81fe25f3ed14a9f28eae82d9fbf604f548f6943bc5c61ad61135afeae0c3",
+        "scripts/custom_env_template.py": "1dae2d6aca61541bfd994b1b3375c3f70bb6b6418d3eedbb6f5b60eb3f97c6b7",
+        "scripts/evaluate_agent.py": "47bd2d49165946abcbeccdcce1790945528174de64c01009bb9064f792fc7484",
+        "scripts/train_rl_agent.py": "349b8f98669424884c2210bba34185f4dfa51f1b8f96451e973c91e938ba16af",
+        "SKILL.md": "8383ae480e27163b9dbe1d9af822e05f0e85dd05b5bab1f6444588d57f569837"
+      },
+      "contentHash": "ffdc094b8cc8d7f1fffe10a81984b68f51534e378b3e72706ccb0e42836c72f0",
+      "executableFiles": []
+    },
+    {
+      "id": "exploratory-data-analysis",
+      "name": "Exploratory data analysis",
+      "categories": [
+        "analysis"
+      ],
+      "keywords": "数据分析台 数据探索 数据质量 CSV Excel exploratory data analysis",
+      "inputs": "local dataset",
+      "outputs": "profile, quality checks and analysis plan",
+      "integration": "script",
+      "description": "Performs bounded, local exploratory analysis of explicitly supported scientific files. Supports redacted CSV/TSV/JSON profiles; optional NumPy, HDF5, FASTA/FASTQ, and basic image metadata inspection; missingness/leakage audits; outlier and transformation sensitivity; and rigorous EDA report scaffolds. Other domain formats are reference-only and unknown formats fail closed.",
+      "version": "1.4",
+      "license": "MIT",
+      "requirements": "Bundled core CLIs require Python 3.11+ and are local/network-free; the complete pinned optional snapshot requires Python 3.12+, uv, and format-specific libraries listed below.",
+      "environmentHints": [],
+      "validation": {
+        "bundle": "integrity-checked",
+        "runtime": "not-verified"
+      },
+      "files": {
+        "assets/report_template.md": "c6cd0644dbefeb64c77e84935509f52a92d45256daf2cd4be84012e99e4d7d44",
+        "references/bioinformatics_genomics_formats.md": "b3594673cbe22e29fd5bc2681c1b53d4f8b02b48ff17fc9ffaf5a09d1d885be3",
+        "references/chemistry_molecular_formats.md": "3ff937541ebf0396d4c2304016cebc42d405110300df7379f59c40953fc8ed41",
+        "references/general_scientific_formats.md": "42bcf3389bbd78e426dd41139208517f3f78bdc17e068a1eb3a984d2f2487320",
+        "references/microscopy_imaging_formats.md": "c96bb7291ded320a106800c1132191683aa3028f2240c5fcf954079f1a26c382",
+        "references/proteomics_metabolomics_formats.md": "66d9493fe14c717f5e8e60500e8fa7bfe1f619084e23b643a767f0952a35efd7",
+        "references/spectroscopy_analytical_formats.md": "102a68c212ef5447815c889cf06668f3cb5bd8644f018354d6e98d1a15101a0f",
+        "scripts/__init__.py": "87539288ce5d4caf24fc9fca14e5d70c41730c9d4285106ac4db0c4b5cefd60c",
+        "scripts/_capabilities.py": "93fd42bcc6940db0a6cad364dab42a52f0867e782f7e93c9b27c4185249edc06",
+        "scripts/_common.py": "f363af255cc78ea63864e0da9f679f57a9e71efd36b6813332f3d2c419b30d51",
+        "scripts/_structured.py": "8cb23c8552339acc926f4dc84e1ec032c79152515098e1fd97f2326b84b4ead9",
+        "scripts/_tabular.py": "5d1db825890dd035c30e51ac1c11aee56e1e1dca6ffd238ee87ae7d51d8df2f0",
+        "scripts/capability_manifest.py": "1e52e1db668ebce919751a75b53ad959c36749e4b1695f59d8ac2d6c8eda4abf",
+        "scripts/distribution_sensitivity.py": "ca6e9f3dd59cfb382b1ff0874e709933c136ec942085a0437d4000bbf7f1f3c8",
+        "scripts/eda_analyzer.py": "6532b28ad3f28dd9f58acecb54361c8271d2755584a54ecb0be34da74d1e5d20",
+        "scripts/image_inspector.py": "79c21b35d01376929ff0edf26a3bb25923b9e75458c586e0f5721cec356fe639",
+        "scripts/missingness_leakage_audit.py": "28458714e80ee31db636c0265ba21e1623ba27816d31e236fdc9b873a5b78ffc",
+        "scripts/report_scaffold.py": "4d745592384bfceb0ec7384eecfc5e8ba49ebfa4ec55be75a99ce7c7e102f60b",
+        "scripts/sequence_inspector.py": "11ca2fa3a0d660192631b9b562f362b0fd120c9e54639bfb049c600c6920be28",
+        "scripts/tabular_profile.py": "78cd139292c18e31d17de882762948db7b51fdc3278546f994270a287d0149db",
+        "SKILL.md": "955c4cefa49106dd03b55cbd62603bab2d2fb678e627dd452ba62040c7128484"
+      },
+      "contentHash": "42ee61fa9b7b0cbfe3d9b316c70af860449020143617c0c7641b4e08b4078e03",
+      "executableFiles": []
+    },
+    {
+      "id": "statistical-analysis",
+      "name": "Statistical analysis",
+      "categories": [
+        "analysis"
+      ],
+      "keywords": "统计分析 显著性 差异检验 t-test anova hypothesis testing",
+      "inputs": "research data and statistical question",
+      "outputs": "tests, effect sizes and interpretation",
+      "integration": "script",
+      "description": "Guided statistical analysis for research data - test selection, assumption checking, effect sizes, power analysis, Bayesian alternatives, and APA-formatted reporting. Use whenever a user wants to compare groups, test a hypothesis, analyze experimental or survey data, check statistical assumptions, compute required sample sizes, or write up results - even if they never name a specific test. Covers t-tests, ANOVA, chi-square, correlation, regression, non-parametric and Bayesian methods. For low-level model APIs, see the statsmodels and pymc skills.",
+      "version": "2.0",
+      "license": "MIT license",
+      "requirements": "Requires Python 3.12+ and the documented isolated scientific Python environment; network access only for installation and documentation.",
+      "environmentHints": [],
+      "validation": {
+        "bundle": "integrity-checked",
+        "runtime": "not-verified"
+      },
+      "files": {
+        "references/assumptions_and_diagnostics.md": "6e1ebc110c092845b93e5c6d28f38c8a990780105ba1865f0bd47c007620b073",
+        "references/bayesian_statistics.md": "34d62e1b20dd82a11497be40e07c93e4fdb555d56e4944e200f881c1b7629cbf",
+        "references/effect_sizes_and_power.md": "5e1321c9058b2931a1bd2a753c7a8f4295f58274412d62e99a34eabd478e42b2",
+        "references/reporting_standards.md": "0a30a1bec63231c94c9c285977acaa4218c50a34c8385857d18f62c61ac817b7",
+        "references/test_selection_guide.md": "e72e00b6ebe9450e5e84849503db223c4908a8d9a68c3b87cf0ab8ec3254fe83",
+        "scripts/assumption_checks.py": "3e37a4e04407b5f040f103962ed0e73935d114d3892ee45b5a06a1da42c10341",
+        "SKILL.md": "e112848726b3713267cac65e4e2c15491a0a26ee1ed628db01195f7e43f97997"
+      },
+      "contentHash": "11ca38127d9a6466eee6f37c31bcafc8b0e821881590b5df8ace8e4664152390",
+      "executableFiles": []
+    },
+    {
+      "id": "statsmodels",
+      "name": "Statistical modeling",
+      "categories": [
+        "analysis"
+      ],
+      "keywords": "回归 计量 时间序列 残差 regression econometrics",
+      "inputs": "tabular or time-series data",
+      "outputs": "statistical models and diagnostics",
+      "integration": "script",
+      "description": "Fits and diagnoses Python statistical models including OLS, GLM, discrete and mixed models, ARIMA and SARIMAX. Supports coefficient inference, marginal effects, model comparison and time series forecasting with explicit design and uncertainty checks. Used for econometrics and statistical modeling; for guided test selection with APA reporting, see statistical-analysis.",
+      "version": "1.5",
+      "license": "BSD-3-Clause license",
+      "requirements": "Requires Python 3.10+ and statsmodels 0.15.0; the tested NumPy 2.5.3/SciPy 1.18.1 stack needs Python 3.12+. Plotting needs matplotlib; predictive metrics need scikit-learn. Network access is needed only for installation or documentation; no credentials.",
+      "environmentHints": [],
+      "validation": {
+        "bundle": "integrity-checked",
+        "runtime": "not-verified"
+      },
+      "files": {
+        "references/discrete_choice.md": "30422e14c2e05bfc4a3da924086c8f067b6e4eb9c1c828ec7f25ab79ed16d54e",
+        "references/glm.md": "dca241c58df3b08c05aa4f0a96e4efd8ebb24ce37c57dd23402c236f86db57e4",
+        "references/linear_models.md": "a14ce5ba795442bc8805f6d59e9a397efe9e6587b09b19dcaba40e88d3c4654c",
+        "references/model_selection.md": "5666665df87dccdb82ddae0d2ffcf13c7e681fee6b410ea279a8edf4688ad75a",
+        "references/modeling_capabilities.md": "7794c4a3d7c82e647f4705caa47614796f34cc07db9d11bc057dec2310e9787c",
+        "references/quick_start_guide.md": "202c61810e3bb59a72f1736c6624899c8ad0c2eabffbf11eff98a987f13eaa2d",
+        "references/review.md": "38d49c7d705d250376c013be489bc5dad2b94b9373e1c7aaa0afe51980af29da",
+        "references/stats_diagnostics.md": "23fd23d9b415b9060151409220f03f203cc1775d517b51d978d5ffe8edad009e",
+        "references/time_series.md": "29b97f1de7fedd5be582cd6e4168403978a5094f54211ccfc53b896f3bece04e",
+        "SKILL.md": "9e6c034bb4acbf0972fda18892d2feea907885ac5ad7194d220182d8810295a3"
+      },
+      "contentHash": "52ccb805874c464f4eb413f46af06bb37bad9cec0d62132a1e7c159b214a4cb0",
+      "executableFiles": []
+    },
+    {
+      "id": "pymc",
+      "name": "Bayesian modeling",
+      "categories": [
+        "analysis"
+      ],
+      "keywords": "贝叶斯 后验 MCMC 概率模型 bayesian posterior",
+      "inputs": "data and probabilistic model",
+      "outputs": "posterior estimates and diagnostics",
+      "integration": "script",
+      "description": "Builds and checks Bayesian models with PyMC, including hierarchical models, NUTS MCMC, variational inference, mutable-data predictions, posterior predictive checks, diagnostics, and PSIS-LOO model comparison. Use for probabilistic modeling and uncertainty inference in PyMC.",
+      "version": "2.0",
+      "license": "Apache License, Version 2.0",
+      "requirements": "Requires Python 3.12+ with PyMC 6.3.2, PyTensor 3.3.2 and ArviZ 1.3-compatible dependencies; NumPy, pandas, Matplotlib, h5netcdf and h5py for bundled helpers/artifacts. Network access for installation only. Optional nutpie, NumPyro and BlackJAX samplers need separate dependencies.",
+      "environmentHints": [],
+      "validation": {
+        "bundle": "integrity-checked",
+        "runtime": "not-verified"
+      },
+      "files": {
+        "assets/hierarchical_model_template.py": "62c482d984830329cf8b6a112e37ef3189a05e243777670a800ca7136067d4fe",
+        "assets/linear_regression_template.py": "0461fe20e6c5b51f811572f4a71ca9c87b2ea04d50f165788da7ab6eaa565794",
+        "references/distributions.md": "8c65dfa852e63b132cd7d9690b59ebddd1480b6965d355939d9c4e0816db3386",
+        "references/model_patterns.md": "7a6e83919e7e0d0985ff0df3e51e8c4c7810f48b80a0956288efaa0cf973783a",
+        "references/sampling_inference.md": "f55cec6f7c3e623a5039ae3893e59e7a1b93e923ad8d961bb5132f285f804212",
+        "references/standard_workflow.md": "acf52b6bd774f9e189cd864c584c56e44b572caaab6b5b1d963aaee042ae7654",
+        "references/workflows.md": "02210930a621675676988ba92fce3f441f1e0e38b4e8721614273b137ab43323",
+        "scripts/model_comparison.py": "6d9f7e7abf53d1499e999d1d6308a2903729c31c30b0da447ce4c83b780841ae",
+        "scripts/model_diagnostics.py": "32fa8260161de387955345f51a0c3698943aa1eb8184d3176f4a1f4fafb6ebf1",
+        "SKILL.md": "77d29ba7adf73d822329eab576d15a748811633a60bca88f5e93954793b3ea8a"
+      },
+      "contentHash": "bd9d432a5246b7ae51813f5b9a100332699ae8a18e4a4376781967afe64f2d25",
+      "executableFiles": []
+    },
+    {
+      "id": "matplotlib",
+      "name": "Scientific plotting",
+      "categories": [
+        "analysis"
+      ],
+      "keywords": "科研绘图 折线图 散点图 子图 matplotlib plot chart",
+      "inputs": "data and plot specification",
+      "outputs": "PNG, PDF or SVG figures",
+      "integration": "script",
+      "description": "Creates and customizes scientific plots with Matplotlib. Used for fine-grained control over plot elements, novel plot types, and scientific workflows. Export to PNG/PDF/SVG for publication. For quick statistical plots use seaborn; for interactive plots use plotly; for publication-ready multi-panel figures with journal styling, use scientific-visualization.",
+      "version": "1.4",
+      "license": "https://github.com/matplotlib/matplotlib/tree/main/LICENSE",
+      "requirements": "Requires Python 3.11+ and Matplotlib 3.11.2. Bundled examples also use NumPy and SciPy; pandas examples need pandas, and Jupyter widgets need ipympl. Installation needs network access; local plotting needs no credentials.",
+      "environmentHints": [],
+      "validation": {
+        "bundle": "integrity-checked",
+        "runtime": "not-verified"
+      },
+      "files": {
+        "references/api_reference.md": "151dba633c9d92e5e3c446a927971f50893c1fee382e50d3780d01d0a33bdfdf",
+        "references/common_issues.md": "f614b7716637d18623a035653ac37fc608ff5be4d08250f7fbf66ae496c59df2",
+        "references/plot_types.md": "149479715344beb5f9f0e5b4bf19f694e0db1ef1ea1282aa633185ab38c5d1bc",
+        "references/styling_guide.md": "a2b84789e227bcbf5dcc99b142e4a9e6a45e5c6cff2252e96f53d0f9627ff6fc",
+        "scripts/plot_template.py": "88fe993c113b581cf7da41c6330a6528ba768afb3fdc2be8fa4e1681d7c1b943",
+        "scripts/style_configurator.py": "f6238b6de27046e3a094573714b3ecd8f856f1d4e2004f17cf4c87a0848a8993",
+        "SKILL.md": "60b80aaa802e1a88db30729611789bf5ee92b3f2a7bb695502bac10dd255ee86"
+      },
+      "contentHash": "0907010e41a6402dd609507c58bb2177ecc5215c911bdeed7a1ed0b804c472c7",
+      "executableFiles": []
+    },
+    {
+      "id": "seaborn",
+      "name": "Statistical visualization",
+      "categories": [
+        "analysis"
+      ],
+      "keywords": "统计绘图 热力图 小提琴图 箱线图 seaborn heatmap",
+      "inputs": "tabular data",
+      "outputs": "statistical charts",
+      "integration": "script",
+      "description": "Creates Seaborn statistical visualizations with pandas integration for distributions, relationships, categorical comparisons, regression displays, pair plots, and heatmaps. Supports function and objects interfaces with explicit aggregation, uncertainty, and missing-data handling. Best suited to static exploratory plots; plotly covers interactive figures and scientific-visualization covers publication styling.",
+      "version": "1.5",
+      "license": "BSD-3-Clause license",
+      "requirements": "Requires Python 3.8+ with seaborn 0.13.2, NumPy, pandas, and Matplotlib; the tested current dependency stack requires Python 3.12+. Optional scipy/statsmodels for advanced regression or clustering, ipywidgets for notebook controls. Network only for installation or uncached example datasets.",
+      "environmentHints": [],
+      "validation": {
+        "bundle": "integrity-checked",
+        "runtime": "not-verified"
+      },
+      "files": {
+        "references/examples.md": "9ac123a232f3aca67a71e0d8132e2b9bd60ba0adcd8871e0368aea9dfc494577",
+        "references/function_reference.md": "0b667b9154898ce9d6096cd6bc7af72ca9e50f8f55a7dbcc4d0c03a3f05ff08a",
+        "references/grids_and_levels.md": "03831ff54cc1885934c9bb51223fded6f6ff282f23c56653b35641c8c073f27a",
+        "references/objects_interface.md": "c3ddb1b2f97d77d9c70c1f079c99b9355b3d8c18874912522032be14d653ea17",
+        "references/palettes_and_theming.md": "d7b8767e1533c5753d2b8792bcc2edff21c28f116f6e05bb200a2b3b1a0799c5",
+        "references/patterns_and_troubleshooting.md": "65c6afdc6551f8ec240a8b3316f2f4739a4734b59267b9c3f486ad6428458cac",
+        "references/plotting_functions.md": "9a3e88895a33a2d9329b365987491981a695226fb9ed97ccb91f334d28c56385",
+        "SKILL.md": "d1500d1e3d9db1db4c72cd272861378d1b98b0b5a5a98e8a3fca5a45bc0c6b2e"
+      },
+      "contentHash": "e991b2d7bcab39b472577673a939876ae46c2fd104eb38a1c822f7273709494b",
+      "executableFiles": []
+    },
+    {
+      "id": "scientific-visualization",
+      "name": "Publication figure workflows",
+      "categories": [
+        "analysis"
+      ],
+      "keywords": "论文配图 科研可视化 多面板 出版 图表 visualization publication figure",
+      "inputs": "data, figures and publication requirements",
+      "outputs": "publication figures and checks",
+      "integration": "script",
+      "description": "Creates and audits truthful, accessible, publication-ready scientific figures with Matplotlib, Seaborn, or Plotly. Use it for figure design, multi-panel layouts, uncertainty and missing-data displays, color/contrast review, image metadata validation, and journal export planning.",
+      "version": "1.4",
+      "license": "MIT",
+      "requirements": "Requires Python 3.11+ and uv for pinned examples. Bundled CLIs are network-free and load Matplotlib, Pillow, or pypdf only when needed. Plotly static export with Kaleido v1 requires a compatible Chrome/Chromium installation.",
+      "environmentHints": [],
+      "validation": {
+        "bundle": "integrity-checked",
+        "runtime": "not-verified"
+      },
+      "files": {
+        "assets/color_palettes.py": "98ee4aa4b9bbb010996d55144ea6bf45a0ab294009b9bb0ef6d9c5ec9fed5154",
+        "assets/nature.mplstyle": "f37a361cdda8846da0794fd879cc8173402094f110239d57e0227fdd8299a4f6",
+        "assets/presentation.mplstyle": "d0e5a768e5965aa3893b12c0f7decd4c3b09502044391a840ebdee37dfea44da",
+        "assets/publication.mplstyle": "eba3001f346649a9e41d9ac1d56101abbae10aefecdad3be9530f4c9cd9269b3",
+        "assets/publisher_profiles.json": "1e1b1b5a4e0e3dfc57877f2abf1e96888fe6b65617234b078f193b8f76e0ebe9",
+        "references/color_palettes.md": "c9b6a596dd1dd1e08050fdcbb304a0268ee515bce2120a9bbd3fba31cd7fa119",
+        "references/journal_requirements.md": "f7c4b6660eb70f7c5778d13908409e1dc690f00e3dfc8314f430feb89781740c",
+        "references/matplotlib_examples.md": "74fd5977ce57b09b476285309559bbcbe3b1748943b719844b28a6b61378c041",
+        "references/publication_guidelines.md": "5f70c6b22dbb5e0fae18b0f1197b8794896bf7afc059874bcf7afbd5aa86bbe5",
+        "references/sources.md": "3ff34759c0fed3baf33286a8005fd81f0c3466a554c8b0d45f43ad30b1e5b505",
+        "scripts/_common.py": "e4eea2c2e5f5d8cfa544c6bed152cdb88a3d7c7952df99bcd74b45077fd6f707",
+        "scripts/export_plan.py": "c20962bf4c624b9939c80bd16815fc0a18fe2be285f0654a6a53704c663add0e",
+        "scripts/figure_export.py": "fe9c77878da61297ce55224b67282d128631deb628d930aa1929c9eb7330bf79",
+        "scripts/image_metadata.py": "45f79cefd99b8e5dabcbfd1a29b7346363f383411cc43540bf9f73e67fed634e",
+        "scripts/palette_audit.py": "3a90b3c9a4a39dde6a341dc3de7b99cd2bca4773c66564fc90cdc2706a5a8165",
+        "scripts/style_presets.py": "8413cfae7f2cbc4a5dd9d4301d74b051fd8eb0c7a4b3375ae59e1da91db3a985",
+        "scripts/style_preview.py": "ca14e714dc2fb32541ff80292db97b3acbac074a65c4f2fb290f38354f880ba7",
+        "SKILL.md": "8cbde7cdc10d959cf72cfd08335cc8ce996247eee6ebdb900eb64a4cb0ff34a3"
+      },
+      "contentHash": "5e1646cd2c47ef4d74e753625e45945efbce5e99d7d6a1cad1dd517af4af9ec9",
+      "executableFiles": []
+    },
+    {
+      "id": "sympy",
+      "name": "Symbolic mathematics",
+      "categories": [
+        "analysis"
+      ],
+      "keywords": "符号计算 公式 推导 积分 微分 sympy symbolic mathematics",
+      "inputs": "expressions and assumptions",
+      "outputs": "symbolic results and derivations",
+      "integration": "script",
+      "description": "Performs exact symbolic mathematics with SymPy for algebra, calculus, equation solving, symbolic linear algebra, physics, and lambdify or LaTeX code generation. Use when a task needs symbolic results, explicit assumptions, or exact arithmetic; use NumPy or SciPy for purely numerical workloads.",
+      "version": "1.5",
+      "license": "https://github.com/sympy/sympy/blob/master/LICENSE",
+      "requirements": "Requires Python 3.9+ and SymPy 1.14.0. Optional NumPy/SciPy/Matplotlib, IPython/ipywidgets, or ANTLR 4.11 parser runtime for relevant examples. Compiled wrappers need a C/Fortran compiler and backend packages; emitting source needs no compiler. Network only for installation/docs.",
+      "environmentHints": [],
+      "validation": {
+        "bundle": "integrity-checked",
+        "runtime": "not-verified"
+      },
+      "files": {
+        "references/advanced-topics.md": "cff0c044c5d7c7f65235f35a7c0fe19e41a42c27393c9aa7f38a31f00ed28e81",
+        "references/code-generation-printing.md": "6a547f4dfd6975762d61d7effd47c9613e16d345e2e1dab89549bfc465f7e404",
+        "references/core_capabilities.md": "69fffa94caf62276112108bbeff5b7dd4281a5b40c07e44eea381f46f00a6011",
+        "references/core-capabilities.md": "2c7d55c127ccd5d4d0792892025979c421573f2662c5cededb6cbcf80ee61888",
+        "references/matrices-linear-algebra.md": "fd64e48e917cf0a71bb0d744e8cfee345a98284256a84fb55793fe4d9783272d",
+        "references/physics-mechanics.md": "0d015cf60861aa5fe1598a76e08d612a758f0c0895bbd1ce1dcbfbc9d4bfaf8c",
+        "references/review.md": "03d4db2d0432cf7ec3a21b2746da7b96809aa7613d17c101d16460f5ec732ab1",
+        "SKILL.md": "bb97087bdddccc845401737ddc7f7a8da1c14ced5e8d40da01271c991ac46e23"
+      },
+      "contentHash": "017594de8f93c6d206f32cd5bb7cf905a6a8f899fcd0ad56049c6b7c22faa8da",
+      "executableFiles": []
+    },
+    {
+      "id": "networkx",
+      "name": "Network and graph analysis",
+      "categories": [
+        "analysis"
+      ],
+      "keywords": "网络分析 图算法 引用网络 关系图 network graph",
+      "inputs": "nodes and edges",
+      "outputs": "graph metrics and layouts",
+      "integration": "script",
+      "description": "Creates, analyzes, and visualizes complex networks and graphs in Python with NetworkX. Use when working with network/graph data structures, computing graph algorithms (shortest paths, centrality, clustering), detecting communities, generating synthetic networks (random, scale-free, small-world), reading/writing graph file formats, or drawing network topologies. Common applications include social, biological, transportation, and citation networks.",
+      "version": "1.4",
+      "license": "3-clause BSD license",
+      "requirements": "Requires Python >=3.12 (excluding 3.14.1) and NetworkX 3.7. NumPy, SciPy, pandas and Matplotlib support numerical, tabular and drawing examples; optional integrations need their own packages. No credentials; network needed only for installation or remote data.",
+      "environmentHints": [],
+      "validation": {
+        "bundle": "integrity-checked",
+        "runtime": "not-verified"
+      },
+      "files": {
+        "references/algorithms.md": "f467eaffa255eca136a0fef8cf8ac23226e47d4df3f2c9281653eba46d2b0645",
+        "references/generators.md": "5c6814bb105c0ffee48217e297263454c8e8a225bf1985e684136c481be99dda",
+        "references/graph-basics.md": "629892ae1f8053fd5e64b31eacd7ac5c8996fa7b2c922f31af2232627de5d0cd",
+        "references/io.md": "e152047466e9152d89e9609b2c7bd5c9552e80ee7529f3a2e4be8c16c10ef4bd",
+        "references/review.md": "04ac479166624496c0f37d232482e6700308c9383d9bf1690198e33b2323b5fa",
+        "references/visualization.md": "e13c6d5a08d1744b03752010ba27cad347f524631cd06ae6cb15d7370a50779b",
+        "SKILL.md": "981a213f33ddca21ec327ecee13e8ef8b85b7986274b84a10268ee73310df5be"
+      },
+      "contentHash": "4745391e946b64eb3502612196e25bdf58ef5d46a7fd48a8cdfc3d8ef4842403",
+      "executableFiles": []
+    },
+    {
+      "id": "polars",
+      "name": "Tabular data processing",
+      "categories": [
+        "analysis"
+      ],
+      "keywords": "数据清洗 表格处理 大表 polars dataframe parquet",
+      "inputs": "tabular files and transformations",
+      "outputs": "processed tables",
+      "integration": "script",
+      "description": "High-performance DataFrame library for Python ETL, analytics, and pandas migration. It supports expression-based data manipulation with lazy query optimization, parallel execution, streaming out-of-core processing, Arrow interoperability, and optional GPU execution.",
+      "version": "1.4",
+      "license": "https://github.com/pola-rs/polars/blob/main/LICENSE",
+      "requirements": "Requires Python 3.10+ for Polars 1.44.2. Install with uv pip install; optional extras enable Excel, database, cloud, pandas/NumPy, and GPU integrations.",
+      "environmentHints": [],
+      "validation": {
+        "bundle": "integrity-checked",
+        "runtime": "not-verified"
+      },
+      "files": {
+        "references/best_practices.md": "8f4a2f994c3d6cac42a7236d0b040d904b872221f781f856b4529fd9e0bb08a5",
+        "references/core_concepts.md": "9447e5587c705a02325978cb8a3095e97c6299678648256056552c5597ecc4af",
+        "references/io_guide.md": "a22663ec99e190f2e571ab085afd01fa2332ff41c0d90a6e5c77835be953bbce",
+        "references/operations.md": "782ed44ed4a2a3091aa6635fec4ec7c94288ecc1844d31afc9e46e43ccb5f5d9",
+        "references/pandas_migration.md": "8decb1e39305c134a58f1d2db2162cb45a1d9f13f76d633e446c1879730bd3fb",
+        "references/review.md": "3a54bb353f4af078ca4d7ba3ae5ad3845d1dc0699b89a3fc443dfb3617627df9",
+        "references/transformations.md": "dcbaadcece9335b120a0deaa6950abd1068c30d2d24960b3bf26ba424638f529",
+        "SKILL.md": "05d64a001190b516bc922bac616483c3109a6d29c3e9950e3e2d6c31b9415e79"
+      },
+      "contentHash": "c696ffa636476c9eee9e6c5da7b156df4531fd645a3c0d3c3acbf8b7e7a2b657",
+      "executableFiles": []
+    },
+    {
+      "id": "dask",
+      "name": "Large dataset processing",
+      "categories": [
+        "analysis"
+      ],
+      "keywords": "大数据 并行计算 分块 dask distributed dataset",
+      "inputs": "larger-than-memory dataset",
+      "outputs": "partitioned processing results",
+      "integration": "script",
+      "description": "Scales pandas, NumPy, and custom Python research workflows beyond memory or across clusters with Dask. Covers DataFrames, Arrays, Bags, Futures, chunking, schedulers, and distributed diagnostics. Use for partitioned file processing, scientific array computation, or parallel tasks whose memory and dependency structure require Dask.",
+      "version": "1.4",
+      "license": "BSD-3-Clause license",
+      "requirements": "Requires Python 3.10+ and dask 2026.8.0; current Zarr 3.4 needs Python 3.12+. DataFrame workflows need pandas 2+ and PyArrow 16+. Cloud paths (s3://, gcs://) need s3fs or gcsfs. Cluster deployment uses dask.distributed (included with dask[complete]).",
+      "environmentHints": [],
+      "validation": {
+        "bundle": "integrity-checked",
+        "runtime": "not-verified"
+      },
+      "files": {
+        "references/arrays.md": "9505d826de392bd9ac35a00bb082e275156cd746a251fac36bdb987a11a6fcda",
+        "references/bags.md": "4668a74485ae2087eb1d6b4bc732641d1e8ee666fba5661243e6a68767d4c17f",
+        "references/best-practices.md": "0d475a1d3ceb341c2bf87b8022fa08e0e3e59fbc516ad00a0c63288ddde597af",
+        "references/dataframes.md": "fce72d6db5d694c88110781079b2cabed613422f60523a9c4eae19b2d44797d2",
+        "references/futures.md": "6f31c828d7794da2db877fe1f5efe6c8fda11197f1328f66693792bf06368e12",
+        "references/review.md": "599658e990675a39e6f3c0eff7198ecc8565e17a0894f1882850f088597d01ed",
+        "references/schedulers.md": "ad95a4a2700a74ef8b0cb331f9f622c5dea86987805de8b3316eeba31e839740",
+        "SKILL.md": "3b563a98f4cb42858bb1cc49832a3fa1ff9483d929af57ebe629473538e5a041"
+      },
+      "contentHash": "a75c732b19a5a1e374af5bdbb2dd84bbaf351460288c8db3b1a94b1dfc2d8f03",
+      "executableFiles": []
+    },
+    {
+      "id": "umap-learn",
+      "name": "Dimensionality reduction",
+      "categories": [
+        "analysis"
+      ],
+      "keywords": "降维 嵌入 可视化 UMAP embedding",
+      "inputs": "feature matrix",
+      "outputs": "low-dimensional embeddings",
+      "integration": "script",
+      "description": "Applies UMAP-learn to nonlinear dimensionality reduction, 2D/3D embeddings, clustering preprocessing, supervised or semi-supervised UMAP, DensMAP, AlignedUMAP, and Parametric UMAP workflows.",
+      "version": "1.5",
+      "license": "BSD-3-Clause license",
+      "requirements": "Requires Python 3.9+ and umap-learn; optional HDBSCAN, Matplotlib, and TensorFlow with Keras 3. Network access is needed for installation, not local fitting.",
+      "environmentHints": [],
+      "validation": {
+        "bundle": "integrity-checked",
+        "runtime": "not-verified"
+      },
+      "files": {
+        "references/api_reference.md": "7713fd3ed704af27890942df5d1e29f3e304636dd8b9b5767d13a6cf911323f9",
+        "SKILL.md": "0cfef32ae0e1d52eec6513bafc0ab4387cf38e43121fba715762b2b2c11b6930"
+      },
+      "contentHash": "3f9e9434ddc5d1f5217c6880ea68746bf85be119ad9f1b76c9929a363b76a02c",
+      "executableFiles": []
+    },
+    {
+      "id": "shap",
+      "name": "Model explanation",
+      "categories": [
+        "analysis"
+      ],
+      "keywords": "可解释性 特征归因 SHAP feature importance",
+      "inputs": "trained model and evaluation data",
+      "outputs": "attribution results and figures",
+      "integration": "script",
+      "description": "Explain and audit machine-learning predictions with SHAP. Use for selecting SHAP explainers and maskers, computing and validating feature attributions, handling multi-output explanations, and producing local or global SHAP visualizations.",
+      "version": "2.3",
+      "license": "MIT",
+      "requirements": "Requires Python 3.12+ and uv for SHAP 0.52.0; model-specific libraries are optional.",
+      "environmentHints": [],
+      "validation": {
+        "bundle": "integrity-checked",
+        "runtime": "not-verified"
+      },
+      "files": {
+        "references/data-maskers.md": "fe586f1d7aac5c799437506c2353dc7c0b4916a09c10ea714b22db49aaa12f12",
+        "references/explainers.md": "d173b54e0ee1d5c5e627609967000926fd6036e8efba282534f68857d9cdefca",
+        "references/migration.md": "81278c5d30634b1e2f16bf7b6b703b2b968bfa01636bd7eecae2201baa76e721",
+        "references/modalities.md": "dd19dc010438ed9dca06bce06d3820d617c2fa5740bf0ac86706081ae2ade518",
+        "references/plots.md": "634067fd6d2c951ac4db35a182109f8313be501b6fcd04e0d99e7957f77d3ec2",
+        "references/theory.md": "103d0f50131649c63d6c0895a723d28f5fc175cb5ef923adec0655adc7a136dd",
+        "references/troubleshooting.md": "92ddecfa7a40e30274b812f14abd0ae2e1ec9ab6f14d1a93e77cb15208e754f8",
+        "references/workflows.md": "d227b27899216451daa89b145c6f9e0f4850efacba687d0db00a06921743132e",
+        "scripts/tabular_report.py": "06161aefd48914406f41ad8b26389853537235c5577a962a29fb4a246013214e",
+        "SKILL.md": "9c395662e608accd60acb62158f1d25299b12ec0e40f9f94b70a46ec527d52c1"
+      },
+      "contentHash": "25eb3319df1ba5a3569da769e90a8201b200c4efb598367b23402f6d9d4399fc",
+      "executableFiles": []
+    },
+    {
+      "id": "geopandas",
+      "name": "Geospatial analysis",
+      "categories": [
+        "analysis"
+      ],
+      "keywords": "地理 空间分析 地图 GIS geospatial shapefile",
+      "inputs": "geospatial data and coordinate system",
+      "outputs": "spatial results and maps",
+      "integration": "script",
+      "description": "Guidance and local audit tools for Python workflows that directly use GeoPandas GeoSeries, GeoDataFrame, spatial operations, or vector-data I/O.",
+      "version": "1.4",
+      "license": "MIT",
+      "requirements": "Requires Python 3.12+ and uv for the tested stack. Bundled CLIs are local-only; runtime analysis requires the pinned GeoPandas stack below.",
+      "environmentHints": [],
+      "validation": {
+        "bundle": "integrity-checked",
+        "runtime": "not-verified"
+      },
+      "files": {
+        "references/crs-management.md": "39c0f83941fa8d781e7a5f2d78f6525ef7f154d5a41659fd64e312a9ca05852b",
+        "references/data-io.md": "62a6c42142aa28ebc75b948a4ca1425ac475dcc135c71b4a20705c9b75dde409",
+        "references/data-structures.md": "6468ee20c71fbdfac409c4cf33f61c6e07cc0ff31e0d92e2eb193c39610637ec",
+        "references/geometric-operations.md": "a335fa87508b20a110c4e0905459a18abdd9267b19bec6daf327864ca071d732",
+        "references/spatial-analysis.md": "9f29ca1cd7c818baf887684bda5b1c6433a8feb0a8afff0cd6c911821cb15765",
+        "references/visualization.md": "a6d20e0370e71fd6994c4381743ecbf5fd19edd0087e140cdddc6096fb9b209e",
+        "scripts/_common.py": "6cf6999f0dff04f65d9ba5387c43262ba9210f6a32769a786dfe346a9e76bdcd",
+        "scripts/crs_reprojection_plan.py": "bc31f67674903f87625b9c88e699097bdeab5fdd919111fc31bae516d0328589",
+        "scripts/export_plan.py": "f2f9de1616c846be48e30812abf3d3c02f29302ee007f162f1cc4dd913e9bc22",
+        "scripts/geometry_validity_report.py": "d1727489a97f8b5941fecb9e7612da727416f4bc3c91a6bc5a8b86052e62f798",
+        "scripts/sensitive_coordinates_checklist.py": "b53830e89bae6c359d237895d8836df29f11b0220facb97eda444d0d98b89079",
+        "scripts/spatial_join_audit.py": "a3828a96b5d4861e2fcea642687e4e7408b6e58631d3198c499b8f8272374661",
+        "scripts/vector_inventory.py": "5b69d0c0f1e99cb9c7c663e4286f703c797b0d150711e1e4c293f6082767483f",
+        "SKILL.md": "c03a46f911535326802af476208a1e04de13ea385f4d5309b022ad931826b222"
+      },
+      "contentHash": "9f1775cab4f983e5b39886bb6eef5b8800704009a6521da8ae024281ab60fd98",
+      "executableFiles": [
+        "scripts/crs_reprojection_plan.py",
+        "scripts/export_plan.py",
+        "scripts/geometry_validity_report.py",
+        "scripts/sensitive_coordinates_checklist.py",
+        "scripts/spatial_join_audit.py",
+        "scripts/vector_inventory.py"
+      ]
+    },
+    {
+      "id": "astropy",
+      "name": "Astronomical data analysis",
+      "categories": [
+        "analysis"
+      ],
+      "keywords": "天文 FITS 坐标 astronomy astropy",
+      "inputs": "astronomy data and units",
+      "outputs": "astronomical calculations and tables",
+      "integration": "script",
+      "description": "Core Python library for astronomy and astrophysics workflows that need Astropy APIs, including units/quantities, coordinates, FITS I/O, tables, time systems, WCS, and cosmology. Use when implementing or debugging astronomical data analysis code with Astropy.",
+      "version": "1.5",
+      "license": "BSD-3-Clause license",
+      "requirements": "Requires Python 3.11+, Astropy 8.0.1 and NumPy 2+; SciPy for cosmology, matching and fitting (uv for installation). Some features (object name resolution, site lookups, remote FITS reads, IERS updates) need network access.",
+      "environmentHints": [],
+      "validation": {
+        "bundle": "integrity-checked",
+        "runtime": "not-verified"
+      },
+      "files": {
+        "references/coordinates.md": "2773d6f4086c287436a4b5a4100fd74a951a1688b09cd307bd2afc2945cc27fb",
+        "references/cosmology.md": "71b7e19b9861147480f5a62a34e692d4caf90cfd0ab4bd1fcca765a9cbb6001f",
+        "references/fits.md": "27ee0335641eadc71a62551d7d58d0cb2b5b651b4b4dbbfca42a40f78be4e836",
+        "references/review.md": "d508fe2c8f2969a3aecfd615088b06159b2f653c4b378f1e7bfc83d76db75986",
+        "references/tables.md": "b2cc2a568ca4b0d514346d1db5b2e8d704fbd181cb56dc1b1edae86fb9c06dae",
+        "references/time.md": "4741498365348fd65fda0ff8ddcb57572cd3e5e7d5ff96f965f6567667b8b987",
+        "references/units.md": "1df6212fab813f85dd6788551f474a68103ee694051d89194cfe8a09e90a88b0",
+        "references/wcs_and_other_modules.md": "5201dfc5450a4648a3c550cf58444f209bcff9b082ece4354e3dbf9becb13cc8",
+        "SKILL.md": "2f9d43ae65766a9715112e3b56cb83fb9c12e4e8b6356c0c4c22131c6cfa536f"
+      },
+      "contentHash": "e4310b63521a3ba11a36ad228376c09cc01b183f0af212ebea3c7d23063c2c39",
+      "executableFiles": []
+    },
+    {
+      "id": "biopython",
+      "name": "Biological sequence analysis",
+      "categories": [
+        "analysis"
+      ],
+      "keywords": "生物 序列 DNA 蛋白 fasta BLAST sequence",
+      "inputs": "sequences or biological identifiers",
+      "outputs": "sequence analyses and records",
+      "integration": "script",
+      "description": "Provides Biopython workflows for sequence manipulation, file parsing (FASTA/GenBank/PDB), phylogenetics, and programmatic NCBI/PubMed access (Bio.Entrez). Supports batch processing, custom molecular-biology pipelines, BLAST automation, structure analysis, and motif analysis.",
+      "version": "1.5",
+      "license": "Biopython License Agreement",
+      "requirements": "Requires Python 3.10+, NumPy, and Biopython 1.88. Optional plotting requires Matplotlib or ReportLab. Entrez and web BLAST require network access and a contact email; local BLAST, MUSCLE 5, Clustal Omega, and DSSP require separate executables.",
+      "environmentHints": [
+        "NCBI_API_KEY"
+      ],
+      "validation": {
+        "bundle": "integrity-checked",
+        "runtime": "not-verified"
+      },
+      "files": {
+        "references/advanced.md": "b023aa7df32c4c5f8db621929e23dde64ae0ef77169cbfdefdf479068c0001a8",
+        "references/alignment.md": "99668ee8cf0314f655149a8383f931d51ec039dea566a51219f7f37b02ef6bd4",
+        "references/blast.md": "487953c8120658887de77fe794cc07881b0a223f68e29b4575ec317995fa7151",
+        "references/databases.md": "87dcee5bb51eff9959c313b6680aebf7ff064155599bbb03630325148809bb50",
+        "references/phylogenetics.md": "c0129d6636b7628a512f5338e2afc0101561377210467d17c47008115d851ac6",
+        "references/review.md": "a44292d82f9ec99f1b232a835275e694275709b928e297ed9cc24ed1dbc2f139",
+        "references/sequence_io.md": "cb858b46c28873e5b681b54eba37cbf919dc9febe7d282ca3aeafafe3603c514",
+        "references/structure.md": "c5805632d9bd56cc933374a932a3669444329b135ba275216492659d5420da2e",
+        "SKILL.md": "b617561b38a2e3ecc8f8cf3dd8bb0307ac1aaf4d67e6e0432b0c248bc4382245"
+      },
+      "contentHash": "de0181d0b1b2c86ecd8e79f5726f560f1538786b44d9d3d1d6f331ff1fc515cf",
+      "executableFiles": []
+    },
+    {
+      "id": "scanpy",
+      "name": "Single-cell analysis",
+      "categories": [
+        "analysis"
+      ],
+      "keywords": "单细胞 RNA 细胞聚类 single cell scanpy",
+      "inputs": "single-cell expression data",
+      "outputs": "QC, embeddings and marker results",
+      "integration": "script",
+      "description": "Performs Scanpy single-cell RNA-seq QC, normalization, HVG selection, PCA/UMAP/t-SNE, clustering, exploratory marker ranking, pseudobulk preparation, visualization, and Seurat or SingleCellExperiment RDS conversion to h5ad. Applies to established exploratory scRNA-seq workflows with explicit count and expression provenance; complementary skills cover scvi-tools models and AnnData format details.",
+      "version": "1.8",
+      "license": "BSD-3-Clause",
+      "requirements": "Requires Python 3.12+ and Scanpy; tested with Python 3.13, Scanpy 1.12.4, and AnnData 0.13.4. Optional integrations need separate packages; R conversion needs R. Local analysis needs no credentials or network.",
+      "environmentHints": [],
+      "validation": {
+        "bundle": "integrity-checked",
+        "runtime": "not-verified"
+      },
+      "files": {
+        "assets/analysis_template.py": "c66689f25eeb96c688fd4d66dcd8c78dad22e1f964efed36de1f1ab51f16137e",
+        "assets/celltype_mapping.json": "57252f2224f1ff8cf1e43661bc8a2fabec36bd5d65f996945599fd010c8edf7c",
+        "assets/gene_signatures.json": "96b2cf9b5f56d3b1a110eba1ea585fa624618b6648378ce55d5d82c621e8d286",
+        "assets/pipeline_config.json": "c4cb974ad55afbb3befac85fedb7b2b4daf8799a9ce37c590d4e43ac8b675ee4",
+        "references/analysis_workflow.md": "4ec79d994dfb121b2b79559b3d1b07696ca4cbbfd40b8d2d8ad926176e82f187",
+        "references/api_reference.md": "62cd2efbf21c47b86e52ca25e5b77fd505956d0982c85eb9693c7f94cdf8b759",
+        "references/plotting_guide.md": "6e6de91dce872b00a383ba4a8ba4a87d6f39d53b182857c1defd3a3375c2fd2f",
+        "references/r_interop.md": "8ec8ed4257e18a66fe258da573fb7be9c4261366536edc9ec1298e8271aa79c1",
+        "references/standard_workflow.md": "b7164b502c37779e4c16e41bdbabb8c780da11fa11366c752fc5c889b0b4b7f7",
+        "references/upstream-review.md": "d8cf1606bd21f4772f09b3666f1349e265de3e5c0e8fbea881cbaea18e8b9b28",
+        "scripts/_common.py": "048948933c9fa6831520a512bce6e0a221e31352b6a1b2091d838e9460942e9f",
+        "scripts/annotate.py": "c6f438cdf97db25b493abf072f51cbe9679313966fd9110bdfc9442ec2d79181",
+        "scripts/batch_correct.py": "598178094764aa082894b433d2c9196d45432f3b1bb3928a221519fc5f4cbb45",
+        "scripts/cluster.py": "4b3e8d97351b22452d9898d14bda28759fc35bb885c85c7a99bca0e88b028c7f",
+        "scripts/convert.py": "05e4ced7479b99ed2d98154da1b7c35f822f95ddf1ff25a27b4b6c821f2b9647",
+        "scripts/find_markers.py": "892650b8935fad0d664fad6fe5766468687cf08d7bc231d48f7a40f2635ddfd3",
+        "scripts/inspect_data.py": "587cd7331064126721b814984acf3a15b7cd8e4ed6c4179063b967fbcc965a99",
+        "scripts/plot.py": "afa4163d2eda3e1ae4db2998891d3716e0baf671286260a63dc9d23c0ce38ba8",
+        "scripts/preprocess.py": "513dd9009dd3fe8a300c7d1d7d8a25f3769333945131b8dd50f49184b54ed60c",
+        "scripts/pseudobulk.py": "2050b357a55a00eb91c9f80970465fdf464e601d2350ddaf774bed5d572b6da6",
+        "scripts/qc_analysis.py": "a4ba9a873839c39934c6255708bd5d0542087f54fdb5bc3a295a2b4d8197c104",
+        "scripts/reduce_dimensions.py": "03d8170077c88f90ba28f86d05002ae7009ee1f61d37e4bb06ce50c4550f907a",
+        "scripts/run_pipeline.py": "380209ebe35bddb3e70eaa1f94dd245494e86013619a736688fb81156cde2733",
+        "scripts/score_genes.py": "c18c02410b3797450da4e2d001bf21a216ab0fdef70eeadc6dfb2e8460302b29",
+        "scripts/subset.py": "e245e03f887efc0b662fc7ac623d4cb0929d873eb2e471cc29c09bfe5955e79e",
+        "SKILL.md": "4a59f87933a1e9ed49eac603719af1b0c606dd99050fe59ffa1c1bf807900cb8"
+      },
+      "contentHash": "4443ad9997417f746b9231f51b2b74ecee8d24c953902ca77490970d9373cfc0",
+      "executableFiles": [
+        "scripts/qc_analysis.py"
+      ]
+    },
+    {
+      "id": "anndata",
+      "name": "Annotated biological matrices",
+      "categories": [
+        "analysis"
+      ],
+      "keywords": "注释矩阵 h5ad 单细胞 数据管理 anndata",
+      "inputs": "annotated matrix",
+      "outputs": "validated annotated datasets",
+      "integration": "script",
+      "description": "Handles annotated matrices in single-cell analysis, .h5ad and Zarr files, and integration with the scverse ecosystem. This is the data format skill—for analysis workflows use scanpy; for probabilistic models use scvi-tools; for population-scale queries use cellxgene-census.",
+      "version": "1.4",
+      "license": "BSD-3-Clause license",
+      "requirements": "Requires Python 3.12+ and anndata; uv for installation. Optional dask/lazy extras for lazy I/O; openpyxl for Excel, loompy for legacy Loom, and provider-specific fsspec adapters for remote stores. Network required for installation and remote data only.",
+      "environmentHints": [],
+      "validation": {
+        "bundle": "integrity-checked",
+        "runtime": "not-verified"
+      },
+      "files": {
+        "references/best_practices.md": "bdc271aeb64c884cc0ebe5b6bdfde09855ca76862bb374783a5e8d113ce63a3b",
+        "references/concatenation.md": "0a34a1f21ed9577f521c6ef649ed5f15972ca1cc7e6b9906aeb00ec16b4b142c",
+        "references/data_structure.md": "5ee825849caf215f7810bfe00facdd9f1a00a099f346dafc149f7da024346b11",
+        "references/io_operations.md": "63bf1113076a0d74fe2ab1e02d84c2d32fb29489b7df5e74c981c62c31007af7",
+        "references/manipulation.md": "0c253c29e199bd75ad0ebf47741942aae23732f735f4c0990aaf6dccc5912258",
+        "SKILL.md": "a619c4088e1be6f6feaa5838c63ff8c4381fa21b4adee2a9276aa61464f3a034"
+      },
+      "contentHash": "4ed04e04d4151b2c56a2e934b3b68599064703a8ff6fc59ea13b5e136a135e51",
+      "executableFiles": []
+    },
+    {
+      "id": "pydeseq2",
+      "name": "Differential expression analysis",
+      "categories": [
+        "analysis"
+      ],
+      "keywords": "差异表达 RNA测序 bulk RNA DESeq2",
+      "inputs": "count matrix and sample metadata",
+      "outputs": "differential expression results",
+      "integration": "script",
+      "description": "Performs bulk RNA-seq differential expression analysis with PyDESeq2, including count validation, formula designs, explicit contrasts, Wald tests, FDR correction, coefficient-matched LFC shrinkage, and result visualization. Use for PyDESeq2 or Python DESeq2 workflows with biological replicates.",
+      "version": "1.7",
+      "license": "MIT license",
+      "requirements": "Requires Python >=3.11 and PyDESeq2 0.5.4. Tested current stack uses Python 3.13 and AnnData 0.13.4 (which requires Python >=3.12). Local analyses need no credentials or network; installation and upstream example-data downloads need network access.",
+      "environmentHints": [],
+      "validation": {
+        "bundle": "integrity-checked",
+        "runtime": "not-verified"
+      },
+      "files": {
+        "references/analysis_patterns.md": "de25b02590029166c9e22d845f6b194ddbc1f66ef8dfd4a99bffa54186e61894",
+        "references/api_reference.md": "8f60f7302417b8c094e3e716c1435aea4ebff556c3e90fe389dc0f5bb8509f75",
+        "references/core_workflow_steps.md": "af01451d1ed181f7d0194e28a0ece6ee16bdc5896f463f9b245eff8b47fd2a78",
+        "references/workflow_guide.md": "abcb6571119c4aa1611e959a8d780f76b0036b6da0f90277e2cba66ab7cd83c5",
+        "scripts/run_deseq2_analysis.py": "d99ee5d170fdeea2f80ab3282a9a5fff6e4bf7c3f784af5a4cc4211b1ab2b622",
+        "SKILL.md": "f06a9f5ece540c05bd8a8208bb3970d000b13cb1032abc9488cfbfe6106cd843"
+      },
+      "contentHash": "bd3b0611dc43db4e9e9d1654be145afc0621b861cae9db8309fac881091e2556",
+      "executableFiles": []
+    },
+    {
+      "id": "rdkit",
+      "name": "Molecular data analysis",
+      "categories": [
+        "analysis"
+      ],
+      "keywords": "化学 分子 SMILES 药物 指纹 RDKit molecule",
+      "inputs": "molecular structures and analysis request",
+      "outputs": "descriptors, structures and molecular results",
+      "integration": "script",
+      "description": "Cheminformatics toolkit for fine-grained molecular control. SMILES/SDF parsing, descriptors (MW, LogP, TPSA), fingerprints, substructure search, 2D/3D generation, similarity, reactions. For standard workflows with simpler interface, use datamol (wrapper around RDKit). Use rdkit for advanced control, custom sanitization, specialized algorithms.",
+      "version": "1.5",
+      "license": "BSD-3-Clause license",
+      "requirements": "Tested with RDKit 2026.03.6 on Python 3.13; bundled scripts require the rdkit package. No credentials or network are needed after installation. Use conda-forge for the broadest binary support or PyPI package `rdkit` for supported platform wheels; `rdkit-pypi` is the legacy PyPI name.",
+      "environmentHints": [],
+      "validation": {
+        "bundle": "integrity-checked",
+        "runtime": "not-verified"
+      },
+      "files": {
+        "references/api_reference.md": "160f14e37cfaff3a93e77d77c772b0a06b5dd413fbefddc9a6bc414f5dd63d70",
+        "references/core_capabilities.md": "6ec3d2334012a4b6bbd46a1a055fccad3aa01650c778e6d9c2793d06fa666306",
+        "references/descriptors_reference.md": "5213da1e42c99249490e5a619d213911cafc708056c2e3444f8514cd9e9ce4f9",
+        "references/review.md": "66c4364a9949942203c32aa40766291da75112833576834c272fa24e80817119",
+        "references/smarts_patterns.md": "3746ed0bf7d7ca99b945e5c4ac53077f539e7a20d9091ec59c8c3e0f2a37f190",
+        "references/workflows_and_best_practices.md": "13ac8e6ce522b5585a6c964b10b539d06e18e1c3d4c18880a9733b0be5e54a3f",
+        "scripts/_common.py": "b9de71f55294e9587b42173a49f688f03808678fdf085604fd0a3b3d1ec4fafc",
+        "scripts/molecular_properties.py": "93deadbda64b763d5ff07e88f48de57968e8f2cf1ed210898899bc73f173806a",
+        "scripts/similarity_search.py": "fa935d7cb14f9aa601c15ae2daec539513a397727946b2b62126b77dcf1b52a6",
+        "scripts/substructure_filter.py": "3a737d874bab1007409aea7398d001602142cf54f8fc64b080109da91ac6b513",
+        "SKILL.md": "9f32d5d229bc1a5bac3e57de5fb87895cdb85dcc99132c57373905db0e1a941e"
+      },
+      "contentHash": "66ad2a73b1381ca34d010611e0c361e83baefa67f349cde7cae2dc8643071cb5",
+      "executableFiles": []
+    },
+    {
+      "id": "pymatgen",
+      "name": "Materials data analysis",
+      "categories": [
+        "analysis"
+      ],
+      "keywords": "材料 晶体 结构 pymatgen materials crystal",
+      "inputs": "material structures or identifiers",
+      "outputs": "structure analyses and material records",
+      "integration": "script",
+      "description": "Analyzes, validates, converts, and transforms materials structures and computed materials data with pymatgen. Use for local phase diagrams, symmetry sensitivity, electronic-structure I/O, and bounded Materials Project queries.",
+      "version": "1.5",
+      "license": "MIT",
+      "requirements": "Python 3.11+ with uv. The verified snapshot uses pymatgen 2026.9.24, pymatgen-core 2026.9.23, and mp-api 0.46.5. Bundled help and planning CLIs use only the standard library; local scientific execution lazily requires the pinned pymatgen packages. Materials Project access additionally requires explicit network approval and the single named secret MP_API_KEY.",
+      "environmentHints": [
+        "MP_API_KEY"
+      ],
+      "validation": {
+        "bundle": "integrity-checked",
+        "runtime": "not-verified"
+      },
+      "files": {
+        "references/analysis_modules.md": "80f2b10954eb382326f29b42e2c0ba36ecffcb7b7f7aa7baac41787417e98619",
+        "references/core_classes.md": "855b72c5860def49bda192d93b114a411493d639772bf7b4b75965ed9c6d994a",
+        "references/io_formats.md": "86a02f2c65b2bd9007b9b51a67694610cb468517a0e213b42e51c3e6ed2a310f",
+        "references/materials_project_api.md": "dd1940b0ffb25d59f49aa2c7ff2167be5542c46025b6af599425b9ff5a7300d7",
+        "references/transformations_workflows.md": "2ba11b7b1f61de4af89ca216abf12b8c28ee7fa4659623914730bb9733991628",
+        "scripts/_common.py": "8eaa46482ecd54861730808aa628b515eae633eb5414835e600917505fc98772",
+        "scripts/artifact_manifest.py": "20e64dcd2e65996312bd17a487e0eebfb8e87fc814f938cc030a972f64d6118c",
+        "scripts/composition_structure_validator.py": "cc008c188a2e864a4498df0b90acab4c02f2270e58cc5659dd2129c21f5766c9",
+        "scripts/io_conversion_plan.py": "bbaa88773984f1cc2ae170720ff18142e7d4a5114a98c83b1da905e9803605f1",
+        "scripts/mp_query.py": "7b9fc0e0ec04d63b2349d6c336bb5e390f5ab481ea669a2f43efc7f0d6d1f704",
+        "scripts/phase_diagram_generator.py": "2deeae612bae443c643078ddecea37000aeb88b6982a39522985d93436c38208",
+        "scripts/structure_analyzer.py": "1f1bccf254b80edb28f9b2925dccc72327e948d41c1fb3adef6a5e72288413b9",
+        "scripts/structure_converter.py": "eead5fd4e7c18a050c226f9ecdcc8ae97fa570d9e0269421f1142013deaf92d8",
+        "scripts/symmetry_sensitivity_report.py": "21a384d299e20b7e98281c8623da02a4a8e82604275c8c83454f87163652da15",
+        "SKILL.md": "4a106d7682cd9881765700d534cb419458ba407935a59168547da1ae6ea4b6b1"
+      },
+      "contentHash": "37127a468548c76a9c0bf3712d9a0cb59b05418a3c161aa7009222c6c2096902",
+      "executableFiles": []
+    },
+    {
+      "id": "timesfm-forecasting",
+      "name": "Time-series forecasting",
+      "categories": [
+        "analysis"
+      ],
+      "keywords": "时间序列预测 预测台 timesfm forecasting",
+      "inputs": "time series and horizon",
+      "outputs": "forecasts and evaluation",
+      "integration": "script",
+      "description": "Performs zero-shot time-series forecasting with Google's TimesFM, including regular-grid CSV preparation, quantile forecasts, XReg covariates, and held-out evaluation. Uses the Apache-licensed TimesFM 2.5 checkpoint by default and documents the distinct TimesFM 3.0 multivariate API and weight-license requirements.",
+      "version": "3.0",
+      "license": "Apache-2.0 license",
+      "requirements": "Requires Python 3.10+ and timesfm 3.0.2 with PyTorch; CSV tooling also needs NumPy and pandas. Network access and cache space are needed for initial Hugging Face checkpoint download. Optional XReg needs JAX and scikit-learn; current JAX requires Python 3.12+.",
+      "environmentHints": [],
+      "validation": {
+        "bundle": "integrity-checked",
+        "runtime": "not-verified"
+      },
+      "files": {
+        "examples/anomaly-detection/detect_anomalies.py": "b72da2b712f0615d6441cd7544886a0cac9265aec87d07d8249e8ac901fd8159",
+        "examples/covariates-forecasting/demo_covariates.py": "58a1a831a9f06ce63f8940fca87ec2c1557ad6251660ec957598db5138b83de2",
+        "examples/global-temperature/generate_animation_data.py": "68aedbe20bcdb6ae737a88f36e0152b115acd62955fe95735c0b0f19511738ea",
+        "examples/global-temperature/generate_gif.py": "0e5d0d0cdc3c41e90ac442db307b534b933301bee635b2a0dd0fc14898c2c355",
+        "examples/global-temperature/generate_html.py": "f4f6004450e0808c9bda4187fc0ffbb1f997425c366389350b596376197983f1",
+        "examples/global-temperature/README.md": "85d4dc8a83b6710bb0849b194340ae925df004ae14621a6369e9f0b68262a651",
+        "examples/global-temperature/run_example.sh": "e4dca4db1f6f7d9f172d26d7232b0d967e93fef28389b4ae204a6278ca051aff",
+        "examples/global-temperature/run_forecast.py": "e365895dbe5c13f19caeac7eca029c79344e47ae65fc6d840f45a1af3edb2204",
+        "examples/global-temperature/temperature_anomaly.csv": "3a32b67453575fe786983efb9cad4c491b69ee69903cd9d36b58eb04204161a7",
+        "examples/global-temperature/visualize_forecast.py": "fe718aff95b212d5a1472a8462d1806cb72041b6e852ab06710d0b8c617ab7f9",
+        "references/api_reference.md": "e56d8921fa04b2312b49cf52ecd8814bbf4a9016a46ceab7f8aad3e6774d639e",
+        "references/data_preparation.md": "3bb3910e541f5d81307e2f41b3d4f1f991c34af431d974dbeaacb99db8cdeb94",
+        "references/examples_and_validation.md": "8f2a1c53328d59b7ed95351eaec556e4a0d907df2fed61de66890d671b042fd9",
+        "references/output_and_config.md": "3f261ac97ca9ec4b1c1ccf6f688010a2ee5603ee2eae80dfa33399f13d26a908",
+        "references/performance_tuning.md": "59a622f82572937e055c2306298e0b4f67da5ba7df6f9825797ef86c87de61b2",
+        "references/system_requirements.md": "cd0d4612452062cc49c07594b79ab08a26c43ea9b68cd5ec60a6f698eb362d72",
+        "references/timesfm3.md": "9c43ae9428a6022195c4bed1ca6a9d6189f69360b10b68bb203fc40865f7fb00",
+        "references/workflows.md": "fc702f51534461c7c1225287102366a1926cc2ee5e875205ddcfa875c615e5f7",
+        "scripts/check_system.py": "3fabbf00a3882bd73fd8a2c65e4c161386ea995e2dd322690f1e1f149a1fb590",
+        "scripts/forecast_csv.py": "1f2969934ea6273a83fdc33fbf3e2e3e34b3fa416421977ea35c5ef669dd0b9b",
+        "SKILL.md": "6f785fe73b133e9af7720fa46cf9013645198950155624889ef611b7b0dc74b8"
+      },
+      "contentHash": "44979ddf15bd5ad20b0d2046c7a6f5b9e685edd29013442219bb52c6db8dd8c8",
+      "executableFiles": [
+        "examples/global-temperature/run_example.sh"
+      ]
+    },
+    {
+      "id": "uncertainty-and-units",
+      "name": "Measurement uncertainty and units",
+      "categories": [
+        "analysis"
+      ],
+      "keywords": "不确定度 单位 误差传播 uncertainty units measurement",
+      "inputs": "measurements, units and uncertainty",
+      "outputs": "unit-aware results and error propagation",
+      "integration": "script",
+      "description": "Tracks physical units and propagates measurement uncertainty in scientific calculations using pint and uncertainties. Use for unit conversion and dimensional checking, GUM uncertainty budgets, Type A and Type B evaluation, coverage factors and expanded uncertainty, Monte Carlo propagation, significant-figure and plus-minus reporting, error propagation through curve fits, CODATA constants, auditing Python code for stripped units or broken uncertainty propagation, and order-of-magnitude plausibility checks using dimensionless groups (Reynolds, Peclet, Damkohler, Knudsen, Biot, Womersley), characteristic scales such as diffusion time or Debye length, and observed magnitude ranges. Trigger on \"is this number physically reasonable\", \"sanity check these units\", \"what regime is this flow in\", or a result that looks off by orders of magnitude.",
+      "version": "1.3",
+      "license": "MIT",
+      "requirements": "Requires Python 3.12+. The numeric CLIs need pint, uncertainties, NumPy, and SciPy; the static auditor is standard-library only. All bundled tooling runs locally with no network access.",
+      "environmentHints": [],
+      "validation": {
+        "bundle": "integrity-checked",
+        "runtime": "not-verified"
+      },
+      "files": {
+        "references/domain-conversions.md": "7ab73bbd69acbd23fac74ae9f3ad570a6f1501c1a5fd22998cfcd01c725441ca",
+        "references/gum-methodology.md": "def9b0ac9ff3d2912922d121062559b22ff3ec36aed94e183eef3338b4e0430f",
+        "references/pint-recipes.md": "9fbc1bc7b12267777a0359bf252e52415e6e1683cd8c4c3a6582ddca6cd51baa",
+        "references/plausibility-scales.md": "b9ef8acbc0ff6948ec7dca027cd31b7d73d2157b18bcf0c8e92d60c0029e8131",
+        "references/reporting-rules.md": "8d302b26e0792b866d3249955250e9132c09337639abb8cf36ac3f5cdaf4648e",
+        "references/review.md": "59c605f037739927495f0323246168abf9cd2bae5511b1566bb13e775bf00868",
+        "references/uncertainties-recipes.md": "2125796d070c4b13ed007e6d8f498c69698a1ce4917ece4cdda32a887dd7c214",
+        "scripts/_common.py": "9d6b9ecabf92759a5d9f017ae3174673f827328b76cde238d07089f2d99c9323",
+        "scripts/audit_units.py": "2b891065c8b801f4a16b8dca2b73a6348c3ecf3fc88569936ded5e7f86a1e429",
+        "scripts/check_plausibility.py": "f4c1bff54a483d08f794f205454ed03fa263008b26cee772bd04d417cc86384f",
+        "scripts/convert_units.py": "89a9a0aa40a8158d2a739270115778fc1415f1a3cb207a6f17be14278872473a",
+        "scripts/format_result.py": "a839041c3f31a67cffda00e895bfed612cbc5748e83c41da83c17ff8f7b17302",
+        "scripts/propagate_uncertainty.py": "6c555f3fc7095ac340d11e8dd69f29f483f309b91af4b3489cd4c5ea468ceb86",
+        "scripts/uncertainty_budget.py": "162699fd5336fca43489757a1c63e81c89deb46aefb51ceb99a24682fde14b44",
+        "SKILL.md": "caaafa079a4eaac6012717bcf705dec0417b5434f5dbd1af934a3a36ad375722"
+      },
+      "contentHash": "555822e8bd8bf990f36abee96121a39ec559ebe1fc0085fa72533261ac932c56",
+      "executableFiles": []
+    },
+    {
+      "id": "literature-review",
+      "name": "Literature review",
+      "categories": [
+        "writing"
+      ],
+      "keywords": "文献综述 系统综述 检索筛选 literature review systematic review",
+      "inputs": "review question and sources",
+      "outputs": "evidence synthesis and review",
+      "integration": "agent",
+      "description": "Conducts systematic, scoping, and narrative literature reviews using PubMed, arXiv, bioRxiv, Semantic Scholar, and other appropriate sources. Use for research synthesis, reproducible literature searches, screening, citation checking, or preparing Markdown and PDF reviews. Tracks search coverage, records versus studies, and evidence limitations; supports meta-analysis planning but does not supply a meta-analysis engine.",
+      "version": "1.11",
+      "license": "MIT license",
+      "requirements": "Python 3.10+ with requests; network for DOI checks and searches. Optional parallel-cli requires Parallel authentication. PDF export needs Pandoc and XeLaTeX; AI schematics need OPENROUTER_API_KEY.",
+      "environmentHints": [
+        "OPENROUTER_API_KEY",
+        "PARALLEL_API_KEY"
+      ],
+      "validation": {
+        "bundle": "integrity-checked",
+        "runtime": "not-verified"
+      },
+      "files": {
+        "assets/review_template.md": "08671516976d01a7004f8ae7c944a50c253877504720c15d5fa24eed90889819",
+        "references/citation_styles.md": "2a50e43b18c2fff781e04406deb66186ba8f91ed28af32004aba63c63dcc1789",
+        "references/core_workflow.md": "4d63f1087c98efeec7c7bf622bed6e0456a9c7c3defe584995917f2de6f2c601",
+        "references/database_strategies.md": "24b56cd88128a9016520ed6b5e2abb79e19dc9b86cbf064927e9056aa1504f48",
+        "references/example_workflow.md": "86336c42f78ff282430a6cdd2282a99562cc9d5e46b62e70a33bd839f9ab726a",
+        "references/search_and_citation.md": "f33d671351989ee86066b9a21bdbf630a1f60001ada92fda4c942006d37b74fe",
+        "scripts/generate_pdf.py": "0ba1b16b196b64d4966e5f055a289f0c17e3579a84254abe47ff63be95b4f136",
+        "scripts/generate_schematic_ai.py": "7316f2df92f442b8c60a5dd2bd8b504e17449d4be89352e5af24be2239700046",
+        "scripts/generate_schematic.py": "0c81ce099d5ab9aa3d3c486aa9bd3e81ee1117e18a54db14bb0a68de61eaa4bc",
+        "scripts/search_databases.py": "76f47fd18ca28df4985ffc6d30d5ad659e67c8058bb3de8f385c2443752f4eaf",
+        "scripts/verify_citations.py": "4c8e8377718ddd47e9cd7cef706935b04910af5d13bfd920970dcf41d4ef3706",
+        "SKILL.md": "16a9e85bcdcb9bb859e1646bf836e51b22900445ba2e367d8d75be05b5a5cba8"
+      },
+      "contentHash": "1be5eab8251fb5cba16192f9f7e2c7ba695518acedf099474f261bbc097464b7",
+      "executableFiles": []
+    },
+    {
+      "id": "scientific-writing",
+      "name": "Scientific manuscript writing",
+      "categories": [
+        "writing"
+      ],
+      "keywords": "科研写作 论文写作 手稿 scientific writing manuscript",
+      "inputs": "evidence, outline and manuscript",
+      "outputs": "evidence-grounded draft and checks",
+      "integration": "agent",
+      "description": "Drafts, revises, and audits scientific manuscripts or reports with explicit evidence provenance, reporting-guideline coverage, authorship accountability, confidentiality controls, and local consistency checks. Use for manuscript sections, references, declarations, tables, figures, or submission preparation when scientific accuracy and traceability matter.",
+      "version": "2.3",
+      "license": "MIT",
+      "requirements": "Requires Python 3.11+ only for optional dependency-free local CLIs; core guidance is platform-neutral. Bundled tools are offline and require no API keys.",
+      "environmentHints": [],
+      "validation": {
+        "bundle": "integrity-checked",
+        "runtime": "not-verified"
+      },
+      "files": {
+        "assets/authorship_template.json": "04a590ac47ed61dcc7cd88a26d51243cf178fe6ada99d4000ca225e1b5f6f20a",
+        "assets/claim_evidence_template.csv": "cfb7a9f44cd1e5ef47ccdb3e32ac0a25b72d30e51343faace9bf07c00e3a0659",
+        "assets/consistency_manifest_template.json": "2ea6f468ab6fab45c4db3616fbaddcc2ae706b3a26d6745b4cf74ddb53266872",
+        "assets/manuscript_manifest_template.json": "914052ff25b44072a07dce2ae8171524b717894ad7d2103054356115b9dd6c22",
+        "assets/manuscript_scaffold.md": "55305ba311ff4e2459a31a99b3f1b9da44d79499332399a9216b5f92cb412ab2",
+        "assets/REPORT_FORMATTING_GUIDE.md": "2bb69499426ed6727c1701bae752c2e902151cbf69963f8bcf25b9e54cc20724",
+        "assets/reporting_coverage_template.json": "886ca599622c1dfaedde7649ec47e973b4fbe6081cac6a6afaf24ace899d46a9",
+        "assets/reporting_guidelines.json": "215f8c55bd40bda0569f2e81556030ff575319e25276b1e1ae70e2cc7475ddcd",
+        "assets/source_manifest_template.json": "fc6f65a8571b717691ac717f325825a608190f271e8b79650b711cc95f5b0a36",
+        "references/authorship_ai_confidentiality.md": "0200e3ad8eafaedec26bce2b9895cda81c6c9325790507509134373a0ca41fe2",
+        "references/citation_styles.md": "338c08d8fba6fbf7437aad4dd99db5bccf3f597fa6650c562fae0c7ca422e572",
+        "references/cli_reference.md": "05b15a587277e37dbc6161532dce58c8ccf647e22f21861ebcbac22954453e75",
+        "references/evidence_workflow.md": "346c867d71e8cf1db6e3684a64714925a3966fcaeb1db853d7ddb07c6a6f607b",
+        "references/figures_tables.md": "212d10f3e7a01325d2518c4aab54a4fc04a67e4aa94e959cead199c425a0f4d6",
+        "references/imrad_structure.md": "8a1201f8e58a045736a5bc65a47f239c894be6946716e969c0b77aa90a7e8e39",
+        "references/journal_policies.md": "aefbd73c5a8a23be076b210a910f026ece748a73b4593cb99e885879bd61d2c2",
+        "references/professional_report_formatting.md": "c269fd256bda6a9389bfd5ffefa8eff8876b96d92f8391e8a01fa80910bb35d3",
+        "references/reporting_guidelines.md": "4a74d4613742bb26fe3d74596998b9e75ea8a2694a012222b6d9636e121a1f0d",
+        "references/research_integrity_open_science.md": "f8f91010537acf4b78616d7410d23b85030f94d66e9d36db03d6e632ffb56100",
+        "references/source_ledger.md": "1692a3bea432dfde6eb1e7ca7054d0dd8652b1bef6b97322ea3c30f0ff68d5b3",
+        "references/writing_principles.md": "58d4b32f63446c0b082f163314fdcf0d41a50568ad392d34ba992e24fadae764",
+        "scripts/_common.py": "8cc192d82d219d1ec9720f8a8ab0c440fb35f2562fdeaeb7432a38d18e5e7b42",
+        "scripts/audit_claims.py": "6074f51663e6863cf28168824a3f440b5acce9734c3c3f72590ba89c88a23c06",
+        "scripts/check_consistency.py": "5bd1f0dcbcccdac31e422b5a7b220d1ab1272a7eed906a62c0a5f2518e495d87",
+        "scripts/check_references.py": "a262d6e935e69ec1c1f25a36b8a12b6905b3f3dee0a11d94557d3f69857c5f07",
+        "scripts/lint_manuscript.py": "08ff45315c4dadd1c91104e3639b6bec7a6086c000830dc9d0b2b965895b3398",
+        "scripts/scaffold_manuscript.py": "69e9a82c7d0608646872c0f4ad08b538f0c67175b48601d9d52ea527334ce4ae",
+        "scripts/select_reporting_guidelines.py": "d130036ab1df6486cb54431a168207af03a52c626459ba7471041b0ee5aab567",
+        "scripts/validate_authorship.py": "31572a61ff61fe58f0b3f4c5b0e0e44bd9de5b865772f563dd5413876c186788",
+        "scripts/validate_manifest.py": "6f87919db5aa5fb5ba929b6566c892a0d6881a9e46d8a9646186c6cac01e13d2",
+        "SKILL.md": "511a2096bebecd8cf0f8212b9d262d37154ae1ba566eb385d93ac968682edbd1"
+      },
+      "contentHash": "779314316fb2892f41d30f5411d3211ae603be8eabcb5dbdf323bc146ddbcb3c",
+      "executableFiles": []
+    },
+    {
+      "id": "peer-review",
+      "name": "Manuscript review",
+      "categories": [
+        "writing"
+      ],
+      "keywords": "论文评审 审稿 回复审稿 peer review reviewer",
+      "inputs": "manuscript and review criteria",
+      "outputs": "structured review and revision priorities",
+      "integration": "agent",
+      "description": "Prepares evidence-bounded, constructive peer-review drafts and structured manuscript assessments. Supports authorized review of scientific manuscripts, protocols, preprints, or research proposals; reporting-guideline selection; claim–evidence checks; methods, statistics, reproducibility, ethics, figure/table, and citation critique; or revision-response planning.",
+      "version": "2.4",
+      "license": "MIT",
+      "requirements": "Python 3.11+ standard library. Bundled CLIs are deterministic and local-only; they accept bounded JSON, CSV, or Markdown and make no network, model, image, or external-service calls.",
+      "environmentHints": [],
+      "validation": {
+        "bundle": "integrity-checked",
+        "runtime": "not-verified"
+      },
+      "files": {
+        "assets/citation_references_template.csv": "e00b259742a0716661d8adba1e81fc7ca722cea32c3cfe5a5e29509844ed742b",
+        "assets/claim_evidence_matrix_template.csv": "06e1215c998a978bdbbe30008040536902abe138e0f790b243ecaee1f21b7da7",
+        "assets/reporting_checklist_template.csv": "02709793bc1702fadc760e7089398eb28351b22885a08cbea6c85f135e931ee1",
+        "assets/reporting_guidelines.json": "cf95b9a4e1f54016c800e8b3ff02191e7bc60593e30c043231d47d91259250ac",
+        "assets/review_intake_template.json": "14d7e00cdc710b8235c80faa71f4c5712c1db1a0a2d734fd4fa9807bbc960438",
+        "assets/review_scaffold_template.md": "4e320c9a6238ac7ea2494a4c486e93d1eaf2c5239aab80fcd8eea70a6e359102",
+        "assets/source_ledger.csv": "9226c94f1066b8c8f9a2a65d6aea08a3471ec36e19f835908573690282a8e737",
+        "assets/statistical_reproducibility_template.json": "071bfc0b1e1edb9d09c539b5c6e291e43e8d719cbe50cfdeac1044fe8f0b69a3",
+        "assets/study_profile_template.json": "bc0c19b9ad478c78c4b5111bcd913faca8046e0833815b1bd579a046f737df40",
+        "references/common_issues.md": "6a0979d6d64e07f769db8ee9ab82ad3190aebaca4294838f338f5c4b51b596f6",
+        "references/ethical_review_practice.md": "d61f27a471f9b42160ae303cb13df2b034085e037b5647cbc0bbf2de8435b1d7",
+        "references/reporting_standards.md": "19ececda52568269987be1dff81900471433353dee8bb8a28a06f3691cb051c2",
+        "references/security_validation.md": "3d24c7aa7d7b1d1a7df410307d95993b63dff79bf01c400a1c154df19fcf737d",
+        "references/statistical_reproducibility.md": "aab5c13d19525fc4626a4153a90ba63231324d609e16bbf569d874c974731bd6",
+        "references/tool_reference.md": "d765fa7a03712049174b2c288718a602c623fd2233b6fa451bbd6854eb0c46c1",
+        "scripts/_common.py": "78e751bd8024d4df69a6a7ab82497424d58da06d751f4cb97ba4fc75eb9044db",
+        "scripts/audit_citations.py": "9521d624dce092b93f36e3c4c7dd9cab151b24d2e623d0b299adbef239100e47",
+        "scripts/audit_statistics_reproducibility.py": "8daf60d78a2758665b5c676d1d68e52c57c5c1988249fdbbaba62d31a49c495b",
+        "scripts/generate_review_scaffold.py": "3c2d6dc36e8e5fdd0313422d30da8c31a7ca808618818db376e348fe8d38fd2c",
+        "scripts/lint_review.py": "623878c26ede3d74f2ddf0e0a15acbade40d10009c66ab334550b814b2361e75",
+        "scripts/select_reporting_guidelines.py": "9ccbbdeca6df01f2f4e1c86b98db0e9ab0a43685c6726e1abfdb9bbaa2b92ae3",
+        "scripts/validate_claim_evidence.py": "93490b289f288ed686a8eb300bf40693e7caf148b5022b180077f0db22acbe2b",
+        "scripts/validate_review_intake.py": "0ad9038d96a7867fa8268b70aff4f69ec1e2472b6399bbc04feb5c6fd842d5fa",
+        "SKILL.md": "a042ccdc76d3399431b9a6c4cd4f98968eab964b1c14baeea4d9e73de82c7d19"
+      },
+      "contentHash": "79da559f5e7942f466911e94aaee4042ba77a39bf1958ef7b194e80367f6b3f1",
+      "executableFiles": []
+    },
+    {
+      "id": "scientific-slides",
+      "name": "Scientific presentations",
+      "categories": [
+        "writing"
+      ],
+      "keywords": "科研汇报 论文转PPT 幻灯片 scientific slides presentation",
+      "inputs": "research content and audience",
+      "outputs": "slide deck and validation artifacts",
+      "integration": "script",
+      "description": "Builds slide decks and presentations for research talks. Used for making PowerPoint slides, conference presentations, seminar talks, research presentations, thesis defense slides, or any scientific talk. Provides slide structure, design templates, timing guidance, and visual validation. Works with PowerPoint and LaTeX Beamer.",
+      "version": "1.12",
+      "license": "MIT license",
+      "requirements": "Python 3.12+; requests for OpenRouter generation, Pillow for image PDFs, PyMuPDF for rendering, pypdf and python-pptx for validation and template editing. Generation needs network and OPENROUTER_API_KEY. Beamer needs TeX Live/MiKTeX; programmatic PPTX needs Node.js and PptxGenJS; rendering PPTX for review needs LibreOffice.",
+      "environmentHints": [
+        "OPENROUTER_API_KEY"
+      ],
+      "validation": {
+        "bundle": "integrity-checked",
+        "runtime": "not-verified"
+      },
+      "files": {
+        "assets/beamer_template_conference.tex": "6baeb344277e60f0909b48421cd8d93f093e6733469b39426cdfcf38164cdafa",
+        "assets/beamer_template_defense.tex": "03893eaf18e9e689fefd42bcb6ffc56413d229fe980c0bd67804422ba0077f45",
+        "assets/beamer_template_seminar.tex": "714a3c3d29b0227100d9ecac10383471c3fb1d11cb3450c691d3955f0ef46ee3",
+        "assets/powerpoint_design_guide.md": "afacd3ac9b33311a86ebf1398bc960279b1412a77a25c3ce5429ebbf3e50d94a",
+        "assets/timing_guidelines.md": "39f4720e9d5a602d6c16af0985232fbc78d4e79598e7ed17a2bc076efc9cc195",
+        "references/beamer_guide.md": "a57ee14a34d7b8b6bb72d19bc0b0d4ccaa172731cfc5d8dbf30fbceeb30dcbcd",
+        "references/common_pitfalls.md": "1624aa65d42d52469a06727e6a68c5ba66cce311020f107659de7ca80654888b",
+        "references/data_visualization_slides.md": "ff0b437dae2cc74b9290907ade331dc69cb1365071584ef2a854f5ade3a53408",
+        "references/presentation_structure.md": "8e79965dd65ca56a7e239920867b36be1b2f626cee9e65e99e4d6efaaa883004",
+        "references/presentation_workflow.md": "5e52ebfcf4b0a423dc82451fd62ec5468e8c4b66599f14d5e57ec6ece9c00700",
+        "references/prompt_writing.md": "87341d37eac34509c88ba2a3e5e1a880915ac0576e74b12f0f6d2baa31f79f9d",
+        "references/script_reference.md": "cc20750df4fbb6f3e8068bc9ba355dfacfa943da5c5211223244da0b39e69761",
+        "references/slide_capabilities.md": "1ad22713e87571cf65ac3176a84985774ad74e2a8be7e4c3396cb0877876f38b",
+        "references/slide_design_principles.md": "6b50148bc161c80272b16da445dfdb87f966a32ccd3a28ff94dedc940dd6fbff",
+        "references/talk_types_guide.md": "743274bc2664177f7a015c2531d07d516d1a7a6d6b6cb4a5ff527a3a99fac683",
+        "references/visual_review_workflow.md": "38138ef5f10b92f6d8965906438235bbb9ff08c8839545501a00bd6b799ab581",
+        "scripts/generate_schematic_ai.py": "7316f2df92f442b8c60a5dd2bd8b504e17449d4be89352e5af24be2239700046",
+        "scripts/generate_schematic.py": "0c81ce099d5ab9aa3d3c486aa9bd3e81ee1117e18a54db14bb0a68de61eaa4bc",
+        "scripts/generate_slide_image_ai.py": "1ecd12ffe9529d13cc16747ff6c63f44340df0df439a35c1ac796c488e6a9fec",
+        "scripts/generate_slide_image.py": "19fe23e762df171625b6d5fec9635759398709dd2434b36f95da4004ec45af00",
+        "scripts/pdf_to_images.py": "06ada43a0b3ff5c5f6c89dfb214a451e99ec0f23532ccb7962376b3f3e5ba610",
+        "scripts/slides_to_pdf.py": "a816f9269c3d1889677b92daa92e819834aafdcf600b1535304f385e178b3fdf",
+        "scripts/validate_presentation.py": "f4f8ebe14e2cc593edf60e5236bd31fcae1b686757c90cc4b18eb488cdf78646",
+        "SKILL.md": "b1d34b81d30789f561bd4ee3ddb373c9fb84bed25086794bebd842af46afbad6"
+      },
+      "contentHash": "1aa557485d389b6bb65cdb324159ccfe1269c9de832614b5924c33b0287efbee",
+      "executableFiles": []
+    },
+    {
+      "id": "scientific-schematics",
+      "name": "Scientific diagrams",
+      "categories": [
+        "writing"
+      ],
+      "keywords": "机制图 流程图 示意图 scientific schematic diagram",
+      "inputs": "scientific structure and visual requirements",
+      "outputs": "scientific diagram",
+      "integration": "api",
+      "description": "Generates scientific diagram drafts using Nano Banana 2 AI with smart iterative refinement. Uses Gemini 3.7 Flash for quality review. Refines when the review requests improvement, with at most two generations. Specialized in neural network architectures, system diagrams, flowcharts, biological pathways, and complex scientific visualizations.",
+      "version": "1.10",
+      "license": "MIT license",
+      "requirements": "Requires Python 3.10+ with requests, network access, and an OpenRouter API key.",
+      "environmentHints": [
+        "OPENROUTER_API_KEY"
+      ],
+      "validation": {
+        "bundle": "integrity-checked",
+        "runtime": "not-verified"
+      },
+      "files": {
+        "references/best_practices.md": "a991e1f2219feaffea93360c39cb5a7102c7cd8985c0c7aafc68fa617d3b8581",
+        "references/iterative_refinement.md": "f151ecba3c786b55f6f4b505ddca01957deabbc8f5dc9dcd0d3e27e766c3da75",
+        "scripts/example_usage.sh": "921e4c2332f83cafa75491be4bb92dd863c86cd9118ef0e04028a7eb74a9ae0b",
+        "scripts/generate_schematic_ai.py": "7316f2df92f442b8c60a5dd2bd8b504e17449d4be89352e5af24be2239700046",
+        "scripts/generate_schematic.py": "0c81ce099d5ab9aa3d3c486aa9bd3e81ee1117e18a54db14bb0a68de61eaa4bc",
+        "SKILL.md": "e15d761ef88013c98fd5b19cc144aba7336e20dbadf340db17bd1ba2227d1d69"
+      },
+      "contentHash": "f679cc2e2bd1381040d75a41058cebbd57870a9b8ccbc4b97b7fc1ed4a3b4fe2",
+      "executableFiles": [
+        "scripts/example_usage.sh"
+      ]
+    },
+    {
+      "id": "markdown-mermaid-writing",
+      "name": "Markdown and Mermaid documents",
+      "categories": [
+        "writing"
+      ],
+      "keywords": "技术文档 markdown mermaid 流程图 架构图",
+      "inputs": "structured content or process",
+      "outputs": "Markdown documents and diagrams",
+      "integration": "script",
+      "description": "Writes scientific Markdown documentation and Mermaid diagrams for workflows, relationships, timelines, and schemas. Provides syntax references, document templates, accessibility guidance, and version-aware rendering checks. Use when a user requests Markdown, Mermaid, or a text-based structural diagram; quantitative scientific figures require suitable plotting tools.",
+      "version": "1.3",
+      "license": "Apache-2.0",
+      "requirements": "Markdown authoring needs no runtime. Local rendering targets Mermaid and Mermaid CLI 12.0.0, Node.js 22.13+ and a supported Chromium browser. Package or CDN installation needs network access; no credentials required.",
+      "environmentHints": [],
+      "validation": {
+        "bundle": "integrity-checked",
+        "runtime": "not-verified"
+      },
+      "files": {
+        "assets/examples/example-research-report.md": "af5844d2f8b2972d96ad85218b479367b1fa99cd718bd23be6027266079ec7de",
+        "references/current-rendering.md": "03b96222d08fffb254a1828f301af4ce8ebe099c9bc380ab21ad59888e0d3d51",
+        "references/diagrams/architecture.md": "b246d31c1b99d41a795d7df1c451b77f8bd1cf584561471bc3cd8874b3199376",
+        "references/diagrams/block.md": "02b2a095b4c8c6845c1fd9d3a3ca917113746517dcd224107f6c9c6bede8221c",
+        "references/diagrams/c4.md": "2f815d518f8715fa2968566c88edd146f760f33db3299704ff15614ec50df2d5",
+        "references/diagrams/class.md": "496286c007ab15dc5e875ff7e30ca2a2e6b69d8cf46bce4330a3e92eb9810c8b",
+        "references/diagrams/complex_examples.md": "1eddefc2e1e2717ac813b3488a1355fa9585b496c5d7bc9606121924c73b3c73",
+        "references/diagrams/er.md": "2086906f3c002837c5508205a81acc93cc2cc6166cea96d62f3836153a71f76e",
+        "references/diagrams/flowchart.md": "be90231d635aea2645fefd86c108a3a0f819e74929e30afe5b670702265e368e",
+        "references/diagrams/gantt.md": "c05da4e62a02f4ae4d01995a0de4272cc04f7609408d9ecc08345b1ff6e65914",
+        "references/diagrams/git_graph.md": "5992286cc0ac0b16020ef71fccb074eeb9b5c70d874fc08ef1b07672f550645e",
+        "references/diagrams/kanban.md": "acd582211a09ba799445a0d1fc7fb710149cd46ea71e4f17509ffce7733f142f",
+        "references/diagrams/mindmap.md": "79bbffa9faff776f832a77d7fbe29530b3f3aa45c60e08176e621c39c824dcee",
+        "references/diagrams/packet.md": "6d17b2b9dcb24d78538b3d14d06a53c51a06d5b7b81a191c1c923d85f90f07d2",
+        "references/diagrams/pie.md": "5c23d5928eea6cfaf3d6cdd7fc0306403abf8a1d5394dfea2d5f64bc30bc5f99",
+        "references/diagrams/quadrant.md": "14977d2d10cd6255afad2f9e6db92f21ece23cf50b0595928877a84125e340c6",
+        "references/diagrams/radar.md": "37bd437a3b99782b3a2adb5cbc7a9d888e99508f25539fbad53aa2ca12a9f03d",
+        "references/diagrams/requirement.md": "37da70b91532bf1c71925b75c1fe5424cb1637726765f285c7ee059231916941",
+        "references/diagrams/sankey.md": "28446f926580846fe9dffd8fc19d08d69aab010793520b2b41045a5e0d5e57e3",
+        "references/diagrams/sequence.md": "7eb7c9d4822de94a8c2e0fce23cd3c98a4eabfd72969ac1db5b774ba981ac1b0",
+        "references/diagrams/state.md": "6f4932b9e0f8b52eb1e364e54ce79d5051facf0706b8832d2fa1ec61b1c3d4dd",
+        "references/diagrams/timeline.md": "54989d17d5636c8cb4a32cd256f58857d63a78928d2b06a7bc204cd4bdbaca6c",
+        "references/diagrams/treemap.md": "2a52475aa915d9173ec506c8b71500ea8e6ebea48663c742c2a9b0d0b8c2e56d",
+        "references/diagrams/user_journey.md": "3e04d3e557732cd90f841e142f43bdb70d255bc9c7b9d148a609014aca56ca0f",
+        "references/diagrams/xy_chart.md": "642910cf5949017f15dfe8ecf46564e0697427072f66eebbcb33d8c0a35232c0",
+        "references/diagrams/zenuml.md": "319efbe76fd336bc4049f20a3139e51f3d4df6be2fcea421b85e4ca8c7e6441a",
+        "references/markdown_style_guide.md": "ecc85928c8ebcb4bbfd46556bb37269061e6f58504dfe3ffbaf29b7788d64248",
+        "references/mermaid_style_guide.md": "083ce0070bf3d8b4e64d9b946ab6eaec908168f0a3bb77926d720a4f767feaef",
+        "SKILL.md": "c28a9d602fc5b55e9fa80cff493b045bb70d3cec47e2288e38051744337214c4",
+        "templates/decision_record.md": "da314705b15a2c4bb9fb6150222f9db5e8229da275481c4acfc9e8c7a0afdbbc",
+        "templates/how_to_guide.md": "1363b28cc6edd59f68ca81efe6e8723ad43008283acad23dcda45fa0e8c30848",
+        "templates/issue.md": "3ec84341c5a923f1dc9066e1c346533c7021602a6a8b17252d51dd4f40d0d1ec",
+        "templates/kanban.md": "213df6f39e2ef3e253b98fe6c3688322bb78e88f0f89d9cdbd23933774bc21e2",
+        "templates/presentation.md": "13494ab83e242fd4cb9fb3110d87a4f8aadcc8a4f520cb16acca4d8fdb8875cf",
+        "templates/project_documentation.md": "58da34425cabac1b859e8f43916bad215232e60ecefe031a959b729c1549f9df",
+        "templates/pull_request.md": "18828f680999f39bdb6f7ae7c175af507dbe945363f16962ddd019958751c499",
+        "templates/research_paper.md": "c795783bfde5fa07ccb29159ff5129d5ea0888d827cfa50548a9101e8c177c29",
+        "templates/status_report.md": "2cdf785affe8831d2fa1cb6e87cf33afbb5c3cb056575aa5ecb2b8b6bfbe3152"
+      },
+      "contentHash": "e35c58076ad3998e8860e787487398dfba001574ff3679cb96e363a3dcd9d50b",
+      "executableFiles": []
+    },
+    {
+      "id": "latex-posters",
+      "name": "Research posters",
+      "categories": [
+        "writing"
+      ],
+      "keywords": "学术海报 科研海报 poster latex",
+      "inputs": "research content and poster dimensions",
+      "outputs": "LaTeX poster and PDF",
+      "integration": "script",
+      "description": "Creates research posters in LaTeX using beamerposter, tikzposter, or baposter. Use for conference posters, academic presentations, multi-column scientific layouts, figure integration, typography, compilation, and PDF preflight.",
+      "version": "1.10",
+      "license": "See upstream LICENSE.md and resource notices",
+      "requirements": "Requires a LaTeX distribution with the selected poster class and Poppler for PDF checks. Optional AI schematics require Python 3.10+, requests, network access, and OPENROUTER_API_KEY. baposter needs a separately supplied class file.",
+      "environmentHints": [
+        "OPENROUTER_API_KEY"
+      ],
+      "validation": {
+        "bundle": "integrity-checked",
+        "runtime": "not-verified"
+      },
+      "files": {
+        "assets/baposter_template.tex": "05d52aa0bcc7d704525a3c09edb72c478f3ed5de29e1d8d751c046aa69649045",
+        "assets/beamerposter_template.tex": "79df337979df21b20c6852ada7860a6fe186d7189550bfe831db9a27513c0dbb",
+        "assets/poster_quality_checklist.md": "1d6fb4875798aa349180e07919e0dd2ad8b8cb8357a0fb5106e9914bdd0ea4db",
+        "assets/tikzposter_template.tex": "39ef6e3dc99240481e56a439d23d438f84a264b53933d5b8d3c713d5bf918d04",
+        "references/ai_graphics_for_posters.md": "a8090976bc9d195fac6e4ed115e64ab28a6a8c93412d5cd3185e5a73a5dc1d5a",
+        "references/compilation_and_quality_control.md": "2fdeabd760c2e56ee26be771a373cb5809655831a5a82d60010bbe3a22993fc6",
+        "references/latex_poster_packages.md": "d120828344c56093a5c71fe91d821c38e3768dcfd9e149c5412c6ff0af71eda6",
+        "references/latex_poster_reference.md": "beef5f9e5d931d43ebf41233e42413f07bf2bb235b19cc952e52e23227595ee1",
+        "references/poster_content_guide.md": "047f27c34c6a31673ce96dd0a08ca0ac8934ee7d4374da4b244782690e96d224",
+        "references/poster_design_principles.md": "53a1e16ddf7eb3f1e9e5cb47af02327b3ed21986334f8c7f7a3bb612da0324ad",
+        "references/poster_layout_design.md": "c7ef85b5620ea58cdf985bca99313a41a2cb762437209dad6333e0dd15fe018e",
+        "references/poster_patterns_and_presentation.md": "b465767303ddcd4d2e720dd82722bcafbb6d4948e9b614307cd3608b23e3f593",
+        "references/README.md": "c468139388159d4333d1118504d46df1518c6f9ae5051309f7207e24aa4d44ac",
+        "scripts/generate_schematic_ai.py": "7316f2df92f442b8c60a5dd2bd8b504e17449d4be89352e5af24be2239700046",
+        "scripts/generate_schematic.py": "0c81ce099d5ab9aa3d3c486aa9bd3e81ee1117e18a54db14bb0a68de61eaa4bc",
+        "scripts/review_poster.sh": "4bb2956a7920c58c5bdd9a20c3bd402c7b72432a7dbfeebe4d82f78250234bff",
+        "SKILL.md": "4350dc80280fea210f9682991103445e97c58504ddd14e7a26f3d84e2fee5837"
+      },
+      "contentHash": "29be1c782d0110be77287b49a477e1a0be159bd1e729175fafae169218268b5d",
+      "executableFiles": [
+        "scripts/review_poster.sh"
+      ]
+    },
+    {
+      "id": "venue-templates",
+      "name": "Publication templates",
+      "categories": [
+        "writing"
+      ],
+      "keywords": "期刊模板 会议模板 格式 排版 venue template latex",
+      "inputs": "target venue and manuscript",
+      "outputs": "venue-specific template and checks",
+      "integration": "script",
+      "description": "Prepares journal manuscripts, conference papers, research posters, and grant documents using venue-specific formatting guidance and bundled LaTeX scaffolds. Supports selecting an official template, checking current page or anonymity rules, adapting academic writing to a venue, or inspecting a submission PDF.",
+      "version": "1.6",
+      "license": "MIT license",
+      "requirements": "Requires Python 3.11+ for helper scripts; LaTeX and Poppler command-line tools are optional for compilation and PDF inspection. Needs network access to verify current venue instructions.",
+      "environmentHints": [],
+      "validation": {
+        "bundle": "integrity-checked",
+        "runtime": "not-verified"
+      },
+      "files": {
+        "assets/examples/cell_summary_example.md": "ec939d99d836d3f4cfd23a74c17fee238d712a42b2de4c613668de492f158b6a",
+        "assets/examples/medical_structured_abstract.md": "ace206511ac555421ad43a8adfada7b4fc49546903c3822bc6b89e5f31455697",
+        "assets/examples/nature_abstract_examples.md": "a612f01502410614472a34adcbcede740fa954a1c0c8cb1921fc423d2b7eec62",
+        "assets/examples/neurips_introduction_example.md": "c1075000483674576c2685a8ac56b872b84207c4507e4f33112318edc918c910",
+        "assets/grants/nih_specific_aims.tex": "e6d95aabd8ba9dd709bfeb45b811b7930b6c3678779fc84c86754e356075dd7f",
+        "assets/grants/nsf_proposal_template.tex": "5f24239bc977c04a2e2ebe7d4441809430d4576b423b4745ce53f3a09aa97410",
+        "assets/journals/elsarticle-harv.bst": "d85a928515628a9526d1d02f076f723a4da25387286a4f656d8943600880a436",
+        "assets/journals/elsarticle-num-names.bst": "c6c0d83707463ac6ebed7f43a754e38b7a38b17a8e58897e8057f8af0dc35024",
+        "assets/journals/elsarticle-num.bst": "f04dfa2f78d0198ab8e4055b609dc0b91bdb730743cbbd549d84270f20d11394",
+        "assets/journals/elsarticle-template-harv.tex": "b154487ec96ed096d8c114c074849c42fe91ba111315ccfea6ed2ce9a6143671",
+        "assets/journals/elsarticle-template-num-names.tex": "06f9a44d39f057b9d4a7285d77176319b79a02fe1aeb08570c39ccae60a1b120",
+        "assets/journals/elsarticle-template-num.tex": "3b02f9b8c80972bda933f281de3c96bb5147969fcebeb23fd8468ff28e33e15d",
+        "assets/journals/nature_article.tex": "57b6f7fc332c1ff596df1440ee8c9f36f9bb24b5257ce39187af9c1f2ed8d0e6",
+        "assets/journals/neurips_article.tex": "10f5bbc3259ef3a9e56563941ef26253314bccde77adac8f690603e77eca7ea8",
+        "assets/journals/plos_one.tex": "6dbecd4786ae01155e7bb163d416719efaea733a17943a36bb392ce277f11a5e",
+        "assets/posters/beamerposter_academic.tex": "721558f66dd60e6d0711a361b4b5fc3ae141eda989d6b744d008951b8cb15194",
+        "references/cell_press_style.md": "f8f30f312b2c098d9c5fc0b0cc2ab93e44c5d1f511c314171c193bd42ce2905e",
+        "references/conferences_formatting.md": "3babe847025e4d4eb4f469119739031ea9709ad48936150177eb941130d08ae7",
+        "references/cs_conference_style.md": "5cca948eef8aef571f6c5eb2b3a25b338c60fbac297eec5907e5d6e32d448c96",
+        "references/current_sources.md": "648984f031181a1e5cf431677f2095af5771f6757eb050de00b8c417053922b0",
+        "references/grants_requirements.md": "d08680fdcdd0c122a25b9bdf97169f081f9cdf8a8049fadd69f9c06fce9805c8",
+        "references/journals_formatting.md": "aa456055e03b90a01d58846939d039221dcd05b134da3a8b48dc5293e22effaf",
+        "references/medical_journal_styles.md": "e27800194f8d4ca3428533c9ad20d8934b43eda2214137d6fde8b0b494047a88",
+        "references/ml_conference_style.md": "b8cc82fe8d78e8b96eeabeab99b2e0f964705db1a33337fe645b7ece68c99aef",
+        "references/nature_science_style.md": "439c2ee29f44de59c4a1d5fa4fb721e2458a5c51392db61d04f765f96b3b9d1a",
+        "references/posters_guidelines.md": "d0f34c6f27917c09368d3cacafdb0f61c189e3d97c0a89393992cd3a26986c11",
+        "references/reviewer_expectations.md": "67537d2d6e8e9efe112677405fcee119a5d4e84cdbc291002e6dd4b9cb20e6ed",
+        "references/venue_writing_styles.md": "40da3f71c383d2fcbf1755a5101ef33c0af8a5e03fe39ec58c07daa327bd1faf",
+        "scripts/customize_template.py": "4ccb452b44583d48845216da4688c11f436342d81f54ea59bf2c72b8f5e689cb",
+        "scripts/query_template.py": "80b6de787685b723d28831fa0271ee56866f2f0e31cb33bab0c1fb484dae7c7a",
+        "scripts/validate_format.py": "8909d963c7308f380eee9277ee4652570e736d837505730e77e046dc94e95c91",
+        "SKILL.md": "8607993327f451cc6b9d7ca7502c0e7d5f5060954fec12e2ea779d96841e78b5"
+      },
+      "contentHash": "6bcfa81e25a15bc2731001db313dfaa96eb842776921803e5ca77b51229af375",
+      "executableFiles": [
+        "scripts/customize_template.py",
+        "scripts/query_template.py",
+        "scripts/validate_format.py"
+      ]
+    },
+    {
+      "id": "research-grants",
+      "name": "Research grant preparation",
+      "categories": [
+        "writing"
+      ],
+      "keywords": "科研基金 项目申请 经费 资助 grant proposal",
+      "inputs": "funding call and research plan",
+      "outputs": "grant outline and compliance checks",
+      "integration": "agent",
+      "description": "Supports research proposal preparation and review for NSF, NIH, DOE, DARPA, and Taiwan NSTC, including opportunity-specific requirements, aims, review criteria, budgets, broader impacts, forms, and resubmissions. Use for investigator-authored grant development, compliance matrices, and proposal critiques.",
+      "version": "1.5",
+      "license": "MIT license",
+      "requirements": "Requires network access to verify current opportunities and agency instructions, or supplied dated official documents for a bounded review. Optional figures via scientific-schematics require OPENROUTER_API_KEY and outbound API access.",
+      "environmentHints": [
+        "OPENROUTER_API_KEY"
+      ],
+      "validation": {
+        "bundle": "integrity-checked",
+        "runtime": "not-verified"
+      },
+      "files": {
+        "assets/budget_justification_template.md": "a65ce61ac86ff3971f64d735854f8b9b53af93d3c0614e7c391d908c8b28ff45",
+        "assets/nih_specific_aims_template.md": "f960b6410bf6c4a8ebfcb23d069ccdaae5692c38b61d55662ce21a06eaa49696",
+        "assets/nsf_project_summary_template.md": "a8c5c638df67fa54f8bb8ab8c4d92bc9a10c471afcbf73e15b6e173c33d8c788",
+        "references/broader_impacts.md": "de888b798004a3c0174d8dfd99626c8654a9ca53f78e2dcd4d2e242bed9873e1",
+        "references/core_components.md": "73b5915fa8fb905949233d3e2cdc118525ac9b448cb0fb05407ee3d7ecf44cdb",
+        "references/darpa_guidelines.md": "f7bc5c2d0b461275599a157a074a90b71169415ebdeea3417549952b09598fc6",
+        "references/doe_guidelines.md": "79e4afebf7fb71dabfc661144913d0d6af9583072e52b8405a67f2932b5ac5d7",
+        "references/nih_guidelines.md": "ff3f8dda0a2f77743401b44caff6c4f94471fb0348e2d4abf4f7b86e8874f285",
+        "references/nsf_guidelines.md": "78fe17b0e5798767e6ff9074f28d6b8d154dbe256b9d36dcbdaa78fbd6b73f24",
+        "references/nstc_guidelines.md": "852b3bdcd990a17b9164680b4bf344f0800e551d4126310531f7c1d2be7f6c35",
+        "references/proposal_types_and_resubmission.md": "267d3c8688407620c3cf633a0b4e18730c4d65b5380531796d1e8b4a4da9db1f",
+        "references/README.md": "c1dc961d3ea576cd4d06e76a47d1a4236b7e9d77bf90a612302125938db9bc5c",
+        "references/review_criteria.md": "e6d6b9822ee6cb744eff39a79a7502c3ce6668c76ae49a5f652793421e81a458",
+        "references/specific_aims_guide.md": "f0bb4f76ceac2db418cdc556869cab16d9bccbc2ad0568894fd5a086a6e796a2",
+        "references/writing_principles.md": "718b079d8f93df8ce4bd44767b3d794ddde7ebe5901a9957caf7b2ace9c5bda8",
+        "SKILL.md": "3ca7ea8075bbe8008389660cc4a5769d66ac9ec638f3f61a955a5d7b20aeba85"
+      },
+      "contentHash": "2a5d2568561a7b01599a1b1c32be4885fe2ea6d5ead34e6b432d3e6bd2739747",
+      "executableFiles": []
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+✔ CSV/JSON comparisons distinguish missing, incomparable, within and outside with explicit units/datasets/tolerance (5.314583ms)
+✔ ambiguous or unsupported inputs and mappings fail rather than choosing a column or flattening records (0.60125ms)
+✔ a saved report reopens with source/run fingerprints, while changes remain visible as stale history (58.553083ms)
+✔ actual IPC freezes chosen bytes, rejects cross-run tokens and binds saved numbers to the real current run (52.617875ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 265.414291

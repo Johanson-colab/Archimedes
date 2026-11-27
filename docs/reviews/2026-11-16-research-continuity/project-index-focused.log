@@ -1,0 +1,284 @@
+✔ translation shards cover every string exactly once (7.937208ms)
+✔ keys stay sorted inside each shard so concurrent additions do not collide (7.763834ms)
+✖ the shell merges every shard and keeps the surfaces translated (2.636417ms)
+✔ project research opens the exact paper from an unloaded folder and forwards the requested reading view (149.853083ms)
+✔ opening a project hydrates only the first folder; project-wide browsing deduplicates shared papers (28.80475ms)
+✔ document switching mounts one reader and protects a running paper conversation (62.631292ms)
+✔ more than eight papers remain open and keep their reading positions (64.639833ms)
+✔ removing a paper removes only that folder membership; sync still includes annotations (15.887708ms)
+✔ a late folder refresh cannot overwrite a completed paper-state update (22.1065ms)
+✔ notes survive unmounting and failed saves; editing during save keeps the newer draft (7.668417ms)
+✔ metadata queue bounds concurrency, continues after errors and cancels queued work (2.837333ms)
+✔ search keeps a pasted title together, includes tags, and sorting leaves cache order intact (0.2095ms)
+✔ the project view saves and reopens a linked conclusion, filters work, and returns the actual source locator (367.932083ms)
+✔ the project index projects existing objects and saves editable evidence notes across a real database reopen (83.300042ms)
+✔ a removed source stays an explicitly unavailable reference while the interpretation remains editable (54.763125ms)
+✔ project packages rebind notes, run/result evidence and named manuscript versions to the restored project (128.4035ms)
+✔ the actual preload and IPC save to the window's project store and reopen the same evidence (80.528042ms)
+✔ a standalone named manuscript remains indexed and migrates after the default folder changes (98.447958ms)
+✔ a real SQLite and disk package restores new local owners, source, PDFs, annotations, history and editable results (124.436834ms)
+✔ repeated restore creates another project/root and preserves existing names and files (119.713958ms)
+✔ missing linked resources are explicit and configuration files cannot be selected as manuscript source (86.277291ms)
+✔ corrupt file bytes and record hashes fail before creating a project or target directory (86.208084ms)
+✔ V01 history keeps snapshots and full local logs but cannot carry Docker/SSH cleanup ownership (93.706792ms)
+✔ owned review runs retain PDF/log/manifest with new return owners, while unrelated or legacy owners are explicit (97.673875ms)
+✔ a database constraint failure rolls back imported records and only newly created files (82.860334ms)
+✔ a historical session root remains selectable and usable after the project default root changes (95.23575ms)
+✔ a persisted directory alias and its default root restore to the same usable source directory (92.156166ms)
+✔ results can be restored without their optional conversation (71.723584ms)
+✔ changed or missing research resources do not acquire a false ready receipt on restore (70.550416ms)
+✔ actual preload/IPC capture the source data owner across a destination chooser and reject another project root (69.155084ms)
+✔ serialized Windows drive and UNC source roots restore on the host without interpreting them as host paths (80.182917ms)
+✔ a conversation based on a standalone historical result restores its FK after the result, or clears it when omitted (81.740542ms)
+✔ numerical source/report files migrate with new run owners and an explicit stale historical run attachment (76.130417ms)
+✔ actual Reproduce view keeps copied same-id events within their data root, explicitly binds legacy records, and reads historical evidence separately (288.285584ms)
+ℹ tests 34
+ℹ suites 0
+ℹ pass 33
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1474.582916
+
+✖ failing tests:
+
+test at electron/i18n-translations.test.cjs:45:1
+✖ the shell merges every shard and keeps the surfaces translated (2.636417ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /import \{ writingCitations as writingCitationsStrings \} from "\.\/i18n\/translations\/writingCitations"/. Input:
+  
+  'import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";\n' +
+    'import { projectResearch as projectResearchStrings } from "./i18n/translations/projectResearch";\n' +
+    'import { projectTransfer as projectTransferStrings } from "./i18n/translations/projectTransfer";\n' +
+    'import { metricComparison as metricComparisonStrings } from "./i18n/translations/metricComparison";\n' +
+    'import { app as appStrings } from "./i18n/translations/app";\n' +
+    'import { library as libraryStrings } from "./i18n/translations/library";\n' +
+    'import { gallery as galleryStrings } from "./i18n/translations/gallery";\n' +
+    'import { figureforge as figureforgeStrings } from "./i18n/translations/figureforge";\n' +
+    'import { canvas as canvasStrings } from "./i18n/translations/canvas";\n' +
+    'import { composer as composerStrings } from "./i18n/translations/composer";\n' +
+    'import { conversation as conversationStrings } from "./i18n/translations/conversation";\n' +
+    'import { agent as agentStrings } from "./i18n/translations/agent";\n' +
+    'import { journey as journeyStrings } from "./i18n/translations/journey";\n' +
+    'import { settings as settingsStrings } from "./i18n/translations/settings";\n' +
+    'import { runtime as runtimeStrings } from "./i18n/translations/runtime";\n' +
+    'import { collab as collabStrings } from "./i18n/translations/collab";\n' +
+    'import { reproduce as reproduceStrings } from "./i18n/translations/reproduce";\n' +
+    'import { writingCitations } from "./i18n/translations/writingCitations";\n' +
+    'import { writingVersions } from "./i18n/translations/writingVersions";\n' +
+    'import { writing as writingStrings } from "./i18n/translations/writing";\n' +
+    'import { misc as miscStrings } from "./i18n/translations/misc";\n' +
+    'import { native as nativeStrings } from "./i18n/translations/native";\n' +
+    'import { news as newsStrings } from "./i18n/translations/news";\n' +
+    'import { paperReview as paperReviewStrings } from "./i18n/translations/paperReview";\n' +
+    'import { paperSlides as paperSlidesStrings } from "./i18n/translations/paperSlides";\n' +
+    'import { dataAnalysis as dataAnalysisStrings } from "./i18n/translations/dataAnalysis";\n' +
+    'import {\n' +
+    '  DEFAULT_FILE_TEXT_SHORTCUTS,\n' +
+    '  FILE_TEXT_SIZE_DEFAULT,\n' +
+    '  clampFileTextSize,\n' +
+    '  type FileTextShortcuts,\n' +
+    '} from "./file-text-size";\n' +
+    'import { session as sessionStrings } from "./i18n/translations/session";\n' +
+    'import { sidebarFooter as sidebarFooterStrings } from "./i18n/translations/sidebarFooter";\n' +
+    'import { sessionComments as sessionCommentsStrings } from "./i18n/translations/sessionComments";\n' +
+    'import { sessionSnapshot as sessionSnapshotStrings } from "./i18n/translations/sessionSnapshot";\n' +
+    '\n' +
+    'export type Language = "en" | "zh";\n' +
+    'export type TextSize = "smaller" | "small" | "default" | "large" | "larger";\n' +
+    'export type InterfaceFont = "system" | "geist";\n' +
+    'export type MonoFont = "system" | "geist-mono";\n' +
+    'export type FileIconStyle = "opencode" | "city-lights" | "material" | "seti" | "outline" | "monochrome" | "minimal";\n' +
+    'export type ChatVerbosity = "low" | "medium" | "high";\n' +
+    '\n' +
+    'const LANGUAGE_STORAGE_KEY = "archimedes-language";\n' +
+    'const TEXT_SIZE_STORAGE_KEY = "archimedes-text-size";\n' +
+    'const INTERFACE_FONT_STORAGE_KEY = "archimedes-interface-font";\n' +
+    'const MONO_FONT_STORAGE_KEY = "archimedes-mono-font";\n' +
+    'const FILE_ICON_STYLE_STORAGE_KEY = "archimedes-file-icon-style";\n' +
+    'const FILE_ICON_STYLE_VERSION_KEY = "archimedes-file-icon-style-version";\n' +
+    'const CHAT_VERBOSITY_STORAGE_KEY = "archimedes-chat-verbosity";\n' +
+    'const FILE_TEXT_SIZE_STORAGE_KEY = "archimedes-file-text-size";\n' +
+    'const FILE_TEXT_SHORTCUTS_STORAGE_KEY = "archimedes-file-text-shortcuts";\n' +
+    'export const TEXT_SIZE_SCALE: Record<TextSize, number> = { smaller: 0.8, small: 0.9, default: 1, large: 1.1, larger: 1.2 };\n' +
+    '\n' +
+    'const translations: Record<string, string> = {\n' +
+    '  ...sessionCommentsStrings,\n' +
+    '  ...sessionSnapshotStrings,\n' +
+    '  ...projectResearchStrings,\n' +
+    '  ...projectTransferStrings,\n' +
+    '  ...metricComparisonStrings,\n' +
+    '  ...appStrings,\n' +
+    '  ...libraryStrings,\n' +
+    '  ...galleryStrings,\n' +
+    '  ...figureforgeStrings,\n' +
+    '  ...canvasStrings,\n' +
+    '  ...composerStrings,\n' +
+    '  ...conversationStrings,\n' +
+    '  ...agentStrings,\n' +
+    '  ...journeyStrings,\n' +
+    '  ...settingsStrings,\n' +
+    '  ...runtimeStrings,\n' +
+    '  ...collabStrings,\n' +
+    '  ...reproduceStrings,\n' +
+    '  ...writingCitations,\n' +
+    '  ...writingVersions,\n' +
+    '  ...writingStrings,\n' +
+    '  ...miscStrings,\n' +
+    '  ...nativeStrings,\n' +
+    '  ...newsStrings,\n' +
+    '  ...paperReviewStrings,\n' +
+    '  ...dataAnalysisStrings,\n' +
+    '  ...paperSlidesStrings,\n' +
+    '  ...sessionStrings,\n' +
+    '  ...sidebarFooterStrings,\n' +
+    '};\n' +
+    '\n' +
+    'type UISettings = {\n' +
+    '  language: Language;\n' +
+    '  setLanguage: (language: Language) => void;\n' +
+    '  textSize: TextSize;\n' +
+    '  setTextSize: (size: TextSize) => void;\n' +
+    '  interfaceFont: InterfaceFont;\n' +
+    '  setInterfaceFont: (font: InterfaceFont) => void;\n' +
+    '  monoFont: MonoFont;\n' +
+    '  setMonoFont: (font: MonoFont) => void;\n' +
+    '  fileIconStyle: FileIconStyle;\n' +
+    '  setFileIconStyle: (style: FileIconStyle) => void;\n' +
+    '  chatVerbosity: ChatVerbosity;\n' +
+    '  setChatVerbosity: (verbosity: ChatVerbosity) => void;\n' +
+    '  fileTextSize: number;\n' +
+    '  setFileTextSize: (size: number) => void;\n' +
+    '  increaseFileTextSize: () => void;\n' +
+    '  decreaseFileTextSize: () => void;\n' +
+    '  resetFileTextSize: () => void;\n' +
+    '  fileTextShortcuts: FileTextShortcuts;\n' +
+    '  setFileTextShortcut: (action: keyof FileTextShortcuts, shortcut: string) => void;\n' +
+    '  resetFileTextShortcuts: () => void;\n' +
+    '  t: (key: string, values?: Record<string, string | number>) => string;\n' +
+    '};\n' +
+    '\n' +
+    'const UISettingsContext = createContext<UISettings | null>(null);\n' +
+    '\n' +
+    'function readLanguage(): Language {\n' +
+    '  if (typeof window === "undefined") return "en";\n' +
+    '  return window.localStorage.getItem(LANGUAGE_STORAGE_KEY) === "zh" ? "zh" : "en";\n' +
+    '}\n' +
+    '\n' +
+    'function readTextSize(): TextSize {\n' +
+    '  if (typeof window === "undefined") return "default";\n' +
+    '  const stored = window.localStorage.getItem(TEXT_SIZE_STORAGE_KEY);\n' +
+    '  return stored === "smaller" || stored === "small" || stored === "large" || stored === "larger" ? stored : "default";\n' +
+    '}\n' +
+    '\n' +
+    'function readInterfaceFont(): InterfaceFont {\n' +
+    '  if (typeof window === "undefined") return "geist";\n' +
+    '  return window.localStorage.getItem(INTERFACE_FONT_STORAGE_KEY) === "system" ? "system" : "geist";\n' +
+    '}\n' +
+    '\n' +
+    'function readMonoFont(): MonoFont {\n' +
+    '  if (typeof window === "undefined") return "geist-mono";\n' +
+    '  return window.localStorage.getItem(MONO_FONT_STORAGE_KEY) === "system" ? "system" : "geist-mono";\n' +
+    '}\n' +
+    '\n' +
+    'function readFileIconStyle(): FileIconStyle {\n' +
+    '  if (typeof window === "undefined") return "opencode";\n' +
+    '  const stored = window.localStorage.getItem(FILE_ICON_STYLE_STORAGE_KEY);\n' +
+    '  if (window.localStorage.getItem(FILE_ICON_STYLE_VERSION_KEY) !== "3") {\n' +
+    '    window.localStorage.setItem(FILE_ICON_STYLE_VERSION_KEY, "3");\n' +
+    '    if (!stored || stored === "city-lights" || stored === "badges") {\n' +
+    '      window.localStorage.setItem(FILE_ICON_STYLE_STORAGE_KEY, "opencode");\n' +
+    '      return "opencode";\n' +
+    '    }\n' +
+    '  }\n' +
+    '  return stored === "city-lights" || stored === "monochrome" || stored === "material" || stored === "seti" || stored === "outline" || stored === "minimal" ? stored : "opencode";\n' +
+    '}\n' +
+    '\n' +
+    'function readChatVerbosity(): ChatVerbosity {\n' +
+    '  if (typeof window === "undefined") return "medium";\n' +
+    '  const stored = window.localStorage.getItem(CHAT_VERBOSITY_STORAGE_KEY);\n' +
+    '  return stored === "low" || stored === "high" ? stored : "medium";\n' +
+    '}\n' +
+    '\n' +
+    'function readFileTextSize() {\n' +
+    '  if (typeof window === "undefined") return FILE_TEXT_SIZE_DEFAULT;\n' +
+    '  const stored = window.localStorage.getItem(FILE_TEXT_SIZE_STORAGE_KEY);\n' +
+    '  if (stored === null) return FILE_TEXT_SIZE_DEFAULT;\n' +
+    '  return clampFileTextSize(Number(stored));\n' +
+    '}\n' +
+    '\n' +
+    'function readFileTextShortcuts(): FileTextShortcuts {\n' +
+    '  if (typeof window === "undefined") return DEFAULT_FILE_TEXT_SHORTCUTS;\n' +
+    '  try {\n' +
+    '    const stored = JSON.parse(window.localStorage.getItem(FILE_TEXT_SHORTCUTS_STORAGE_KEY) ?? "null") as Partial<FileTextShortcuts> | null;\n' +
+    '    return {\n' +
+    '      increase: typeof stored?.increase === "string" ? stored.increase : DEFAULT_FILE_TEXT_SHORTCUTS.increase,\n' +
+    '      decrease: typeof stored?.decrease === "string" ? stored.decrease : DEFAULT_FILE_TEXT_SHORTCUTS.decrease,\n' +
+    '      reset: typeof stored?.reset === "string" ? stored.reset : DEFAULT_FILE_TEXT_SHORTCUTS.reset,\n' +
+    '    };\n' +
+    '  } catch {\n' +
+    '    return DEFAULT_FILE_TEXT_SHORTCUTS;\n' +
+    '  }\n' +
+    '}\n' +
+    '\n' +
+    'export function UISettingsProvider({ children }: { children: React.ReactNode }) {\n' +
+    '  const [language, setLanguage] = useState<Language>(readLanguage);\n' +
+    '  const [textSize, setTextSize] = useState<TextSize>(readTextSize);\n' +
+    '  const [interfaceFont, setInterfaceFont] = useState<InterfaceFont>(readInterfaceFont);\n' +
+    '  const [monoFont, setMonoFont] = useState<MonoFont>(readMonoFont);\n' +
+    '  const [fileIconStyle, setFileIconStyle] = useState<FileIconStyle>(readFileIconStyle);\n' +
+    '  const [chatVerbosity, setChatVerbosity] = useState<ChatVerbosity>(readChatVerbosity);\n' +
+    '  const [fileTextSize, setFileTextSizeState] = useState(readFileTextSize);\n' +
+    '  const [fileTextShortcuts, setFileTextShortcutsState] = useState<FileTextShortcuts>(readFileTextShortcuts);\n' +
+    '\n' +
+    '  useEffect(() => {\n' +
+    '    window.localStorage.setItem(LANGUAGE_STORAGE_KEY, language);\n' +
+    '    document.documentElement.lang = language === "zh" ? "zh-CN" : "en";\n' +
+    '  }, [language]);\n' +
+    '\n' +
+    '  useEffect(() => {\n' +
+    '    window.localStorage.setItem(TEXT_SIZE_STORAGE_KEY, textSize);\n' +
+    '    const root = document.documentElement;\n' +
+    '    root.dataset.textSize = textSize;\n' +
+    '    if (typeof window.researchDesk?.setUiZoom === "function") {\n' +
+    '      root.dataset.uiZoom = "native";\n' +
+    '      void window.researchDesk.setUiZoom(TEXT_SIZE_SCALE[textSize]).catch(() => {\n' +
+    '        root.dataset.uiZoom = "css";\n' +
+    '      });\n' +
+    '    } else {\n' +
+    '      root.dataset.uiZoom = "css";\n' +
+    '    }\n' +
+    '  }, [textSize]);\n' +
+    '\n' +
+    '  useEffect(() => {\n' +
+    '    window.localStorage.setItem(INTERFACE_FONT_STORAGE_KEY, interfaceFont);\n' +
+    '    document.documentElement.dataset.interfaceFont = interfaceFont;\n' +
+    '  }, [interfaceFont]);\n' +
+    '\n' +
+    '  useEffect(() => {\n' +
+    '    window.localStorage.setItem(MONO_FONT_STORAGE_KEY, monoFont);\n' +
+    '    document.documentElement.dataset.monoFont = monoFont;\n' +
+    '  }, [monoFont]);\n' +
+    '\n' +
+    '  useEffect(() => {\n' +
+    '    window.localStorage.setItem(FILE_ICON_STYLE_STORAGE_KEY, fileIconStyle);\n' +
+    '    document.documentElement.dataset.fileIcons = fileIconStyle;\n' +
+    '  }, [fileIconStyle]);\n' +
+    '\n' +
+    '  useEffect(() => {\n' +
+    '    window.localStorage.setItem(CHAT_VERBOSITY_STORAGE_KEY, chatVerbosity'... 2371 more characters
+  
+      at TestContext.<anonymous> (/Users/fei/Desktop/Archimedes/electron/i18n-translations.test.cjs:49:12)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";\nimport { projectResearch as projectResearchStrings } from "./i18n/translations/projectResearch";\nimport { projectTransfer as projectTransferStrings } from "./i18n/translations/projectTransfer";\nimport { metricComparison as metricComparisonStrings } from "./i18n/translations/metricComparison";\nimport { app as appStrings } from "./i18n/translations/app";\nimport { library as libraryStrings } from "./i18n/translations/library";\nimport { gallery as galleryStrings } from "./i18n/translations/gallery";\nimport { figureforge as figureforgeStrings } from "./i18n/translations/figureforge";\nimport { canvas as canvasStrings } from "./i18n/translations/canvas";\nimport { composer as composerStrings } from "./i18n/translations/composer";\nimport { conversation as conversationStrings } from "./i18n/translations/conversation";\nimport { agent as agentStrings } from "./i18n/translations/agent";\nimport { journey as journeyStrings } from "./i18n/translations/journey";\nimport { settings as settingsStrings } from "./i18n/translations/settings";\nimport { runtime as runtimeStrings } from "./i18n/translations/runtime";\nimport { collab as collabStrings } from "./i18n/translations/collab";\nimport { reproduce as reproduceStrings } from "./i18n/translations/reproduce";\nimport { writingCitations } from "./i18n/translations/writingCitations";\nimport { writingVersions } from "./i18n/translations/writingVersions";\nimport { writing as writingStrings } from "./i18n/translations/writing";\nimport { misc as miscStrings } from "./i18n/translations/misc";\nimport { native as nativeStrings } from "./i18n/translations/native";\nimport { news as newsStrings } from "./i18n/translations/news";\nimport { paperReview as paperReviewStrings } from "./i18n/translations/paperReview";\nimport { paperSlides as paperSlidesStrings } from "./i18n/translations/paperSlides";\nimport { dataAnalysis as dataAnalysisStrings } from "./i18n/translations/dataAnalysis";\nimport {\n  DEFAULT_FILE_TEXT_SHORTCUTS,\n  FILE_TEXT_SIZE_DEFAULT,\n  clampFileTextSize,\n  type FileTextShortcuts,\n} from "./file-text-size";\nimport { session as sessionStrings } from "./i18n/translations/session";\nimport { sidebarFooter as sidebarFooterStrings } from "./i18n/translations/sidebarFooter";\nimport { sessionComments as sessionCommentsStrings } from "./i18n/translations/sessionComments";\nimport { sessionSnapshot as sessionSnapshotStrings } from "./i18n/translations/sessionSnapshot";\n\nexport type Language = "en" | "zh";\nexport type TextSize = "smaller" | "small" | "default" | "large" | "larger";\nexport type InterfaceFont = "system" | "geist";\nexport type MonoFont = "system" | "geist-mono";\nexport type FileIconStyle = "opencode" | "city-lights" | "material" | "seti" | "outline" | "monochrome" | "minimal";\nexport type ChatVerbosity = "low" | "medium" | "high";\n\nconst LANGUAGE_STORAGE_KEY = "archimedes-language";\nconst TEXT_SIZE_STORAGE_KEY = "archimedes-text-size";\nconst INTERFACE_FONT_STORAGE_KEY = "archimedes-interface-font";\nconst MONO_FONT_STORAGE_KEY = "archimedes-mono-font";\nconst FILE_ICON_STYLE_STORAGE_KEY = "archimedes-file-icon-style";\nconst FILE_ICON_STYLE_VERSION_KEY = "archimedes-file-icon-style-version";\nconst CHAT_VERBOSITY_STORAGE_KEY = "archimedes-chat-verbosity";\nconst FILE_TEXT_SIZE_STORAGE_KEY = "archimedes-file-text-size";\nconst FILE_TEXT_SHORTCUTS_STORAGE_KEY = "archimedes-file-text-shortcuts";\nexport const TEXT_SIZE_SCALE: Record<TextSize, number> = { smaller: 0.8, small: 0.9, default: 1, large: 1.1, larger: 1.2 };\n\nconst translations: Record<string, string> = {\n  ...sessionCommentsStrings,\n  ...sessionSnapshotStrings,\n  ...projectResearchStrings,\n  ...projectTransferStrings,\n  ...metricComparisonStrings,\n  ...appStrings,\n  ...libraryStrings,\n  ...galleryStrings,\n  ...figureforgeStrings,\n  ...canvasStrings,\n  ...composerStrings,\n  ...conversationStrings,\n  ...agentStrings,\n  ...journeyStrings,\n  ...settingsStrings,\n  ...runtimeStrings,\n  ...collabStrings,\n  ...reproduceStrings,\n  ...writingCitations,\n  ...writingVersions,\n  ...writingStrings,\n  ...miscStrings,\n  ...nativeStrings,\n  ...newsStrings,\n  ...paperReviewStrings,\n  ...dataAnalysisStrings,\n  ...paperSlidesStrings,\n  ...sessionStrings,\n  ...sidebarFooterStrings,\n};\n\ntype UISettings = {\n  language: Language;\n  setLanguage: (language: Language) => void;\n  textSize: TextSize;\n  setTextSize: (size: TextSize) => void;\n  interfaceFont: InterfaceFont;\n  setInterfaceFont: (font: InterfaceFont) => void;\n  monoFont: MonoFont;\n  setMonoFont: (font: MonoFont) => void;\n  fileIconStyle: FileIconStyle;\n  setFileIconStyle: (style: FileIconStyle) => void;\n  chatVerbosity: ChatVerbosity;\n  setChatVerbosity: (verbosity: ChatVerbosity) => void;\n  fileTextSize: number;\n  setFileTextSize: (size: number) => void;\n  increaseFileTextSize: () => void;\n  decreaseFileTextSize: () => void;\n  resetFileTextSize: () => void;\n  fileTextShortcuts: FileTextShortcuts;\n  setFileTextShortcut: (action: keyof FileTextShortcuts, shortcut: string) => void;\n  resetFileTextShortcuts: () => void;\n  t: (key: string, values?: Record<string, string | number>) => string;\n};\n\nconst UISettingsContext = createContext<UISettings | null>(null);\n\nfunction readLanguage(): Language {\n  if (typeof window === "undefined") return "en";\n  return window.localStorage.getItem(LANGUAGE_STORAGE_KEY) === "zh" ? "zh" : "en";\n}\n\nfunction readTextSize(): TextSize {\n  if (typeof window === "undefined") return "default";\n  const stored = window.localStorage.getItem(TEXT_SIZE_STORAGE_KEY);\n  return stored === "smaller" || stored === "small" || stored === "large" || stored === "larger" ? stored : "default";\n}\n\nfunction readInterfaceFont(): InterfaceFont {\n  if (typeof window === "undefined") return "geist";\n  return window.localStorage.getItem(INTERFACE_FONT_STORAGE_KEY) === "system" ? "system" : "geist";\n}\n\nfunction readMonoFont(): MonoFont {\n  if (typeof window === "undefined") return "geist-mono";\n  return window.localStorage.getItem(MONO_FONT_STORAGE_KEY) === "system" ? "system" : "geist-mono";\n}\n\nfunction readFileIconStyle(): FileIconStyle {\n  if (typeof window === "undefined") return "opencode";\n  const stored = window.localStorage.getItem(FILE_ICON_STYLE_STORAGE_KEY);\n  if (window.localStorage.getItem(FILE_ICON_STYLE_VERSION_KEY) !== "3") {\n    window.localStorage.setItem(FILE_ICON_STYLE_VERSION_KEY, "3");\n    if (!stored || stored === "city-lights" || stored === "badges") {\n      window.localStorage.setItem(FILE_ICON_STYLE_STORAGE_KEY, "opencode");\n      return "opencode";\n    }\n  }\n  return stored === "city-lights" || stored === "monochrome" || stored === "material" || stored === "seti" || stored === "outline" || stored === "minimal" ? stored : "opencode";\n}\n\nfunction readChatVerbosity(): ChatVerbosity {\n  if (typeof window === "undefined") return "medium";\n  const stored = window.localStorage.getItem(CHAT_VERBOSITY_STORAGE_KEY);\n  return stored === "low" || stored === "high" ? stored : "medium";\n}\n\nfunction readFileTextSize() {\n  if (typeof window === "undefined") return FILE_TEXT_SIZE_DEFAULT;\n  const stored = window.localStorage.getItem(FILE_TEXT_SIZE_STORAGE_KEY);\n  if (stored === null) return FILE_TEXT_SIZE_DEFAULT;\n  return clampFileTextSize(Number(stored));\n}\n\nfunction readFileTextShortcuts(): FileTextShortcuts {\n  if (typeof window === "undefined") return DEFAULT_FILE_TEXT_SHORTCUTS;\n  try {\n    const stored = JSON.parse(window.localStorage.getItem(FILE_TEXT_SHORTCUTS_STORAGE_KEY) ?? "null") as Partial<FileTextShortcuts> | null;\n    return {\n      increase: typeof stored?.increase === "string" ? stored.increase : DEFAULT_FILE_TEXT_SHORTCUTS.increase,\n      decrease: typeof stored?.decrease === "string" ? stored.decrease : DEFAULT_FILE_TEXT_SHORTCUTS.decrease,\n      reset: typeof stored?.reset === "string" ? stored.reset : DEFAULT_FILE_TEXT_SHORTCUTS.reset,\n    };\n  } catch {\n    return DEFAULT_FILE_TEXT_SHORTCUTS;\n  }\n}\n\nexport function UISettingsProvider({ children }: { children: React.ReactNode }) {\n  const [language, setLanguage] = useState<Language>(readLanguage);\n  const [textSize, setTextSize] = useState<TextSize>(readTextSize);\n  const [interfaceFont, setInterfaceFont] = useState<InterfaceFont>(readInterfaceFont);\n  const [monoFont, setMonoFont] = useState<MonoFont>(readMonoFont);\n  const [fileIconStyle, setFileIconStyle] = useState<FileIconStyle>(readFileIconStyle);\n  const [chatVerbosity, setChatVerbosity] = useState<ChatVerbosity>(readChatVerbosity);\n  const [fileTextSize, setFileTextSizeState] = useState(readFileTextSize);\n  const [fileTextShortcuts, setFileTextShortcutsState] = useState<FileTextShortcuts>(readFileTextShortcuts);\n\n  useEffect(() => {\n    window.localStorage.setItem(LANGUAGE_STORAGE_KEY, language);\n    document.documentElement.lang = language === "zh" ? "zh-CN" : "en";\n  }, [language]);\n\n  useEffect(() => {\n    window.localStorage.setItem(TEXT_SIZE_STORAGE_KEY, textSize);\n    const root = document.documentElement;\n    root.dataset.textSize = textSize;\n    if (typeof window.researchDesk?.setUiZoom === "function") {\n      root.dataset.uiZoom = "native";\n      void window.researchDesk.setUiZoom(TEXT_SIZE_SCALE[textSize]).catch(() => {\n        root.dataset.uiZoom = "css";\n      });\n    } else {\n      root.dataset.uiZoom = "css";\n    }\n  }, [textSize]);\n\n  useEffect(() => {\n    window.localStorage.setItem(INTERFACE_FONT_STORAGE_KEY, interfaceFont);\n    document.documentElement.dataset.interfaceFont = interfaceFont;\n  }, [interfaceFont]);\n\n  useEffect(() => {\n    window.localStorage.setItem(MONO_FONT_STORAGE_KEY, monoFont);\n    document.documentElement.dataset.monoFont = monoFont;\n  }, [monoFont]);\n\n  useEffect(() => {\n    window.localStorage.setItem(FILE_ICON_STYLE_STORAGE_KEY, fileIconStyle);\n    document.documentElement.dataset.fileIcons = fileIconStyle;\n  }, [fileIconStyle]);\n\n  useEffect(() => {\n    window.localStorage.setItem(CHAT_VERBOSITY_STORAGE_KEY, chatVerbosity'... 2371 more characters,
+    expected: /import \{ writingCitations as writingCitationsStrings \} from "\.\/i18n\/translations\/writingCitations"/,
+    operator: 'match',
+    diff: 'simple'
+  }

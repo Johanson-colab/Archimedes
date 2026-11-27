@@ -1,0 +1,26 @@
+✔ actual save writes its captured directory and preserves the other root's current editor (129.6575ms)
+✔ an actual external conflict can retain the local edit, then save and reopen cleanly (4.671834ms)
+✔ same relative paths keep independent drafts and feedback in each execution root (40.873833ms)
+✔ a delayed A save completion leaves the active B draft and its feedback untouched (1.442584ms)
+✔ save completion preserves edits made after submission and does not reopen closed drafts (0.228375ms)
+✔ closing the app detects dirty drafts outside the currently viewed root (0.158625ms)
+✔ accepts editable text and rejects binary or oversized files (42.867375ms)
+✔ normalizes CRLF while editing and restores it when saving (0.463042ms)
+✔ keeps dirty buffers and reports external conflicts (1.103291ms)
+✔ formats a line comment as a readable chat request (0.777959ms)
+✔ tracks a successful save without dropping later keystrokes (0.238875ms)
+✔ a clicked directory link expands nested Files entries and can still open a skill file (317.282666ms)
+✔ newer path requests win over slower directory inspection (1.189ms)
+✔ lists complete directories lazily and ignores dependency folders (6.800041ms)
+✔ inspects files and nested directories without escaping the workspace (6.19875ms)
+✔ reads and writes text without allowing workspace escapes (5.502708ms)
+✔ computes line changes for direct writes and command snapshots (4.163083ms)
+✔ snapshots bound retained file contents without losing change detection (32.765125ms)
+ℹ tests 18
+ℹ suites 0
+ℹ pass 18
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1000.431584

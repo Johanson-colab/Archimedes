@@ -1,0 +1,1 @@
+{"service":"docker","status":"passed","configuredImage":"python:3.11-slim","smokeImage":"neo4j:5.26.2","launchOverride":true,"container":"archimedes-repro-a48a4662-e220-40b2-a303-0c712ddfeb75","outputBytes":1048588,"boundedCapture":64000,"removedOwnedContainer":true}

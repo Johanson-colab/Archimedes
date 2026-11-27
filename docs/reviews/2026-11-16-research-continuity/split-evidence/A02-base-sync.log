@@ -1,0 +1,24 @@
+✔ menu proposals and late reader previews preserve the accepted owner; recovery IPC needs no database (108.405916ms)
+✔ new project tasks use returned records before rerender, and empty side chats forward the selected workspace (327.597125ms)
+✔ context rejects thread/project/workspace/root mixing before any new turn and preserves historical execution (54.403417ms)
+✔ opening a freshly imported conversation binds the same local context used by run and remains readable to viewers (34.25125ms)
+✔ late run events and completion cannot adopt an empty task in another project (304.865167ms)
+✔ a delayed approval uses its original task for command execution and completion (4.16225ms)
+✔ new selections use only the chosen project workspace and session roots retain historical ownership (54.150208ms)
+✔ Library project selection commits the returned complete task only after loading succeeds (244.070417ms)
+✔ failed opening keeps the old coherent task and transcript available (2.551333ms)
+✔ a slower open cannot take over the task chosen by a newer request (1.600875ms)
+✔ an imported thread without local workspace fields resolves its own project default, never the data folder (0.1785ms)
+✔ an in-flight window request retains its database through another selection and its window close (79.805708ms)
+✔ canonical aliases share one data store and same-ID runtime identities remain distinct across roots (59.0075ms)
+✔ a synchronously failing IPC invocation releases its store lease (32.006959ms)
+✔ real terminal child persists in its data store after IPC returns and its execution folder has no database (98.835125ms)
+✔ same imported thread id in two data stores has independent running/stop/approval identity (80.629583ms)
+ℹ tests 16
+ℹ suites 0
+ℹ pass 16
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1890.118292

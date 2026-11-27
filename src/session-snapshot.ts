@@ -22,7 +22,7 @@ export function selectSnapshot(snapshot: FrozenSnapshot, title: string, ids: str
   const selected = new Set(ids);
   const all = snapshotTurns(snapshot.manifest);
   const turns = all.filter((turn) => selected.has(turn.id));
-  const isAll = turns.length === all.length;
+  const isAll = turns.length === all.length && snapshot.manifest.partial !== true;
   const events = (Array.isArray(snapshot.manifest.events) ? snapshot.manifest.events : []).filter((value) => {
     const id = text(object(value).turn_id);
     return id ? selected.has(id) : isAll;

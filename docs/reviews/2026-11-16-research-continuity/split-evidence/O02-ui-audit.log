@@ -1,0 +1,37 @@
+✔ conversation composers keep their resting border while focused (2.035208ms)
+✔ chat-like side inputs share the quiet focus contract (1.412458ms)
+✔ chat send controls are unfilled up-arrows (2.96775ms)
+✔ main composer supports a minimal voice button beside send (0.846291ms)
+✔ composer input has IME protection and grows with the draft (0.263875ms)
+✔ composer uses harness selection while execution preferences live in Models (0.277042ms)
+✔ context usage exposes a readable breakdown without runtime chrome (0.806792ms)
+✔ composer drafts are persisted per thread and restored after a failed send (0.314375ms)
+✔ composer accepts dropped and pasted files through the existing bridge (0.618333ms)
+✔ composer exposes history recall, focus shortcut and disabled-send reason (0.713292ms)
+✔ composer queues follow-ups while the agent is busy (0.612959ms)
+✔ composer exposes slash commands and an @ context shortcut (0.503709ms)
+✔ slash menu presents the requested commands and connects all actions (1.908416ms)
+✔ IdeaSpark is opt-in from the Research slash menu and never auto-runs (2.604458ms)
+✔ chat modes retain explicit choices and map legacy conversations using skill records (220.967208ms)
+✔ composer exposes the current file and a clear-all attachment action (4.289958ms)
+✔ composer can attach the current editor selection and shows attachment size (11.329041ms)
+✔ News is a Discovery & tracking app ordered between Daily papers and Benchmark Radar (1.395958ms)
+✔ News view is registry-hosted with a real bridge, not a static import (0.257042ms)
+✔ News defaults to the single-column feed and offers a board toggle (0.461833ms)
+✔ News controls live in the page, not the global toolbar (0.735833ms)
+✔ News cards render the source structure and its original media (0.606375ms)
+✔ News actions save to Library, ask the agent and open the original (0.087459ms)
+✔ News API surface is wired through preload and main (0.834208ms)
+✔ News keeps secrets out of the renderer and ships default feeds (0.075959ms)
+✔ News strings are translated (0.176792ms)
+✔ workbench tabs are registry-driven, reorderable, and configurable (2.029791ms)
+✔ Changes tab aggregates agent changes without duplicating the chat card (1.492083ms)
+✔ Notes tab autosaves per conversation and sends into the composer (0.888ms)
+ℹ tests 29
+ℹ suites 0
+ℹ pass 29
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 573.112042

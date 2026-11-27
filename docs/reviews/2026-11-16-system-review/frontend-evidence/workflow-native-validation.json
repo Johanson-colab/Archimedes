@@ -1,0 +1,204 @@
+{
+  "writing": {
+    "resumedSectionAfterRestart": true,
+    "mainDocumentRetained": true,
+    "savedStateVisible": true,
+    "compilerWasNotRun": true
+  },
+  "diagnostics": {
+    "actualRepoPath": true,
+    "versionVisible": true,
+    "commitVisible": true,
+    "developmentChannel": true,
+    "branchVisible": true,
+    "sourceDirtyVisible": true
+  },
+  "discovery": {
+    "queryAfterInlineLibraryCreate": true,
+    "targetAfterCreate": true,
+    "selectionReasonVisible": true,
+    "savedCandidateVisible": true,
+    "returnedFromReader": {
+      "queryPreserved": true,
+      "targetPreserved": true,
+      "reasonPreserved": true,
+      "savedCandidatePreserved": true
+    },
+    "afterRestart": {
+      "queryPreserved": true,
+      "targetPreserved": true,
+      "reasonPreserved": true,
+      "savedCandidatePreserved": true
+    }
+  },
+  "bibliography": {
+    "importedWithoutRepairs": true,
+    "exportKeepsOriginalTitle": true,
+    "exportKeepsCitekey": true,
+    "repeatedImportRecognizesExisting": true
+  },
+  "navigation": {
+    "defaultFigureIsPlanningWorkspace": true,
+    "specificSidebarLabels": true,
+    "referenceNavigationVisible": true,
+    "referenceNavigationEvidence": "AX contains a Paper chart references button inside FigureForge; no model/generation request made."
+  },
+  "environment": {
+    "date": "2026-11-16",
+    "renderer": "current dist compiled by npm run build before this native pass; backend loaded modules separately recorded",
+    "profile": "isolated disposable profile, no credentials",
+    "fixture": "Only library:discover-daily handler substituted with repository discovery-fixture.cjs; all project/library/Bib persistence used actual IPC/store",
+    "theme": "charcoal",
+    "language": "English",
+    "viewportLogical": [
+      1100,
+      949
+    ],
+    "pixels": [
+      2200,
+      1898
+    ],
+    "modelsOrTexCalled": false,
+    "mainProcessExited": true,
+    "fixtureRetainedForLaterWorkflowValidation": true,
+    "processCleanup": "The native Quit action finished each after pass; the final original-renderer comparison process stayed alive after its menu action and was ended through its own exec session (exit 0). No unrelated process was signalled."
+  },
+  "screenshots": [
+    {
+      "file": "docs/assets/research-workflow-integrity/build-diagnostics-after.jpg",
+      "pixels": [
+        2200,
+        1898
+      ],
+      "sha256": "922c4f6a086f13b89a8356a31120ff6774bb80760872af5f5b50a4b4b32d25d1"
+    },
+    {
+      "file": "docs/assets/research-workflow-integrity/build-diagnostics-before.jpg",
+      "pixels": [
+        2200,
+        1898
+      ],
+      "sha256": "fa973e410de51cc43c751b2e00f64899141ec65f42830b2fdfbe19314243daac"
+    },
+    {
+      "file": "docs/assets/research-workflow-integrity/discovery-after.jpg",
+      "pixels": [
+        2200,
+        1898
+      ],
+      "sha256": "7a9a11e22d9585973db7c9b746b1a1bfe06d807acc9318fed9b04cab089f33e2"
+    },
+    {
+      "file": "docs/assets/research-workflow-integrity/discovery-before.jpg",
+      "pixels": [
+        2200,
+        1898
+      ],
+      "sha256": "a78139a4a18d61e20c7647b6e425815dda25524e0eef5558a3647dae73987cf2"
+    },
+    {
+      "file": "docs/assets/research-workflow-integrity/discovery-return-before.jpg",
+      "pixels": [
+        2200,
+        1898
+      ],
+      "sha256": "3b35e1d6c59a693bc80593db1d76aa0d954aa39f22004f64388a8daeb38366fa"
+    },
+    {
+      "file": "docs/assets/research-workflow-integrity/figure-entry-after.jpg",
+      "pixels": [
+        2200,
+        1898
+      ],
+      "sha256": "ba33c39e467f178c3177767ffd6fc3745f1d852ccd809f51a1538c1e29e4b4e3"
+    },
+    {
+      "file": "docs/assets/research-workflow-integrity/figure-entry-before.jpg",
+      "pixels": [
+        2200,
+        1898
+      ],
+      "sha256": "2c7020aeceada6cfa7ea8bd32e46a75ac45efc5eefa23410fbca1ebc84660e63"
+    },
+    {
+      "file": "docs/assets/research-workflow-integrity/library-bibtex-after.jpg",
+      "pixels": [
+        2200,
+        1898
+      ],
+      "sha256": "b7ebdc69d0c4498097ab8d7d1b962226ffdf393a77583e9e711a835ae34557e5"
+    },
+    {
+      "file": "docs/assets/research-workflow-integrity/library-import-before.jpg",
+      "pixels": [
+        2200,
+        1898
+      ],
+      "sha256": "e38611516579559282264bc32754255c2b4229f84fa3a9c09da9fe0f5134ce14"
+    },
+    {
+      "file": "docs/assets/research-workflow-integrity/navigation-after.jpg",
+      "pixels": [
+        2200,
+        1898
+      ],
+      "sha256": "4136a125670486772b0a7d3131835b98217919377709080f6cb43d0de4de9c3f"
+    },
+    {
+      "file": "docs/assets/research-workflow-integrity/navigation-before.jpg",
+      "pixels": [
+        2200,
+        1898
+      ],
+      "sha256": "c53b2c4d1ff28f690aeda47cb1c0c6ba367f6e9fb1bb3af19794b17c8a39d484"
+    },
+    {
+      "file": "docs/assets/research-workflow-integrity/project-reason-after.jpg",
+      "pixels": [
+        2200,
+        1898
+      ],
+      "sha256": "e03cf55a3b46ef009ac2fae57c6c8e6f2b0e698ec152bef84cbb8d3bc4c0b26f"
+    },
+    {
+      "file": "docs/assets/research-workflow-integrity/work-modes-after.jpg",
+      "pixels": [
+        2200,
+        1898
+      ],
+      "sha256": "7910910fd4ce3dcb889b01252f2f723668d3d33376d674b68ab5321d0a95a592"
+    },
+    {
+      "file": "docs/assets/research-workflow-integrity/work-modes-before.jpg",
+      "pixels": [
+        2200,
+        1898
+      ],
+      "sha256": "b4ea51063989e8ca5f7035d150e5655b04e759f00addb5688be16d925606778f"
+    },
+    {
+      "file": "docs/assets/research-workflow-integrity/writing-after.jpg",
+      "pixels": [
+        2200,
+        1898
+      ],
+      "sha256": "4458b833432dbb96e80579d06e83da564b4963416083c39bb3ce8a478eafd9eb"
+    },
+    {
+      "file": "docs/assets/research-workflow-integrity/writing-before.jpg",
+      "pixels": [
+        2200,
+        1898
+      ],
+      "sha256": "68156fabaca149d4a9c6160a01e5a0f8606fdaef3817de3e126bdd712d475272"
+    },
+    {
+      "file": "docs/assets/research-workflow-integrity/writing-resume-after.jpg",
+      "pixels": [
+        2200,
+        1898
+      ],
+      "sha256": "8d6ce62254fffb3b50f3eb7b9b2d4a9aeb41cc1d5848365d1aca24107f342830"
+    }
+  ]
+}

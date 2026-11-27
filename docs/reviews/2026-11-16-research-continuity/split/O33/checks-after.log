@@ -1,0 +1,19 @@
+✔ workspace writes are refused unless the caller asks for them (4.500667ms)
+✔ command proposals are refused unless the caller asks for them (1.728333ms)
+✔ read-only tools keep working without any capability grant (3.849ms)
+✔ lists complete directories lazily and ignores dependency folders (14.091291ms)
+✔ inspects files and nested directories without escaping the workspace (9.060917ms)
+✔ reads and writes text without allowing workspace escapes (12.1965ms)
+✔ computes line changes for direct writes and command snapshots (5.292417ms)
+✔ snapshots bound retained file contents without losing change detection (80.182125ms)
+✔ snapshot bounds actual text reads and skips generated Python environments while preserving metadata change detection (102.718042ms)
+✔ changing budget placement does not invent modifications and ordinary text still has meaningful line diffs (49.3675ms)
+✔ an approved command persists scan coverage and only reports actual read limits (1693.043083ms)
+ℹ tests 11
+ℹ suites 0
+ℹ pass 11
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2122.558042

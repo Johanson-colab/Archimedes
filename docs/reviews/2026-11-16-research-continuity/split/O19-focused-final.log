@@ -1,0 +1,19 @@
+✔ actual App slides callback creates its target before copying the old-root build, preserving the original draft (259.836ms)
+✔ late App slides staging stays with its original owner and stores a recoverable draft rather than sending in the newly selected task (33.07325ms)
+✔ actual slides view keeps source and target distinct, checks setup before starting, and isolates another data folder's input (109.083542ms)
+✔ slides copy a historical manuscript to the real target session root with a durable source receipt and reject other projects (69.228875ms)
+✔ the actual existing prerequisite script reports local presence without exposing token values or treating optional QA as a generation blocker (297.106625ms)
+✔ missing Python and missing PATH tools produce explicit actionable checks rather than a ready result (48.372375ms)
+✔ the real presence script can permit a limited generation environment while preview and QA tools remain optional (1023.73925ms)
+✔ a stalled npm root subprocess is bounded and killed with the real Python probe process group (3208.085708ms)
+✔ selected PDF is copied to an isolated workspace task without overwriting the source (6.8535ms)
+✔ Codex and Claude install distinct bundled skills, preserve user changes, and resume (54.812667ms)
+✔ page opens a PDF, switches example and sends the selected harness and settings (753.869208ms)
+ℹ tests 11
+ℹ suites 0
+ℹ pass 11
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 4753.0135

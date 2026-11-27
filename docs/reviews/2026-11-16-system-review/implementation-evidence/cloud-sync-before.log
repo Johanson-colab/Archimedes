@@ -1,0 +1,50 @@
+{"scenario":"same-id-final","remote":{"id":"8cc3f0b8-fbf5-4c4f-84a9-60a03b74fb80","mode":"free-chat","user_message":"Question","assistant_message":"","status":"running","created_at":"2026-11-16T05:30:14.260Z","completed_at":null}}
+{"scenario":"library-reconnect","resurrected":true}
+✖ an already uploaded running turn reaches its same-ID incomplete final state (45.863917ms)
+✖ a deleted synced library stays deleted on reconnect (27.062625ms)
+ℹ tests 2
+ℹ suites 0
+ℹ pass 0
+ℹ fail 2
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 215.776583
+
+✖ failing tests:
+
+test at docs/reviews/2026-11-16-system-review/implementation-evidence/cloud-sync-before.cjs:19:1
+✖ an already uploaded running turn reaches its same-ID incomplete final state (45.863917ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + 'running'
+  - 'incomplete'
+  
+      at TestContext.<anonymous> (/Users/fei/Desktop/Archimedes/docs/reviews/2026-11-16-system-review/implementation-evidence/cloud-sync-before.cjs:36:10)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'running',
+    expected: 'incomplete',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at docs/reviews/2026-11-16-system-review/implementation-evidence/cloud-sync-before.cjs:38:1
+✖ a deleted synced library stays deleted on reconnect (27.062625ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  true !== false
+  
+      at TestContext.<anonymous> (/Users/fei/Desktop/Archimedes/docs/reviews/2026-11-16-system-review/implementation-evidence/cloud-sync-before.cjs:50:10)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: true,
+    expected: false,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

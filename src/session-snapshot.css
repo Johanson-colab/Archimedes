@@ -27,3 +27,6 @@
 .session-snapshot-footer { display: flex; align-items: end; justify-content: flex-end; flex-wrap: wrap; gap: 12px; padding: 14px 24px; border-top: 1px solid var(--border-soft); }
 .session-snapshot-dialog .primary-button, .session-snapshot-dialog .secondary-button { min-height: 32px; font-size: 12px; }
 @media (max-width: 640px) { .session-snapshot-body { grid-template-columns: minmax(0, 1fr); } .session-snapshot-options { border-right: 0; border-bottom: 1px solid var(--border-soft); } .snapshot-preview { max-height: 240px; } }
+.snapshot-range-content { min-height: 0; overflow: auto; padding: 20px 24px; font-size: 13px; line-height: 1.6; }
+.snapshot-range-content > p:first-child { margin-top: 0; }
+.snapshot-range-list { max-height: 360px; }

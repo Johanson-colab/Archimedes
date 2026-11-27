@@ -1,0 +1,181 @@
+✖ git state distinguishes none, empty, and ready folders (59.044166ms)
+✖ a linked worktree is reported as nested instead of a project root (136.134541ms)
+✔ a broken .git entry is suspicious (10.634792ms)
+✔ translation shards cover every string exactly once (15.270375ms)
+✖ keys stay sorted inside each shard so concurrent additions do not collide (3.367292ms)
+✔ the shell merges every shard and keeps the surfaces translated (5.158458ms)
+✖ Windows prefers PowerShell 7 when it is installed (4.969375ms)
+✖ Windows falls back to Windows PowerShell before cmd (0.359875ms)
+✔ Windows uses COMSPEC only as the last built-in fallback (0.139667ms)
+✖ explicit shell profiles do not fall through to a different shell (0.142541ms)
+✔ custom shell paths are honored when they exist (0.415375ms)
+✔ macOS and Linux use the login shell with -l (1.2295ms)
+✔ missing POSIX shells fall back to /bin/sh (0.121375ms)
+✔ opening an existing database attaches projects and sessions to a shared workspace (109.947ms)
+✔ sessions are filtered by workspace and can be pinned and marked viewed (54.12475ms)
+✔ sandboxes copy project files without caches or app data (51.196583ms)
+✔ workspaces accept a user name and can be renamed later (45.377666ms)
+✖ git projects can open and remove a worktree workspace (121.206ms)
+✔ projects without git cannot create a worktree (42.704375ms)
+ℹ tests 19
+ℹ suites 0
+ℹ pass 12
+ℹ fail 7
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 592.750834
+
+✖ failing tests:
+
+test at electron/git-state.test.cjs:19:1
+✖ git state distinguishes none, empty, and ready folders (59.044166ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + 'suspicious'
+  - 'empty'
+  
+      at TestContext.<anonymous> (/Users/fei/Desktop/Archimedes/electron/git-state.test.cjs:26:10)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.start (node:internal/test_runner/test:1262:17)
+      at startSubtestAfterBootstrap (node:internal/test_runner/harness:387:17) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'suspicious',
+    expected: 'empty',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at electron/git-state.test.cjs:41:1
+✖ a linked worktree is reported as nested instead of a project root (136.134541ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + 'suspicious'
+  - 'ready'
+  
+      at TestContext.<anonymous> (/Users/fei/Desktop/Archimedes/electron/git-state.test.cjs:52:10)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'suspicious',
+    expected: 'ready',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at electron/i18n-translations.test.cjs:36:1
+✖ keys stay sorted inside each shard so concurrent additions do not collide (3.367292ms)
+  AssertionError [ERR_ASSERTION]: library.ts is out of order at "back to reading"
+      at TestContext.<anonymous> (/Users/fei/Desktop/Archimedes/electron/i18n-translations.test.cjs:40:14)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+
+test at electron/terminal-shell.test.cjs:5:1
+✖ Windows prefers PowerShell 7 when it is installed (4.969375ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + 'cmd.exe'
+  - 'C:\\Program Files\\PowerShell\\7\\pwsh.exe'
+  
+      at TestContext.<anonymous> (/Users/fei/Desktop/Archimedes/electron/terminal-shell.test.cjs:13:10)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.start (node:internal/test_runner/test:1262:17)
+      at startSubtestAfterBootstrap (node:internal/test_runner/harness:387:17) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'cmd.exe',
+    expected: 'C:\\Program Files\\PowerShell\\7\\pwsh.exe',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at electron/terminal-shell.test.cjs:17:1
+✖ Windows falls back to Windows PowerShell before cmd (0.359875ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + 'cmd.exe'
+  - 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
+  
+      at TestContext.<anonymous> (/Users/fei/Desktop/Archimedes/electron/terminal-shell.test.cjs:25:10)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'cmd.exe',
+    expected: 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at electron/terminal-shell.test.cjs:39:1
+✖ explicit shell profiles do not fall through to a different shell (0.142541ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + 'cmd.exe'
+  - 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
+  
+      at TestContext.<anonymous> (/Users/fei/Desktop/Archimedes/electron/terminal-shell.test.cjs:50:10)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'cmd.exe',
+    expected: 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at electron/workspace-session-model.test.cjs:178:1
+✖ git projects can open and remove a worktree workspace (121.206ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + 'suspicious'
+  - 'ready'
+  
+      at TestContext.<anonymous> (/Users/fei/Desktop/Archimedes/electron/workspace-session-model.test.cjs:184:12)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'suspicious',
+    expected: 'ready',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

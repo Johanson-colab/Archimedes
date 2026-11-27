@@ -1,0 +1,22 @@
+Local Writing owner fix; no commit or PR.
+
+node --test electron/paper-writing-workspace.test.cjs
+tests 6 / pass 6 / fail 0
+
+node --test electron/paper-writing-workspace.test.cjs electron/paper-source-search.test.cjs electron/latex-workspace.test.cjs electron/managed-latex-engine.test.cjs
+tests 33 / pass 32 / fail 0 / skipped 1 (latexmk is not installed)
+
+node --test electron/ui-audit-coedit.test.cjs
+tests 2 / pass 2 / fail 0 (source contract migration; not live collaboration evidence)
+
+npm run lint: passed
+git diff --check: passed
+
+Actual component/temporary-disk and IPC probes are separate from the native Electron acceptance owned by the frontend reviewer.
+
+Independent QA: the same adjacent 33 tests had 32 pass / 0 fail / 1 skip;
+an additional failed-save then retry probe passed, and the coedit contract migration was reviewed.
+
+Final unified suite (frontend coordinator): 1288 tests / 1274 pass / 7 fail / 7 skip.
+The 7 failures match the original baseline. Unified lint/build/theme passed.
+Native acceptance is recorded separately in frontend.md and its native evidence.
