@@ -1,0 +1,13 @@
+$ node --test electron/ui-audit-model-picker-keys.test.cjs electron/harness-picker.test.cjs
+✔ harness picker exposes five entries, switches supported runtimes and opens Models (95.897708ms)
+✔ busy state disables switching and failed saves keep the current harness (6.044833ms)
+✔ an established chat explains that another harness starts a new chat (4.850333ms)
+✔ model search stops text keys but lets dismissal and navigation keys bubble (0.67275ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 523.698583

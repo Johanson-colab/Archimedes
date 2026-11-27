@@ -1,0 +1,38 @@
+$ node --test electron/ui-audit-model-picker-keys.test.cjs  # PR #360 head
+node:internal/assert/utils:146
+  throw error;
+  ^
+
+AssertionError [ERR_ASSERTION]: the model search field should handle key events
+    at Object.<anonymous> (/Users/fei/Desktop/Archimedes/electron/ui-audit-model-picker-keys.test.cjs:10:8)
+    at Module._compile (node:internal/modules/cjs/loader:1968:14)
+    at Object..js (node:internal/modules/cjs/loader:2108:10)
+    at Module.load (node:internal/modules/cjs/loader:1690:32)
+    at Module._load (node:internal/modules/cjs/loader:1480:12)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:261:19)
+    at Module.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:171:5)
+    at node:internal/main/run_main_module:33:47 {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: undefined,
+  expected: true,
+  operator: '==',
+  diff: 'simple'
+}
+
+Node.js v26.13.0
+✖ electron/ui-audit-model-picker-keys.test.cjs (93.123417ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 97.284583
+
+✖ failing tests:
+
+test at electron/ui-audit-model-picker-keys.test.cjs:1:1
+✖ electron/ui-audit-model-picker-keys.test.cjs (93.123417ms)
+  'test failed'
