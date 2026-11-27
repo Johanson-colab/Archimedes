@@ -2620,7 +2620,13 @@ function App() {
     if (agentBusy) throw new Error(t("Stop the running turn before using this command."));
     if (command === "init") {
       if (!executionWorkspace) throw new Error(t("Select a workspace first."));
-      if (!(await submitPrompt(INIT_PROMPT, "free-chat"))) throw new Error(t("Project initialization could not start."));
+      const send: ComposerSend = { slot: composerSlot, owner: composerOwner, dataRoot: workspace, draftKey: composerDraftKey, clientRunId: `work-composer:init:${Date.now()}`, accepted: false };
+      pendingComposerSend.current = send;
+      try {
+        if (!(await submitPrompt(INIT_PROMPT, "free-chat", reasoningEffort, contextLength, undefined, undefined, undefined, false, undefined, send))) throw new Error(t("Project initialization could not start."));
+      } finally {
+        pendingComposerSend.current = null;
+      }
       setContextItems((current) => current.filter((item) => !contextItems.some((submitted) => submitted.id === item.id)));
       return;
     }
