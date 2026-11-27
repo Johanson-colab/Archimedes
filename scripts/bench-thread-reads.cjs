@@ -166,6 +166,8 @@ async function localModel() {
       return;
     }
     response.writeHead(200, { "content-type": "text/event-stream" });
+    const heartbeat = setInterval(() => { try { response.write(": keep-alive\n\n"); } catch { /* closed */ } }, 15_000);
+    response.on("close", () => clearInterval(heartbeat));
     response.write(`data: ${JSON.stringify({ choices: [{ delta: { content: delta } }] })}\n\n`);
     const finish = () => response.end('data: {"choices":[{"finish_reason":"stop","delta":{}}]}\n\n');
     if (hold) hold = finish;
@@ -327,13 +329,17 @@ function installRenderer(prompt) {
     async input() {
       const element = composer();
       const value = element.value;
-      const start = performance.now();
-      setDraft(element, `${value}x`);
-      await nextPaint();
-      const ms = performance.now() - start;
-      if (element.value !== `${value}x`) throw new Error("The composer did not accept input.");
-      setDraft(element, value);
-      return ms;
+      const samples = [];
+      const deadline = performance.now() + 300;
+      while (performance.now() < deadline) {
+        const start = performance.now();
+        setDraft(element, `${value}x`);
+        await nextPaint();
+        samples.push(performance.now() - start);
+        if (element.value !== `${value}x`) throw new Error("The composer did not accept input.");
+        setDraft(element, value);
+      }
+      return Math.max(...samples);
     },
   };
   return true;
