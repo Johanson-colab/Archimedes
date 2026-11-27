@@ -5,6 +5,7 @@ import rehypeKatex from "rehype-katex";
 import { BookOpen, Check, ChevronLeft, ChevronRight, ExternalLink, FileText, GraduationCap, LoaderCircle, Plus, RefreshCw, Search } from "lucide-react";
 import conferenceCatalog from "../shared/conferences.json";
 import { FilterGroup, FilterButton } from "./Tabs";
+import { readDiscoveryControls, writeDiscoveryControls } from "./discovery-state";
 
 import { useUISettings } from "./i18n";
 import { InlineNotice } from "./InlineNotice";
@@ -14,21 +15,32 @@ const PRESENTATIONS: Array<{ id: ConferencePresentation | "all"; label: string }
   { id: "poster", label: "Poster" }, { id: "unknown", label: "Unclassified" },
 ];
 const PAGE_SIZE = 40;
+const YEARS = [2026, 2025, 2024, 2023];
 function errorMessage(error: unknown) {
   const message = String(error).replace(/^Error:\s*/, "").replace(/^Error invoking remote method '[^']+':\s*(?:Error:\s*)?/, "");
   if (/AbortError|operation was aborted|premature close/i.test(message)) return "The connection to the official catalog was interrupted. Please retry.";
   return message;
 }
 
-export default function ConferenceDiscovery({ bridge, targetLibraryId, topic, onImported, active = true }: {
-  bridge: ResearchDeskBridge; targetLibraryId: string; topic: DailyDiscoveryTopic; onImported: () => Promise<void>; active?: boolean;
+export default function ConferenceDiscovery({ storageKey, bridge, targetLibraryId, topic, onImported, active = true }: {
+  storageKey: string; bridge: ResearchDeskBridge; targetLibraryId: string; topic: DailyDiscoveryTopic; onImported: () => Promise<void>; active?: boolean;
 }) {
   const { t } = useUISettings();
-  const [conference, setConference] = useState<ConferenceId>("icml");
-  const [year, setYear] = useState(2026);
-  const [presentation, setPresentation] = useState<ConferencePresentation | "all">("all");
-  const [query, setQuery] = useState("");
-  const [submittedQuery, setSubmittedQuery] = useState("");
+  const [saved] = useState(() => readDiscoveryControls(storageKey, {
+    conference: "icml" as ConferenceId,
+    year: YEARS[0],
+    presentation: "all" as ConferencePresentation | "all",
+    query: "",
+    submittedQuery: "",
+  }));
+  const [conference, setConference] = useState<ConferenceId>(conferenceCatalog.some(({ id }) => id === saved.conference) ? saved.conference : "icml");
+  const [year, setYear] = useState(YEARS.includes(saved.year) ? saved.year : YEARS[0]);
+  const [presentation, setPresentation] = useState<ConferencePresentation | "all">(PRESENTATIONS.some(({ id }) => id === saved.presentation) ? saved.presentation : "all");
+  const [query, setQuery] = useState(saved.query);
+  const [submittedQuery, setSubmittedQuery] = useState(saved.submittedQuery);
+  useEffect(() => {
+    writeDiscoveryControls(storageKey, { conference, year, presentation, query, submittedQuery });
+  }, [storageKey, conference, year, presentation, query, submittedQuery]);
   const [offset, setOffset] = useState(0);
   const [response, setResponse] = useState<ConferenceSearchResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -104,7 +116,7 @@ export default function ConferenceDiscovery({ bridge, targetLibraryId, topic, on
         {conferenceCatalog.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
       </select></label>
       <label>Year<select aria-label="Conference year" value={year} onChange={(event) => { setYear(Number(event.target.value)); setOffset(0); }}>
-        {[2026, 2025, 2024, 2023].map((item) => <option key={item} value={item}>{item}</option>)}
+        {YEARS.map((item) => <option key={item} value={item}>{item}</option>)}
       </select></label>
       <FilterGroup label="Presentation format" className="conference-presentation-tabs">
         {PRESENTATIONS.map((item) => <FilterButton key={item.id} active={presentation === item.id} onClick={() => { setPresentation(item.id); setOffset(0); }}>

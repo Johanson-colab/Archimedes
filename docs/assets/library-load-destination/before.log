@@ -1,0 +1,31 @@
+$ node --test --test-name-pattern="failed library load" electron/discovery-project-state.test.cjs  # PR #342 head
+✖ a failed library load keeps the saved save destination (49.733ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 480.618833
+
+✖ failing tests:
+
+test at electron/discovery-project-state.test.cjs:130:1
+✖ a failed library load keeps the saved save destination (49.733ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + ''
+  - 'saved-library'
+  
+      at TestContext.<anonymous> (/Users/fei/Desktop/Archimedes/electron/discovery-project-state.test.cjs:138:12)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '',
+    expected: 'saved-library',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
