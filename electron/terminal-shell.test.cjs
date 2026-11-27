@@ -119,6 +119,12 @@ test("Windows shell candidates use target paths for store installs and alternate
   assert.equal(installed.shell, installedShell);
 });
 
+test("terminal teardown contains signal failures", () => {
+  const permission = Object.assign(new Error("Operation not permitted"), { code: "EPERM" });
+  assert.equal(stopTerminalCommand({ pid: 4321 }, { platform: "linux", kill: () => { throw permission; } }), false);
+  assert.equal(stopTerminalCommand({ kill: () => { throw permission; } }, { platform: "win32" }), false);
+});
+
 test("a shell command inherits its workspace environment without application credentials", { skip: process.platform === "win32" }, async () => {
   const command = 'printf "%s|%s|%s|%s" "$ARCHIMEDES_LLM_API_KEY" "$AXIOM_WEB_SEARCH_API_KEY" "$ARCH_TEST_VISIBLE" "$TERM_PROGRAM"';
   const child = spawnTerminalCommand(command, { cwd: __dirname, version: "test", env: {

@@ -72,15 +72,16 @@ function spawnTerminalCommand(command, { cwd, version, env = process.env }) {
   });
 }
 
-function stopTerminalCommand(child) {
-  if (process.platform === "win32") return child.kill("SIGTERM");
-  if (!child.pid) return false;
+function stopTerminalCommand(child, { platform = process.platform, kill = process.kill } = {}) {
   try {
+    if (platform === "win32") return child.kill("SIGTERM");
+    if (!child.pid) return false;
     // The leader can exit while inherited stdio and its other processes stay open.
-    process.kill(-child.pid, "SIGKILL");
+    kill(-child.pid, "SIGKILL");
     return true;
-  } catch (error) {
-    if (error.code !== "ESRCH") throw error;
+  } catch {
+    // Teardown is best effort: an unsignalable process must not abort cleanup
+    // for the remaining terminal sessions or window/store state.
     return false;
   }
 }
