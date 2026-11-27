@@ -1,0 +1,15 @@
+{
+  "stage": "before",
+  "viewport": [
+    900,
+    520
+  ],
+  "before": {
+    "menuOpen": true,
+    "search": true
+  },
+  "after": {
+    "menuOpen": true,
+    "search": true
+  }
+}

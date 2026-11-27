@@ -120,3 +120,23 @@ test("new chat modes use their own instructions and unknown modes fall back to S
   assert.match(instruction("create"), /Create mode/);
   assert.match(instruction("unknown"), /Standard mode/);
 });
+
+test("a small profile budget compacts large recent replies before making the next request", () => {
+  const historicalTurns = Array.from({ length: 4 }, (_, index) => ({
+    id: `old-${index}`,
+    user_message: `Question ${index + 1}`,
+    assistant_message: "a".repeat(51_000),
+  }));
+  const contextCharacterLimit = 24_000;
+  const conversation = prepareConversation({
+    thread: { turns: [...historicalTurns, { id: "new", user_message: "Continue the analysis." }] },
+    currentTurnId: "new",
+    mode: "free-chat",
+    contextCharacterLimit,
+    strictContextLimit: true,
+  });
+  assert.equal(conversation.omittedTurnCount, 4);
+  assert.ok(conversation.messages.reduce((total, message) => total + JSON.stringify(message).length, 0) <= contextCharacterLimit);
+  assert.match(conversation.messages[1].content, /Earlier research context/);
+  assert.equal(conversation.messages.at(-1).content, "Continue the analysis.");
+});

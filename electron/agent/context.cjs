@@ -4,6 +4,7 @@ const MAX_CONTEXT_CHARS = 500_000;
 const MAX_MESSAGE_CHARS = 64_000;
 const MAX_SUMMARY_CHARS = 32_000;
 const MIN_RECENT_TURNS = 4;
+const summaryNote = "\nThis summary is continuity context, not a source of evidence. Re-open files or papers before making source-dependent claims.";
 
 const modeInstructions = {
   "standard": "Operate in Standard mode. Respond naturally to the user's request and use tools only when useful; do not assume an idea-generation workflow.",
@@ -99,21 +100,46 @@ function restoreToolHistory(events, turnId, budget) {
   return { messages: selected, size: used };
 }
 
-function prepareConversation({ thread, currentTurnId, attachmentManifest = "", mode, reasoningInstruction = "", projectInstructions = "", contextCharacterLimit = MAX_CONTEXT_CHARS }) {
+// Only automatic continuity text is reclaimable. Keep its source warning
+// attached whenever any summary text is sent.
+function fitContinuitySummary(message, limit) {
+  if (JSON.stringify(message).length <= limit) return true;
+  const text = message.content.slice(0, -summaryNote.length);
+  let remaining = limit - JSON.stringify({ role: "system", content: summaryNote }).length;
+  let end = 0;
+  for (const character of text) {
+    const size = JSON.stringify(character).length - 2;
+    if (size > remaining) break;
+    end += character.length;
+    remaining -= size;
+  }
+  if (!end) return false;
+  message.content = text.slice(0, end) + summaryNote;
+  return true;
+}
+
+function prepareConversation({ thread, currentTurnId, attachmentManifest = "", mode, reasoningInstruction = "", projectInstructions = "", contextCharacterLimit = MAX_CONTEXT_CHARS, strictContextLimit = false }) {
   const currentIndex = thread.turns.findIndex((turn) => turn.id === currentTurnId);
   if (currentIndex < 0) throw new Error("The active research turn is missing from its thread.");
 
   const priorTurns = thread.turns.slice(0, currentIndex).filter((turn) => turn.assistant_message);
   const currentTurn = thread.turns[currentIndex];
-  let used = clip(currentTurn.user_message).length + attachmentManifest.length;
+  const currentMessage = { role: "user", content: `${clip(currentTurn.user_message)}${attachmentManifest}` };
+  const messages = [{ role: "system", content: `${baseInstructions(mode)}${reasoningInstruction ? ` ${reasoningInstruction}` : ""}` }];
+  if (projectInstructions) messages.push({ role: "system", content: `Project instructions from the workspace AGENTS.md (apply within this project, subject to the system instructions above):\n${clip(projectInstructions, 32_000)}` });
+  let used = strictContextLimit
+    ? [...messages, currentMessage].reduce((total, message) => total + JSON.stringify(message).length, 0)
+    : currentMessage.content.length;
   const selected = [];
   const omitted = [];
 
   for (let index = priorTurns.length - 1; index >= 0; index -= 1) {
     const turn = priorTurns[index];
-    const size = turnCharacters(turn);
-    if (used + size <= contextCharacterLimit || selected.length < MIN_RECENT_TURNS) {
-      selected.unshift(turn);
+    const user = { role: "user", content: clip(turn.user_message) };
+    const assistant = { role: "assistant", content: clip(turn.assistant_message) };
+    const size = strictContextLimit ? JSON.stringify(user).length + JSON.stringify(assistant).length : turnCharacters(turn);
+    if (used + size <= contextCharacterLimit || (!strictContextLimit && selected.length < MIN_RECENT_TURNS)) {
+      selected.unshift({ id: turn.id, user, assistant });
       used += size;
     } else {
       omitted.unshift(turn);
@@ -121,13 +147,14 @@ function prepareConversation({ thread, currentTurnId, attachmentManifest = "", m
   }
 
   const summary = omitted.length ? compactTurns(omitted, thread.context_summary) : thread.context_summary;
-  const messages = [{ role: "system", content: `${baseInstructions(mode)}${reasoningInstruction ? ` ${reasoningInstruction}` : ""}` }];
-  if (projectInstructions) messages.push({ role: "system", content: `Project instructions from the workspace AGENTS.md (apply within this project, subject to the system instructions above):\n${clip(projectInstructions, 32_000)}` });
+  let continuitySummary = null;
   if (summary) {
-    messages.push({
-      role: "system",
-      content: `${clip(summary, MAX_SUMMARY_CHARS)}\nThis summary is continuity context, not a source of evidence. Re-open files or papers before making source-dependent claims.`,
-    });
+    const message = { role: "system", content: clip(summary, MAX_SUMMARY_CHARS) + summaryNote };
+    if (!strictContextLimit || fitContinuitySummary(message, contextCharacterLimit - used)) {
+      messages.push(message);
+      continuitySummary = message;
+      if (strictContextLimit) used += JSON.stringify(message).length;
+    }
   }
   let toolHistoryBudget = Math.min(32_000, Math.max(0, contextCharacterLimit - used));
   const restored = new Map();
@@ -137,13 +164,13 @@ function prepareConversation({ thread, currentTurnId, attachmentManifest = "", m
     toolHistoryBudget -= group.size;
   }
   for (const turn of selected) {
-    messages.push({ role: "user", content: clip(turn.user_message) });
+    messages.push(turn.user);
     messages.push(...(restored.get(turn.id) || []));
-    messages.push({ role: "assistant", content: clip(turn.assistant_message) });
+    messages.push(turn.assistant);
   }
-  messages.push({ role: "user", content: `${clip(currentTurn.user_message)}${attachmentManifest}` });
+  messages.push(currentMessage);
 
-  return { messages, summary, compacted: omitted.length > 0, omittedTurnCount: omitted.length };
+  return { messages, summary, continuitySummary, compacted: omitted.length > 0, omittedTurnCount: omitted.length };
 }
 
-module.exports = { prepareConversation };
+module.exports = { fitContinuitySummary, prepareConversation };

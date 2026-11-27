@@ -59,7 +59,8 @@ import ArtifactsPanel from "./ArtifactsPanel";
 import ChatActivityTimeline from "./ChatActivityTimeline";
 import NativeAgentPanel, { NativeContextUsage, NativeQuestionCard, NativeSessionBusyNotice } from "./NativeAgentPanel";
 import { mergeNativeEvent, nativeTurnEvents, nativeUsage, updateNativeQuestions, type NativeSessionBackend } from "./native-agent-state";
-import HarnessPicker from "./HarnessPicker";
+import HarnessPicker, { ComposerModelPicker } from "./HarnessPicker";
+import { modelProfilesEnabled } from "./ModelSettingsModal";
 import ResearchAppsView from "./ResearchAppsView";
 import NewChatModePicker, { draftForNewChatMode, RESEARCH_EXAMPLE, type NewChatMode } from "./NewChatModePicker";
 import JourneyView from "./JourneyView";
@@ -86,7 +87,6 @@ import AgentLayer from "./AgentLayer";
 import ResearchPathPanel from "./ResearchPathPanel";
 import ResearchGraphPanel from "./research-graph/ResearchGraphPanel";
 import ProactiveAgentPanel from "./ProactiveAgentPanel";
-import ProactiveSettingsPanel from "./ProactiveSettingsPanel";
 import { researchStages, stageForMode, type ResearchStage, type ResearchStageId } from "./research-path";
 import { useProactiveAgent } from "./useProactiveAgent";
 import type { ProactiveSuggestion } from "./proactive-types";
@@ -1540,7 +1540,10 @@ function App() {
   const [changeSets, setChangeSets] = useState<WorkspaceChangeSet[]>([]);
   const [papers, setPapers] = useState(initialPapers);
   const [modal, setModal] = useState<Modal>(null);
+  const [modelConfigRevision, setModelConfigRevision] = useState(0);
   const [activeModelConfig, setActiveModelConfig] = useState<PublicModelConfig | null>(null);
+  const [modelProfiles, setModelProfiles] = useState<PublicModelProfile[]>([]);
+  const [chatModelChoices, setChatModelChoices] = useState<Record<string, string | undefined>>({});
   const [newProjectOpen, setNewProjectOpen] = useState(false);
   const [newProjectName, setNewProjectName] = useState("");
   const [newProjectWorkspace, setNewProjectWorkspace] = useState("");
@@ -1625,6 +1628,11 @@ function App() {
   // and paper writing operate inside the session folder: session snapshot →
   // project folder → primary workspace.
   const executionWorkspace = activeThread?.workspace_path || activeWorkspace?.root || activeProject?.workspace_path || workspace;
+  const chatModelScope = JSON.stringify([workspace, activeThreadId || ["draft", activeProjectId, chatViewNonce], selectedHarness]);
+  const requestedChatModel = chatModelChoices[chatModelScope];
+  const selectedChatModel = selectedHarness === "api" && !modelProfiles.some(profile => profile.id === requestedChatModel)
+    ? undefined : requestedChatModel;
+  const defaultChatModel = activeModelConfig?.hasApiKey ? activeModelConfig.model : "";
   const executionWorkspaceRef = useRef(executionWorkspace);
   const fileWorkspaceVersionRef = useRef(0);
   if (executionWorkspaceRef.current !== executionWorkspace) fileWorkspaceVersionRef.current += 1;
@@ -1660,6 +1668,7 @@ function App() {
     workspace: executionWorkspace,
     section: mainSection,
     bridge: desktopBridge,
+    modelConfigRevision,
     onRun: runProactiveSuggestion,
     onNotice: (text) => setProactiveNotice(t(text)),
   });
@@ -1744,13 +1753,13 @@ function App() {
 
   useEffect(() => {
     let active = true;
-    void desktopBridge.getModelCapabilities().then((capabilities) => {
+    void desktopBridge.getModelCapabilities("agent", selectedHarness === "api" ? selectedChatModel : undefined).then((capabilities) => {
       if (active) setModelCapabilities(capabilities);
     }).catch(() => {
       if (active) setModelCapabilities(previewModelCapabilities);
     });
     return () => { active = false; };
-  }, [activeModelConfig?.provider, activeModelConfig?.model]);
+  }, [activeModelConfig, selectedHarness, selectedChatModel]);
 
   useEffect(() => {
     if (modelCapabilities.thinkingEfforts.length && !modelCapabilities.thinkingEfforts.includes(reasoningEffort)) {
@@ -2387,10 +2396,13 @@ function App() {
       }
       if (isGraphEvent && event.threadId && activeThreadIdRef.current !== event.threadId) return;
       const state = event.type === "complete" || event.type === "artifact" || event.type === "graph_update" || event.snapshotCoverage || event.toolCall?.status === "completed" ? "done" : event.type === "configuration" || event.type === "failed" || event.type === "incomplete" || event.type === "interrupted" || event.toolCall?.status === "failed" || event.toolCall?.status === "interrupted" ? "waiting" : "active";
-      setEvents((current) => [...current.filter((item) => item.title !== event.title), { title: event.title, detail: event.detail, snapshotCoverage: event.snapshotCoverage, state }]);
+      const localizableFailure = event.error?.code === "MODEL_CONTEXT_BUDGET_EXCEEDED" || event.error?.code === "MODEL_SESSION_HEADER_REQUIRED";
+      const title = localizableFailure ? t(event.title) : event.title;
+      const detail = localizableFailure ? t(event.detail) : event.detail;
+      setEvents((current) => [...current.filter((item) => item.title !== title), { title, detail, snapshotCoverage: event.snapshotCoverage, state }]);
     });
     return unsubscribe;
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     const unsubscribeFiles = desktopBridge.onWorkspaceFilesChanged(() => {
@@ -2424,8 +2436,20 @@ function App() {
 
   useEffect(() => {
     void desktopBridge.getInitialWorkspace().then((initialWorkspace) => loadWorkspace(initialWorkspace ?? DEFAULT_WORKSPACE));
-    void desktopBridge.getModelConfig().then(setActiveModelConfig).catch(() => setActiveModelConfig(null));
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    const profiles = modelProfilesEnabled() && typeof desktopBridge.listModelProfiles === "function" ? desktopBridge.listModelProfiles() : Promise.resolve([]);
+    void desktopBridge.getModelConfig().then((config) => {
+      if (active) setActiveModelConfig(config);
+    }).catch(() => {
+      if (active) setActiveModelConfig(null);
+    });
+    void profiles.then((next) => { if (active) setModelProfiles(next.filter(profile => profile.hasApiKey)); })
+      .catch(() => { if (active) setModelProfiles([]); });
+    return () => { active = false; };
+  }, [modelConfigRevision]);
 
   useEffect(() => {
     const unsubscribeNewChat = desktopBridge.onMenuNewChat(() => startNewTask());
@@ -3064,13 +3088,19 @@ function App() {
     setEvents(selectedNativeBackend ? [] : [{ title: "Evidence synthesis", detail: "Reading workspace and knowledge context", state: "active" }]);
 
     try {
-      const result = await desktopBridge.runAgent({ prompt: requestPrompt, workspace: executionWorkspace, threadId: forceNew ? undefined : activeThreadId || undefined, projectId: activeProjectId || undefined, workspaceId: activeWorkspace?.id, visibility: threadVisibility, mode: requestedMode, researchSkill, mineruToken, reasoningEffort: requestedReasoningEffort, contextLength: requestedContextLength, contextItems: submittedContext, capabilities: { write: "ask", command: "ask" }, origin: "research", backend: backendOverride || selectedHarness, ...(remoteServerId && !researchSkill && (backendOverride || selectedHarness) === "codex" && ["research", "experiment-setup"].includes(requestedMode) ? { remoteServerId } : {}) });
+      const result = await desktopBridge.runAgent({ prompt: requestPrompt, workspace: executionWorkspace, threadId: forceNew ? undefined : activeThreadId || undefined, projectId: activeProjectId || undefined, workspaceId: activeWorkspace?.id, visibility: threadVisibility, mode: requestedMode, researchSkill, mineruToken, reasoningEffort: requestedReasoningEffort, contextLength: requestedContextLength, contextItems: submittedContext, capabilities: { write: "ask", command: "ask" }, origin: "research", backend: backendOverride || selectedHarness,
+        ...(!backendOverride && (selectedHarness === "api" ? { modelProfileId: selectedChatModel } : { nativeModel: selectedChatModel })),
+        ...(remoteServerId && !researchSkill && (backendOverride || selectedHarness) === "codex" && ["research", "experiment-setup"].includes(requestedMode) ? { remoteServerId } : {}) });
       setThreads((current) => [result.thread, ...current.filter((thread) => thread.id !== result.threadId)]);
       setNativeStream((current) => current.threadId === result.threadId ? { threadId: "", events: [] } : current);
       setNativeQuestions((current) => current.filter((item) => item.threadId !== result.threadId));
       if (submittedThreadId === null) await moveDraftWorkbenchNote(draftNoteKey, result.threadId);
       const stillViewingSubmittedThread = activeThreadIdRef.current === result.threadId
         || (submittedThreadId === null && activeThreadIdRef.current === null);
+      if (!backendOverride && selectedChatModel !== undefined) {
+        const scope = JSON.stringify([workspace, result.threadId, selectedHarness]);
+        setChatModelChoices(current => ({ ...current, [scope]: selectedChatModel }));
+      }
       if (stillViewingSubmittedThread) {
         clearPendingAssistantDeltas();
         activeThreadIdRef.current = result.threadId;
@@ -3782,6 +3812,10 @@ function App() {
               events={events}
               trajectoryEvents={combinedTrajectoryEvents}
               nativeBackend={selectedNativeBackend}
+              defaultChatModel={defaultChatModel}
+              modelProfiles={modelProfiles}
+              selectedChatModel={selectedChatModel}
+              onChatModelChange={(model) => setChatModelChoices(current => ({ ...current, [chatModelScope]: model }))}
               remoteServers={remoteServers}
               remoteServerId={remoteServerId}
               onRemoteServerChange={setRemoteServerId}
@@ -3842,7 +3876,7 @@ function App() {
               onComposerRequestApplied={(id) => setComposerRequest((current) => current?.id === id ? null : current)}
             />
           )}
-          {sideThread && <div className={mainSection === "chat" ? "side-chat-host" : "side-chat-host hidden"}><SideConversation key={sideThread.id} bridge={desktopBridge} initialThread={sideThread} dataWorkspace={workspace} reasoningEffort={reasoningEffort} contextLength={contextLength} onBusyChange={setSideBusy} onClose={() => setSideThread(null)} onOpenMain={(thread) => { setSideThread(null); void openResearchThread(thread); }} onUpdated={(thread) => { setSideThread((current) => current?.id === thread.id ? thread : current); setThreads((current) => [thread, ...current.filter((item) => item.id !== thread.id)]); }} /></div>}
+          {sideThread && <div className={mainSection === "chat" ? "side-chat-host" : "side-chat-host hidden"}><SideConversation key={sideThread.id} bridge={desktopBridge} initialThread={sideThread} dataWorkspace={workspace} defaultChatModel={defaultChatModel} modelProfiles={modelProfiles} onModelSettings={() => { void runConversationCommand("model"); }} reasoningEffort={reasoningEffort} contextLength={contextLength} onBusyChange={setSideBusy} onClose={() => setSideThread(null)} onOpenMain={(thread) => { setSideThread(null); void openResearchThread(thread); }} onUpdated={(thread) => { setSideThread((current) => current?.id === thread.id ? thread : current); setThreads((current) => [thread, ...current.filter((item) => item.id !== thread.id)]); }} /></div>}
           <Suspense fallback={null}>
             {/* View host sidebar-modules: one looping projection, semantics derived from the module registry (keepMounted/cacheClass/requiresWorkspace/open gate). */}
             {(Object.entries(sidebarModuleContent) as [string, ReactNode][]).map(([id, content]) => {
@@ -4069,7 +4103,7 @@ function App() {
         appearance={appearance}
         onAppearanceChange={setAppearance}
         bridge={desktopBridge}
-        onModelSaved={setActiveModelConfig}
+        onModelSaved={() => setModelConfigRevision((value) => value + 1)}
         executionPreferences={{ reasoningEffort, contextLength, capabilities: modelCapabilities, onReasoningEffort: setReasoningEffort, onContextLength: setContextLength }}
         workspace={workspace}
         modelWorkspace={executionWorkspace}
@@ -4203,6 +4237,9 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
   }, []);
   const lastUserIndex = useMemo(() => visibleMessages.reduce((last, message, index) => message.role === "user" ? index : last, -1), [visibleMessages]);
   const nativeEvents = useMemo(() => nativeTurnEvents(trajectoryEvents), [trajectoryEvents]);
+  const localizableFailureTurns = useMemo(() => new Set(trajectoryEvents
+    .filter((event) => event.type === "context_budget_exceeded" || event.type === "model_session_header_required")
+    .map((event) => event.turn_id)), [trajectoryEvents]);
   const hasStreamingText = messages.some((message) => message.role === "assistant" && message.id.endsWith(":stream") && Boolean(message.text.trim()));
   const lastNativeActivity = [...nativeEvents].reverse()
     .map((event) => (event.payload as { activity?: NativeAgentActivity } | null)?.activity)
@@ -4295,6 +4332,10 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
     setHistoryStart((current) => historyExpandedRef.current ? Math.min(current, tailStart) : tailStart);
   }, [messages.length]);
 
+  const renderMessage = (message: Message) => {
+    const text = message.role === "assistant" && message.turn_id && localizableFailureTurns.has(message.turn_id) ? t(message.text) : message.text;
+    return <ConversationMessage message={message} text={text} streaming={agentBusy && message.id.endsWith(":stream")} busyBackend={message.turn_id ? nativeBusyTurns.get(message.turn_id) : undefined} />;
+  };
   const historyContent = welcomeVisible ? <ResearchWelcome onSelect={onWelcomeAction} /> : <div className="conversation-thread">
         {historyStart > 0 && <button className="conversation-load-history" onClick={() => {
           historyExpandedRef.current = true;
@@ -4303,7 +4344,7 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
           Show {Math.min(HISTORY_MESSAGE_PAGE_SIZE, historyStart)} earlier {Math.min(HISTORY_MESSAGE_PAGE_SIZE, historyStart) === 1 ? "message" : "messages"}
         </button>}
         {visibleMessages.slice(0, lastUserIndex + 1).map((message, index) => <div key={message.id}>
-          <ConversationMessage message={message} streaming={agentBusy && message.id.endsWith(":stream")} busyBackend={message.turn_id ? nativeBusyTurns.get(message.turn_id) : undefined} />
+          {renderMessage(message)}
           {message.role === "user" && index < lastUserIndex && message.turn_id && nativeEventsByTurn.has(message.turn_id) && <NativeAgentPanel events={nativeEventsByTurn.get(message.turn_id)!} busy={false} />}
           {message.turn_id && message.turn_id !== currentTurnId && lastTurnMessageIndex.get(message.turn_id) === index && (changeSetsByTurn.get(message.turn_id) ?? []).map((changeSet) => <WorkspaceChangesCard key={changeSet.id} changeSet={changeSet} onOpenFile={onOpenFile} />)}
         </div>)}
@@ -4311,7 +4352,7 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
         {visibleMessages.slice(lastUserIndex + 1).map((message, offset) => {
           const index = lastUserIndex + 1 + offset;
           return <div key={message.id}>
-            <ConversationMessage message={message} streaming={agentBusy && message.id.endsWith(":stream")} busyBackend={message.turn_id ? nativeBusyTurns.get(message.turn_id) : undefined} />
+            {renderMessage(message)}
             {message.turn_id && message.turn_id !== currentTurnId && lastTurnMessageIndex.get(message.turn_id) === index && (changeSetsByTurn.get(message.turn_id) ?? []).map((changeSet) => <WorkspaceChangesCard key={changeSet.id} changeSet={changeSet} onOpenFile={onOpenFile} />)}
           </div>;
         })}
@@ -4349,7 +4390,7 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
   </div>;
 });
 
-function ConversationView({ onOpenCreatedApps, messages, events, trajectoryEvents, remoteServers, remoteServerId, onRemoteServerChange, onRefreshRemoteServers, onOpenSshSettings, nativeBackend, harnessBound, onHarnessChange, nativeQuestions, onNativeAnswer, onNativeSteer, workspace, projectId, agentBusy, interrupting, canInterrupt, pendingAction, changeSets, researchMode, researchGraphOpen, onToggleResearchGraph, onResearchGraphAvailability, reasoningEffort, contextLength, modelCapabilities, contextItems, onOpenWorkspaceSettings, onCommand, contextSummary, compactedThroughTurnId, onSubmit, onInterrupt, onResearchMode, onAddContext, onRemoveContext, onApprove, onReject, onOpenFile, showWelcome, onWelcomeAction, composerRequest, draftKey, currentFile, currentSelection, onComposerRequestApplied, initialScrollTop, onScrollTop, commentScope, addingComment, commentsShowResolved, onExitComments }: {
+function ConversationView({ onOpenCreatedApps, messages, events, trajectoryEvents, remoteServers, remoteServerId, onRemoteServerChange, onRefreshRemoteServers, onOpenSshSettings, nativeBackend, defaultChatModel, modelProfiles, selectedChatModel, onChatModelChange, harnessBound, onHarnessChange, nativeQuestions, onNativeAnswer, onNativeSteer, workspace, projectId, agentBusy, interrupting, canInterrupt, pendingAction, changeSets, researchMode, researchGraphOpen, onToggleResearchGraph, onResearchGraphAvailability, reasoningEffort, contextLength, modelCapabilities, contextItems, onOpenWorkspaceSettings, onCommand, contextSummary, compactedThroughTurnId, onSubmit, onInterrupt, onResearchMode, onAddContext, onRemoveContext, onApprove, onReject, onOpenFile, showWelcome, onWelcomeAction, composerRequest, draftKey, currentFile, currentSelection, onComposerRequestApplied, initialScrollTop, onScrollTop, commentScope, addingComment, commentsShowResolved, onExitComments }: {
   onOpenCreatedApps: () => void;
   commentScope: SessionCommentsScope | null;
   addingComment: boolean;
@@ -4359,6 +4400,10 @@ function ConversationView({ onOpenCreatedApps, messages, events, trajectoryEvent
   events: TimelineEvent[];
   trajectoryEvents: ResearchEvent[];
   nativeBackend: AgentBackendConfig | null;
+  defaultChatModel: string;
+  modelProfiles: PublicModelProfile[];
+  selectedChatModel?: string;
+  onChatModelChange: (model: string | undefined) => void;
   remoteServers: SshServer[];
   remoteServerId: string;
   onRemoteServerChange: (id: string) => void;
@@ -4980,7 +5025,12 @@ function ConversationView({ onOpenCreatedApps, messages, events, trajectoryEvent
         {commandNotice && <div className="composer-command-notice" role="status">{commandNotice}</div>}
         <div className="conversation-composer-footer">
           <ContextPicker bridge={desktopBridge} workspace={workspace} projectId={projectId} items={contextItems} openRequest={contextPickerRequest} currentFile={currentFile} currentSelection={currentSelection} onAdd={addContextItems} />
-          <HarnessPicker backend={nativeBackend?.backend || "api"} bound={harnessBound} busy={agentBusy} onChange={onHarnessChange} onSettings={() => { void onCommand("model"); }} />
+          <div className="composer-agent-model">
+            <HarnessPicker backend={nativeBackend?.backend || "api"} bound={harnessBound} busy={agentBusy} onChange={onHarnessChange} onSettings={() => { void onCommand("model"); }} />
+            <ComposerModelPicker bridge={desktopBridge} native={nativeBackend} workspace={workspace} defaultModel={defaultChatModel}
+              profiles={modelProfiles} value={selectedChatModel} bound={harnessBound} disabled={agentBusy}
+              onChange={onChatModelChange} onSettings={() => { void onCommand("model"); }} />
+          </div>
           <button
             type="button"
             className="composer-context"
@@ -5065,17 +5115,17 @@ function ConversationView({ onOpenCreatedApps, messages, events, trajectoryEvent
   </div>;
 }
 
-const ConversationMessage = memo(function ConversationMessage({ message, streaming, busyBackend }: { message: Message; streaming: boolean; busyBackend?: NativeSessionBackend }) {
+const ConversationMessage = memo(function ConversationMessage({ message, text, streaming, busyBackend }: { message: Message; text: string; streaming: boolean; busyBackend?: NativeSessionBackend }) {
   return <article className={`conversation-message ${message.role}`} data-session-message-id={message.id} data-turn-id={message.role === "user" ? message.id : undefined}>
     <div className="conversation-message-content">
     {message.role === "user" && Boolean(message.attachments?.length) && <div className="message-attachments">{message.attachments?.map((attachment) => <MessageAttachmentView key={attachment.position} attachment={attachment} turnId={message.turn_id} />)}</div>}
     <div className="conversation-message-copy">
       <div className="conversation-message-role">{message.role === "assistant" ? "Archimedes" : "You"}</div>
       {message.role === "assistant"
-        ? streaming ? <StreamingMarkdownMessage content={message.text} /> : busyBackend
+        ? streaming ? <StreamingMarkdownMessage content={text} /> : busyBackend
           ? <NativeSessionBusyNotice backend={busyBackend} />
-          : <MarkdownMessage content={message.text} />
-        : <p>{message.text}</p>}
+          : <MarkdownMessage content={text} />
+        : <p>{text}</p>}
       {Boolean(message.sources?.length) && <div className="conversation-sources" aria-label="Sources read by Archimedes">
         {message.sources?.map((source, index) => <a key={`${source.url}:${source.startPage}:${index}`} href={source.startPage ? `${source.url}#page=${source.startPage}` : source.url} target="_blank" rel="noreferrer" title={[source.title, source.url, source.query && `Query: ${source.query}`, source.excerpt, source.retrievedAt && `Read: ${source.retrievedAt}`].filter(Boolean).join("\n\n")}>
           <FileText size={12} /><span>{source.startPage ? `${new URL(source.url).hostname} · pp. ${source.startPage}${source.endPage !== source.startPage ? `-${source.endPage}` : ""}` : source.title}</span>

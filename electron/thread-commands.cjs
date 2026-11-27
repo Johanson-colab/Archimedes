@@ -86,15 +86,17 @@ function registerThreadCommands({ ipcMain, store, agent, modelConfig, dialog, Br
     try {
       const configured = nativeBackend?.getConfig();
       const harness = thread.harness || configured?.backend;
+      const bindings = store.nativeAgentBindings(thread.id);
+      const binding = bindings.get();
       const backend = configured && harness && harness !== "api"
-        ? { ...configured, ...configured.profiles?.[harness], backend: harness }
+        ? { ...configured, ...configured.profiles?.[harness], ...(binding && binding.model !== undefined ? { model: binding.model } : {}), backend: harness }
         : null;
       if (backend && thread.kind !== "paper") {
         const requireEditor = () => {
           if (!store.canAccessProject(thread.project_id, "editor")) throw new Error("You do not have permission to edit this conversation.");
         };
         requireEditor();
-        await nativeBackend.compact({ config: backend, workspace: thread.workspace_path || workspace, thread, bindings: store.nativeAgentBindings(thread.id),
+        await nativeBackend.compact({ config: backend, workspace: thread.workspace_path || workspace, thread, bindings,
           signal: AbortSignal.timeout(180_000),
           recordEvent: (record) => { store.openWorkspace(workspace); requireEditor(); store.appendResearchEvent({ threadId: thread.id, turnId: expectedTurnId, ...record }); },
         });
