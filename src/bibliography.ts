@@ -282,9 +282,11 @@ export function matchBibliographyPaper<T extends AcademicSearchResult>(incoming:
   const normalizedTitle = title(incoming.title);
   // A metadata repair does not rewrite the stored key assigned at import.
   const legacyKey = `title:${normalizedTitle}`;
-  const retained = originalKey && papers.find(paper => "canonical_key" in paper && compatible(paper)
-    && (paper.canonical_key === originalKey && originalKey !== legacyKey
-      || paper.canonical_key === legacyKey && compatibleTitleMetadata(incoming, paper)));
+  const exactRetained = originalKey && originalKey !== legacyKey
+    ? papers.find(paper => "canonical_key" in paper && paper.canonical_key === originalKey && compatible(paper))
+    : undefined;
+  if (exactRetained) return exactRetained;
+  const retained = originalKey && papers.find(paper => "canonical_key" in paper && paper.canonical_key === legacyKey && compatible(paper) && compatibleTitleMetadata(incoming, paper));
   const matched = retained || papers.find(paper => compatible(paper) && compatibleTitleMetadata(incoming, paper)
     && (titleAlreadyMatched || normalizedTitle && normalizedTitle === title(paper.title)));
   if (matched) return matched;
