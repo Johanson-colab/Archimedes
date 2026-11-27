@@ -3392,7 +3392,7 @@ function App() {
       if (action.source === "agent") await desktopBridge.approveAgentAction(action.id);
       setPendingAction(current => current?.id === action.id ? null : current);
       clearThreadPendingAction();
-      if (action.kind === "command" && action.payload.command && !action.payload.externalAgent && !action.payload.managedByAgent) {
+      if (action.kind === "command" && action.payload.command && !action.payload.externalAgent && !action.payload.managedByAgent && !action.payload.remoteOperation) {
         await runCommand(action.payload.command, action.id);
       } else if (action.kind === "write" && action.payload.path) {
         await refreshWorkspaceFiles();
@@ -4183,7 +4183,7 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
   const [autoRunIn, setAutoRunIn] = useState<number | null>(null);
   const approveRef = useRef(onApprove);
   useEffect(() => { approveRef.current = onApprove; }, [onApprove]);
-  const autoRunId = pendingAction?.kind === "command" && (pendingAction.payload.managedByAgent || (agentBusy && pendingAction.ownerThreadId && pendingAction.payload.remoteOperation === "ssh_remote_exec")) ? pendingAction.id : null;
+  const autoRunId = pendingAction?.kind === "command" && pendingAction.payload.managedByAgent && !pendingAction.payload.remoteOperation ? pendingAction.id : null;
   useEffect(() => {
     if (!autoRunId) {
       setAutoRunIn(null);

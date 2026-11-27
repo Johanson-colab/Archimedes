@@ -1,4 +1,5 @@
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 const { pathToFileURL } = require('node:url');
@@ -8,6 +9,22 @@ function fakeClock() {
   let time = 0, callback;
   return { now: () => time, setInterval: fn => { callback = fn; return 1; }, clearInterval: () => {}, advance: ms => { time += ms; callback(); } };
 }
+
+test('only managed local command approvals qualify for a countdown', () => {
+  const renderer = fs.readFileSync(path.join(__dirname, '../src/App.tsx'), 'utf8');
+  const expression = renderer.match(/const autoRunId = (.*);/)?.[1];
+  assert.ok(expression, 'the approval card defines countdown eligibility');
+  const localCommandApprovalId = new Function('pendingAction', 'agentBusy', 'return ' + expression);
+  const action = { id: 'local', kind: 'command', payload: { managedByAgent: true } };
+  assert.equal(localCommandApprovalId(action), 'local');
+  for (const remoteOperation of ['ssh_remote_exec', 'ssh_remote_read', 'ssh_remote_edit']) {
+    assert.equal(localCommandApprovalId({ ...action, ownerThreadId: 'test', payload: { ...action.payload, remoteOperation } }, true), null);
+    assert.equal(localCommandApprovalId({ ...action, ownerThreadId: 'test', payload: { remoteOperation } }, true), null);
+  }
+  assert.equal(localCommandApprovalId({ ...action, kind: 'write' }), null);
+  assert.equal(localCommandApprovalId({ ...action, payload: {} }), null);
+  assert.equal(localCommandApprovalId(null), null);
+});
 
 test('countdown runs exactly once after ten seconds', async () => {
   const { startApprovalCountdown } = await countdown;
