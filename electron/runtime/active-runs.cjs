@@ -27,7 +27,7 @@ function listActiveRuns(domain) {
   return [...activeRuns.values()].filter(entry => !domain || entry.domain === domain).map(entry => entry.run);
 }
 
-function installQuitGuard({ app, dialog, hasWork, stopWork, timeoutMs = 2_000 }) {
+function installQuitGuard({ app, dialog, hasWork, stopWork, restoreWindow, strings, timeoutMs = 2_000 }) {
   let asking = false;
   let allowQuit = false;
   let cleaning = false;
@@ -39,15 +39,16 @@ function installQuitGuard({ app, dialog, hasWork, stopWork, timeoutMs = 2_000 })
     asking = true;
     void (async () => {
       try {
+        const copy = strings?.() ?? {};
         const { response } = await dialog.showMessageBox({
           type: "warning",
-          message: "Research is still running",
-          detail: "Stop active work and quit Archimedes?",
-          buttons: ["Keep running", "Stop and quit"],
+          message: copy.message || "Research is still running",
+          detail: copy.detail || "Stop active work and quit Archimedes?",
+          buttons: copy.buttons || ["Keep running", "Stop and quit"],
           defaultId: 0,
           cancelId: 0,
         });
-        if (response !== 1) return;
+        if (response !== 1) { restoreWindow?.(); return; }
         allowQuit = true;
         app.quit();
       } catch (error) {

@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { createHash } = require('node:crypto');
+const catalog = require('../shared/official-latex-templates.json');
 const { loadOfficialTemplate, createPaperProject } = require('./official-latex-templates.cjs');
 const content = '\\documentclass{article}\n\\begin{document}Test\\end{document}\n';
 const template = { name: 'Fixture', sourceUrl: 'https://github.com/example/template', revision: 'test', assets: [{ path: 'main.tex', url: 'https://raw.githubusercontent.com/example/template/test/main.tex', sha256: createHash('sha256').update(content).digest('hex') }] };
@@ -27,6 +28,7 @@ test('a failed download does not create a partial paper project', async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'template-failure-'));
   try {
     await assert.rejects(createPaperProject(root, 'paper', 'iclr-2027', { fetchImpl: async () => new Response('', { status: 503 }) }), /HTTP 503/);
+    await assert.rejects(createPaperProject(root, 'paper', 'aaai-2027', { fetchImpl: () => assert.fail('External author kit was fetched') }), /import the folder/);
     assert.deepEqual(fs.readdirSync(root), []);
     await assert.rejects(createPaperProject(root, 'paper', 'unknown-template'), /Unknown LaTeX template/);
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
@@ -45,21 +47,24 @@ test('binary template figures survive download, caching and project creation', a
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 
-test('bundled ACM class and starter create a complete project without network access', async () => {
+test('ACM and KDD starter projects use the bundled publisher class offline', async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'template-acm-'));
   try {
-    const file = await createPaperProject(root, 'acm', 'acm-sigconf', { fetchImpl: () => { throw new Error('offline'); } });
-    const source = fs.readFileSync(path.join(root, file.path), 'utf8');
-    assert.match(source, /\\documentclass\[sigconf,review,anonymous\]\{acmart\}/);
-    assert.match(source, /\\bibliography\{references\}/);
-    assert.equal(fs.existsSync(path.join(root, 'acm/acmart.cls')), true);
-    assert.equal(fs.existsSync(path.join(root, 'acm/acmart.dtx')), true);
-    assert.equal(fs.existsSync(path.join(root, 'acm/ACM-Reference-Format.bst')), true);
-    assert.match(fs.readFileSync(path.join(root, 'acm/ARCHIMEDES-SOURCE.txt'), 'utf8'), /Archimedes-authored starter/);
+    for (const [id, classOptions] of [['acm-sigconf', 'sigconf,review,anonymous'], ['kdd-2027-research', 'sigconf,anonymous,review']]) {
+      const file = await createPaperProject(root, id, id, { fetchImpl: () => assert.fail('Bundled class was fetched') });
+      const source = fs.readFileSync(path.join(root, file.path), 'utf8');
+      assert.ok(source.includes(`\\documentclass[${classOptions}]{acmart}`));
+      assert.match(source, /\\bibliography\{references\}/);
+      for (const asset of ['acmart.cls', 'acmart.dtx', 'ACM-Reference-Format.bst']) assert.ok(fs.existsSync(path.join(root, id, asset)));
+      const receipt = fs.readFileSync(path.join(root, id, 'ARCHIMEDES-SOURCE.txt'), 'utf8');
+      assert.match(receipt, /Archimedes-authored starter/);
+      const template = catalog.find((entry) => entry.id === id);
+      assert.ok(receipt.includes(`Venue instructions: ${template.officialSourceUrl || template.sourceUrl}`));
+    }
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 test('bundled assets and starter overlays reject traversal, corruption and source collisions', async () => {
-  const acm = require('../shared/official-latex-templates.json').find((entry) => entry.id === 'acm-sigconf');
+  const acm = catalog.find((entry) => entry.id === 'acm-sigconf');
   for (const change of [{ resource: '../escape.cls' }, { path: '../escape.cls' }, { sha256: '0'.repeat(64) }]) {
     await assert.rejects(loadOfficialTemplate({ ...acm, bundledAssets: [{ ...acm.bundledAssets[0], ...change }] }), /Invalid bundled|checksum/);
   }

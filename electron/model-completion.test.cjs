@@ -1,5 +1,6 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
+const { createServer } = require("node:http");
 const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
@@ -96,6 +97,49 @@ test("a transport error after text retains that text and does not retry the mode
   });
   await assert.rejects(agent.complete(config, [], {}), error => error.code === "MODEL_RESPONSE_INCOMPLETE" && error.reason === "stream_error" && error.partialResponse === "Before disconnect");
   assert.equal(requests, 1);
+});
+
+test("successful incomplete streams never make a second POST or execute a tool", async t => {
+  const store = require("./store.cjs");
+  const model = require("./model-config.cjs");
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-model-stream-")));
+  store.openWorkspace(root);
+  t.after(() => { fs.rmSync(root, { recursive: true, force: true }); });
+  model.initializeModelConfig(path.join(root, "settings"));
+  const registry = new ToolRegistry();
+  let executions = 0;
+  registry.register({ definition: { type: "function", function: { name: "spy", description: "Local fixture", parameters: { type: "object" } } },
+    source: "builtin", execute: async () => { executions++; return { content: "Executed" }; } });
+  let events;
+  const requests = [];
+  const server = createServer(async (request, response) => {
+    let input = "";
+    for await (const chunk of request) input += chunk;
+    const { stream } = JSON.parse(input);
+    requests.push([request.method, stream]);
+    response.writeHead(200, { "content-type": stream ? "text/event-stream" : "application/json" });
+    response.end(stream ? events.map(frame).join("") : JSON.stringify({ choices: [{ finish_reason: "stop", message: { content: "Retried" } }] }));
+  });
+  await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
+  t.after(() => server.close());
+  model.saveModelConfig({ ...config, baseUrl: `http://127.0.0.1:${server.address().port}/v1` });
+
+  const tool = { choices: [{ delta: { tool_calls: [{ index: 0, id: "call", function: { name: "spy", arguments: "{}" } }] } }] };
+  for (const [label, response, reason, partial] of [
+    ["empty", [], "missing_terminal", ""],
+    ["empty with stop", [delta("", { finish_reason: "stop" })], "empty_stream", ""],
+    ["nonstandard", [{ type: "response.output_text.delta", delta: "Unexpected" }, "[DONE]"], "missing_terminal", ""],
+    ["unterminated tool", [delta("Useful partial"), tool, "[DONE]"], "missing_terminal", "Useful partial"],
+  ]) {
+    events = response;
+    requests.length = 0;
+    const result = await agent.runAgent({ workspace: root, prompt: label, transient: true, toolRegistry: registry });
+    assert.deepEqual(requests, [["POST", true]], label);
+    assert.equal(result.status, "incomplete", label);
+    assert.equal(result.error.reason, reason, label);
+    assert.ok(result.response.startsWith(partial ? `${partial}\n\n` : "This model response is incomplete:"), label);
+    assert.equal(executions, 0, label);
+  }
 });
 
 test("real agent persists incomplete text and executes none of a mixed complete/partial tool batch; a later valid turn can continue", async t => {
