@@ -74,6 +74,27 @@ function createRun({ root, project, thread, experiment, command = "true" }) {
   });
 }
 
+test("reopening a workspace does not treat a remote pid as a local process", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-run-recovery-"));
+  const other = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-run-other-"));
+  try {
+    store.openWorkspace(root);
+    const project = store.createResearchProject({ name: "Recovery" });
+    const thread = threadFor(project.id);
+    const first = experimentFor(project.id, thread.id).experiment;
+    const second = experimentFor(project.id, thread.id).experiment;
+    const local = store.createExperimentRun({ projectId: project.id, threadId: thread.id, nodeId: first.id, command: "true", cwd: root });
+    const remote = store.createExperimentRun({ projectId: project.id, threadId: thread.id, nodeId: second.id, command: "true", cwd: "/remote", backend: "ssh" });
+    store.openWorkspace(other);
+    store.openWorkspace(root);
+    assert.equal(store.getExperimentRun(local.id).status, "failed");
+    assert.equal(store.getExperimentRun(remote.id).status, "starting");
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(other, { recursive: true, force: true });
+  }
+});
+
 test("experiment runs move through a one-way terminal lifecycle", () => {
   withWorkspace(({ root, project }) => {
     const thread = threadFor(project.id);

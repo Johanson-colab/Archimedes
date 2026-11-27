@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { FileText } from "lucide-react";
 import { useUISettings } from "../i18n";
 import type { ExperimentRun, ExperimentRunStatus, ResearchNode } from "./types";
@@ -43,6 +43,30 @@ export default function ExperimentInspector({ node, runs, onReadLog, connections
   const content = node.current_revision?.content ?? {};
   const [log, setLog] = useState<{ runId: string; text: string } | null>(null);
   const [readingLog, setReadingLog] = useState<string | null>(null);
+  const [stopping, setStopping] = useState<string | null>(null);
+  const [stopError, setStopError] = useState("");
+  const readLogRef = useRef(onReadLog);
+  readLogRef.current = onReadLog;
+  const watchingRemoteLog = Boolean(log?.runId && runs.some(run => run.id === log.runId && run.backend === "ssh" && ["starting", "running"].includes(run.status)));
+
+  useEffect(() => {
+    if (!log?.runId || !watchingRemoteLog) return;
+    let cancelled = false, busy = false;
+    const timer = window.setInterval(() => {
+      if (busy) return;
+      busy = true;
+      void readLogRef.current(log.runId).then(text => { if (!cancelled && text) setLog({ runId: log.runId, text }); }).finally(() => { busy = false; });
+    }, 8000);
+    return () => { cancelled = true; window.clearInterval(timer); };
+  }, [log?.runId, watchingRemoteLog]);
+
+  const stopRun = async (runId: string) => {
+    if (!window.researchDesk?.cancelExperimentRun) return;
+    setStopping(runId); setStopError("");
+    try { await window.researchDesk.cancelExperimentRun(runId); }
+    catch (error) { setStopError(error instanceof Error ? error.message : String(error)); }
+    finally { setStopping(null); }
+  };
 
   const fields = [
     { label: "Experiment hypothesis", value: text(content.hypothesis) || text(content.plan) },
@@ -87,13 +111,18 @@ export default function ExperimentInspector({ node, runs, onReadLog, connections
             return <details className="experiment-run-entry" key={run.id}>
               <summary className={`experiment-run-row status-${run.status}`}>
                 <span className="experiment-run-number">{t("Run")} {runs.length - index}</span>
-                <span className="experiment-run-status">{t(RUN_STATUS_LABELS[run.status])}</span>
+                <span className="experiment-run-status">{t(run.remote_connection === "unknown" ? "Remote status unknown" : RUN_STATUS_LABELS[run.status])}</span>
                 <span className="experiment-run-time">{timeLabel(run)}</span>
                 {run.exit_code != null && <span className="experiment-run-exit">{t("Exit code")} {run.exit_code}</span>}
               </summary>
               <div className="experiment-run-details">
                 <div className="experiment-plan-row"><span>{t("Command")}</span><p className="experiment-run-code">{run.command}</p></div>
                 <div className="experiment-plan-row"><span>{t("Working directory")}</span><p className="experiment-run-code">{run.cwd}</p></div>
+                {run.backend === "ssh" && <>
+                  <div className="experiment-plan-row"><span>{t("Remote server")}</span><p className="experiment-run-code">{source?.remote ? `${source.remote.user}@${source.remote.host}:${source.remote.port}` : t("Not recorded")}</p></div>
+                  {run.remote_connection === "unknown" && <p className="experiment-hint">{t("Remote status unknown; reconnect to check the run.")} {run.remote_reason}</p>}
+                  <p className="experiment-hint">{t("Remote code and data are not snapshotted.")}</p>
+                </>}
                 <div className="experiment-plan-row"><span>{t("Experiment revision")}</span><p className="experiment-run-code">{source?.experimentRevisionId || t("Not recorded")}</p></div>
                 <div className="experiment-plan-row"><span>{t("Source ideas")}</span>{source?.ideas?.length
                   ? source.ideas.map((idea, ideaIndex) => <p key={`${idea.nodeId}-${idea.revisionId}-${ideaIndex}`}>{connections.find(item => item.nodeId === idea.nodeId)?.title || idea.nodeId} <code title={idea.revisionId}>{idea.revisionId?.slice(0, 8) || "—"}</code></p>)
@@ -121,6 +150,8 @@ export default function ExperimentInspector({ node, runs, onReadLog, connections
                 <button type="button" className="experiment-run-link" onClick={() => void readLog(run.id)} disabled={readingLog === run.id}>
                   <FileText size={12} />{t("Run log")}
                 </button>
+                {run.backend === "ssh" && ["starting", "running"].includes(run.status) && <button type="button" className="experiment-run-link" disabled={stopping === run.id || run.remote_connection === "unknown"} onClick={() => void stopRun(run.id)}>{t("Stop remote run")}</button>}
+                {stopError && <p className="experiment-hint">{stopError}</p>}
                 {log?.runId === run.id && <pre className="experiment-run-log" title={run.log_path || ""}>{log.text}</pre>}
               </div>
             </details>;

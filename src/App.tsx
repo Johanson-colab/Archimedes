@@ -1,6 +1,6 @@
 import { Fragment, lazy, memo, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent as ReactClipboardEvent, type ReactNode } from "react";
 import { flushSync } from "react-dom";
-import { startApprovalCountdown } from "./approval-countdown.mjs";
+import { ApprovalActions } from "./ApprovalActions";
 import ReactMarkdown from "react-markdown";
 import { WorkspaceMarkdownLink, WorkspaceMarkdownProvider, workspaceMarkdownUrlTransform } from "./WorkspaceMarkdownLink";
 import remarkGfm from "remark-gfm";
@@ -4180,17 +4180,6 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
   onScrollTop: (top: number) => void;
 }) {
   const { t } = useUISettings();
-  const [autoRunIn, setAutoRunIn] = useState<number | null>(null);
-  const approveRef = useRef(onApprove);
-  useEffect(() => { approveRef.current = onApprove; }, [onApprove]);
-  const autoRunId = pendingAction?.kind === "command" && (pendingAction.payload.managedByAgent || (agentBusy && pendingAction.ownerThreadId && pendingAction.payload.remoteOperation === "ssh_remote_exec")) ? pendingAction.id : null;
-  useEffect(() => {
-    if (!autoRunId) {
-      setAutoRunIn(null);
-      return;
-    }
-    return startApprovalCountdown(setAutoRunIn, () => approveRef.current(autoRunId));
-  }, [autoRunId]);
   const [historyStart, setHistoryStart] = useState(() => Math.max(0, messages.length - INITIAL_VISIBLE_MESSAGE_COUNT));
   const historyExpandedRef = useRef(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -4328,11 +4317,7 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
               <strong>{t("Before")}</strong><pre>{pendingAction.payload.editPreview.before}</pre>
               <strong>{t("After")}</strong><pre>{pendingAction.payload.editPreview.after}</pre>
             </details>}
-            <div className="approval-actions">
-              {autoRunId && autoRunIn !== null && <span className="approval-countdown">{t("Auto-run in {seconds}s", { seconds: autoRunIn })}</span>}
-              <button className="approval-dismiss" onClick={() => onReject(pendingAction.id)}>Dismiss</button>
-              <button className="approval-apply" onClick={() => onApprove(pendingAction.id)}>{pendingAction.kind === "write" ? "Apply" : "Run"}</button>
-            </div>
+            <ApprovalActions action={pendingAction} agentBusy={agentBusy} onApprove={onApprove} onReject={onReject} />
           </div>
         </section>}
       </div>;
