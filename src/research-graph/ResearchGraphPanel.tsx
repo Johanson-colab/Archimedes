@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowUpRight, History, Maximize2, Minimize2, PanelRight, Pin, RefreshCw, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, ArrowUpRight, History, Maximize2, Minimize2, Pin, RefreshCw, X } from "lucide-react";
 import { useUISettings } from "../i18n";
 import { Dialog } from "../Dialog";
 import { layoutLineage } from "./graphLayout";
@@ -262,7 +262,7 @@ export default function ResearchGraphPanel({
       aria-pressed={pinned}
       disabled={!hasThread && !pinned}
     ><Pin size={12} /></button>}
-    <button className={inspectorOpen ? "agent-path-icon on" : "agent-path-icon"} onClick={() => setInspectorOpen(value => !value)} aria-label={t(inspectorOpen ? "Hide node details" : "Show node details")} title={t(inspectorOpen ? "Hide node details" : "Show node details")} aria-pressed={inspectorOpen}><PanelRight size={13} /></button>
+    <button className={inspectorOpen ? "agent-path-icon on" : "agent-path-icon"} onClick={() => setInspectorOpen(value => !value)} aria-label={t(inspectorOpen ? "Hide node details" : "Show node details")} title={t(inspectorOpen ? "Hide node details" : "Show node details")} aria-pressed={inspectorOpen}>{inspectorOpen ? <ArrowRight size={13} /> : <ArrowLeft size={13} />}</button>
     {retractedCount > 0 && <button
       className={showHistory ? "agent-path-icon on" : "agent-path-icon"}
       onClick={() => setShowHistory((value) => !value)}

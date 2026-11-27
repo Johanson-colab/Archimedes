@@ -1,5 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type WheelEvent as ReactWheelEvent } from "react";
 import ReactMarkdown from "react-markdown";
+import type { PDFDocumentLoadingTask, PDFDocumentProxy, PDFPageProxy, RenderTask, TextLayer } from "pdfjs-dist";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
@@ -40,6 +41,7 @@ import { fingerprintFor } from "./proactive-engine";
 import { emitProactiveSignal } from "./proactive-signals";
 import {
   ArrowLeft,
+  ArrowRight,
   ArrowUp,
   Bookmark,
   BookOpen,
@@ -70,8 +72,6 @@ import {
   LoaderCircle,
   MessageCircleReply,
   Minus,
-  PanelRightClose,
-  PanelRightOpen,
   Pencil,
   Plus,
   RefreshCw,
@@ -549,7 +549,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
   const briefingStartedRef = useRef(false);
   const activePaperRunIdRef = useRef<string | null>(null);
   const ready = reader?.asset?.status === "ready" && reader.pages.length > 0 && Boolean(reader.asset.preview_url);
-  const currentPage = reader?.pages.find((page) => page.page_number === pageNumber) ?? reader?.pages[0] ?? null;
+  const indexedPage = reader?.pages.find((page) => page.page_number === pageNumber);
   const lastPage = reader?.asset?.page_count ?? reader?.pages.at(-1)?.page_number ?? 1;
   const projectUrl = paper.github_url || detectedProjectUrl;
   const sessionSnapshot = useRef({ pageNumber, pdfZoom, readerView, chatOpen, readerChromeOpen, sideTab });
@@ -568,13 +568,26 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
   }, [chatWidth]);
   useEffect(() => () => document.body.classList.remove("paper-chat-resizing"), []);
 
+  const clearSelection = useCallback(() => {
+    setSelection("");
+    setSelectionAnchor(null);
+    setHighlightPickerOpen(false);
+    setCommentOpen(false);
+    setComment("");
+  }, []);
+  const closeSelection = useCallback(() => {
+    clearSelection();
+    setTranslationPopover(null);
+  }, [clearSelection]);
+
   const loadReader = useCallback(async () => {
     try {
       const next = await bridge.getLibraryPaperReader(paper.id, workspace, projectId);
+      closeSelection();
       setReader(next);
-      if (next.pages[0]) setPageNumber((current) => Math.min(Math.max(1, current), next.pages.at(-1)?.page_number ?? 1));
+      if (next.pages[0]) setPageNumber((current) => Math.min(Math.max(1, current), next.asset?.page_count ?? next.pages.at(-1)?.page_number ?? 1));
     } catch (loadError) { setError(readableError(loadError, "Could not load the paper reader.")); }
-  }, [bridge, paper.id, projectId, workspace]);
+  }, [bridge, closeSelection, paper.id, projectId, workspace]);
   useEffect(() => { void loadReader(); }, [loadReader]);
   useEffect(() => {
     let active = true;
@@ -613,12 +626,14 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
   const selectedHighlight = reader?.highlights.find((highlight) => highlight.page_number === pageNumber &&
     (highlight.quote === selection || highlight.quote.includes(selection) || selection.includes(highlight.quote))) ?? null;
 
-  function clearSelection() { setSelection(""); setSelectionAnchor(null); setHighlightPickerOpen(false); setCommentOpen(false); setComment(""); }
-  function closeSelection() { clearSelection(); setTranslationPopover(null); }
+  function goToPage(page: number) {
+    closeSelection();
+    setPageNumber(page);
+  }
   function openCanvasSource(source: PaperCanvasSource) {
     setReaderView("paper");
     setChatOpen(false);
-    setPageNumber(Math.max(1, source.page));
+    goToPage(Math.max(1, source.page));
     if (source.quote) {
       const focus: PaperHighlight = {
         id: `canvas-focus-${Date.now()}`,
@@ -709,7 +724,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
         ? await bridge.prepareLibraryPaperReader(paper.id, workspace, projectId)
         : await bridge.attachLibraryPaperPdf(paper.id, workspace, projectId);
       setReader(next);
-      setPageNumber(next.pages[0]?.page_number ?? 1);
+      goToPage(next.pages[0]?.page_number ?? 1);
     } catch (prepareError) { setError(readableError(prepareError, "Could not prepare the original PDF.")); }
     finally { setBusy(null); }
   }
@@ -725,7 +740,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
       if (searchRequest !== searchRequestRef.current) return;
       setPassages(next);
       if (next[0]) {
-        setPageNumber(next[0].page_number);
+        goToPage(next[0].page_number);
         setActiveSearchQuery(query.trim());
         setError("");
       } else {
@@ -758,11 +773,11 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
     }
   }
   async function saveHighlight(note = "", color: PaperHighlightInput["color"] = "yellow") {
-    if (!currentPage || !selection) return;
-    const start = currentPage.text.indexOf(selection);
+    if (!selection) return;
+    const start = indexedPage?.text.indexOf(selection) ?? -1;
     try {
       const item = await bridge.createLibraryPaperHighlight(paper.id, {
-        page_number: currentPage.page_number, quote: selection, note, color,
+        page_number: pageNumber, quote: selection, note, color,
         start_offset: start >= 0 ? start : undefined,
         end_offset: start >= 0 ? start + selection.length : undefined,
       }, workspace, projectId);
@@ -1048,12 +1063,12 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
       <div className="reader-header-actions">
         {publicPaperRecordUrl(paper) && <a className="reader-icon-button" href={publicPaperRecordUrl(paper)} target="_blank" rel="noreferrer" title={t("Open source")}><ExternalLink size={15} /></a>}
         <button className="reader-icon-button" title={paper.starred ? t("Unstar paper") : t("Star paper")} onClick={() => void onUpdate({ starred: !paper.starred })}><Star size={15} fill={paper.starred ? "currentColor" : "none"} /></button>
-        {readerView !== "review" && readerView !== "canvas" && <button className={chatOpen ? "reader-ask-button active" : "reader-ask-button"} title={t("Ask Archimedes")} onClick={() => setChatOpen((value) => !value)}>{chatOpen ? <PanelRightClose size={15} /> : <PanelRightOpen size={15} />}<span>{t("Ask AI")}</span></button>}
+        {readerView !== "review" && readerView !== "canvas" && <button className={chatOpen ? "reader-ask-button active" : "reader-ask-button"} title={t("Ask Archimedes")} aria-expanded={chatOpen} onClick={() => setChatOpen((value) => !value)}>{chatOpen ? <ArrowRight size={15} /> : <ArrowLeft size={15} />}<span>{t("Ask AI")}</span></button>}
       </div>
     </header>
     <div className="paper-reader-layout" style={chatOpen ? { "--paper-chat-width": `${chatWidth}px` } as React.CSSProperties : undefined}>
       {reviewVisited && <div className="paper-review-retained" hidden={readerView !== "review"} aria-hidden={readerView !== "review"} inert={readerView !== "review"}>
-        <PaperReviewWorkbench bridge={bridge} workspace={workspace} projectId={projectId} paper={paper} pageCount={lastPage} ready={ready} onOpenSource={(page) => { setPageNumber(page); setReturnToReading(true); setReaderView("paper"); }} onInternalReviewThreadsDeleted={onInternalReviewThreadsDeleted} />
+        <PaperReviewWorkbench bridge={bridge} workspace={workspace} projectId={projectId} paper={paper} pageCount={lastPage} ready={ready} onOpenSource={(page) => { goToPage(page); setReturnToReading(true); setReaderView("paper"); }} onInternalReviewThreadsDeleted={onInternalReviewThreadsDeleted} />
       </div>}
       {readerView === "paper" && returnToReading && <button type="button" className="paper-return-reading" onClick={() => { setReturnToReading(false); setReaderView("review"); }}><ArrowLeft size={15} />{t("Back to reading")}</button>}
       {readerView !== "review" && readerView !== "codebase" && readerView !== "canvas" && <main className={readerView === "project" ? "project-browser-reader" : "original-paper-reader"}>
@@ -1061,7 +1076,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
         {ready ? <>
           <div className="paper-reader-toolbar" inert={!readerChromeOpen}>
             <div className="paper-reader-navigation">
-              <div className="paper-page-controls"><button onClick={() => setPageNumber((value) => Math.max(1, value - 1))} disabled={pageNumber <= 1} title={t("Previous page")}><ChevronLeft size={17} /></button><strong>{pageNumber} / {lastPage}</strong><button onClick={() => setPageNumber((value) => Math.min(lastPage, value + 1))} disabled={pageNumber >= lastPage} title={t("Next page")}><ChevronRight size={17} /></button></div>
+              <div className="paper-page-controls"><button onClick={() => goToPage(Math.max(1, pageNumber - 1))} disabled={pageNumber <= 1} title={t("Previous page")}><ChevronLeft size={17} /></button><strong>{pageNumber} / {lastPage}</strong><button onClick={() => goToPage(Math.min(lastPage, pageNumber + 1))} disabled={pageNumber >= lastPage} title={t("Next page")}><ChevronRight size={17} /></button></div>
               <div className="paper-zoom-control" aria-label={t("PDF zoom")}>
                 <button onClick={() => setPdfZoom((value) => Math.max(.55, Math.round((value - .1) * 100) / 100))} disabled={pdfZoom <= .55} title={t("Zoom out 10%")}><Minus size={16} /></button>
                 <button className="paper-zoom-readout" onClick={() => setPdfZoom(1)} title={t("Reset zoom to 100%")}><span>{Math.round(pdfZoom * 100)}%</span><ChevronDown size={14} /></button>
@@ -1074,13 +1089,13 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
           {highlightListOpen && <aside className="paper-highlight-list" aria-label={t("Highlights & notes")}>
             <header><div><StickyNote size={15} /><strong>{t("Highlights & notes")}</strong></div><button onClick={() => setHighlightListOpen(false)} title={t("Close")}><X size={14} /></button></header>
             <div>{reader?.highlights.length ? reader.highlights.map((highlight) => <article key={highlight.id}>
-              <button className="paper-highlight-entry" onClick={() => { setPageNumber(highlight.page_number); setHighlightListOpen(false); }}><span><i className={`paper-highlight-dot ${highlight.color}`} />{t("Page {page}", { page: highlight.page_number })}</span><p>{highlight.quote}</p>{highlight.note && <small>{highlight.note}</small>}</button>
+              <button className="paper-highlight-entry" onClick={() => { goToPage(highlight.page_number); setHighlightListOpen(false); }}><span><i className={`paper-highlight-dot ${highlight.color}`} />{t("Page {page}", { page: highlight.page_number })}</span><p>{highlight.quote}</p>{highlight.note && <small>{highlight.note}</small>}</button>
               <button className="paper-highlight-canvas" onClick={() => addHighlightToCanvas(highlight)} title={t("Add to canvas")} aria-label={t("Add to canvas")}><Frame size={13} /></button>
               <button className="paper-highlight-delete" onClick={() => void deleteHighlight(highlight.id)} title={t("Delete this highlight or note")}><Trash size={13} /></button>
             </article>) : <p className="paper-highlight-empty">{t("No highlights or notes yet.")}</p>}</div>
           </aside>}
-          {passages.length > 0 && <div className="paper-search-results">{passages.slice(0, 5).map((passage) => <button key={`${passage.page_number}-${passage.start_offset}`} onClick={() => setPageNumber(passage.page_number)}><b>p. {passage.page_number}</b>{passage.excerpt}</button>)}</div>}
-          <PdfPaperCanvas url={reader?.asset?.preview_url || ""} pageNumber={pageNumber} highlights={canvasFocusHighlight ? [...(reader?.highlights ?? []), canvasFocusHighlight] : (reader?.highlights ?? [])} searchQuery={activeSearchQuery} zoom={pdfZoom} activeSelection={selection} figureCaptureActive={Boolean(figureCapture)} onZoomChange={setPdfZoom} onSelection={receiveSelection} onFigureCapture={receiveFigureCapture} onClearSelection={clearSelection} onProjectLink={openProject} onProjectDetected={setDetectedProjectUrl} />
+          {passages.length > 0 && <div className="paper-search-results">{passages.slice(0, 5).map((passage) => <button key={`${passage.page_number}-${passage.start_offset}`} onClick={() => goToPage(passage.page_number)}><b>p. {passage.page_number}</b>{passage.excerpt}</button>)}</div>}
+          <PdfPaperCanvas key={`${reader?.asset?.preview_url}:${reader?.asset?.sha256}`} url={reader?.asset?.preview_url || ""} pageNumber={pageNumber} highlights={canvasFocusHighlight ? [...(reader?.highlights ?? []), canvasFocusHighlight] : (reader?.highlights ?? [])} searchQuery={activeSearchQuery} zoom={pdfZoom} activeSelection={selection} figureCaptureActive={Boolean(figureCapture)} onZoomChange={setPdfZoom} onSelection={receiveSelection} onFigureCapture={receiveFigureCapture} onClearSelection={clearSelection} onProjectLink={openProject} onProjectDetected={setDetectedProjectUrl} />
         </> : <div className="paper-reader-empty">
           <span className="paper-reader-empty-icon"><FileText size={24} /></span><h2>{t("Open the original paper")}</h2><p>{paper.pdf_url ? t("The public PDF can be cached locally and opened in the reader.") : t("Attach a local PDF to open the original paper here.")}</p>
           <div><button className="primary-button" disabled={Boolean(busy) || !paper.pdf_url} onClick={() => void prepare("remote")}>{busy === "remote" ? <LoaderCircle className="spin" size={14} /> : <RefreshCw size={14} />}{busy === "remote" ? t("Preparing…") : t("Prepare PDF")}</button><button className="secondary-button" disabled={Boolean(busy)} onClick={() => void prepare("local")}>{busy === "local" ? <LoaderCircle className="spin" size={14} /> : <Plus size={14} />}{t("Attach PDF")}</button></div>
@@ -1975,6 +1990,10 @@ function PdfPaperCanvas({ url, pageNumber, highlights, searchQuery, zoom, active
   const [width, setWidth] = useState(0);
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
   const [error, setError] = useState("");
+  const [pdfSource, setPdfSource] = useState<{ pdfjs: typeof import("pdfjs-dist"); document: PDFDocumentProxy } | null>(null);
+  const [renderedPage, setRenderedPage] = useState<number>();
+  // The previous page stays visible during rendering. Only the requested page is interactive.
+  const pageReady = renderedPage === pageNumber;
   useEffect(() => {
     const stage = stageRef.current;
     if (!stage) return;
@@ -2009,13 +2028,13 @@ function PdfPaperCanvas({ url, pageNumber, highlights, searchQuery, zoom, active
   useEffect(() => {
     highlightsRef.current = highlights;
     const textLayer = hostRef.current?.querySelector<HTMLDivElement>(".arch-pdf-text-layer");
-    if (textLayer) applyPdfHighlights(textLayer, highlights.filter((highlight) => highlight.page_number === pageNumber));
-  }, [highlights, pageNumber]);
+    if (pageReady && textLayer) applyPdfHighlights(textLayer, highlights.filter((highlight) => highlight.page_number === pageNumber));
+  }, [highlights, pageNumber, pageReady]);
   useEffect(() => {
     searchQueryRef.current = searchQuery;
     const textLayer = hostRef.current?.querySelector<HTMLDivElement>(".arch-pdf-text-layer");
-    if (textLayer) applyPdfSearchHighlights(textLayer, searchQuery);
-  }, [searchQuery]);
+    if (pageReady && textLayer) applyPdfSearchHighlights(textLayer, searchQuery);
+  }, [searchQuery, pageReady]);
   useEffect(() => { onFigureCaptureRef.current = onFigureCapture; }, [onFigureCapture]);
   useEffect(() => { onProjectLinkRef.current = onProjectLink; }, [onProjectLink]);
   useEffect(() => { onProjectDetectedRef.current = onProjectDetected; }, [onProjectDetected]);
@@ -2029,23 +2048,48 @@ function PdfPaperCanvas({ url, pageNumber, highlights, searchQuery, zoom, active
     hostRef.current?.querySelectorAll(".arch-pdf-object-region.selected").forEach((element) => element.classList.remove("selected", "active"));
   }, [figureCaptureActive]);
   useEffect(() => {
-    let cancelled = false;
-    let destroyLoadingTask: (() => void) | undefined;
-    const host = hostRef.current;
-    if (!host || !url || width <= 0) return;
-    const renderHost = host;
-    async function render() {
-      const hasVisiblePage = Boolean(renderHost.querySelector(".arch-pdf-page"));
-      if (!hasVisiblePage) setState("loading");
-      setError("");
+    // The open source owns the worker. Page changes only repaint its content.
+    const controller = new AbortController();
+    const { signal } = controller;
+    let loadingTask: PDFDocumentLoadingTask | undefined;
+    async function load() {
       try {
         const { pdfjs } = await import("./pdf-runtime");
-        const response = await fetch(url);
+        signal.throwIfAborted();
+        const response = await fetch(url, { signal });
         if (!response.ok) throw new Error(`PDF request failed (${response.status}).`);
-        const loadingTask = pdfjs.getDocument({ data: new Uint8Array(await response.arrayBuffer()) });
-        destroyLoadingTask = () => loadingTask.destroy();
-        const pdfDocument = await loadingTask.promise;
-        const pdfPage = await pdfDocument.getPage(pageNumber);
+        const data = new Uint8Array(await response.arrayBuffer());
+        signal.throwIfAborted();
+        loadingTask = pdfjs.getDocument({ data });
+        const document = await loadingTask.promise;
+        if (!signal.aborted) setPdfSource({ pdfjs, document });
+      } catch (loadError) {
+        if (signal.aborted) return;
+        setState("error");
+        setError(readableError(loadError, "The PDF page could not be rendered."));
+      }
+    }
+    void load();
+    return () => {
+      controller.abort();
+      void loadingTask?.destroy().catch((cause) => console.warn("Could not release the PDF worker.", cause));
+    };
+  }, [url]);
+  useEffect(() => {
+    const host = hostRef.current;
+    if (!host || !pdfSource || width <= 0) return;
+    const renderHost = host;
+    const { pdfjs, document: pdfDocument } = pdfSource;
+    let cancelled = false;
+    let renderTask: RenderTask | undefined;
+    let textTask: TextLayer | undefined;
+    let pdfPage: PDFPageProxy | undefined;
+    async function render() {
+      setState(renderHost.firstElementChild ? "ready" : "loading");
+      setError("");
+      try {
+        pdfPage = await pdfDocument.getPage(pageNumber);
+        if (cancelled) return;
         const baseViewport = pdfPage.getViewport({ scale: 1 });
         const fitScale = Math.min(1.65, Math.max(.7, (width - 4) / baseViewport.width));
         const scale = fitScale * zoom;
@@ -2066,18 +2110,25 @@ function PdfPaperCanvas({ url, pageNumber, highlights, searchQuery, zoom, active
         const context = canvas.getContext("2d");
         if (!context) throw new Error("Canvas rendering is unavailable.");
         context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
-        await pdfPage.render({ canvas, canvasContext: context, viewport }).promise;
+        renderTask = pdfPage.render({ canvas, canvasContext: context, viewport });
+        await renderTask.promise;
+        renderTask = undefined;
+        if (cancelled) return;
         const textContent = await pdfPage.getTextContent();
+        if (cancelled) return;
         // Keep PDF.js's declared text styles intact. TextLayer measures and scales
         // spans using those same styles; replacing them with embedded font names
         // makes the DOM selection boxes drift from the canvas glyphs.
-        const layer = new pdfjs.TextLayer({ textContentSource: textContent, container: textLayer, viewport });
-        await layer.render();
+        textTask = new pdfjs.TextLayer({ textContentSource: textContent, container: textLayer, viewport });
+        await textTask.render();
+        textTask = undefined;
         // Geometry-based object detection must run after the page is in the live
         // document. Detached PDF.js spans report zero-sized client rectangles.
         if (cancelled) return;
         renderHost.replaceChildren(page);
+        setRenderedPage(pageNumber);
         const operatorList = await pdfPage.getOperatorList();
+        if (cancelled) return;
         const imageRects = detectPdfImageRegions(operatorList, pdfjs, viewport);
         const nearbyLines = pdfTextLines(page, textLayer);
         const equationRegions: PdfInteractiveRegion[] = findEquationRects(equationTokens(textContent, viewport), viewport.width, viewport.height, imageRects)
@@ -2091,6 +2142,7 @@ function PdfPaperCanvas({ url, pageNumber, highlights, searchQuery, zoom, active
           });
         installPdfInteractiveRegions(page, canvas, mergePdfInteractiveRegions([...equationRegions, ...captionRegions, ...uncaptionedImages]), pageNumber, (capture) => onFigureCaptureRef.current(capture), { equation: translateRef.current("Explain this equation"), table: translateRef.current("Explain this table"), figure: translateRef.current("Explain this image") });
         const annotations = await pdfPage.getAnnotations();
+        if (cancelled) return;
         for (const annotation of annotations) {
           const targetUrl = typeof annotation.url === "string" ? annotation.url : "";
           if (!targetUrl || !Array.isArray(annotation.rect)) continue;
@@ -2114,14 +2166,24 @@ function PdfPaperCanvas({ url, pageNumber, highlights, searchQuery, zoom, active
         }
         applyPdfHighlights(textLayer, highlightsRef.current.filter((highlight) => highlight.page_number === pageNumber));
         applyPdfSearchHighlights(textLayer, searchQueryRef.current);
-        if (!cancelled) setState("ready");
-        pdfPage.cleanup(); pdfDocument.cleanup();
-      } catch (renderError) { if (!cancelled) { setState("error"); setError(readableError(renderError, "The PDF page could not be rendered.")); } }
+        setState("ready");
+      } catch (renderError) {
+        if (cancelled) return;
+        setState("error");
+        setError(readableError(renderError, "The PDF page could not be rendered."));
+      } finally {
+        pdfPage?.cleanup();
+      }
     }
     void render();
-    return () => { cancelled = true; destroyLoadingTask?.(); };
-  }, [pageNumber, url, width, zoom]);
+    return () => {
+      cancelled = true;
+      renderTask?.cancel();
+      textTask?.cancel();
+    };
+  }, [pageNumber, pdfSource, width, zoom]);
   function selected(event: ReactMouseEvent<HTMLDivElement>) {
+    if (!pageReady) return;
     const target = event.currentTarget;
     const selection = window.getSelection();
     if (!selection?.rangeCount || !selection.toString().trim() || !target.contains(selection.anchorNode) || !target.contains(selection.focusNode)) { onClearSelection(); return; }
@@ -2157,7 +2219,7 @@ function PdfPaperCanvas({ url, pageNumber, highlights, searchQuery, zoom, active
     clearActivePdfSelection(hostRef.current);
     onClearSelection();
   }
-  return <div className="arch-pdf-stage" ref={stageRef} onMouseDown={beginSelection} onMouseUp={selected} onWheel={zoomWithTrackpad}><div className="arch-pdf-surface" ref={hostRef} />{state === "loading" && <div className="arch-pdf-loading"><LoaderCircle className="spin" size={17} />{t("Rendering original PDF…")}</div>}{state === "error" && <div className="arch-pdf-loading error"><FileText size={17} />{error}</div>}<span className="arch-pdf-zoom-readout">{Math.round(zoom * 100)}%</span></div>;
+  return <div className="arch-pdf-stage" ref={stageRef} onMouseDown={beginSelection} onMouseUp={selected} onWheel={zoomWithTrackpad}><div className="arch-pdf-surface" ref={hostRef} inert={!pageReady} aria-busy={!pageReady && state !== "error"} />{state === "loading" && <div className="arch-pdf-loading"><LoaderCircle className="spin" size={17} />{t("Rendering original PDF…")}</div>}{state === "error" && <div className="arch-pdf-loading error"><FileText size={17} />{error}</div>}<span className="arch-pdf-zoom-readout">{Math.round(zoom * 100)}%</span></div>;
 }
 
 function selectionNodeSpan(node: Node | null, layer: HTMLElement) {

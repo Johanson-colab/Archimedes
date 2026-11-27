@@ -1,0 +1,67 @@
+[
+  {
+    "skill": "paper-lookup",
+    "script": "arxiv_atom.py",
+    "exitCode": 0
+  },
+  {
+    "skill": "paper-lookup",
+    "script": "jats_to_text.py",
+    "exitCode": 0
+  },
+  {
+    "skill": "paper-lookup",
+    "script": "openalex_abstract.py",
+    "exitCode": 0
+  },
+  {
+    "skill": "hypothesis-generation",
+    "script": "validate_hypothesis_schema.py",
+    "exitCode": 0
+  },
+  {
+    "skill": "hypothesis-generation",
+    "script": "check_falsification_controls.py",
+    "exitCode": 0
+  },
+  {
+    "skill": "exploratory-data-analysis",
+    "script": "tabular_profile.py",
+    "exitCode": 0
+  },
+  {
+    "skill": "exploratory-data-analysis",
+    "script": "missingness_leakage_audit.py",
+    "exitCode": 0
+  },
+  {
+    "skill": "scientific-visualization",
+    "script": "export_plan.py",
+    "exitCode": 0
+  },
+  {
+    "skill": "scientific-visualization",
+    "script": "palette_audit.py",
+    "exitCode": 0
+  },
+  {
+    "skill": "scientific-writing",
+    "script": "lint_manuscript.py",
+    "exitCode": 0
+  },
+  {
+    "skill": "scientific-writing",
+    "script": "check_references.py",
+    "exitCode": 0
+  },
+  {
+    "skill": "peer-review",
+    "script": "lint_review.py",
+    "exitCode": 0
+  },
+  {
+    "skill": "peer-review",
+    "script": "validate_claim_evidence.py",
+    "exitCode": 0
+  }
+]

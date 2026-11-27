@@ -24,10 +24,10 @@ before(async () => {
   const icons = require("lucide-react");
   const scope = {
     React, ...React,
-    ...Object.fromEntries(["Brain", "Workflow", "Check", "ChevronDown", "Key", "LoaderCircle", "Network", "RefreshCw", "Route", "Save", "Server", "Sparkle", "X"].map((name) => [name, icons[name]])),
+    ...Object.fromEntries(["Download", "ExternalLink", "LogIn", "Brain", "Workflow", "Check", "ChevronDown", "Key", "LoaderCircle", "Network", "RefreshCw", "Route", "Save", "Server", "Sparkle", "X"].map((name) => [name, icons[name]])),
     useUISettings: () => ({ t: translate }),
     createPortal: require("react-dom").createPortal,
-    ...Object.fromEntries(["anthropicLogo", "claudeLogo", "opencodeLogo", "geminiLogo", "minimaxLogo", "zaiLogo", "deepseekLogo", "moonshotLogo", "openaiLogo", "qwenLogo"].map((name) => [name, name])),
+    ...Object.fromEntries(["anthropicLogo", "claudeLogo", "opencodeLogo", "antigravityLogo", "geminiLogo", "minimaxLogo", "zaiLogo", "deepseekLogo", "moonshotLogo", "openaiLogo", "qwenLogo"].map((name) => [name, name])),
   };
   async function load(name, exports) {
     const source = fs.readFileSync(path.join(__dirname, "..", "src", `${name}.tsx`), "utf8");
@@ -40,6 +40,7 @@ before(async () => {
   await load("SettingsPrimitives", ["SettingsGroup", "SettingsRow", "SettingsSection"]);
   await load("Tabs", ["Tab", "Tabs"]);
   await load("Menu", ["MenuSurface", "MenuItem"]);
+  await load("HarnessSetupPanel", ["HarnessSetupPanel"]);
   await load("AgentBackendSettings", ["AgentBackendSettings"]);
   ({ ModelSettingsModal } = await load("ModelSettingsModal", ["ModelSettingsModal"]));
 });
@@ -63,6 +64,12 @@ function bridge(overrides = {}) {
   calls.loadedCatalogs = [];
   calls.loadedBackends = 0;
   return {
+    detectHarnessCli: async ({backend,binary}) => ({installed:true, backend, binary, version:"1.0.0", phase:"installed", docsUrl:"https://example.test"}),
+    installHarnessCli: async () => { throw Error("No install expected"); },
+    getHarnessInstallStatus: async () => ({phase:"downloading"}),
+    cancelHarnessInstall: async () => {},
+    loginHarnessCli: async () => ({opened:true}),
+    openExternalUrl: async () => {},
     getModelConfig: async () => ({ provider: "deepseek", baseUrl: "https://api.deepseek.com", model: "deepseek-chat", hasApiKey: true }),
     saveModelConfig: async (config) => { calls.savedModels.push(config); return config; },
     listProviderModels: async () => ({ models: [] }),
@@ -354,7 +361,7 @@ test("a failed catalog request keeps the saved effort and can retry", async () =
     const effort = document.getElementById(label.htmlFor);
     await reveal(effort);
     assert.equal(effort.value, "high", "saved choice is not discarded when lookup fails");
-    assert.match(document.querySelector('[role="status"]').textContent, /Catalog unavailable/);
+    assert.match(document.querySelector('.agent-backend-fields [role="status"]').textContent, /Catalog unavailable/);
     await React.act(async () => effort.dispatchEvent(new dom.window.FocusEvent("focusin", { bubbles: true })));
     assert.equal(attempts, 2);
     assert.deepEqual([...effort.options].map((option) => option.value), ["", "low", "high"]);
@@ -443,13 +450,13 @@ test("OpenCode discovers, searches and selects models while preserving a manual 
   } finally { await cleanup(); }
 });
 
-test("Harnesses are three expandable cards and OpenCode keeps readable static permission copy", async () => {
+test("Harnesses are four expandable cards and OpenCode keeps readable static permission copy", async () => {
   const cleanup = await mount(bridge());
   try {
     await click("Harnesses");
     const cards = [...document.querySelectorAll('.agent-backend-card')];
-    assert.equal(cards.length, 3);
-    assert.deepEqual(cards.map(card => card.getAttribute('aria-label')), ['Codex', 'Claude Code', 'OpenCode']);
+    assert.equal(cards.length, 4);
+    assert.deepEqual(cards.map(card => card.getAttribute('aria-label')), ['Codex', 'Claude Code', 'Antigravity', 'OpenCode']);
     assert.ok(cards.every(card => card.querySelector('.agent-backend-panel').hidden));
     await click("Claude Code");
     const claudeCard = document.querySelector('.agent-backend-card[aria-label="Claude Code"]');
@@ -468,6 +475,23 @@ test("Harnesses are three expandable cards and OpenCode keeps readable static pe
     assert.doesNotMatch(card.querySelector('.agent-backend-fields').textContent, /Claude Code thinking effort|Claude Code permissions/);
     assert.deepEqual(calls.savedBackends, []);
     assert.deepEqual(calls.checkedBackends, []);
+  } finally { await cleanup(); }
+});
+
+test("Antigravity can be checked and selected using its own executable and models", async () => {
+  const cleanup = await mount(bridge());
+  try {
+    await click("Harnesses");
+    await click("Antigravity");
+    const field = document.getElementById([...document.querySelectorAll('label')].find(node => node.textContent === 'Antigravity executable').htmlFor);
+    assert.equal(field.value, 'agy');
+    await click("Check Antigravity");
+    assert.equal(calls.checkedBackends.at(-1).backend, 'antigravity');
+    assert.equal(calls.checkedBackends.at(-1).binary, 'agy');
+    await input('Antigravity model', 'native-model');
+    await click('Use Antigravity');
+    assert.equal(calls.savedBackends.at(-1).backend, 'antigravity');
+    assert.equal(calls.savedBackends.at(-1).model, 'native-model');
   } finally { await cleanup(); }
 });
 
@@ -538,5 +562,97 @@ test("catalog loading is bounded and ignores results for a changed executable", 
     await React.act(async () => effort.dispatchEvent(new dom.window.FocusEvent("focusin", { bubbles: true })));
     assert.deepEqual(requests, ["codex", "/other/codex"]);
     assert.deepEqual([...effort.options].map((option) => option.value), ["", "high"]);
+  } finally { await cleanup(); }
+});
+
+test("each native harness offers install and sign-in without automatically activating or checking it", async () => {
+  const installs = [], logins = [], detects = [];
+  const api = bridge({
+    detectHarnessCli: async ({ backend }) => { detects.push(backend); return { installed: false, backend, phase: 'missing', docsUrl: 'https://example.test' }; },
+    installHarnessCli: async backend => { installs.push(backend); return { installed: true, backend, binary: `/managed/${backend}`, version: '1.2.3', phase: 'installed', docsUrl: 'https://example.test' }; },
+    loginHarnessCli: async input => { logins.push(input); return { opened: true }; },
+  });
+  const cleanup = await mount(api);
+  const action = (backend, label) => [...document.querySelector(`.agent-backend-card[aria-label="${backend}"]`).querySelectorAll('button')].find(node => node.textContent === label);
+  try {
+    await click('Harnesses'); assert.deepEqual(detects, []); assert.deepEqual(installs, []);
+    for (const [backend, name] of [['codex', 'Codex'], ['claude', 'Claude Code'], ['antigravity', 'Antigravity'], ['opencode', 'OpenCode']]) {
+      await click(name);
+      assert.equal(action(name, 'Install CLI').disabled, false);
+      await React.act(async () => action(name, 'Install CLI').click());
+      assert.equal(document.querySelector('.agent-backend-fields input').value, `/managed/${backend}`);
+      await React.act(async () => action(name, 'Sign in / Connect provider').click());
+      assert.match(document.querySelector(`.agent-backend-card[aria-label="${name}"] .harness-setup`).textContent, /return and check the connection/);
+      assert.equal(logins.at(-1).binary, `/managed/${backend}`);
+      assert.deepEqual(calls.checkedBackends, []); assert.deepEqual(calls.savedBackends, []);
+      await click(`Check ${name}`);
+      assert.equal(calls.checkedBackends.at(-1).binary, `/managed/${backend}`);
+      calls.checkedBackends.length = 0;
+    }
+    assert.deepEqual(installs, ['codex', 'claude', 'antigravity', 'opencode']);
+  } finally { await cleanup(); }
+});
+
+test("background installation stays attached to its card after switching harnesses", async () => {
+  let finish;
+  const cleanup = await mount(bridge({
+    detectHarnessCli: async ({ backend }) => ({ installed: false, backend, phase: 'missing', docsUrl: 'https://example.test' }),
+    installHarnessCli: () => new Promise(resolve => { finish = resolve; }),
+  }));
+  try {
+    await click('Harnesses'); await click('Codex');
+    await React.act(async () => document.querySelector('.agent-backend-card[aria-label="Codex"] .harness-setup-actions button').click());
+    assert.equal(button('Use Codex').disabled, true);
+    await click('Claude Code');
+    await React.act(async () => finish({ installed: true, backend: 'codex', binary: '/managed/codex', phase: 'installed', docsUrl: 'https://example.test' }));
+    assert.equal(document.querySelector('.agent-backend-fields input').value, 'claude');
+    await click('Codex'); assert.equal(document.querySelector('.agent-backend-fields input').value, '/managed/codex');
+    assert.deepEqual(calls.savedBackends, []);
+  } finally { await cleanup(); }
+});
+
+test("installation failures can be retried and unmount cancels the active download", async () => {
+  let attempts = 0, rejectPending; const cancellations = [];
+  const cleanup = await mount(bridge({
+    detectHarnessCli: async ({ backend }) => ({ installed: false, backend, phase: 'missing', docsUrl: 'https://example.test' }),
+    installHarnessCli: async () => { if (++attempts === 1) throw Error('Download failed'); return new Promise((_resolve, reject) => { rejectPending = reject; }); },
+    cancelHarnessInstall: async backend => { cancellations.push(backend); rejectPending?.(Error('Cancelled')); },
+  }));
+  await click('Harnesses'); await click('Antigravity');
+  const install = () => document.querySelector('.agent-backend-card[aria-label="Antigravity"] .harness-setup-actions button');
+  await React.act(async () => install().click());
+  assert.match(document.querySelector('[role="alert"]').textContent, /Download failed/);
+  await React.act(async () => install().click());
+  assert.equal(attempts, 2);
+  assert.ok([...document.querySelectorAll('button')].some(node => node.textContent === 'Cancel installation'));
+  await cleanup(); assert.deepEqual(cancellations, ['antigravity']);
+});
+
+test("Antigravity permissions save independently and do not expose unsupported bypass mode", async () => {
+  const cleanup = await mount(bridge());
+  try {
+    await click('Harnesses'); await click('Antigravity');
+    const label = [...document.querySelectorAll('label')].find(node => node.textContent === 'Antigravity permissions');
+    const select = document.getElementById(label.htmlFor);
+    assert.deepEqual([...select.options].map(option => option.value), ['ask', 'accept-edits', 'auto', 'plan']);
+    await React.act(async () => { select.value = 'plan'; select.dispatchEvent(new dom.window.Event('change', { bubbles: true })); });
+    await click('Use Antigravity'); assert.equal(calls.savedBackends.at(-1).permissionMode, 'plan');
+    await click('Claude Code');
+    const claude = [...document.querySelectorAll('label')].find(node => node.textContent === 'Claude Code permissions');
+    assert.equal(document.getElementById(claude.htmlFor).value, 'ask');
+  } finally { await cleanup(); }
+});
+
+test('Antigravity thinking effort is independently saved and reset when its model changes', async () => {
+  const cleanup = await mount(bridge());
+  try {
+    await click('Harnesses'); await click('Antigravity');
+    const label = [...document.querySelectorAll('label')].find(node => node.textContent === 'Antigravity thinking effort');
+    const select = document.getElementById(label.htmlFor);
+    assert.deepEqual([...select.options].map(option => option.value), ['', 'low', 'medium', 'high', 'xhigh']);
+    await React.act(async () => { select.value='xhigh'; select.dispatchEvent(new dom.window.Event('change', {bubbles:true})); });
+    await click('Check Antigravity'); assert.equal(calls.checkedBackends.at(-1).effort,'xhigh');
+    await click('Use Antigravity'); assert.equal(calls.savedBackends.at(-1).effort,'xhigh');
+    await input('Antigravity model','another-model'); assert.equal(select.value,'');
   } finally { await cleanup(); }
 });
