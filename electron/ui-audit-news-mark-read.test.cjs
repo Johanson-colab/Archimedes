@@ -11,6 +11,7 @@ test("News exposes mark-all-read through IPC and the chips row", () => {
   assert.match(view, /markAllNewsRead/);
   assert.match(view, /news-mark-read/);
   assert.match(view, /Mark all read/);
+  assert.match(view, /const unreadCount = items\.reduce\(\(total, item\) => total \+ \(item\.read \? 0 : 1\), 0\);/);
   assert.match(read("electron/preload.cjs"), /markAllNewsRead/);
   assert.match(read("electron/main.cjs"), /news:mark-all-read/);
   assert.match(read("src/i18n/translations/news.ts"), /"Mark all read"/);

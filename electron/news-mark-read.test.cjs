@@ -16,6 +16,19 @@ function profile(t) {
   return directory;
 }
 
+test("cached stories from disabled sources remain visible and unread", (t) => {
+  profile(t);
+  const now = new Date().toISOString();
+  store.upsertItems([
+    { id: "hn:cached", source: "hn", title: "Cached HN story", url: "https://news.ycombinator.com/item?id=1", publishedAt: now },
+  ]);
+  news.setSettings({ sources: { hn: false, github: false, arxiv: false, lobsters: false, reddit: false, rss: false, x: false } });
+  const listed = news.list();
+  assert.deepEqual(listed.sources, []);
+  assert.equal(listed.items.length, 1);
+  assert.equal(listed.items[0].read, false);
+});
+
 test("marking a source read clears only that source's unread stories", async (t) => {
   profile(t);
   const now = new Date().toISOString();

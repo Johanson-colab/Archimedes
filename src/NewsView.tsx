@@ -445,9 +445,7 @@ export default function NewsView({ bridge, projectId, active, onSendToChat }: {
 
   const items = feed?.items ?? [];
   const sources = feed?.sources ?? [];
-  const unreadCount = sourceFilter === "all"
-    ? sources.reduce((total, source) => total + source.unread, 0)
-    : sources.find((source) => source.id === sourceFilter)?.unread ?? 0;
+  const unreadCount = items.reduce((total, item) => total + (item.read ? 0 : 1), 0);
   const watch = settings?.watch ?? [];
   const clusterCounts = useMemo(() => {
     const counts = new Map<string, number>();
