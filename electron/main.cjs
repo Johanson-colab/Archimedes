@@ -2860,7 +2860,7 @@ installQuitGuard({ app, dialog,
   restoreWindow: () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow(startupWorkspace());
   },
-  hasWork: () => listActiveRuns().length > 0 || agent.hasActiveAgentRuns(),
+  hasWork: () => listActiveRuns().length > 0 || agent.hasActiveAgentRuns() || researchAppRuntime.hasRunningApps(),
   stopWork: async () => {
     stoppingResearch = true;
     const reproductions = listActiveRuns("reproduction");
