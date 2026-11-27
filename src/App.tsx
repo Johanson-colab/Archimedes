@@ -2916,6 +2916,7 @@ function App() {
       if (nextThread) await openResearchThread(nextThread);
       else {
         activeThreadIdRef.current = null;
+        trajectorySource.current = { threadId: undefined, cursor: null };
         setActiveThreadId(null);
         setBoundHarness(null);
         setActiveProjectId(snapshot.projects[0]?.id ?? null);
@@ -2940,6 +2941,7 @@ function App() {
       if (nextThread) await openResearchThread(nextThread);
       else {
         activeThreadIdRef.current = null;
+        trajectorySource.current = { threadId: undefined, cursor: null };
         setActiveThreadId(null);
         setBoundHarness(null);
         setActiveProjectId(snapshot.projects[0]?.id ?? null);
