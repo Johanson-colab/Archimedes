@@ -115,6 +115,10 @@ test("parseRssFeed handles RSS items, images and entity decoding", () => {
     "https://cdn.example.com/photo.jpg",
   ]);
   assert.deepEqual(items[0].tags, ["The Register"]);
+  const escaped = xml.replace(/<!\[CDATA\[[\s\S]*?\]\]>/, '&lt;img src=&quot;https://cdn.example.com/photo.jpg&quot;&gt;Publisher summary.');
+  const [escapedItem] = parseRssFeed(escaped);
+  assert.equal(escapedItem.summary, "Publisher summary.");
+  assert.equal(escapedItem.media.at(-1).url, "https://cdn.example.com/photo.jpg");
 });
 
 test("parseRssFeed handles Atom entries", () => {
@@ -132,6 +136,26 @@ test("parseRssFeed handles Atom entries", () => {
   assert.equal(items[0].url, "https://example.com/inference");
   assert.equal(items[0].author, "Jane Doe");
   assert.equal(items[0].native.feedLabel, "Example feed");
+});
+
+test("Atom text summaries keep literal comparison operators", () => {
+  const feed = (attributes) => `<feed xmlns="http://www.w3.org/2005/Atom"><title>Lab</title><entry><title>Bounds</title><link href="https://lab.example/bounds" /><summary${attributes}>Bounds: a &lt; b and c &gt; d.</summary></entry></feed>`;
+  for (const attributes of ["", ' type="text"']) {
+    const [item] = parseRssFeed(feed(attributes));
+    assert.equal(item.summary, "Bounds: a < b and c > d.", attributes || "default type");
+  }
+});
+
+test("Atom summary types accept single quotes and spacing around equals", () => {
+  const xml = `<feed xmlns="http://www.w3.org/2005/Atom"><title>Lab</title><entry><title>Bounds</title><link href="https://lab.example/xhtml" /><summary type = 'xhtml'><div><p>Research result.</p></div></summary></entry></feed>`;
+  const [item] = parseRssFeed(xml);
+  assert.equal(item.summary, "Research result.");
+});
+
+test("Atom plain-text summaries unwrap CDATA before display", () => {
+  const xml = `<feed xmlns="http://www.w3.org/2005/Atom"><title>Lab</title><entry><title>Bounds</title><link href="https://lab.example/cdata" /><summary type="text"><![CDATA[Lab result]]></summary></entry></feed>`;
+  const [item] = parseRssFeed(xml);
+  assert.equal(item.summary, "Lab result");
 });
 
 test("parseReddit keeps subreddit, flair, score and preview image", () => {

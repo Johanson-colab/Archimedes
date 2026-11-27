@@ -1,4 +1,5 @@
 ﻿const { createHash } = require("node:crypto");
+const { searchWeb } = require("./web-search.cjs");
 
 /**
  * News source adapters.
@@ -16,6 +17,7 @@ const SOURCE_LABELS = {
   reddit: "Reddit",
   rss: "RSS",
   x: "X",
+  "x-tavily": "X via Tavily",
 };
 
 const TRACKING_PARAMS = new Set([
@@ -123,7 +125,7 @@ function makeItem(source, fields) {
     publishedAt: fields.publishedAt ? new Date(fields.publishedAt).toISOString() : "",
     score: Number(fields.score) || 0,
     comments: Number(fields.comments) || 0,
-    summary: truncate(stripHtml(fields.summary || ""), 460),
+    summary: truncate(fields.summaryIsText ? String(fields.summary || "").trim() : stripHtml(fields.summary || ""), 460),
     tags: normalizeTags(fields.tags),
     media: normalizeMedia(fields.media),
     native: fields.native && typeof fields.native === "object" ? fields.native : {},
@@ -242,7 +244,18 @@ function parseRssFeed(xml, { feedLabel = "" } = {}) {
         ? firstMatch(block, /<link[^>]*\bhref="([^"]+)"[^>]*\/?>/i) || firstMatch(block, /<link[^>]*>([^<]+)<\/link>/i)
         : firstMatch(block, /<link>\s*([^<]+?)\s*<\/link>/i);
       if (!title || !link) return null;
-      const rawDescription = firstMatch(block, /<content:encoded[^>]*>([\s\S]*?)<\/content:encoded>/i) || firstMatch(block, /<description[^>]*>([\s\S]*?)<\/description>/i) || firstMatch(block, /<summary[^>]*>([\s\S]*?)<\/summary>/i);
+      const encoded = firstMatch(block, /<content:encoded[^>]*>([\s\S]*?)<\/content:encoded>/i);
+      const atomSummary = isAtom ? block.match(/<summary([^>]*)>([\s\S]*?)<\/summary>/i) : null;
+      const atomSummaryType = atomSummary ? (atomSummary[1].match(/\btype\s*=\s*(["'])(.*?)\1/i)?.[2] || "text").toLowerCase() : "";
+      const rawDescription = encoded || atomSummary?.[2] || firstMatch(block, /<description[^>]*>([\s\S]*?)<\/description>/i) || firstMatch(block, /<summary[^>]*>([\s\S]*?)<\/summary>/i);
+      // Atom summaries default to plain text. Decoding then stripping them as
+      // HTML would turn literal comparisons such as "a < b" into markup.
+      const summaryIsText = Boolean(atomSummary) && atomSummaryType === "text";
+      // RSS descriptions can contain escaped HTML or an unescaped CDATA fragment.
+      const cdata = rawDescription.trim().match(/^<!\[CDATA\[([\s\S]*?)\]\]>$/);
+      const summary = summaryIsText
+        ? decodeEntities(cdata ? cdata[1] : rawDescription)
+        : (rawDescription.trimStart().startsWith("<![CDATA[") ? rawDescription : decodeEntities(rawDescription));
       const media = [];
       for (const match of block.matchAll(/<enclosure[^>]*\burl="([^"]+)"[^>]*>/gi)) {
         const tag = match[0];
@@ -252,7 +265,7 @@ function parseRssFeed(xml, { feedLabel = "" } = {}) {
       for (const match of block.matchAll(/<media:(?:content|thumbnail)[^>]*\burl="([^"]+)"[^>]*>/gi)) {
         media.push({ url: decodeEntities(match[1]) });
       }
-      const inlineImage = block.match(/<img[^>]+src="([^"]+)"/i);
+      const inlineImage = `${block}${summaryIsText ? "" : ` ${summary}`}`.match(/<img[^>]+src="([^"]+)"/i);
       if (inlineImage) media.push({ url: decodeEntities(inlineImage[1]) });
       const published = firstMatch(block, /<pubDate[^>]*>([\s\S]*?)<\/pubDate>/i) || firstMatch(block, /<published[^>]*>([\s\S]*?)<\/published>/i) || firstMatch(block, /<updated[^>]*>([\s\S]*?)<\/updated>/i);
       const author = firstMatch(block, /<dc:creator[^>]*>([\s\S]*?)<\/dc:creator>/i) || firstMatch(block, /<author[\s\S]*?<name>([\s\S]*?)<\/name>/i);
@@ -261,7 +274,8 @@ function parseRssFeed(xml, { feedLabel = "" } = {}) {
         url: decodeEntities(link),
         author: stripHtml(author),
         publishedAt: published ? new Date(published).toISOString() : "",
-        summary: rawDescription,
+        summary,
+        summaryIsText,
         tags: feedLabel ? [feedLabel] : [],
         media,
         native: { feedLabel: feedLabel || feedTitle || "" },
@@ -367,9 +381,10 @@ function conditionalHeaders(state = {}) {
 }
 
 function responseState(response) {
+  const missingValue = response.status === 304 ? null : "";
   return {
-    etag: response.headers?.get?.("etag") || "",
-    lastModified: response.headers?.get?.("last-modified") || "",
+    etag: response.headers?.get?.("etag") ?? missingValue,
+    lastModified: response.headers?.get?.("last-modified") ?? missingValue,
   };
 }
 
@@ -463,10 +478,50 @@ async function fetchX({ fetchImpl = fetch, state = {}, bearerToken, query } = {}
   return result.notModified ? result : { ...result, items: parseX(result.json) };
 }
 
+async function fetchXWithTavily({ query, fetchImpl, apiKey }) {
+  const domains = ["x.com", "twitter.com"];
+  // The News cache prunes stories published more than 14 days ago, so a
+  // manual X search asks Tavily for the last week instead of returning
+  // relevant posts that would be inserted and immediately deleted.
+  const { results } = await searchWeb({ query, domains, includePublishedDate: true, timeRange: "week" }, { provider: "tavily", fetchImpl, apiKey });
+  const items = new Map();
+  for (const result of results) {
+    let link;
+    try { link = new URL(result.url); } catch { continue; }
+    const host = link.hostname.replace(/^www\./, "");
+    if (link.protocol !== "https:" || !domains.includes(host)) continue;
+    const post = link.pathname.match(/^\/(?:i\/(?:web\/)?status|([a-z0-9_]{1,15})\/status)\/(\d{1,20})(?:\/(?:photo|video)\/\d+)?\/?$/i);
+    if (!post) continue;
+    const [, username, postId] = post;
+    const handle = username?.toLowerCase();
+    const published = Date.parse(result.published_at);
+    const item = makeItem("x-tavily", {
+      title: result.title,
+      author: handle ? `@${handle}` : "",
+      url: `https://x.com/${handle || "i/web"}/status/${postId}`,
+      summary: result.snippet,
+      publishedAt: Number.isFinite(published) ? new Date(published).toISOString() : "",
+    });
+    const previous = items.get(postId);
+    if (previous) {
+      if (!previous.publishedAt) previous.publishedAt = item.publishedAt;
+      if (!previous.author && item.author) {
+        previous.author = item.author;
+        previous.url = item.url;
+      }
+    } else {
+      items.set(postId, { ...item, id: `x-tavily:${postId}` });
+    }
+  }
+  return { items: [...items.values()] };
+}
+
 async function fetchRss({ fetchImpl = fetch, state = {}, feed }) {
   if (!feed?.url) throw new Error("RSS feed has no URL.");
   const result = await fetchText(fetchImpl, feed.url, { headers: { Accept: "application/rss+xml, application/atom+xml, application/xml, text/xml, */*" } }, state);
-  return result.notModified ? result : { ...result, items: parseRssFeed(result.text, { feedLabel: feed.label || "" }) };
+  if (result.notModified) return result;
+  if (!/<(?:rss|feed|rdf:rdf)[\s>]/i.test(result.text)) throw new Error("The URL did not return an RSS or Atom feed.");
+  return { ...result, items: parseRssFeed(result.text, { feedLabel: feed.label || "" }) };
 }
 
 module.exports = {
@@ -488,6 +543,7 @@ module.exports = {
   fetchReddit,
   fetchRss,
   fetchX,
+  fetchXWithTavily,
   truncate,
   stripHtml,
   decodeEntities,

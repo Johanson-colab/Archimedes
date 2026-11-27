@@ -109,7 +109,7 @@ function rowsFrom(payload, provider, type) {
   return (Array.isArray(rows) ? rows : []).filter((row) => row.url && row.title).map((row) => ({
     title: String(row.title), url: String(row.url),
     snippet: String(row.description || row.content || row.summary || row.highlights?.[0] || "").slice(0, 1200),
-    published_at: String(row.publishedDate || row.published_at || ""), source: type,
+    published_at: String(row.published_date || row.publishedDate || row.published_at || ""), source: type,
   }));
 }
 
@@ -131,7 +131,11 @@ function requestFor(provider, query, input, domains, apiKey) {
   if (provider === "tavily") {
     endpoint = "https://api.tavily.com/search";
     headers.Authorization = `Bearer ${apiKey}`;
-    body = { query, topic: type === "news" ? "news" : "general", max_results: limit, include_domains: domains };
+    body = {
+      query, topic: type === "news" ? "news" : "general", max_results: limit, include_domains: domains,
+      ...(input.includePublishedDate ? { include_published_date: true, search_depth: "basic", auto_parameters: false } : {}),
+      ...(input.timeRange ? { time_range: input.timeRange } : {}),
+    };
   } else if (provider === "exa") {
     endpoint = "https://api.exa.ai/search";
     headers["x-api-key"] = apiKey;

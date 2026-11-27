@@ -538,24 +538,32 @@ interface NewsItem {
   read: boolean;
 }
 
-interface NewsSourceState {
+interface NewsRssFeed { id: string; label: string; url: string }
+
+interface NewsRefreshState {
+  status: "idle" | "ok" | "error";
+  message: string;
+  lastSuccessAt: string;
+}
+
+interface NewsSourceState extends NewsRefreshState {
   id: string;
   label: string;
   total: number;
   unread: number;
-  status: "idle" | "ok" | "error";
-  message: string;
-  lastSuccessAt: string;
+  subscriptions?: Array<NewsRssFeed & NewsRefreshState>;
 }
 
 interface NewsSettings {
   version: number;
   view: "feed" | "board";
   sources: Record<string, boolean>;
-  rssFeeds: Array<{ id: string; label: string; url: string }>;
+  rssFeeds: NewsRssFeed[];
+  recommendedRssFeed: NewsRssFeed;
   reddit: { subreddits: string[]; clientId: string; clientSecret: string; configured?: boolean };
   github: { token: string; configured?: boolean };
   x: { bearerToken: string; query: string; configured?: boolean };
+  tavilyQuery: string;
   watch: string[];
   mute: string[];
   cadenceMinutes: number;
