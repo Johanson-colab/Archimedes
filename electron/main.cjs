@@ -1861,6 +1861,17 @@ app.whenReady().then(async () => {
     }
   });
 
+  const analyses = require("./project-results.cjs");
+  function analysisWorkspace(event, input, role) {
+    const root = windowWorkspaces.get(event.sender.id);
+    if (!root || root !== input.workspace || !store.canAccessProject(input.projectId, role)) {
+      throw new Error("Reopen the original project to access this analysis.");
+    }
+    return root;
+  }
+  ipcMain.handle("analysis:list", (event, input) => analyses.listAnalyses(analysisWorkspace(event, input, "viewer"), input.projectId));
+  ipcMain.handle("analysis:load", (event, input) => analyses.loadAnalysis(analysisWorkspace(event, input, "viewer"), input.projectId, input.id));
+  ipcMain.handle("analysis:save", (event, input) => analyses.saveAnalysis(analysisWorkspace(event, input, "editor"), input.projectId, input));
   const literatureScope = (input) => ({ workspace: resolveWorkspace(input?.workspace), projectId: typeof input?.projectId === "string" ? input.projectId : "" });
   ipcMain.handle("literature-search:run", async (event, input = {}) => {
     const scope = literatureScope(input);

@@ -7,10 +7,10 @@ const { JSDOM } = require("jsdom");
 let scope, load;
 before(async () => {
   const { transformWithOxc } = await import("vite");
-  scope = {};
+  scope = { ...await import("../shared/analysis-dataset.mjs") };
   load = async (file, names) => {
     const source = fs.readFileSync(path.join(__dirname, "../src", file), "utf8")
-      .replace(/^import .*;\r?\n/gm, "").replace(/export default /g, "").replace(/export /g, "");
+      .replace(/^import .*;\r?\n/gm, "").replace(/^export \{[^}]*\};$/gm, "").replace(/export default /g, "").replace(/export /g, "");
     const { code } = await transformWithOxc(source, file, { jsx: { runtime: "classic" } });
     Object.assign(scope, new Function(...Object.keys(scope), `${code}\nreturn {${names.join(",")}};`)(...Object.values(scope)));
   };
@@ -173,4 +173,16 @@ test("field inspection, plot rendering, examples, pagination and chat draft", as
     await React.act(async () => root.unmount()); dom.window.close();
     for (const [key, value] of Object.entries(saved)) value === undefined ? delete global[key] : global[key] = value;
   }
+});
+
+test("saved-analysis errors localize IPC prefixes and retention copy distinguishes saved inputs", () => {
+  const view = fs.readFileSync(path.join(__dirname, "../src/DataAnalysisView.tsx"), "utf8");
+  const helper = view.match(/function analysisError\(reason: unknown\) \{[\s\S]*?\n\}/)?.[0];
+  assert.ok(helper);
+  const analysisError = new Function(`${helper.replace("reason: unknown", "reason")}\nreturn analysisError;`)();
+  assert.equal(analysisError(new Error("Error invoking remote method 'analysis:load': Error: Reopen the original project to access this analysis.")), "Reopen the original project to access this analysis.");
+  assert.match(view, /Local processing\. Unsaved data stays in this session; saved analyses are stored in the project\./);
+  const translations = fs.readFileSync(path.join(__dirname, "../src/i18n/translations/dataAnalysis.ts"), "utf8");
+  assert.match(translations, /"Reopen the original project to access this analysis\.": "请重新打开原项目以访问此分析。"/);
+  assert.match(translations, /"Local processing\. Unsaved data stays in this session; saved analyses are stored in the project\.": "本地处理，未保存的数据仅保留在当前会话；已保存的分析会存入项目。"/);
 });
