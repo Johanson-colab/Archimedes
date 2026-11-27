@@ -695,3 +695,16 @@ test("preview addresses stay with the execution folder that produced the manuscr
   assert.equal(api.createPreviewToken(1, "/project-a"), first);
   assert.equal(tokens.get(second), "/project-b");
 });
+
+test("a delayed autosave does not start a compile after Writing is deactivated", async t => {
+  const gate = deferred();
+  const f = await fixture(t, { write: async () => { await gate.promise; } });
+  await f.render(f.a, 1);
+  await edit(source("Edited while Writing was active"));
+  await React.act(async () => { await new Promise(resolve => setTimeout(resolve, 820)); });
+  assert.equal(f.writes.length, 1);
+  await f.render(f.a, 2, "paper/main.tex", false);
+  gate.resolve();
+  await React.act(async () => { await new Promise(resolve => setTimeout(resolve, 20)); });
+  assert.equal(f.compiles.length, 0);
+});

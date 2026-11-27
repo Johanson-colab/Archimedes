@@ -151,8 +151,8 @@ export default function PaperWritingView({ bridge, workspace, projectId = null, 
     scopesRef.current.set(scopeKey, scope);
   }
   const owner = scope;
-  const activeCompileContext = useRef({ owner, threadId });
-  activeCompileContext.current = { owner, threadId };
+  const activeCompileContext = useRef({ owner, threadId, active });
+  activeCompileContext.current = { owner, threadId, active };
   function scoped<K extends keyof WritingScope>(key: K): [WritingScope[K], React.Dispatch<React.SetStateAction<WritingScope[K]>>] {
     return [owner[key], (action) => { owner[key] = typeof action === "function" ? (action as (current: WritingScope[K]) => WritingScope[K])(owner[key]) : action; refreshScope(); }];
   }
@@ -474,7 +474,7 @@ export default function PaperWritingView({ bridge, workspace, projectId = null, 
     const timer = window.setTimeout(async () => {
       try {
         await saveWritingDocument(currentDocument, bridge.writeWorkspaceFile, refreshScope);
-        if (autoCompile && mainPath && owner.selectedPath === currentDocument.file.path && owner.mainPath === mainPath) void compile(mainPath);
+        if (autoCompile && mainPath && activeCompileContext.current.active && owner.selectedPath === currentDocument.file.path && owner.mainPath === mainPath) void compile(mainPath);
       } catch { /* The owner's buffer retains its unsaved text and save error. */ }
     }, 750);
     return () => {
