@@ -1,0 +1,8 @@
+{
+  "stage": "before",
+  "viewport": [
+    900,
+    220
+  ],
+  "text": "Problems · 1Select a problem to jump to the source line.\nLaTeX\nThe managed LaTeX compiler could not be prepared.Retry the download, or switch to the installed local compiler."
+}
