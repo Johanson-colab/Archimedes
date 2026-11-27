@@ -289,6 +289,7 @@ function createResearchAppRuntime({ approve = async () => false, readSecret = ()
     }
   }
   async function shutdown() { await Promise.all([...runs.values()].map((run) => stop(run.app.workspace, run.app.id))); }
-  return { list, start, stop, status, install, pin, remove, shutdown };
+  function hasRunningApps() { return [...runs.values()].some((run) => run.status === "running" || run.status === "starting"); }
+  return { list, start, stop, status, install, pin, remove, shutdown, hasRunningApps };
 }
 module.exports = { createResearchAppRuntime, readApp, fingerprint, sourceFiles, MANIFEST };
