@@ -96,6 +96,32 @@ test("RSS feeds that only return Last-Modified receive a conditional request", a
   assert.equal(news.list().items[0].title, "Last-Modified story");
 });
 
+test("RSS 304 responses retain validators when response headers are omitted", async (t) => {
+  profile(t);
+  const feed = { id: "lab-304", label: "Lab 304", url: "https://lab.example/304-rss" };
+  const etag = '"lab-304-v1"';
+  const modified = "Wed, 25 Nov 2026 10:00:00 GMT";
+  const seen = [];
+  const fetchImpl = async (_url, { headers }) => {
+    seen.push([headers["If-None-Match"], headers["If-Modified-Since"]]);
+    if (seen.length === 1) {
+      return new Response('<rss><channel><item><title>Cached story</title><link>https://lab.example/304</link></item></channel></rss>', {
+        headers: { etag, "last-modified": modified },
+      });
+    }
+    return new Response(null, { status: 304 });
+  };
+  news.setSettings({ sources: { ...disabledSources, rss: true }, rssFeeds: [feed] });
+  for (let index = 0; index < 4; index++) await news.refresh({ force: true, fetchImpl });
+  assert.deepEqual(seen, [
+    [undefined, undefined],
+    [etag, modified],
+    [etag, modified],
+    [etag, modified],
+  ]);
+  assert.equal(news.list().items[0].title, "Cached story");
+});
+
 test("changing an RSS label invalidates its validators and refreshes cached provenance", async (t) => {
   profile(t);
   const feed = { id: "lab-label", label: "Old label", url: "https://lab.example/label-rss" };

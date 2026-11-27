@@ -246,7 +246,7 @@ function parseRssFeed(xml, { feedLabel = "" } = {}) {
       if (!title || !link) return null;
       const encoded = firstMatch(block, /<content:encoded[^>]*>([\s\S]*?)<\/content:encoded>/i);
       const atomSummary = isAtom ? block.match(/<summary([^>]*)>([\s\S]*?)<\/summary>/i) : null;
-      const atomSummaryType = atomSummary ? (firstMatch(atomSummary[1], /\btype="([^"]+)"/i) || "text").toLowerCase() : "";
+      const atomSummaryType = atomSummary ? (atomSummary[1].match(/\btype\s*=\s*(["'])(.*?)\1/i)?.[2] || "text").toLowerCase() : "";
       const rawDescription = encoded || atomSummary?.[2] || firstMatch(block, /<description[^>]*>([\s\S]*?)<\/description>/i) || firstMatch(block, /<summary[^>]*>([\s\S]*?)<\/summary>/i);
       // Atom summaries default to plain text. Decoding then stripping them as
       // HTML would turn literal comparisons such as "a < b" into markup.
@@ -381,9 +381,10 @@ function conditionalHeaders(state = {}) {
 }
 
 function responseState(response) {
+  const missingValue = response.status === 304 ? null : "";
   return {
-    etag: response.headers?.get?.("etag") || "",
-    lastModified: response.headers?.get?.("last-modified") || "",
+    etag: response.headers?.get?.("etag") ?? missingValue,
+    lastModified: response.headers?.get?.("last-modified") ?? missingValue,
   };
 }
 

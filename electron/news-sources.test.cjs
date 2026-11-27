@@ -146,6 +146,12 @@ test("Atom text summaries keep literal comparison operators", () => {
   }
 });
 
+test("Atom summary types accept single quotes and spacing around equals", () => {
+  const xml = `<feed xmlns="http://www.w3.org/2005/Atom"><title>Lab</title><entry><title>Bounds</title><link href="https://lab.example/xhtml" /><summary type = 'xhtml'><div><p>Research result.</p></div></summary></entry></feed>`;
+  const [item] = parseRssFeed(xml);
+  assert.equal(item.summary, "Research result.");
+});
+
 test("Atom plain-text summaries unwrap CDATA before display", () => {
   const xml = `<feed xmlns="http://www.w3.org/2005/Atom"><title>Lab</title><entry><title>Bounds</title><link href="https://lab.example/cdata" /><summary type="text"><![CDATA[Lab result]]></summary></entry></feed>`;
   const [item] = parseRssFeed(xml);
