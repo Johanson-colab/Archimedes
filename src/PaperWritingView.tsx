@@ -137,7 +137,10 @@ function evidenceError(error: unknown) {
 }
 
 function resultValue(value: number, unit: string) {
-  const number = new Intl.NumberFormat(undefined, { maximumFractionDigits: 8 }).format(value);
+  const magnitude = Math.abs(value);
+  const number = magnitude > 0 && magnitude < 1e-4
+    ? value.toExponential(4).replace(/\.?0+e/, "e")
+    : new Intl.NumberFormat(undefined, { maximumFractionDigits: 8 }).format(value);
   return unit === "%" ? `${number}%` : [number, unit].filter(Boolean).join(" ");
 }
 
@@ -392,8 +395,11 @@ export default function PaperWritingView({ bridge, workspace, projectId = null, 
   function openManuscriptResults() {
     const editor = editorRef.current;
     const start = editor?.selectionStart ?? 0;
-    const text = draft.slice(start, editor?.selectionEnd ?? 0);
-    const before = draft.slice(0, start);
+    // The textarea exposes offsets in its LF-normalized value even when the
+    // saved source still contains CRLF.
+    const normalized = draft.replace(/\r\n?/g, "\n");
+    const text = normalized.slice(start, editor?.selectionEnd ?? 0);
+    const before = normalized.slice(0, start);
     setEvidenceDialog({ key: evidenceScopeKey, selection: file && /^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i.test(text.trim())
       ? { sourcePath: file.path, line: before.split("\n").length, column: start - before.lastIndexOf("\n"), length: text.length, text }
       : null });
