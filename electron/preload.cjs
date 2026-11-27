@@ -296,6 +296,7 @@ contextBridge.exposeInMainWorld("researchDesk", {
   listNews: (filters) => ipcRenderer.invoke("news:list", filters),
   refreshNews: (input) => ipcRenderer.invoke("news:refresh", input),
   markNewsRead: (id, read = true) => ipcRenderer.invoke("news:mark-read", { id, read }),
+  markAllNewsRead: (source = "") => ipcRenderer.invoke("news:mark-all-read", { source }),
   setNewsSaved: (id, saved) => ipcRenderer.invoke("news:set-saved", { id, saved }),
   getPaperReviewSettings: () => ipcRenderer.invoke("paper-review-app:get-settings"),
   savePaperReviewSettings: (patch) => ipcRenderer.invoke("paper-review-app:save-settings", patch),

@@ -8984,6 +8984,8 @@ html[data-menu-style="glass"] .menu-surface {
 .news-range { height: 30px; padding: 0 8px; color: var(--night-ink-soft); background: var(--mono-control); border: 1px solid var(--night-line); border-radius: 6px; font: inherit; font-size: 11px; }
 
 .news-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin-bottom: 14px; }
+.news-mark-read { margin-left: auto; padding: 0; color: var(--accent); background: transparent; border: 0; font-size: 9px; font-weight: 700; }
+.news-mark-read:hover { text-decoration: underline; }
 .news-chip-count, .news-chip-unread { margin-left: 4px; color: var(--night-muted); font-size: 9.5px; }
 .news-chip-unread { color: var(--accent); font-weight: 700; }
 .news-src-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--source-rss); }

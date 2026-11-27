@@ -387,6 +387,18 @@ export default function NewsView({ bridge, projectId, active, onSendToChat }: {
     setFeed((current) => current ? { ...current, items: current.items.map((entry) => entry.id === item.id ? { ...entry, read: true } : entry) } : current);
   }
 
+  async function markAllRead() {
+    const source = sourceFilter === "all" ? "" : sourceFilter;
+    try {
+      if (bridge.markAllNewsRead) await bridge.markAllNewsRead(source);
+      setFeed((current) => current ? { ...current, items: current.items.map((entry) => ({ ...entry, read: true })) } : current);
+      setNotice(t("Marked all stories as read."));
+      await load();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    }
+  }
+
   function openItem(item: NewsItem) {
     markRead(item);
     void bridge.openExternalUrl(item.url).catch(() => undefined);
@@ -433,6 +445,7 @@ export default function NewsView({ bridge, projectId, active, onSendToChat }: {
 
   const items = feed?.items ?? [];
   const sources = feed?.sources ?? [];
+  const unreadCount = items.reduce((total, item) => total + (item.read ? 0 : 1), 0);
   const watch = settings?.watch ?? [];
   const clusterCounts = useMemo(() => {
     const counts = new Map<string, number>();
@@ -519,6 +532,7 @@ export default function NewsView({ bridge, projectId, active, onSendToChat }: {
       <FilterButton active={savedOnly} onClick={() => setSavedOnly((value) => !value)}>
         <Bookmark size={11} /> {t("Saved")}
       </FilterButton>
+      {unreadCount > 0 && <button type="button" className="news-mark-read" onClick={() => void markAllRead()}>{t("Mark all read")}</button>}
     </div>
 
     {error ? <div className="news-notice error">{error}</div> : null}

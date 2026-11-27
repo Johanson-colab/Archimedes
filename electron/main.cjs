@@ -1019,6 +1019,7 @@ app.whenReady().then(async () => {
   ipcMain.handle("news:list", (_event, filters = {}) => news.list(filters));
   ipcMain.handle("news:refresh", (_event, input = {}) => news.refresh({ force: Boolean(input?.force) }));
   ipcMain.handle("news:mark-read", (_event, input = {}) => news.markRead(String(input?.id || ""), Boolean(input?.read)));
+  ipcMain.handle("news:mark-all-read", (_event, input = {}) => news.markAllRead(String(input?.source || "")));
   ipcMain.handle("news:set-saved", (_event, input = {}) => news.setSaved(String(input?.id || ""), Boolean(input?.saved)));
   ipcMain.handle("paper-review-app:get-settings", () => paperReview.getSettings());
   ipcMain.handle("paper-review-app:save-settings", (_event, patch = {}) => paperReview.saveSettings(patch));
