@@ -1,0 +1,31 @@
+✔ actual panel requires confirmed mappings, saves once, shows all four categories and never promotes the run (137.108084ms)
+✔ a late data chooser cannot inject source rows into another project scope (4.303541ms)
+✔ a changed run snapshot refreshes an open historical comparison as stale without discarding its values (18.361459ms)
+✔ CSV/JSON comparisons distinguish missing, incomparable, within and outside with explicit units/datasets/tolerance (7.226292ms)
+✔ ambiguous or unsupported inputs and mappings fail rather than choosing a column or flattening records (0.6025ms)
+✔ decimal/scientific source and tolerance text decide exact boundaries without binary rounding or hidden slack (0.540584ms)
+✔ a saved report reopens with source/run fingerprints, while changes remain visible as stale history (77.866167ms)
+✔ actual IPC freezes chosen bytes, rejects cross-run tokens and binds saved numbers to the real current run (56.455375ms)
+✔ a real SQLite and disk package restores new local owners, source, PDFs, annotations, history and editable results (165.213208ms)
+✔ repeated restore creates another project/root and preserves existing names and files (132.444708ms)
+✔ missing linked resources are explicit and configuration files cannot be selected as manuscript source (98.3505ms)
+✔ corrupt file bytes and record hashes fail before creating a project or target directory (123.642042ms)
+✔ V01 history keeps snapshots and full local logs but cannot carry Docker/SSH cleanup ownership (168.8145ms)
+✔ owned review runs retain PDF/log/manifest with new return owners, while unrelated or legacy owners are explicit (132.948833ms)
+✔ a database constraint failure rolls back imported records and only newly created files (85.64075ms)
+✔ a historical session root remains selectable and usable after the project default root changes (100.286583ms)
+✔ a persisted directory alias and its default root restore to the same usable source directory (85.588792ms)
+✔ results can be restored without their optional conversation (84.937583ms)
+✔ changed or missing research resources do not acquire a false ready receipt on restore (82.076667ms)
+✔ actual preload/IPC capture the source data owner across a destination chooser and reject another project root (84.026ms)
+✔ serialized Windows drive and UNC source roots restore on the host without interpreting them as host paths (102.698791ms)
+✔ a conversation based on a standalone historical result restores its FK after the result, or clears it when omitted (98.257ms)
+✔ numerical source/report files migrate with new run owners and an explicit stale historical run attachment (98.273041ms)
+ℹ tests 23
+ℹ suites 0
+ℹ pass 23
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1819.906625

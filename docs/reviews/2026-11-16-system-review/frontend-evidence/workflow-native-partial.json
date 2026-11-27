@@ -1,0 +1,45 @@
+{
+  "writing": {
+    "resumedSectionAfterRestart": true,
+    "mainDocumentRetained": true,
+    "savedStateVisible": true,
+    "compilerWasNotRun": true
+  },
+  "diagnostics": {
+    "actualRepoPath": true,
+    "versionVisible": true,
+    "commitVisible": true,
+    "developmentChannel": true,
+    "branchVisible": true,
+    "sourceDirtyVisible": true
+  },
+  "discovery": {
+    "queryAfterInlineLibraryCreate": true,
+    "targetAfterCreate": true,
+    "selectionReasonVisible": true,
+    "savedCandidateVisible": true,
+    "returnedFromReader": {
+      "queryPreserved": true,
+      "targetPreserved": true,
+      "reasonPreserved": true,
+      "savedCandidatePreserved": true
+    },
+    "afterRestart": {
+      "queryPreserved": true,
+      "targetPreserved": true,
+      "reasonPreserved": true,
+      "savedCandidatePreserved": true
+    }
+  },
+  "bibliography": {
+    "importedWithoutRepairs": true,
+    "exportKeepsOriginalTitle": true,
+    "exportKeepsCitekey": true,
+    "repeatedImportRecognizesExisting": true
+  },
+  "navigation": {
+    "defaultFigureIsPlanningWorkspace": true,
+    "specificSidebarLabels": true,
+    "referenceNavigationVisible": false
+  }
+}

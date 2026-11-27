@@ -20,14 +20,24 @@ async function readDownload(response, maxBytes = 64 * 1024 * 1024) {
   }
   return Buffer.concat(chunks);
 }
-async function ensureManagedEngine({ runtimeRoot, resourcesPath, platform = process.platform, arch = process.arch, fetchImpl = fetch, onProgress = () => {}, engineManifest = manifest }) {
+async function abortable(promise, signal) {
+  if (!signal) return promise;
+  signal.throwIfAborted();
+  return Promise.race([promise, new Promise((_, reject) => {
+    const abort = () => reject(signal.reason || Object.assign(new Error("Aborted"), { name: "AbortError" }));
+    signal.addEventListener("abort", abort, { once: true });
+    promise.then(() => signal.removeEventListener("abort", abort), () => signal.removeEventListener("abort", abort));
+  })]);
+}
+
+async function ensureManagedEngine({ runtimeRoot, resourcesPath, platform = process.platform, arch = process.arch, fetchImpl = fetch, onProgress = () => {}, engineManifest = manifest, signal }) {
   const target = `${platform}-${arch}`;
   const asset = engineManifest.platforms[target];
   if (!asset) throw new Error(`The managed LaTeX engine does not support ${target}.`);
   const name = platform === 'win32' ? 'tectonic.exe' : 'tectonic';
   const destination = path.join(runtimeRoot, 'engines', engineManifest.version, target, name);
   if (verified(destination, asset.executableSha256)) return destination;
-  if (inflight.has(destination)) return inflight.get(destination);
+  if (inflight.has(destination)) return abortable(inflight.get(destination), signal);
   const install = (async () => {
     const bundled = resourcesPath && path.join(resourcesPath, 'latex-engine', asset.url.endsWith('.zip') ? 'engine.zip' : 'engine.tar.gz');
     let archive;
@@ -51,7 +61,8 @@ async function ensureManagedEngine({ runtimeRoot, resourcesPath, platform = proc
     return destination;
   })();
   inflight.set(destination, install);
-  try { return await install; } finally { inflight.delete(destination); }
+  install.then(() => inflight.delete(destination), () => inflight.delete(destination));
+  return abortable(install, signal);
 }
 function verifyEngineArchive(archive, asset) {
   if (digest(archive) !== asset.sha256) throw new Error('LaTeX compiler archive checksum verification failed.');
@@ -95,14 +106,15 @@ function outputStage(text) {
 function createManagedCompiler(options) {
   let tail = Promise.resolve();
   const pending = new Map();
-  return (workspace, sourcePath, onProgress = () => {}) => {
+  return (workspace, sourcePath, onProgress = () => {}, signal) => {
     let requestedSource;
     try {
+      signal?.throwIfAborted();
       sourcePath = require('./latex-workspace.cjs').normalizePaperPath(sourcePath);
       requestedSource = captureManuscriptSources(workspace, sourcePath);
       workspace = requestedSource.workspace;
     } catch (error) { return Promise.reject(error); }
-    const key = JSON.stringify([workspace, sourcePath, requestedSource.source_version]);
+    const key = signal || JSON.stringify([workspace, sourcePath, requestedSource.source_version]);
     if (pending.has(key)) {
       pending.get(key).listeners.add(onProgress);
       return pending.get(key).task;
@@ -111,8 +123,10 @@ function createManagedCompiler(options) {
     const progress = (stage, log) => { for (const listener of listeners) listener(stage, log); };
     const task = tail.then(async () => {
       pending.delete(key);
+      signal?.throwIfAborted();
       progress('Preparing compiler');
-      const executable = await ensureManagedEngine({ ...options, onProgress: progress });
+      const executable = await ensureManagedEngine({ ...options, onProgress: progress, signal });
+      signal?.throwIfAborted();
       const cache = path.join(options.runtimeRoot, 'tex-cache');
       fs.mkdirSync(cache, { recursive: true });
       const bundle = options.bundle || manifest.bundleUrl;
@@ -121,7 +135,7 @@ function createManagedCompiler(options) {
       progress(stage, `Managed Tectonic ${manifest.version}\n${Object.keys(proxyEnv).length ? 'Using system HTTP proxy.' : 'Using existing network/proxy configuration.'}\n`);
       const result = await require('./latex-workspace.cjs').compileLatexDocument(workspace, sourcePath, {
         executable, managed: true, bundle,
-        requestedSource,
+        requestedSource, signal,
         spawnImpl: options.spawnImpl,
         timeoutMs: options.timeoutMs || 600_000, idleTimeoutMs: options.idleTimeoutMs || 120_000,
         onOutput: (log) => { stage = outputStage(log) || stage; progress(stage, log); },

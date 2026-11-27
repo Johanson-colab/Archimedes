@@ -1,0 +1,14 @@
+[
+  {
+    "probe": "stale-reload-while-typing",
+    "actualDraft": "A edit typed after returning",
+    "newerDraftRetained": true
+  },
+  {
+    "probe": "stale-reload-after-return",
+    "actualDraft": "A edit typed after returning",
+    "newerDraftRetained": true
+  }
+]
+(node:15272) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)

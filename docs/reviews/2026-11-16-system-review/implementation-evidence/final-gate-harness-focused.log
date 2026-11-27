@@ -1,0 +1,19 @@
+✔ News is a Discovery & tracking app ordered between Daily papers and Benchmark Radar (1.105791ms)
+✔ News view is registry-hosted with a real bridge, not a static import (0.272542ms)
+✔ News defaults to the single-column feed and offers a board toggle (0.547875ms)
+✔ News controls live in the page, not the global toolbar (0.257041ms)
+✔ News cards render the source structure and its original media (0.592958ms)
+✔ News actions save to Library, ask the agent and open the original (0.09125ms)
+✔ News API surface is wired through preload and main (0.969666ms)
+✔ News keeps secrets out of the renderer and ships default feeds (0.111959ms)
+✔ News strings are translated (0.225167ms)
+✔ a clicked directory link expands nested Files entries and can still open a skill file (246.059ms)
+✔ newer path requests win over slower directory inspection (0.888417ms)
+ℹ tests 11
+ℹ suites 0
+ℹ pass 11
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 614.041792

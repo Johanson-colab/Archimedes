@@ -1,0 +1,9 @@
+# O18 publication review
+
+- Worktree `Archimedes-pr-splits/manuscript-review-revisions`; feature `codex/manuscript-review-revisions` at `704b3ef3d022543072d6022db41a4668df309e95`.
+- Actual review base `codex/manuscript-review-base` at `d077fe18db8c4d4ddba1b0bc5421b89dc4b6304a`. Contains final O04/O17/B1/A02/O02 heads. `merge-base --is-ancestor` passes; three-dot diff is **31 files, 741 insertions / 64 deletions**, without inherited foundation files.
+- Production paths: manuscript handoff and consumed retention helpers; paper-review orchestration/store/main visibility; selected-feedback/return UI; narrow App callbacks; based-on-thread receipt schema/creation; writer's reviewed-PDF action and guards. O22 setup and N01 service extraction are not prerequisites.
+- Root-requested lifecycle correction is included: deletion removes only `{kind:paper-review,run_id}` from its saved input directory, without checking current sources. One actual create-two-runs/delete/prune/remove-sources/delete path preserves the other consumer pin, then makes an unreferenced old preview disposable. Cancellation stays unchanged.
+- `O18-focused-final.log`: 27/27 (includes actual FS/SQLite/App callbacks, snapshots, review view and writing). `O18-affected-audits.log`: 8/8. `O18-npm-test-final.log`: **1319 = 1306 pass / 6 inherited failures / 7 skips**. Final lint/build/theme passed. The later O02/O04 screenshot-only dependency merges changed no product source, so no repeated gate was needed.
+- Two matched 1440×1000 Charcoal pairs (writer toolbar and same synthetic review row) plus actual prepared-source capture are committed. Feedback seeded into actual review SQLite; separate source PDF came from managed Tectonic (322 ms). Harness HTML/TSX remains untracked and excluded.
+- Body `O18-PR.md`; not pushed or published, ready for review.

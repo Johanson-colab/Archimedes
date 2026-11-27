@@ -1,0 +1,17 @@
+✔ discovery creates a library inline, saves provenance, and remounts without searching across data roots (199.224958ms)
+✔ project reasons remain separate while personal notes stay shared, including after reopening the database (47.803375ms)
+✔ BibTeX supports nested values, grouped authors, stable keys and explicit unsupported syntax (1.566792ms)
+✔ BibTeX preserves literal braces and backslashes across its own export while retaining grouped capitalization (0.372666ms)
+✔ BibTeX only identifies arXiv eprints and normalizes the same identifiers as the actual store (27.763834ms)
+✔ citation keys are scoped to the target export, while paper identity still deduplicates across projects (49.703375ms)
+✔ real Library BibTeX preview preserves existing edits and notes; only selected metadata repair is applied (55.973625ms)
+✔ conference discovery restores the candidate page and saves official-source provenance without re-querying (74.642875ms)
+✔ leaving a BibTeX import stops subsequent operations after an in-flight add returns (41.970291ms)
+ℹ tests 9
+ℹ suites 0
+ℹ pass 9
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1290.917042

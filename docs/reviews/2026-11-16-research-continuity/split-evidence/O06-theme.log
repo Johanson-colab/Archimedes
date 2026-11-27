@@ -1,0 +1,12 @@
+
+> archimedes-research@0.1.0 check:theme
+> node scripts/check-theme-tokens.mjs
+
+Theme token checks passed
+  ✓ tokens.css imported before styles.css
+  ✓ 22 semantic tokens in both themes
+  ✓ 17 legacy --night-* aliases resolve to semantic tokens
+  ✓ no theme token re-declarations outside tokens.css
+  ✓ src/styles.css hardcoded colors 3588/3629
+  ✓ src/typography.css hardcoded colors 7/7
+  · src/styles.css is below baseline (3588 < 3629); lower scripts/theme-baseline.json.

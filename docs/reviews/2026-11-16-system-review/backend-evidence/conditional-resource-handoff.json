@@ -1,0 +1,25 @@
+{
+  "memt": {
+    "title": "MemT-1.0: Towards Memory-Native Evolution",
+    "official_source": "https://arxiv.org/abs/2610.26825v2",
+    "official_repository": "https://github.com/MemTensor/MemT-1.0",
+    "download_url": "https://arxiv.org/pdf/2610.26825v2",
+    "fixture": "/private/var/folders/y6/7f277x5n4z14sqwsw21h8ffm0000gn/T/archimedes-v03-resources-6KgBeb/conditional-fixtures/memt-2610.26825v2.pdf",
+    "bytes": 7096280,
+    "sha256": "959206da6621d9ba52c070e2b617792717111cf28792b61a4fd8e5f2b0adefdb",
+    "result": "original pdf-equations.test.cjs 10/10 passed, zero skip, including pages6-8 15 displays at5 zoom levels"
+  },
+  "kimi_pptd": {
+    "result": "not run; exact official local tool unavailable",
+    "checked_candidates": [
+      "/Applications/Kimi.app",
+      "/Users/fei/Applications/Kimi.app",
+      "/Applications/Kimi.app/Contents/Resources/resources/daimon-bundle/app/daimon/assets/builtin-skills/pptx/scripts/kimi_ppt_dsl.pyz",
+      "/Applications/Kimi.app/Contents/Resources/resources/daimon-bundle/runtime/python/cpython-3.12/bin/python3"
+    ],
+    "all_candidates_exist": false,
+    "official_help": "https://www.kimi.com/en/help/ppt/ppt-overview",
+    "limit": "No confirmed directly distributed official pyz was found in the bounded lookup; unofficial reverse-engineered exporters were not used. No login or large desktop installation was attempted."
+  },
+  "cleanup": "Task-owned resources retained for final unified tests; no third-party binary/PDF added to repository."
+}

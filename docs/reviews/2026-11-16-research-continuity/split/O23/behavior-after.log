@@ -1,0 +1,30 @@
+✔ proactive is opt-in and starts off (0.936458ms)
+✔ the floating layer drags, resizes, clamps, and persists (0.333917ms)
+✔ research path keeps the thread state and drops the old chrome (0.174292ms)
+✔ the research path state is lifted to the thread owner (0.595ms)
+✔ proactive output always carries evidence, why-now, and one primary action (0.17375ms)
+✔ the engine dedupes, expires, budgets, and learns from dismissal (0.096292ms)
+✔ the hook gates on composer focus and uses the dock as the shown boundary (0.105458ms)
+✔ L0 signals are emitted by the surfaces that own the evidence (0.130708ms)
+✔ toolbar opens the floating panels without stealing focus (0.640375ms)
+✔ proactive settings expose mode, budget, quiet hours, and L0 sources (0.125958ms)
+✔ the proactive header is output-first and uses an amber status mark (0.847917ms)
+✔ panels float over the workspace and share one surface (2.472875ms)
+✔ proactive shows the latest output only and hides the composer until asked (0.090541ms)
+✔ proactive suggestions are read-only and replies use the Proactive model (2.196834ms)
+✔ proactive action labels follow the interface language (0.066ms)
+✔ live observation follows the local activity pulse (0.09575ms)
+✔ L2 captures the Archimedes window only, never the desktop (0.295917ms)
+✔ Proactive model lives inside the Proactive agent page (0.0605ms)
+✔ the research path is thread-scoped and can be pinned globally (0.246291ms)
+✔ configured model starts auto from the dock and random mode opens on signals (0.244375ms)
+✔ work modes offer routing choices without synthetic research acceptance (1.27475ms)
+✔ work mode buttons route the next message without accepting research and preserve pinned-session navigation (251.020084ms)
+ℹ tests 22
+ℹ suites 0
+ℹ pass 22
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 873.047084

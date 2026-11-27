@@ -1,0 +1,15 @@
+✔ wide chat content cannot push history and composer out of the viewport (1966.690708ms)
+✔ shared note editor never reports edits before the document loads (0.457209ms)
+✔ paper writing only mounts the co-edit pane for a loaded document (0.1435ms)
+✔ shared dialog hook implements escape, tab trapping, scroll lock and focus return (0.782333ms)
+✔ all modal surfaces use the shared dialog shell (5.459625ms)
+✔ welcome composer stays quiet while resizers keep explicit focus styling (1.910334ms)
+✔ paper project dialog is dismissible before a project exists (0.302833ms)
+ℹ tests 7
+ℹ suites 0
+ℹ pass 7
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2086.309875

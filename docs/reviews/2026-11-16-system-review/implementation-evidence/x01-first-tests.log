@@ -1,0 +1,12 @@
+✔ a real SQLite and disk package restores new local owners, source, PDFs, annotations, history and editable results (98.938417ms)
+✔ repeated restore creates another project/root and preserves existing names and files (76.497625ms)
+✔ missing linked resources are explicit and configuration files cannot be selected as manuscript source (64.613667ms)
+✔ corrupt file bytes and record hashes fail before creating a project or target directory (64.225917ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 426.788458

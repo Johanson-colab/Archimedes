@@ -1,0 +1,15 @@
+✔ Stop while checkout or backend preparation is deferred prevents every later stage and persists one stopped result (43.93375ms)
+✔ a real pilot waiting for its model reports cancellation as stopped and does not retry an incomplete model (1.008417ms)
+✔ shutdown is bounded for an unresponsive preparation and late completion cannot start a pilot or duplicate cleanup (50.290792ms)
+✔ a detached run retains its original database and persisted resource ownership until cleanup finishes (55.102083ms)
+✔ reopening recovers only persisted resources owned by this database and exact run (33.511ms)
+✔ a directly copied database cannot reclaim an original data workspace's still-active run resources (39.983167ms)
+✔ the actual quit handler waits for bounded run shutdown before closing stores and prevents duplicate cleanup (2.301583ms)
+ℹ tests 7
+ℹ suites 0
+ℹ pass 7
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 362.49725

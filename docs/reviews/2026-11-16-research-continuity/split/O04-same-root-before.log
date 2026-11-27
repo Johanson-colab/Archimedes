@@ -1,0 +1,30 @@
+✖ projects sharing one execution folder restore their own manuscript selection (186.26375ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 954.847084
+
+✖ failing tests:
+
+test at electron/paper-writing-workspace.test.cjs:316:1
+✖ projects sharing one execution folder restore their own manuscript selection (186.26375ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + 'paper/main.tex'
+  - 'other/main.tex'
+  
+      at TestContext.<anonymous> (/Users/fei/Desktop/Archimedes-pr-splits/continue-existing-manuscripts/electron/paper-writing-workspace.test.cjs:328:10)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'paper/main.tex',
+    expected: 'other/main.tex',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

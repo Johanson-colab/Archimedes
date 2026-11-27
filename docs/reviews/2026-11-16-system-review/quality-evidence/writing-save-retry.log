@@ -1,0 +1,21 @@
+{
+  "probe": "failed-save-retry-and-newest-snapshot",
+  "failureRetained": true,
+  "calls": [
+    {
+      "owner": "A",
+      "content": "First edit"
+    },
+    {
+      "owner": "A",
+      "content": "Retry snapshot"
+    },
+    {
+      "owner": "A",
+      "content": "Newest queued edit"
+    }
+  ],
+  "finalState": "saved",
+  "errorCleared": true,
+  "otherRootUntouched": true
+}

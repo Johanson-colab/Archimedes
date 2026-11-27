@@ -1,0 +1,9 @@
+{
+  "directory": "/tmp/archimedes-final-resource-audit",
+  "entry": "/tmp/archimedes-final-resource-audit/entry.cjs",
+  "archive": "/tmp/archimedes-final-resource-audit/resource-audit.asar",
+  "sourceArchive": "/Users/fei/Desktop/Archimedes/release/mac-arm64/Archimedes.app/Contents/Resources/app.asar",
+  "worker": "semantic-worker-Bq-2bQd4.js",
+  "wasm": "ort-wasm-simd-threaded.jsep-Dt1SEu-e.wasm",
+  "module": "ort-wasm-simd-threaded.jsep-BdMRXSUM.mjs"
+}

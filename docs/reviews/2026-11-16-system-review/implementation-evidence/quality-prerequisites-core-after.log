@@ -1,0 +1,43 @@
+✔ git state distinguishes none, empty, and ready folders (420.017ms)
+✔ a linked worktree is reported as nested instead of a project root (150.280667ms)
+✔ a broken .git entry is suspicious (9.302375ms)
+✔ directory aliases share Git state without accepting a parent repository (257.524042ms)
+✔ translation shards cover every string exactly once (17.39625ms)
+✖ keys stay sorted inside each shard so concurrent additions do not collide (26.70775ms)
+✔ the shell merges every shard and keeps the surfaces translated (19.411875ms)
+✔ Windows prefers PowerShell 7 when it is installed (11.836334ms)
+✔ Windows falls back to Windows PowerShell before cmd (1.003583ms)
+✔ Windows uses COMSPEC only as the last built-in fallback (0.257667ms)
+✔ explicit shell profiles do not fall through to a different shell (5.994125ms)
+✔ custom shell paths are honored when they exist (0.867125ms)
+✔ macOS and Linux use the login shell with -l (3.428083ms)
+✔ missing POSIX shells fall back to /bin/sh (0.183791ms)
+✔ Windows shell candidates use target paths for store installs and alternate drives (0.865458ms)
+ℹ tests 15
+ℹ suites 0
+ℹ pass 14
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1010.365708
+
+✖ failing tests:
+
+test at electron/i18n-translations.test.cjs:36:1
+✖ keys stay sorted inside each shard so concurrent additions do not collide (26.70775ms)
+  AssertionError [ERR_ASSERTION]: sessionSnapshot.ts is out of order at "copy markdown"
+      at TestContext.<anonymous> (/Users/fei/Desktop/Archimedes/electron/i18n-translations.test.cjs:40:14)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }

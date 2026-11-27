@@ -1,0 +1,35 @@
+✔ review retains the real build with its generated run ID and keeps its data-store lease through background ingestion (620.991833ms)
+✔ failed run creation rolls back only its pin, and stale or mismatched inputs cannot create a new review (42.993917ms)
+✔ the global review database filters same-project-ID histories by data root without fabricating provenance for legacy rows (35.792167ms)
+✔ deleting a real review releases only its input pin, including after manuscript sources are removed (81.789333ms)
+✔ actual review view prioritizes the manuscript request over old history and sends selected versioned feedback back to its owner (144.403208ms)
+✔ actual App manuscript discussion/revision uses an empty based-on historical-root session and reuses it without replacing drafts (231.504042ms)
+✔ manuscript version covers sections, bibliography and images while excluding generated/environment caches (31.8405ms)
+✔ successive builds retain immutable PDF/log bytes and a fresh source/PDF handoff check (26.682708ms)
+✔ changes during compilation produce a stale receipt instead of a current PDF (9.254458ms)
+✔ removing a source while compiling retains an inspectable stale build (13.216334ms)
+✔ untracked symbolic-link inputs cannot be handed off as a verified current build (20.420125ms)
+✔ the actual preload and snapshot handler recheck disk bytes at handoff time (15.538917ms)
+✔ queued builds coalesce unchanged inputs, distinguish changed section/bib, and preserve root ownership (82.302417ms)
+✔ only five completed previews remain while active builds survive (98.378875ms)
+✔ same-named papers keep their owner and autosave on departure without replaying an old open request (234.56425ms)
+✔ a delayed save preserves later keystrokes and drains the newest snapshot to its old root (844.609375ms)
+✔ late reads, compile progress and build results update only their owner scope (65.011041ms)
+✔ failed departure autosaves keep the original draft and expose its save error on return (31.951584ms)
+✔ switching source files during an in-flight save retains and saves the final edit to the old file (845.751875ms)
+✔ the actual preload and compile handler preserve owner ids and legacy two-argument calls (3.23775ms)
+✔ Writing opens existing manuscripts before templates and restores the chosen document after remount (49.825ms)
+✔ a main document at the execution root opens in place and a removed recent document returns to the chooser (32.101375ms)
+✔ compiling main waits for a pending save of another source file in the same manuscript (67.500333ms)
+✔ typing during the compile save barrier retains the new edit and does not compile an older source set (79.152042ms)
+✔ projects sharing one execution folder restore their own manuscript selection (78.996958ms)
+✔ Writing hands off only a fresh whole-manuscript snapshot and keeps source/PDF identity for returning (83.729375ms)
+✔ a late snapshot check cannot hand off a newer unsaved editing version as its old PDF (45.565125ms)
+ℹ tests 27
+ℹ suites 0
+ℹ pass 27
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 3282.094375

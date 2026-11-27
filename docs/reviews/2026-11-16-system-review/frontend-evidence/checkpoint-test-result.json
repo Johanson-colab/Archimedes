@@ -1,0 +1,11 @@
+{
+  "command": [
+    "npm",
+    "test"
+  ],
+  "exitCode": 1,
+  "durationSeconds": 24.98,
+  "log": "/tmp/archimedes-checkpoint-tests.log",
+  "kind": "Intermediate checkpoint, not final PR validation",
+  "credentialEnvironment": "Model/provider key, token, password and secret environment flags removed; isolated tests only"
+}

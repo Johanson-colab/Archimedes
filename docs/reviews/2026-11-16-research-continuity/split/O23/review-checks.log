@@ -1,0 +1,37 @@
+✔ mode selection inserts an editable research example without overwriting a draft (269.2725ms)
+✔ conversation composers keep their resting border while focused (2.41875ms)
+✔ chat-like side inputs share the quiet focus contract (4.170958ms)
+✔ chat send controls are unfilled up-arrows (2.597417ms)
+✔ main composer supports a minimal voice button beside send (1.107458ms)
+✔ composer input has IME protection and grows with the draft (0.840042ms)
+✔ composer uses harness selection while execution preferences live in Models (0.433709ms)
+✔ context usage exposes a readable breakdown without runtime chrome (1.88575ms)
+✔ composer drafts are persisted per thread and restored after a failed send (0.809792ms)
+✔ composer accepts dropped and pasted files through the existing bridge (3.451583ms)
+✔ composer exposes history recall, focus shortcut and disabled-send reason (3.920291ms)
+✔ composer queues follow-ups while the agent is busy (1.699875ms)
+✔ composer exposes slash commands and an @ context shortcut (4.742042ms)
+✔ slash menu presents the requested commands and connects all actions (17.741916ms)
+✔ IdeaSpark is opt-in from the Research slash menu and never auto-runs (9.642708ms)
+✔ chat modes retain explicit choices and map legacy conversations using skill records (462.503291ms)
+✔ composer exposes the current file and a clear-all attachment action (1.9845ms)
+✔ composer can attach the current editor selection and shows attachment size (1.462292ms)
+✔ journey lives in Workbench > Research path with all controls (2.4265ms)
+✔ journey defaults are shared by the renderer and the electron store (1.075042ms)
+✔ journey story uses chapters, a scrubber, evidence, and a pinned next move (1.747916ms)
+✔ journey settings control view, merging, cadence, and pins (0.548583ms)
+✔ journey summaries are loaded, updated on cadence, and stored per thread (0.440416ms)
+✔ claims and manual chapter titles are first-class journey data (1.360708ms)
+✔ manual merge and split persist by event range (0.43275ms)
+✔ journey chapter rows keep actions clear of meta and only dot attention episodes (1.769375ms)
+✔ selected journey chapters do not draw an accent left border (10.778625ms)
+✔ work mode buttons route the next message without accepting research and preserve pinned-session navigation (405.5005ms)
+✔ selected work modes reach the actual composer submit and runAgent request unchanged (6.124833ms)
+ℹ tests 29
+ℹ suites 0
+ℹ pass 29
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1683.624417

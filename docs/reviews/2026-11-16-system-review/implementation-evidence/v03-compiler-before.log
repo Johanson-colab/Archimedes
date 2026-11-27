@@ -1,0 +1,7 @@
+{
+  "fixture": "controlled compiler, not real TeX",
+  "firstPdfPath": ".archimedes/latex-build/defc3a7a99c3/main.pdf",
+  "secondPdfPath": ".archimedes/latex-build/defc3a7a99c3/main.pdf",
+  "oldPathChanged": true,
+  "changedInputsSharePromise": true
+}

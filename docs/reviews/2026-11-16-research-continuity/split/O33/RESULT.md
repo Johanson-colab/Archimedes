@@ -1,0 +1,7 @@
+- Local head `f14da97cad4c14e11a04c3096a395fc0a917d303`.
+- Branch/worktree `codex/snapshot-read-budgets` / `/Users/fei/Desktop/Archimedes-pr-splits/snapshot-read-budgets`; independent main `1f4b375`.
+- Scope only snapshot environment exclusion, pre-read byte/entry budget and tracking-mode comparison, plus actual `propose_command` action/event coverage. No repository checkout or clone cancellation, data model/IPC or worker infrastructure.
+- 11 focused checks pass, including three actual budget/command behaviors and existing filesystem/capability checks. Lint/build/theme pass. Standard npm test: 1,273 = 1,259 pass / identical seven base failures / seven skips.
+- Actual production-function measurement against untouched base: 39,000,000→7,200,000 bytes read; 150→8 content reads. New run log `measure.log`, reproducible public script `scripts/measure-workspace-snapshot.cjs`, public table `docs/assets/workspace-snapshot-budget/behavior.md`. Time varies with the local machine and is not used as a general UI performance claim.
+- Review correction: retained all coverage on receipts, added byteBudgetReached, and limited UI events to actual byte/file caps. The same approved-command case also checks an ordinary .git/.venv scan has no limited event; focused 11/11 passed again.
+- Published after review: https://github.com/Johanson-colab/Archimedes/pull/352 . Normal main base / exact f14da97 / five-file remote scope checked. PR body `PR_BODY.md`.

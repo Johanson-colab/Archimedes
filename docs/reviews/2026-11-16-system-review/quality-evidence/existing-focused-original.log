@@ -1,0 +1,41 @@
+✔ command result includes actual output, exit status, duration and a bounded private log (203.08725ms)
+✔ large command output is bounded for the model while the log is retained (124.227584ms)
+✔ timeout and cancellation stop a real command (306.907792ms)
+✔ approved command output reaches the next model request, and denial never executes (68.800917ms)
+✔ command cwd cannot escape the workspace through a symlink (18.722041ms)
+✔ interrupting while awaiting approval rejects the pending action and never runs the command (18.150292ms)
+✔ the agent runs a command and finishes when the evidence is real (10.135208ms)
+✔ a verdict with an invented quote is refused and the step stays open (0.624458ms)
+✔ a failing command cannot prove that a step passed (0.921042ms)
+✔ the agent can revise the runbook, and a kept id keeps its verdict (0.30675ms)
+✔ a person is asked rather than guessed at (0.108292ms)
+✔ destructive commands never reach the machine (0.160541ms)
+✔ a destructive command is refused and the run continues (0.180083ms)
+✔ the agent is stopped when it keeps running commands without moving the runbook (0.457ms)
+✔ the prompt carries what earlier runs learned and the last output (0.157334ms)
+✔ done is refused while a runbook step has no verdict (0.151875ms)
+✔ a reopened run keeps the verdicts the last one earned (0.153667ms)
+✔ an error-driven fix is written back to the runbook (0.343792ms)
+✔ a long output is kept on the machine and its path is offered (0.653417ms)
+✔ a short output is not copied anywhere (0.20525ms)
+✔ a finding counts as progress, so diagnosis does not look like a stall (0.438667ms)
+✔ the stall message says which command it gave up on (0.443458ms)
+✔ the agent sees which keys are set, never their values (0.13575ms)
+✔ each turn announces itself so the run panel can show progress (0.17975ms)
+✔ read_paper puts the requested slice in front of the model, not the whole paper (0.497125ms)
+✔ read_file returns numbered lines and a paging hint (0.401958ms)
+✔ write_file writes inside the checkout and announces it (0.162584ms)
+✔ edit_file refuses ambiguous text and records a unique replacement (0.401667ms)
+✔ a run left running by a killed app is reconciled on the next open (56.089667ms)
+✔ a verified reproduction is left alone (20.546583ms)
+✔ native execution is canceled on owning window destruction without sending to closed contents (1.485458ms)
+✔ normal completion, rejection and already closed windows cannot retain lifecycle listeners (0.357625ms)
+✔ API execution is canceled when its owning window closes (0.123583ms)
+ℹ tests 33
+ℹ suites 0
+ℹ pass 33
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1351.05575

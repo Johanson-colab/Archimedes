@@ -1,0 +1,17 @@
+(node:57973) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ same-ID running turns deliver completed/failed/incomplete to another SQLite client, survive retries and old snapshots (300.276541ms)
+✔ library and membership tombstones survive reconnect/old pull while explicit re-add and other references remain valid (128.562667ms)
+✔ real main sync IPC captures A dataRoot through delayed pull, B open and A close (73.395458ms)
+✔ turn revisions reject terminal regression and cross-thread identity mixing (0.179084ms)
+✔ a first upload removed before its ACK remains deleted, including delayed library creation (59.694375ms)
+✔ viewer sync can import and observe deletion without exposing local editor operations or pushing libraries (61.73825ms)
+✔ deletion journal survives reopening and a delayed deletion ACK cannot swallow an explicit re-add (79.328917ms)
+ℹ tests 7
+ℹ suites 0
+ℹ pass 7
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 895.058333

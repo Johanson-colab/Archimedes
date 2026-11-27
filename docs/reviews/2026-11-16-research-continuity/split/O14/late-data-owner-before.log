@@ -1,0 +1,30 @@
+✔ real bridge saves to the canonical project root, registers only actual sessions, and cannot cross data stores (57.997833ms)
+✔ updates retain historical roots, validate session ownership before writes, and survive session deletion/reopen (53.235375ms)
+✔ viewers can reopen result files and see changed hashes but cannot save or inject credentials (47.0575ms)
+✔ an analysis result creates a persisted discussion in its original registered folder (51.654875ms)
+✔ complete accepted CSV sources above the old read cap remain available to workspace tools (68.742958ms)
+✖ a delayed summary discussion links its original result after the window changes data stores (256.790875ms)
+ℹ tests 6
+ℹ suites 0
+ℹ pass 5
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 664.098292
+
+✖ failing tests:
+
+test at electron/project-result-commands.test.cjs:117:1
+✖ a delayed summary discussion links its original result after the window changes data stores (256.790875ms)
+  Error: Project result not found in this data workspace.
+      at required (/Users/fei/Desktop/Archimedes-pr-splits/project-data-analysis/electron/project-result-commands.cjs:11:24)
+      at /Users/fei/Desktop/Archimedes-pr-splits/project-data-analysis/electron/project-result-commands.cjs:18:20
+      at /Users/fei/Desktop/Archimedes-pr-splits/project-data-analysis/electron/workspace-context.cjs:43:45
+      at AsyncLocalStorage.run (node:internal/async_local_storage/async_context_frame:66:14)
+      at facade.run (/Users/fei/Desktop/Archimedes-pr-splits/project-data-analysis/electron/store.cjs:44:47)
+      at /Users/fei/Desktop/Archimedes-pr-splits/project-data-analysis/electron/workspace-context.cjs:43:35
+      at /Users/fei/Desktop/Archimedes-pr-splits/project-data-analysis/electron/project-result-commands.test.cjs:28:85
+      at async TestContext.<anonymous> (/Users/fei/Desktop/Archimedes-pr-splits/project-data-analysis/electron/project-result-commands.test.cjs:141:3)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7)

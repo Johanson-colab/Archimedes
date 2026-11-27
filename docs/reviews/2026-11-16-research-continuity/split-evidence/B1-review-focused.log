@@ -1,0 +1,14 @@
+✔ menu proposals and late reader previews preserve the accepted owner; recovery IPC needs no database (72.094167ms)
+✔ an in-flight window request retains its database through another selection and its window close (57.956583ms)
+✔ canonical aliases share one data store and same-ID runtime identities remain distinct across roots (43.80625ms)
+✔ a synchronously failing IPC invocation releases its store lease (25.145291ms)
+✔ real terminal child persists in its data store after IPC returns and its execution folder has no database (154.163709ms)
+✔ same imported thread id in two data stores has independent running/stop/approval identity (98.45725ms)
+ℹ tests 6
+ℹ suites 0
+ℹ pass 6
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1098.553042

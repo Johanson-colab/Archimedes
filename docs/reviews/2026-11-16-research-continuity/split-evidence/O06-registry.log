@@ -1,0 +1,18 @@
+✔ built-in, MCP and Research App adapters use the same events and validated result contract (1.534875ms)
+✔ external tools require authorization, cannot overwrite built-ins and cannot mutate advertised schemas (0.716375ms)
+✔ bad input and failed tools record one correlated call and result without running unauthorized code (0.234ms)
+✔ aborting while an external authorization waits prevents execution (5.035292ms)
+✔ an abandoned external authorization is released on cancellation (0.366417ms)
+✔ oversized tool results are rejected instead of inflating the model context (0.479417ms)
+✔ registered external adapters are advertised and invoked through the actual API agent loop (31.814125ms)
+✔ API IdeaSpark invokes a fresh isolated model context and records correlated phase events (65.022625ms)
+✔ an existing output is not proof that an isolated phase wrote it (1.765458ms)
+✔ API harness initializes IdeaSpark only when the user explicitly selects it (55.194791ms)
+ℹ tests 10
+ℹ suites 0
+ℹ pass 10
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 761.056125

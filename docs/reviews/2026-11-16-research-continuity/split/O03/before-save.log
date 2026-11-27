@@ -1,0 +1,10 @@
+Untouched upstream 1f4b375 actual save callback:
+A disk: "Submitted A\n"
+B disk: "Original B\n"
+Current B buffer savedContent: "Submitted A\n"
+Expected values to be strictly equal:
++ actual - expected
+
++ 'Submitted A\n'
+- 'Original B\n'
+

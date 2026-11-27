@@ -1,0 +1,12 @@
+{"scenario":"same-id-final","remote":{"id":"cbcc8a19-cbe8-457c-88f9-c6dbadc70b32","mode":"free-chat","user_message":"Question","assistant_message":"Partial result","status":"incomplete","created_at":"2026-11-16T05:51:07.556Z","completed_at":"2026-11-16T05:51:07.560Z","sync_revision":2}}
+{"scenario":"library-reconnect","resurrected":false}
+✔ an already uploaded running turn reaches its same-ID incomplete final state (42.971833ms)
+✔ a deleted synced library stays deleted on reconnect (28.504708ms)
+ℹ tests 2
+ℹ suites 0
+ℹ pass 2
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 207.33

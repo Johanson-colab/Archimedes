@@ -1,0 +1,7 @@
+Files drafts, save progress, conflicts and errors now belong to the execution directory that opened them. If an A save finishes after the user opens the same relative path in B, A is updated without marking B's editor as saved. Returning to a directory retains its draft, and closing the workbench/app still notices unsaved edits in other directories. Delayed reads and directory refreshes retain their original owner.
+
+Split from https://github.com/Johanson-colab/Archimedes/pull/336 following the maintainer's request; base: upstream `main` at `1f4b375`.
+
+Validation: 18 focused real filesystem, actual callback, component and editor checks pass; lint, build and theme checks pass. Standard `npm test`: 1,276 tests, 1,262 pass, 7 fail, 7 skip. The unchanged base has the same seven failures: three canonical Git/worktree checks, three Windows shell path fixtures on macOS and the library translation ordering check.
+
+The controls and layout are unchanged. A before probe executing the actual base callback showed B's saved baseline becoming `Submitted A`; the new real-filesystem callback test keeps B's baseline `Original B` while A receives `Submitted A`. A normal external-conflict/save/reopen check also passes. The [committed behavior record](https://github.com/feiiiiii5/Archimedes/blob/e380b88cd5cdfd276de1ed0b9435278ea90aa42b/docs/assets/files-owner-saves/behavior.md) contains the before/after output.

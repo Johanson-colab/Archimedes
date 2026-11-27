@@ -1,0 +1,12 @@
+{"probe":"database-binding","rejection":null,"threadStatus":"idle","turnStatus":"completed","answer":"Completed fake-provider answer."}
+{"probe":"process-recovery","threadStatus":"idle","turnStatus":"interrupted","actionStatus":"rejected","interruptResult":false,"archiveError":""}
+✔ an in-flight API turn remains bound to its original database after another workspace opens (565.949084ms)
+✔ reopening after the owning process exits reconciles turns and stale approvals (144.351917ms)
+ℹ tests 2
+ℹ suites 0
+ℹ pass 2
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 825.533791

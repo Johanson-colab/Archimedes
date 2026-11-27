@@ -1,0 +1,15 @@
+{
+  "source": "upstream store.cjs at 1f4b375",
+  "expected": {
+    "a": [
+      "Origin A"
+    ],
+    "b": []
+  },
+  "observed": {
+    "a": [],
+    "b": [
+      "Origin A"
+    ]
+  }
+}

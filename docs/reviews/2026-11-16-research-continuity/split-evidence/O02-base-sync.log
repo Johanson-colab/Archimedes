@@ -1,0 +1,33 @@
+✔ menu proposals and late reader previews preserve the accepted owner; recovery IPC needs no database (134.145334ms)
+✔ Notes appends to its named chat, preserves explicit replace intent, and a late owner callback cannot navigate another session (290.418166ms)
+✔ attachment and pending request updates are isolated by session, including delayed adds (99.269083ms)
+✔ a failed run after switching sessions reports only to the original composer (146.108375ms)
+✔ a delayed successful run clears only submitted attachment objects in its owner (2.187584ms)
+✔ a newly created session receives later text, attachments and queued follow-ups from its original draft only (1.212708ms)
+✔ the same imported cloud thread in different data folders cannot share text, attachments or pending handoffs (1.080458ms)
+✔ failed send restoration keeps the failed prompt and later typing in the original stored scope (0.912084ms)
+✔ new project tasks use returned records before rerender, and empty side chats forward the selected workspace (223.761084ms)
+✔ late run events and completion cannot adopt an empty task in another project (255.003125ms)
+✔ a delayed approval uses its original task for command execution and completion (2.838042ms)
+✔ new selections use only the chosen project workspace and session roots retain historical ownership (59.105459ms)
+✔ Library project selection commits the returned complete task only after loading succeeds (167.559375ms)
+✔ failed opening keeps the old coherent task and transcript available (0.775375ms)
+✔ a slower open cannot take over the task chosen by a newer request (1.063959ms)
+✔ an imported thread without local workspace fields resolves its own project default, never the data folder (0.602083ms)
+✔ workbench notes persist per key and survive reload (4.190958ms)
+✔ workbench notes clear empty content and delete explicitly (2.388125ms)
+✔ workbench notes reject empty keys (0.300416ms)
+✔ owned notes claim legacy content once and keep same-ID folders isolated after reload (4.214625ms)
+✔ an in-flight window request retains its database through another selection and its window close (47.328459ms)
+✔ canonical aliases share one data store and same-ID runtime identities remain distinct across roots (40.390375ms)
+✔ a synchronously failing IPC invocation releases its store lease (26.735917ms)
+✔ real terminal child persists in its data store after IPC returns and its execution folder has no database (80.669167ms)
+✔ same imported thread id in two data stores has independent running/stop/approval identity (62.692416ms)
+ℹ tests 25
+ℹ suites 0
+ℹ pass 25
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 898.829667

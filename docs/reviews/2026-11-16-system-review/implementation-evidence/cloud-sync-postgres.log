@@ -1,0 +1,10 @@
+                                                                                        ?column?                                                                                         
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ PASS: migration/backfill, same-ID final monotonicity, aggregate status, membership delete/retry/re-add, legacy DELETE, library tombstone, retained canonical paper, viewer/outsider RLS
+(1 row)
+
+PASS: concurrent final commit versus blocked stale running update; peer editor legacy DELETE preserves tombstone.
+PASS: normal owner project deletion cascades through tombstoned/live libraries, memberships and project members.
+PASS: database-owner org deletion also cascades fully; no new end-user org-delete permission is added.
+PostgreSQL 17, CPU 1, memory 384MiB, no network/ports, isolated temporary DB. Optional unused vector extension omitted; minimal auth.uid() fixture, not hosted Auth/Realtime.
+Own container cleanup: removed

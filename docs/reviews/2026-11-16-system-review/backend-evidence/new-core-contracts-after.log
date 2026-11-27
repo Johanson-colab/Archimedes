@@ -1,0 +1,25 @@
+✔ review retains the real build with its generated run ID and keeps its data-store lease through background ingestion (604.014041ms)
+✔ failed run creation rolls back only its pin, and stale or mismatched inputs cannot create a new review (47.8305ms)
+✔ slides copy a historical manuscript to the real target session root with a durable source receipt and reject other projects (45.138208ms)
+✔ the global review database filters same-project-ID histories by data root without fabricating provenance for legacy rows (40.415625ms)
+✔ real bridge saves to the canonical project root, registers only actual sessions, and cannot cross data stores (91.927458ms)
+✔ updates retain historical roots, validate session ownership before writes, and survive session deletion/reopen (78.622458ms)
+✔ viewers can reopen result files and see changed hashes but cannot save or inject credentials (63.836833ms)
+✔ a saved 9 MiB CSV is actually readable through the research agent at its final row with bounded output (101.951875ms)
+✔ a historical saved result creates a legitimate empty source session and stages hash-bound figures without editing the manuscript (104.419625ms)
+✔ manuscript figure staging rejects symlink destinations and project mixing without changing external files (63.279625ms)
+✔ a new run cannot inherit the previous run's passed verdict, while immutable historical receipts survive reopen (90.862458ms)
+✔ actual Git commit/dirty and known paper/plan changes are recorded without claiming untracked environments (166.383625ms)
+✔ legacy reproduction binding is explicit and cannot move an existing record across project workspaces (44.109209ms)
+✔ basedOnThreadId creates an empty linked session in its real historical root and refuses conflicting owners (53.279208ms)
+✔ actual run history IPC returns each saved receipt and enforces parent project and data-root ownership (78.599667ms)
+✔ snapshot bounds actual text reads and skips generated Python environments while preserving metadata change detection (41.634166ms)
+✔ changing budget placement does not invent modifications and ordinary text still has meaningful line diffs (34.236833ms)
+ℹ tests 17
+ℹ suites 0
+ℹ pass 17
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1232.272792

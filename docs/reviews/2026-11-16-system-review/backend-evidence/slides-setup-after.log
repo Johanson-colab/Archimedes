@@ -1,0 +1,12 @@
+✔ the actual existing prerequisite script reports local presence without exposing token values or treating optional QA as a generation blocker (270.2395ms)
+✔ missing Python and missing PATH tools produce explicit actionable checks rather than a ready result (43.101708ms)
+✔ the real presence script can permit a limited generation environment while preview and QA tools remain optional (1892.322792ms)
+✔ a stalled npm root subprocess is bounded and killed with the real Python probe process group (3207.852041ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 5578.509667

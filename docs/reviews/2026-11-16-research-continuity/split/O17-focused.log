@@ -1,0 +1,39 @@
+✔ normalizes only workspace-relative TeX compile targets (3.388083ms)
+✔ creates a collision-safe paper template and discovers main documents (18.458208ms)
+✔ creates LaTeX files and folders without overwriting workspace entries (3.018625ms)
+✔ creates projects from built-in templates with a bibliography (4.828708ms)
+✔ falls back to tectonic and passes its CLI arguments (17.003958ms)
+✔ classifies known LaTeX compilers (0.090292ms)
+✔ imports a complete LaTeX folder and selects its main document (7.066667ms)
+✔ finds the imported main document even when the workspace discovery cap is exhausted (795.636ms)
+✔ extracts line-oriented LaTeX diagnostics (0.901375ms)
+﹣ built-in templates compile before and after adding a citation (0.128ms) # latexmk is not installed
+✔ a missing TeX font reports an installation fix instead of a source line (0.095917ms)
+✔ a failed recompile does not expose the PDF left by a previous successful build (7.361166ms)
+✔ a stalled compiler returns its partial log and a dependency timeout diagnostic (3.649ms)
+✔ an active first build keeps its longer budget but still reaches the total deadline (0.259542ms)
+✔ compiler logs preserve UTF-8 symbols split across stdout and stderr chunks (0.246709ms)
+✔ missing-glyph diagnostics recover the symbol from XeTeX's code point and deduplicate damaged text (0.615291ms)
+✔ extracts executable bytes from tar.gz and deflated Windows ZIP without writing archive paths (1.350333ms)
+✔ concurrent first use downloads once; verified warm cache works offline and corrupt cache is replaced (45.383125ms)
+✔ checksum and download failures leave no executable, and retry can recover (2.799875ms)
+✔ packaged archive is verified and unpacked without network access; invalid archive never downloads a replacement (2.787042ms)
+✔ unsupported platforms and oversized downloads fail explicitly (0.967833ms)
+✔ native compiler inherits Electron HTTP proxy and preserves explicit proxy environment (1.135958ms)
+✔ compiler log stages distinguish downloading, initialization and typesetting (0.213458ms)
+✔ manuscript version covers sections, bibliography and images while excluding generated/environment caches (28.51425ms)
+✔ successive builds retain immutable PDF/log bytes and a fresh source/PDF handoff check (28.322875ms)
+✔ changes during compilation produce a stale receipt instead of a current PDF (7.28025ms)
+✔ removing a source while compiling retains an inspectable stale build (6.987334ms)
+✔ untracked symbolic-link inputs cannot be handed off as a verified current build (9.7525ms)
+✔ the actual preload and snapshot handler recheck disk bytes at handoff time (10.16375ms)
+✔ queued builds coalesce unchanged inputs, distinguish changed section/bib, and preserve root ownership (68.550833ms)
+✔ only five completed previews remain while active builds survive (32.937958ms)
+ℹ tests 31
+ℹ suites 0
+ℹ pass 30
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 1
+ℹ todo 0
+ℹ duration_ms 1051.024334

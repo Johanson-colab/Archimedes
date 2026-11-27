@@ -1,0 +1,20 @@
+✔ git state distinguishes none, empty, and ready folders (192.44725ms)
+✔ a linked worktree is reported as nested instead of a project root (172.830459ms)
+✔ a broken .git entry is suspicious (9.763083ms)
+✔ directory aliases share Git state without accepting a parent repository (293.098958ms)
+✔ Windows prefers PowerShell 7 when it is installed (7.332042ms)
+✔ Windows falls back to Windows PowerShell before cmd (0.149917ms)
+✔ Windows uses COMSPEC only as the last built-in fallback (0.099375ms)
+✔ explicit shell profiles do not fall through to a different shell (1.080417ms)
+✔ custom shell paths are honored when they exist (0.15175ms)
+✔ macOS and Linux use the login shell with -l (0.142ms)
+✔ missing POSIX shells fall back to /bin/sh (0.184916ms)
+✔ Windows shell candidates use target paths for store installs and alternate drives (0.204ms)
+ℹ tests 12
+ℹ suites 0
+ℹ pass 12
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 792.589584

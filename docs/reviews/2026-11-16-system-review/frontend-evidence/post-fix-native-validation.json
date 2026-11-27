@@ -1,0 +1,139 @@
+{
+  "date": "2026-11-16",
+  "baselineCommit": "1f4b37581c446770d576440f9ebb9bca5c55bfb7",
+  "testedWorkingTreeSha256": {
+    "src/App.tsx": "a9629810ee9265f667143582de73081a9c18987aca1ddd213199b6a5aa842a2d",
+    "src/file-editor.ts": "842171cf3ff6025118ddd4104577bcd8cbe176fd0ded030604bddaef4c81ecfb",
+    "src/PaperWritingView.tsx": "702783f59accc65db2c896bfd905309580b3ff13a84a822f186ef415a34c59e8",
+    "src/paper-writing-state.ts": "3948b8ff1ba7ad02b7b755c8ca06734a234c139cd54f5fa5608594e321aad3f8",
+    "electron/main.cjs": "d340b16bf202adbc3011e0b5cc586bb0ca954f16d0772d13fcae30f9db8ff6d0",
+    "electron/preload.cjs": "ea3c1c081b9462d28a46a9e13218c89c4174086b3182a23b9d7387924af4da27",
+    "src/vite-env.d.ts": "07a038bd7bb7840144f9a2b701e6af4732757e559660c9589f54bee361ee232a"
+  },
+  "environment": "Electron 43.4.1, actual main/preload/renderer, isolated local userData/data/A-B project folders, CUA native UI controls. No model requests, sign-in, or TeX compilation.",
+  "filesBasic": {
+    "steps": [
+      "A README edit FIXED_A_DRAFT_RETAINED without Save",
+      "Switch to B; open same README; its preview/editor shows Original B",
+      "Edit/save FIXED_B_OWN_SAVE in B",
+      "Return to A and reopen README; its unsaved FIXED_A_DRAFT_RETAINED is still visible",
+      "Save A"
+    ],
+    "diskAfterBSaveBeforeASave": {
+      "a": "# Project A\n\nOriginal A content.\n",
+      "b": "# Project B\n\nFIXED_B_OWN_SAVE"
+    },
+    "aUnsentDraftRestoredInUI": true,
+    "bEditorShowsOriginalB": true,
+    "screenshot": "files-project-b-after-fix.png"
+  },
+  "filesDelayedSave": {
+    "steps": [
+      "Edit/save A once, then edit DELAYED_A_SAVE_MARKER",
+      "Click A Save; the temporary wrapper holds exactly that write-file IPC before invoking the real handler",
+      "Switch to B and type B_TYPED_WHILE_A_SAVE_PENDING into its README",
+      "Release the timing gate; actual original write handler saves A",
+      "Observe B remains Unsaved, Save enabled, and keeps its new draft",
+      "Save B independently"
+    ],
+    "timingOnlyWrapper": true,
+    "realWriteHandlerUnchanged": true,
+    "pendingActualRequest": {
+      "workspace": "/tmp/archimedes-ui-review.lPAjgP/project-a",
+      "path": "README.md",
+      "content": "# Project A\n\nDELAYED_A_SAVE_MARKER"
+    },
+    "diskBeforeRelease": {
+      "a": "# Project A\n\nFIXED_A_DRAFT_RETAINED\n",
+      "b": "# Project B\n\nFIXED_B_OWN_SAVE"
+    },
+    "diskAfterReleaseBeforeBSave": {
+      "a": "# Project A\n\nDELAYED_A_SAVE_MARKER",
+      "b": "# Project B\n\nFIXED_B_OWN_SAVE"
+    },
+    "uiAfterAResponse": {
+      "owner": "B",
+      "newInputRetained": true,
+      "unsaved": true,
+      "saveEnabled": true
+    },
+    "finalDisk": {
+      "a": {
+        "content": "# Project A\n\nDELAYED_A_SAVE_MARKER",
+        "sha256": "8dd3355bfa19a50c83ae5bf804646c29e067213e49245345f3236c1040d7244f"
+      },
+      "b": {
+        "content": "# Project B\n\nB_TYPED_WHILE_A_SAVE_PENDING",
+        "sha256": "e07e1f57f4cafadb20291ef3f421ca3e74a2c9bd7a1c12e078f1c7064cb3c057"
+      }
+    }
+  },
+  "writing": {
+    "steps": [
+      "Open B through its existing chat .tex link",
+      "Uncheck Auto compile",
+      "Edit PENDING_B_LATEX_CROSS_ROOT_MARKER and immediately select A Workspace",
+      "Read files before returning to B",
+      "Open Writing in A: its chooser appears, without stale B editor",
+      "Return B Workspace then Writing: B marker visible with Saved state"
+    ],
+    "diskAfterSwitchBeforeReturningB": {
+      "a": {
+        "content": "\\documentclass{article}\n\\begin{document}\nProject A original.\n\\end{document}\n",
+        "sha256": "a3a5b3dbf415ffa7542153829011e03a8ff38b3f2be01f55578fb646f299d0b6"
+      },
+      "b": {
+        "content": "\\documentclass{article}\n\\begin{document}\nPENDING_B_LATEX_CROSS_ROOT_MARKER\n\\end{document}\n",
+        "sha256": "9384331292413e98318705b9e87cc79f9096409e35a8f1d628187b34d9d98323"
+      }
+    },
+    "aDidNotReplayOldBOpenRequest": true,
+    "bWasSavedWhileAway": true,
+    "bRestoredMarkerAndSavedInUI": true,
+    "autoCompileRemainedOff": true
+  },
+  "checks": {
+    "commands": [
+      {
+        "name": "lint",
+        "command": [
+          "npm",
+          "run",
+          "lint"
+        ],
+        "exitCode": 0
+      },
+      {
+        "name": "build",
+        "command": [
+          "npm",
+          "run",
+          "build"
+        ],
+        "exitCode": 0
+      },
+      {
+        "name": "theme",
+        "command": [
+          "node",
+          "scripts/check-theme-tokens.mjs"
+        ],
+        "exitCode": 0
+      }
+    ],
+    "testFiles": 264,
+    "tests": 1288,
+    "pass": 1274,
+    "fail": 7,
+    "skip": 7,
+    "durationMs": 20421.179,
+    "remainingFailures": "Same seven named failures as original baseline; see quality-evidence/failure-causes.json. No additional failure remains."
+  },
+  "cleanup": {
+    "electronProcessExitedWithCode": 0,
+    "electronProcessesRemaining": false,
+    "previewTabClosed": true,
+    "previewServerStopped": true,
+    "temporaryFixtureRemoved": true
+  }
+}

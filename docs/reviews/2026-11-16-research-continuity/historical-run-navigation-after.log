@@ -1,0 +1,12 @@
+✔ project index opens the named manuscript version in its historical session without replacing a draft (170.36475ms)
+✔ a late source lookup cannot navigate a different data folder with matching project IDs (1.241041ms)
+✔ paper reviews and historical experiment runs reopen their concrete objects (0.927959ms)
+✔ actual Reproduce view keeps copied same-id events within their data root, explicitly binds legacy records, and reads historical evidence separately (218.091792ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 842.430375

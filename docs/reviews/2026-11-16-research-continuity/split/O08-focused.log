@@ -1,0 +1,20 @@
+✔ one repository and branch maps to one directory on the server (2.367916ms)
+✔ a trailing slash or .git in the URL does not change the directory (0.144667ms)
+✔ a non-GitHub URL still produces a usable directory (0.092417ms)
+✔ commands survive quoting, including single quotes in a path (0.08125ms)
+✔ the probe output is parsed into facts (0.251208ms)
+✔ a machine without docker or a GPU says so instead of guessing (0.995375ms)
+✔ the probe command asks only for things it can report (0.379458ms)
+✔ a remote path lets the server expand the home directory (0.188791ms)
+✔ commands run through a login shell so the profile's proxy applies (0.387458ms)
+✔ the backend implements everything the runner calls (2.209667ms)
+✔ Docker structured files reject external directory/final symlinks and preserve ordinary nested edits (11.341625ms)
+✔ SSH production file scripts preserve stdin/quoting, refuse linked paths and never truncate a complete-read result silently (45.6035ms)
+ℹ tests 12
+ℹ suites 0
+ℹ pass 12
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 185.650708

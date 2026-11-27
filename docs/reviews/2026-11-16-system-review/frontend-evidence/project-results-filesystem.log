@@ -1,0 +1,13 @@
+✔ saved analysis has real complete source/output files and metadata-only reopen with controlled per-file reads (35.885417ms)
+✔ figure binary references reopen byte-for-byte without a fabricated session or model credentials (3.397458ms)
+✔ the registered owner and fixed manifest path cannot be transplanted to another project or result (4.23425ms)
+✔ result writes and reads reject symbolic-link parents and leaves rather than touching external files (4.566334ms)
+✔ all package input is checked before writes and updating retains its owner and creation time (13.32775ms)
+ℹ tests 5
+ℹ suites 0
+ℹ pass 5
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 193.217833

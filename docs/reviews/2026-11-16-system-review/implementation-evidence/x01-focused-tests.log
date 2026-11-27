@@ -1,0 +1,30 @@
+✔ translation shards cover every string exactly once (25.899458ms)
+✔ keys stay sorted inside each shard so concurrent additions do not collide (7.719417ms)
+✔ the shell merges every shard and keeps the surfaces translated (6.848958ms)
+✔ saved analysis has real complete source/output files and metadata-only reopen with controlled per-file reads (41.139417ms)
+✔ figure binary references reopen byte-for-byte without a fabricated session or model credentials (4.898833ms)
+✔ the registered owner and fixed manifest path cannot be transplanted to another project or result (5.498708ms)
+✔ result writes and reads reject symbolic-link parents and leaves rather than touching external files (10.961167ms)
+✔ all package input is checked before writes and updating retains its owner and creation time (19.242708ms)
+✔ actual dialog selects content/source files, previews missing resources and requires preview before export (163.908625ms)
+✔ restore preview is verified before choosing a new target and returns the imported project (9.954541ms)
+✔ a late source-data preview cannot replace another project or leave it busy (5.044792ms)
+✔ a real SQLite and disk package restores new local owners, source, PDFs, annotations, history and editable results (162.886166ms)
+✔ repeated restore creates another project/root and preserves existing names and files (116.681917ms)
+✔ missing linked resources are explicit and configuration files cannot be selected as manuscript source (88.407375ms)
+✔ corrupt file bytes and record hashes fail before creating a project or target directory (72.611959ms)
+✔ V01 history keeps snapshots and full local logs but cannot carry Docker/SSH cleanup ownership (83.571916ms)
+✔ owned review runs retain PDF/log/manifest with new return owners, while unrelated or legacy owners are explicit (124.060375ms)
+✔ a database constraint failure rolls back imported records and only newly created files (74.808583ms)
+✔ a historical session root remains selectable and usable after the project default root changes (84.756375ms)
+✔ results can be restored without their optional conversation (111.898875ms)
+✔ changed or missing research resources do not acquire a false ready receipt on restore (80.402708ms)
+✔ actual preload/IPC capture the source data owner across a destination chooser and reject another project root (67.941417ms)
+ℹ tests 22
+ℹ suites 0
+ℹ pass 22
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1306.822166

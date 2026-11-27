@@ -1,0 +1,45 @@
+{"probe":"stop-during-provisioning","stopReturned":true,"pilotStartedAfterStop":true,"pilotSignalAborted":false,"disposed":1}
+{"probe":"stale-verdict","status":"verified","commands":["old-check"],"finalCommand":"new-check","finalStatus":"passed","evidence":"Old configuration passed"}
+✖ Stop during provisioning prevents the pilot from starting afterward (6.166ms)
+✖ changing an executed runbook command invalidates its previous passed verdict (4.804583ms)
+ℹ tests 2
+ℹ suites 0
+ℹ pass 0
+ℹ fail 2
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 118.64125
+
+✖ failing tests:
+
+test at docs/reviews/2026-11-16-system-review/backend-evidence/reproduction-lifecycle.cjs:29:1
+✖ Stop during provisioning prevents the pilot from starting afterward (6.166ms)
+  AssertionError [ERR_ASSERTION]: Stop must prevent inference/execution after setup completes
+  
+  true !== false
+  
+      at TestContext.<anonymous> (/Users/fei/Desktop/Archimedes/docs/reviews/2026-11-16-system-review/backend-evidence/reproduction-lifecycle.cjs:62:10)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: true,
+    expected: false,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at docs/reviews/2026-11-16-system-review/backend-evidence/reproduction-lifecycle.cjs:65:1
+✖ changing an executed runbook command invalidates its previous passed verdict (4.804583ms)
+  AssertionError [ERR_ASSERTION]: a changed experiment needs its own executed evidence
+      at TestContext.<anonymous> (/Users/fei/Desktop/Archimedes/docs/reviews/2026-11-16-system-review/backend-evidence/reproduction-lifecycle.cjs:76:10)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 'verified',
+    expected: 'verified',
+    operator: 'notStrictEqual',
+    diff: 'simple'
+  }

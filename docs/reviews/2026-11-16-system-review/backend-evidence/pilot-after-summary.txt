@@ -1,0 +1,10 @@
+Local patch applied after the original full-suite baseline; no commit or PR.
+
+Command:
+node --test electron/reproduction-pilot.test.cjs electron/reproduction-contract.test.cjs electron/reproduction-preflight.test.cjs electron/reproduction-planner.test.cjs
+tests 63 / pass 63 / fail 0 / skipped 0
+git diff --check: passed
+
+Independent regression probe after the local patch:
+stale-verdict: status=manual, commands=[old-check], finalCommand=new-check, finalStatus=pending, evidence=""
+reproduction-lifecycle.cjs: 1 pass / 3 fail (symlink boundary and cancellation defects remain deliberately unmodified).

@@ -1,0 +1,10 @@
+Original source 1f4b37581c446770d576440f9ebb9bca5c55bfb7; candidate behavior tests with only module paths redirected.
+not ok 6 - a changed command cannot inherit a verdict or reuse output from before its revision
+not ok 7 - changed acceptance criteria need a new verdict but can re-evaluate the same execution output
+not ok 10 - an explicit replacement command must have produced the cited output
+not ok 11 - historical errors can explain a manual handoff but cannot fail changed execution conditions
+not ok 12 - command receipts preserve meaningful quoted whitespace when matching or revising execution
+# tests 29
+# pass 24
+# fail 5
+# skipped 0

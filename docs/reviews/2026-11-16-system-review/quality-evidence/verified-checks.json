@@ -1,0 +1,28 @@
+[
+  {
+    "name": "lint",
+    "command": [
+      "npm",
+      "run",
+      "lint"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "build",
+    "command": [
+      "npm",
+      "run",
+      "build"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "theme",
+    "command": [
+      "node",
+      "scripts/check-theme-tokens.mjs"
+    ],
+    "exitCode": 0
+  }
+]

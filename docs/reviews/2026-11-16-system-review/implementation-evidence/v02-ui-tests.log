@@ -1,0 +1,12 @@
+✔ actual panel requires confirmed mappings, saves once, shows all four categories and never promotes the run (196.342792ms)
+✔ a late data chooser cannot inject source rows into another project scope (13.949791ms)
+✔ a user-entered fixed tolerance reaches the bridge as its exact decimal text (69.259917ms)
+✔ a changed run snapshot refreshes an open historical comparison as stale without discarding its values (36.377042ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1511.479792
