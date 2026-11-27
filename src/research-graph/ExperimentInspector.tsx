@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { FileText } from "lucide-react";
+import { FileText, Link2 } from "lucide-react";
 import { useUISettings } from "../i18n";
 import type { ExperimentRun, ExperimentRunStatus, ResearchNode } from "./types";
 
@@ -121,6 +121,9 @@ export default function ExperimentInspector({ node, runs, onReadLog, connections
                 <button type="button" className="experiment-run-link" onClick={() => void readLog(run.id)} disabled={readingLog === run.id}>
                   <FileText size={12} />{t("Run log")}
                 </button>
+                {run.status === "succeeded" && window.researchDesk?.listManuscriptEvidenceOptions && <button type="button" className="experiment-run-link" onClick={() => window.dispatchEvent(new CustomEvent<ManuscriptEvidenceRunRequest>("archimedes:manuscript-run", { detail: { projectId: run.project_id, runId: run.id } }))}>
+                  <Link2 size={12} />{t("Use run in manuscript")}
+                </button>}
                 {log?.runId === run.id && <pre className="experiment-run-log" title={run.log_path || ""}>{log.text}</pre>}
               </div>
             </details>;

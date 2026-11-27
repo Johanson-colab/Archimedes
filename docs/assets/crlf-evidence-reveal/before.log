@@ -1,0 +1,34 @@
+$ node --test electron/ui-audit-crlf-evidence-reveal.test.cjs  # PR #418 head
+✖ evidence links reveal the same range in a CRLF source as in the LF textarea (2.995041ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 105.468
+
+✖ failing tests:
+
+test at electron/ui-audit-crlf-evidence-reveal.test.cjs:17:1
+✖ evidence links reveal the same range in a CRLF source as in the LF textarea (2.995041ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+    [
+  -   33,
+      35,
+  +   37
+    ]
+  
+      at TestContext.<anonymous> (/Users/fei/Desktop/Archimedes/electron/ui-audit-crlf-evidence-reveal.test.cjs:39:10)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: [ 35, 37 ],
+    expected: [ 33, 35 ],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }

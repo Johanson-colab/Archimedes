@@ -1537,6 +1537,18 @@ function App() {
   const [fileLoading, setFileLoading] = useState(false);
   const [fileError, setFileError] = useState("");
   const [paperOpenRequest, setPaperOpenRequest] = useState<PaperOpenRequest>(null);
+  const [manuscriptRun, setManuscriptRun] = useState<(ManuscriptEvidenceRunRequest & { workspace: string }) | null>(null);
+  useEffect(() => {
+    function useRun(event: Event) {
+      const request = (event as CustomEvent<ManuscriptEvidenceRunRequest>).detail;
+      if (request.projectId !== activeProjectId) return;
+      setManuscriptRun({ ...request, workspace });
+      setMainSection("writing");
+      setResearchPanelOpen(false);
+    }
+    window.addEventListener("archimedes:manuscript-run", useRun);
+    return () => window.removeEventListener("archimedes:manuscript-run", useRun);
+  }, [activeProjectId, workspace]);
   const [changeSets, setChangeSets] = useState<WorkspaceChangeSet[]>([]);
   const [papers, setPapers] = useState(initialPapers);
   const [modal, setModal] = useState<Modal>(null);
@@ -3616,7 +3628,7 @@ function App() {
     "image-creation": <ImageCreationView active={mainSection === "image-creation"} onBrowseProceedings={() => { setDailyOpened(true); setDailyStartMode("conference"); setMainSection("daily"); }} />,
     "data-charts": <DataChartsView active={mainSection === "data-charts"} />,
     "literature-review": <LiteratureReviewView key={`${workspace}:${activeProjectId || ""}`} bridge={desktopBridge} workspace={executionWorkspace} projectId={activeProjectId || ""} onLibraryImported={() => setLibraryRefreshVersion((version) => version + 1)} />,
-    "data-analysis": <DataAnalysisView onAskAI={(text) => sendNoteToChat(text, "replace")} />,
+    "data-analysis": <DataAnalysisView key={JSON.stringify([workspace, activeProjectId])} owner={activeProjectId ? { workspace, projectId: activeProjectId } : undefined} bridge={desktopBridge} onAskAI={(text) => sendNoteToChat(text, "replace")} />,
     "paper-to-slides": <PaperToSlidesView bridge={desktopBridge} workspace={executionWorkspace} busy={agentBusy} onStart={async ({ pdfPath, backend, language, length, instructions, mineruToken }) => {
       const staged = await desktopBridge.stagePaperToSlidesPdf(executionWorkspace, pdfPath);
       startNewTask();
@@ -3624,7 +3636,7 @@ function App() {
       await submitPrompt(prompt, "free-chat", reasoningEffort, contextLength, [], "paper-to-slides", backend, true, mineruToken || undefined);
     }} />,
 
-    writing: <PaperWritingView bridge={desktopBridge} workspace={executionWorkspace} projectId={activeProjectId} openRequest={paperOpenRequest} onRefresh={refreshWorkspaceFiles} onAskAI={askAIAboutPaper} active={mainSection === "writing"} />,
+    writing: <PaperWritingView bridge={desktopBridge} workspace={executionWorkspace} projectId={activeProjectId} threadId={activeThreadId} openRequest={paperOpenRequest} evidenceRunId={manuscriptRun && manuscriptRun.workspace === workspace && manuscriptRun.projectId === activeProjectId ? manuscriptRun.runId : undefined} onRefresh={refreshWorkspaceFiles} onAskAI={askAIAboutPaper} active={mainSection === "writing"} />,
   };
   for (const entry of pluginEntries) {
     sidebarModuleContent[entry.id] = <PluginModuleView key={entry.id} entry={entry} />;

@@ -1109,6 +1109,10 @@ app.whenReady().then(async () => {
 
   ipcMain.handle("workspace:write-file", (event, input = {}) => {
     const workspace = resolveWorkspace(input.workspace);
+    if (input.expectedContent !== undefined &&
+      workspaceFiles.readWorkspaceFile(workspace, input.path).content !== input.expectedContent) {
+      throw new Error("The source changed on disk. Your draft is still open.");
+    }
     const file = workspaceFiles.writeWorkspaceTextFile(workspace, input.path, input.content);
     if (!event.sender.isDestroyed()) event.sender.send("workspace:files-changed", { path: file.path });
     return file;
@@ -1167,6 +1171,16 @@ app.whenReady().then(async () => {
     fetchImpl: (...args) => net.fetch(...args),
   });
 
+  const manuscriptEvidence = require("./manuscript-evidence.cjs");
+  function manuscriptStore(event) {
+    if (!windowWorkspaces.get(event.sender.id)) throw new Error("Open a workspace before opening manuscript results.");
+    return store.currentStore();
+  }
+  ipcMain.handle("paper:evidence-options", (event, input = {}) => manuscriptEvidence.evidenceOptions(manuscriptStore(event), input));
+  ipcMain.handle("paper:evidence-save", (event, input = {}) => manuscriptEvidence.saveEvidence(manuscriptStore(event), input));
+  ipcMain.handle("paper:evidence-get", (event, input = {}) => manuscriptEvidence.getEvidence(manuscriptStore(event), input));
+  ipcMain.handle("paper:evidence-list", (event, input = {}) => manuscriptEvidence.listEvidence(manuscriptStore(event), input));
+
   ipcMain.handle("paper:build-snapshot", (_event, input = {}) => {
     const workspace = resolveWorkspace(input.workspace);
     return require("./manuscript-snapshot.cjs").readManuscriptSnapshot(workspace, input.manifestPath);
@@ -1174,8 +1188,9 @@ app.whenReady().then(async () => {
 
   ipcMain.handle("paper:compile", async (event, input = {}) => {
     const workspace = resolveWorkspace(input.workspace);
+    const requestId = typeof input.requestId === "string" ? input.requestId.slice(0, 200) : undefined;
     const result = await managedPaperCompiler(workspace, input.path, (stage, log) => {
-      if (!event.sender.isDestroyed()) event.sender.send("paper:compile-progress", { path: input.path, stage, log });
+      if (!event.sender.isDestroyed()) event.sender.send("paper:compile-progress", { workspace, requestId, path: input.path, stage, log });
     });
     if (!result.ok || !result.pdf_path) return result;
     const token = createPreviewToken(event.sender.id, workspace);
@@ -1861,6 +1876,17 @@ app.whenReady().then(async () => {
     }
   });
 
+  const analyses = require("./project-results.cjs");
+  function analysisWorkspace(event, input, role) {
+    const root = windowWorkspaces.get(event.sender.id);
+    if (!root || root !== input.workspace || !store.canAccessProject(input.projectId, role)) {
+      throw new Error("Reopen the original project to access this analysis.");
+    }
+    return root;
+  }
+  ipcMain.handle("analysis:list", (event, input) => analyses.listAnalyses(analysisWorkspace(event, input, "viewer"), input.projectId));
+  ipcMain.handle("analysis:load", (event, input) => analyses.loadAnalysis(analysisWorkspace(event, input, "viewer"), input.projectId, input.id));
+  ipcMain.handle("analysis:save", (event, input) => analyses.saveAnalysis(analysisWorkspace(event, input, "editor"), input.projectId, input));
   const literatureScope = (input) => ({ workspace: resolveWorkspace(input?.workspace), projectId: typeof input?.projectId === "string" ? input.projectId : "" });
   ipcMain.handle("literature-search:run", async (event, input = {}) => {
     const scope = literatureScope(input);

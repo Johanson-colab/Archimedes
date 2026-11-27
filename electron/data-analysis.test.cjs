@@ -7,10 +7,10 @@ const { JSDOM } = require("jsdom");
 let scope, load;
 before(async () => {
   const { transformWithOxc } = await import("vite");
-  scope = {};
+  scope = { ...await import("../shared/analysis-dataset.mjs") };
   load = async (file, names) => {
     const source = fs.readFileSync(path.join(__dirname, "../src", file), "utf8")
-      .replace(/^import .*;\r?\n/gm, "").replace(/export default /g, "").replace(/export /g, "");
+      .replace(/^import .*;\r?\n/gm, "").replace(/^export \{[^}]*\};$/gm, "").replace(/export default /g, "").replace(/export /g, "");
     const { code } = await transformWithOxc(source, file, { jsx: { runtime: "classic" } });
     Object.assign(scope, new Function(...Object.keys(scope), `${code}\nreturn {${names.join(",")}};`)(...Object.values(scope)));
   };
