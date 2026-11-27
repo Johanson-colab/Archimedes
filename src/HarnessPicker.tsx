@@ -3,6 +3,7 @@ import { ChevronDown } from "lucide-react";
 import openaiLogo from "@lobehub/icons-static-svg/icons/openai.svg";
 import claudeLogo from "@lobehub/icons-static-svg/icons/claude-color.svg";
 import opencodeLogo from "@lobehub/icons-static-svg/icons/opencode.svg";
+import antigravityLogo from "@lobehub/icons-static-svg/icons/antigravity-color.svg";
 import ArchimedesMark from "./brand/ArchimedesMark";
 import { MenuDivider, MenuItem, MenuSurface } from "./Menu";
 import { useUISettings } from "./i18n";
@@ -21,8 +22,8 @@ export default function HarnessPicker({ backend, bound, busy, onChange, onSettin
   const [error, setError] = useState("");
   const trigger = useRef<HTMLButtonElement>(null);
   useEffect(() => { if (busy) setOpen(false); }, [busy]);
-  const label = { codex: "Codex", claude: "Claude Code", opencode: "OpenCode", api: "Archimedes" }[backend];
-  const brand = (id: string) => id === "api" ? <ArchimedesMark size={16} variant="small" /> : <img className={`provider-brand-logo${id === "claude" ? "" : " provider-brand-mono"}`} src={id === "codex" ? openaiLogo : id === "claude" ? claudeLogo : opencodeLogo} alt="" />;
+  const label = { codex: "Codex", claude: "Claude Code", opencode: "OpenCode", antigravity: "Antigravity", api: "Archimedes" }[backend];
+  const brand = (id: string) => id === "api" ? <ArchimedesMark size={16} variant="small" /> : <img className={`provider-brand-logo${id === "claude" || id === "antigravity" ? "" : " provider-brand-mono"}`} src={id === "codex" ? openaiLogo : id === "claude" ? claudeLogo : id === "antigravity" ? antigravityLogo : opencodeLogo} alt="" />;
   async function choose(next: AgentBackendConfig["backend"]) {
     if (saving || busy) return;
     setSaving(true); setError("");
@@ -38,6 +39,7 @@ export default function HarnessPicker({ backend, bound, busy, onChange, onSettin
       {bound && <p className="harness-picker-notice">{t("Start a new chat to use this agent")}</p>}
       <MenuItem checked={backend === "codex"} title={bound && backend !== "codex" ? t("Start a new chat to use this agent") : undefined} disabled={saving} onClick={() => void choose("codex")}>Codex</MenuItem>
       <MenuItem checked={backend === "claude"} title={bound && backend !== "claude" ? t("Start a new chat to use this agent") : undefined} disabled={saving} onClick={() => void choose("claude")}>Claude Code</MenuItem>
+      <MenuItem checked={backend === "antigravity"} title={bound && backend !== "antigravity" ? t("Start a new chat to use this agent") : undefined} disabled={saving} onClick={() => void choose("antigravity")}>Antigravity</MenuItem>
       <MenuItem checked={backend === "opencode"} title={bound && backend !== "opencode" ? t("Start a new chat to use this agent") : undefined} disabled={saving} onClick={() => void choose("opencode")}>OpenCode</MenuItem>
       <MenuItem checked={backend === "api"} title={bound && backend !== "api" ? t("Start a new chat to use this agent") : undefined} disabled={saving} onClick={() => void choose("api")}>Archimedes</MenuItem>
       {error && <p className="harness-picker-error" role="alert">{error}</p>}

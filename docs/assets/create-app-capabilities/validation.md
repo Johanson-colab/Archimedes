@@ -1,0 +1,15 @@
+# Optional Research App capabilities: validation
+
+Tracks issue #256 and PR #428. The owner requested App Agent calls, Environment key binding and dependency setup as optional features after the host lifecycle increment.
+
+- Focused runtime, setup, Agent adapter, UI message boundary, native protocol and capability tests: **89 passed, 0 failed**.
+- `npm run lint`, `npm run build`, `npm run check:theme`: passed; build retains the existing chunk-size warning.
+- Full `npm test`: **1,591 tests, 1,582 passed, 4 failed, 5 skipped**. The same four failures were reproduced against the base and documented in [the prior evidence](../create-scientific-capabilities/validation.md): experiment temporary path, translation ordering, local LaTeX compile, and LibraryView Tabs audit. No existing tests were weakened.
+- A real Python virtual environment was created in a temporary fixture with no packages/network. Setup tests also verify explicit approval, package syntax, changed-source checks, preservation of existing environments and failure handling. PyPI package download was not exercised.
+- A real local Python server received only an explicitly declared synthetic key; the key did not appear in runtime logs. Missing keys and unchanged Apps were tested separately.
+- Native Codex and Claude Code were each invoked through `createAppAgent` using a synthetic prompt, local temporary App, approved test callback, and no native tool operations; both returned `READY`. This validates the actual installed CLI adapters, not a full interactive Electron permission-dialog or generated-page-to-output workflow. OpenCode was tested through the existing adapter fixture, not a real App request.
+- The iframe behavior test rejects requests from wrong origins, unrelated windows and undeclared backends. Existing native backend suites cover tool approval protocols. The App Skill test verifies an exported local SKILL.md path is included in the request; it does not establish a complete scientific workflow.
+
+The new setup button only appears when a Python App has no `.venv`; the existing Molecule Workbench already has an environment. A fresh before/after screenshot pair for this state was not captured because the live desktop was in use. This UI increment should receive a manual screenshot review before merging. Existing lifecycle screenshots remain at [create-app-runtime](../create-app-runtime/validation.md).
+
+Limits: Python must already be installed; only exactly pinned top-level PyPI requirements are supported and transitive dependencies are not locked. Agent calls return one final response, have no native question card or resumable conversation, and Codex requires a CLI that supports temporary sessions. Local App Python code retains user filesystem/network permissions and can use any key explicitly supplied to it. Native Agent CLI processes still inherit their normal process environment and native configuration. Windows setup/process behavior, packaged builds, and real UI approval dialogs have not been verified for this increment.

@@ -28,6 +28,7 @@ export const paperReview: Record<string, string> = {
   "Confidence": "置信度",
   "Configured — leave blank to keep the saved key.": "已配置——留空则保留已保存的密钥。",
   "Contributions": "主要贡献",
+  "Could not download {identifier}. {reason}": "无法下载 {identifier}。{reason}",
   "Critical": "批判视角",
   "Current compiled manuscript": "当前已编译稿件",
   "Custom provider": "自定义提供商",

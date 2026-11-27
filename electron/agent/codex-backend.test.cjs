@@ -166,6 +166,19 @@ test("streaming uses restricted policy, rejects foreign events and persists only
   assert.equal(args.events.filter((event) => event.delta).map((event) => event.delta).join(""), "hello");
 });
 
+test("Codex Create receives the capability CLI in its actual native turn", async () => {
+  let client;
+  const args = input(fakeClient("success", (value) => { client = value; }));
+  args.thread.mode = "create";
+  args.turn.mode = "create";
+  assert.equal(await runCodex(args), "hello");
+  const turn = client.requests.find((item) => item.method === "turn/start").params;
+  assert.match(turn.input[0].text, /creator-capabilities-cli.cjs/);
+  assert.match(turn.input[0].text, /zero, one or multiple/);
+  assert.doesNotMatch(turn.input[0].text, /# Paper Lookup/);
+  assert.equal(client.closed, true);
+});
+
 test("native approval is returned once and denied unless explicitly approved", async () => {
   for (const approved of [false, true]) {
     let client;

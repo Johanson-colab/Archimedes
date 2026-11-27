@@ -62,7 +62,7 @@ export function NativeQuestionCard({ question, onAnswer }: { question: NativeAge
 
 export function NativeSessionBusyNotice({ backend }: { backend: NativeSessionBackend }) {
   const { t } = useUISettings();
-  const harness = { codex: "Codex", claude: "Claude Code", opencode: "OpenCode" }[backend];
+  const harness = { codex: "Codex", claude: "Claude Code", opencode: "OpenCode", antigravity: "Antigravity" }[backend];
   return <InlineNotice tone="warning" className="native-session-busy-notice">
     {t("Another workspace is using this {harness} conversation. Wait for its active turn to finish.", { harness })}
   </InlineNotice>;

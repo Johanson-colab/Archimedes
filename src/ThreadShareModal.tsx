@@ -21,7 +21,7 @@ function SnapshotDialog({ snapshot, bridge, projectId, threadId, threadTitle, pr
   const [scope, setScope] = useState<"all" | "latest" | "custom">("all");
   const [selected, setSelected] = useState(() => turns.map((turn) => turn.id));
   const [sources, setSources] = useState(defaults?.sources ?? true);
-  const [diagnostics, setDiagnostics] = useState(defaults?.diagnostics ?? false);
+  const [diagnostics, setDiagnostics] = useState(snapshot.manifest.diagnostics_omitted === true ? false : defaults?.diagnostics ?? false);
   const [format, setFormat] = useState<"md" | "json" | "png">(defaults?.format ?? "md");
   const [imageWidth, setImageWidth] = useState(900);
   const [busy, setBusy] = useState(false);
@@ -36,7 +36,7 @@ function SnapshotDialog({ snapshot, bridge, projectId, threadId, threadTitle, pr
   const ids = scope === "all" ? turns.map((turn) => turn.id) : scope === "latest" ? turns.slice(-1).map((turn) => turn.id) : selected;
   const exported = useMemo(() => selectSnapshot(snapshot, threadTitle, ids, sources, diagnostics), [snapshot, threadTitle, ids.join("\0"), sources, diagnostics]);
   const markdown = snapshotMarkdown(exported);
-  const allSelected = canShareSessionLink(signedIn, privateThread, turns.map((turn) => turn.id), ids);
+  const allSelected = snapshot.manifest.partial !== true && canShareSessionLink(signedIn, privateThread, turns.map((turn) => turn.id), ids);
   const stem = snapshotFileStem(threadTitle);
   useEffect(() => { setImagePages([]); setNotice(""); }, [ids.join("\0"), format, imageWidth, sources, diagnostics]);
 
@@ -69,8 +69,9 @@ function SnapshotDialog({ snapshot, bridge, projectId, threadId, threadTitle, pr
       <div className="session-snapshot-options">
         <label>{t("Snapshot range")}<select aria-label={t("Snapshot range")} value={scope} disabled={busy} onChange={(event) => { setScope(event.target.value as typeof scope); setNotice(""); }}><option value="all">{t("All turns")}</option><option value="latest">{t("Latest turn")}</option><option value="custom">{t("Choose turns")}</option></select></label>
         {scope === "custom" && <div className="snapshot-turn-list">{turns.map((turn, index) => <label key={turn.id}><input type="checkbox" checked={selected.includes(turn.id)} disabled={busy} onChange={(event) => setSelected((current) => event.target.checked ? [...current, turn.id] : current.filter((id) => id !== turn.id))} /><span>{index + 1}. {turn.user_message || t("Empty question")}</span></label>)}</div>}
-        <label className="snapshot-check"><input type="checkbox" checked={sources} disabled={busy} onChange={(event) => setSources(event.target.checked)} />{t("Include sources")}</label>
-        <label className="snapshot-check"><input type="checkbox" checked={diagnostics} disabled={busy} onChange={(event) => setDiagnostics(event.target.checked)} />{t("Include diagnostic events")}</label>
+        <label className="snapshot-check"><input type="checkbox" checked={sources && snapshot.manifest.sources_omitted !== true} disabled={busy || snapshot.manifest.sources_omitted === true} onChange={(event) => setSources(event.target.checked)} />{t("Include sources")}</label>
+        <label className="snapshot-check"><input type="checkbox" checked={diagnostics} disabled={busy || snapshot.manifest.diagnostics_omitted === true} onChange={(event) => setDiagnostics(event.target.checked)} />{t("Include diagnostic events")}</label>
+        {snapshot.manifest.diagnostics_omitted === true && <p className="snapshot-note">{t(snapshot.manifest.sources_omitted === true ? "This partial snapshot excludes sources and diagnostic events." : "This partial snapshot includes selected turns and source events; diagnostic events are excluded.")}</p>}
         <p className="snapshot-note">{t(diagnostics ? "Diagnostic events may contain paths, commands, or other sensitive information." : "Raw diagnostic events are excluded by default. Review the selected content before sharing.")}</p>
         {privateThread && <p className="snapshot-note">{t("Private session. Exporting does not change its visibility.")}</p>}
         <p className="snapshot-note">{t("{selected} of {total} turns selected", { selected: exported.turns.length, total: turns.length })}</p>
