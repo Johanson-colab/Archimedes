@@ -149,7 +149,7 @@ function closeInteractiveTerminal(sessionId) {
 
 function closeAllTerminals() {
   for (const sessionId of interactiveTerminalSessions.keys()) closeInteractiveTerminal(sessionId);
-  for (const session of commandSessions.values()) stopTerminalCommand(session.process);
+  for (const session of commandSessions.values()) { session.cancelled = true; stopTerminalCommand(session.process); }
   commandSessions.clear();
 }
 
@@ -159,6 +159,7 @@ function closeWindowTerminals(senderId) {
   }
   for (const [sessionId, session] of commandSessions) {
     if (session.senderId !== senderId) continue;
+    session.cancelled = true;
     stopTerminalCommand(session.process);
     commandSessions.delete(sessionId);
   }
@@ -2419,7 +2420,8 @@ app.whenReady().then(async () => {
     const child = spawnTerminalCommand(command, { cwd: workspace, version: app.getVersion() });
     const captured = owner.captureStore();
 
-    commandSessions.set(sessionId, { process: child, senderId: event.sender.id });
+    const session = { process: child, senderId: event.sender.id, cancelled: false };
+    commandSessions.set(sessionId, session);
     const send = (data) => {
       owner.appendCommandOutput(commandRun.id, data);
       if (!event.sender.isDestroyed()) {
@@ -2431,8 +2433,8 @@ app.whenReady().then(async () => {
     child.on("error", (error) => send(`\n[process error] ${error.message}\n`));
     child.on("close", (code) => {
       try {
-        send(`\n[process exited with code ${code ?? "unknown"}]\n`);
-        owner.finishCommand(commandRun.id, code, code === 0 ? "completed" : "failed");
+        send(session.cancelled ? "\n[process stopped]\n" : `\n[process exited with code ${code ?? "unknown"}]\n`);
+        owner.finishCommand(commandRun.id, session.cancelled ? null : code, session.cancelled ? "cancelled" : code === 0 ? "completed" : "failed");
         if (beforeSnapshot && typeof actionId === "string") {
           const changes = workspaceFiles.compareWorkspaceSnapshots(beforeSnapshot, workspaceFiles.snapshotWorkspace(workspace));
           if (changes.length) {
@@ -2460,7 +2462,10 @@ app.whenReady().then(async () => {
 
   ipcMain.handle("terminal:stop", (event, sessionId) => {
     const session = commandSessions.get(sessionId);
-    if (session?.senderId === event.sender.id) stopTerminalCommand(session.process);
+    if (session?.senderId === event.sender.id) {
+      session.cancelled = true;
+      stopTerminalCommand(session.process);
+    }
   });
 
   ipcMain.handle("journey:get-settings", () => journeySettings.journeySettings());
