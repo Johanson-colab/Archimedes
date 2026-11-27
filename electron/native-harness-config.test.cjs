@@ -5,6 +5,14 @@ const path = require('node:path');
 const test = require('node:test');
 const config = require('./agent-backend-config.cjs');
 
+test('Antigravity has a separate agy profile and preserves native settings', () => {
+  const value = config.normalize({ backend: 'antigravity', model: 'gemini-example' });
+  assert.equal(value.binary, 'agy');
+  assert.equal(value.profiles.antigravity.model, 'gemini-example');
+  assert.equal(value.profiles.opencode.binary, 'opencode');
+  assert.throws(() => config.normalize({ backend: 'antigravity', binary: 'other' }), /absolute/);
+});
+
 test('OpenCode catalog parses model IDs without accepting command output or duplicates', () => {
   const models = config.parseOpenCodeModels('warning: ignored\nopencode-go/qwen3.7-plus\nopencode-go/qwen3.7-plus\nopenai/gpt-5\ninvalid entry\n');
   assert.deepEqual(models.map(item => item.id), ['opencode-go/qwen3.7-plus', 'openai/gpt-5']);

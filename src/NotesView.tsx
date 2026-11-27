@@ -2,16 +2,19 @@ import { useState } from "react";
 import { ArrowUpToLine, LoaderCircle, NotebookPen, Replace } from "lucide-react";
 import { useUISettings } from "./i18n";
 
+export type NoteSaveState = "idle" | "saving" | "saved" | "error";
+
 type NotesViewProps = {
   value: string;
   loading: boolean;
-  saveState: "idle" | "saving" | "saved";
+  saveState: NoteSaveState;
   contextLabel: string;
   onChange: (value: string) => void;
+  onRetry: () => void;
   onSend: (text: string, mode: "append" | "replace") => void;
 };
 
-export default function NotesView({ value, loading, saveState, contextLabel, onChange, onSend }: NotesViewProps) {
+export default function NotesView({ value, loading, saveState, contextLabel, onChange, onRetry, onSend }: NotesViewProps) {
   const { t } = useUISettings();
   const [selection, setSelection] = useState("");
   const canSend = Boolean(value.trim());
@@ -25,7 +28,9 @@ export default function NotesView({ value, loading, saveState, contextLabel, onC
     <header className="notes-header">
       <div className="notes-heading"><NotebookPen size={13} /><span>{contextLabel}</span></div>
       <span className={`notes-save-state ${saveState}`} aria-live="polite">
-        {saveState === "saving" ? <><LoaderCircle className="spin" size={11} />{t("Saving")}</> : saveState === "saved" ? t("Saved") : null}
+        {saveState === "saving" && <><LoaderCircle className="spin" size={11} />{t("Saving")}</>}
+        {saveState === "saved" && t("Saved")}
+        {saveState === "error" && <>{t("Could not save notes.")}<button type="button" className="notes-action" onClick={onRetry}>{t("Retry")}</button></>}
       </span>
     </header>
 

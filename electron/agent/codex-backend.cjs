@@ -96,6 +96,9 @@ function userPrompt(thread, turn, resume, attachments, experimentBridgeInstructi
     assertJsonSize(attachments, VISIBLE_IMPORT_LIMIT, 'The attached context exceeds the native request limit. No request was sent or replayed.');
   }
   if (attachments.length) prompt += `\n\nUser-attached context (metadata only):\n${JSON.stringify(attachments)}`;
+  // Shared by Codex, Claude Code and OpenCode; per-turn guidance also reaches
+  // resumed native sessions without importing every skill into their context.
+  if (turn.mode === "create") prompt += `\n\n${require("./creator-capabilities.cjs").creatorInstructions({ native: true })}`;
   if (["research", "experiment-setup"].includes(turn.mode)) {
     const directives = require("./experiment-directives.cjs");
     prompt += `\n\n${experimentBridgeInstructions || directives.experimentPrompt()}`;
@@ -137,7 +140,7 @@ async function answerNativeQuestion(localThreadId, questionId, answers) {
   return { answered: true };
 }
 
-async function nativeSession({ config, workspace, thread, turn, contextItems = [], researchSkill, nativeSkill, mineruToken, experimentBridgeInstructions = "", experimentDynamicTools = [], invokeExperimentTool = null, signal = new AbortController().signal, emit = () => {}, recordEvent = () => {}, approve = async () => false, bindings, Client = CodexClient, timeoutMs, compaction = false, ephemeral = false, runtimeId = thread.id }) {
+async function nativeSession({ config, workspace, thread, turn, contextItems = [], researchSkill, nativeSkill, mineruToken, experimentBridgeInstructions = "", experimentDynamicTools = [], invokeExperimentTool = null, signal = new AbortController().signal, emit = () => {}, recordEvent = () => {}, approve = async () => false, bindings, Client = CodexClient, timeoutMs, compaction = false, ephemeral = false, disableSharedEnvironment = false, runtimeId = thread.id }) {
   const root = fs.realpathSync(workspace);
   const policy = nativePolicy(config, root);
   const attachments = nativeContext(contextItems);
@@ -167,7 +170,7 @@ async function nativeSession({ config, workspace, thread, turn, contextItems = [
     : prepareResearchSkill({ workspace: root, backend: 'codex', thread, requested: researchSkill, emit, recordEvent });
   const ideaSpark = ideaSparkControls(researchSkill);
   const developerInstructions = skill?.instructions || ideaSpark.developerInstructions;
-  const launchEnv = { ...(!ephemeral && !compaction ? getSharedEnvironment() : {}), ...(mineruToken ? { MINERU_API_TOKEN: mineruToken } : {}) };
+  const launchEnv = { ...(!disableSharedEnvironment && !ephemeral && !compaction ? getSharedEnvironment() : {}), ...(mineruToken ? { MINERU_API_TOKEN: mineruToken } : {}) };
   const client = new Client({ binary: config.binary, appServerArgs: ideaSpark.appServerArgs, ...(Object.keys(launchEnv).length ? { env: launchEnv } : {}) });
   const events = createNativeEvents({ emit, recordEvent, onError: (error) => {
     try { finish(error); }

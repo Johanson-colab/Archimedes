@@ -51,3 +51,84 @@ test("extension marketplace normalizes custom sources and keeps the bundled inde
   marketplace.resetSources();
   assert.ok(marketplace.listSources().some((source) => source.id === "archimedes"));
 });
+
+test("source credentials migrate privately and stay bound to the configured destination", async t => {
+  const dir = tempDir("archimedes-source-token-");
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const file = path.join(dir, "extension-sources.json");
+  const secret = "synthetic-source-credential";
+  const source = { id: "lab", type: "json", name: "Lab", url: "https://lab.example/feed", enabled: true };
+  const original = JSON.stringify({ sources: [{ ...source, token: secret }] });
+  fs.writeFileSync(file, original);
+  const storage = { isEncryptionAvailable: () => true, encryptString: text => Buffer.from(text), decryptString: bytes => bytes.toString() };
+  marketplace.initialize(dir, { ...storage, getSelectedStorageBackend: () => "basic_text" });
+  assert.throws(() => marketplace.listSources(), /encryption is unavailable/);
+  assert.equal(fs.readFileSync(file, "utf8"), original);
+  marketplace.initialize(dir, storage);
+  const rename = t.mock.method(fs, "renameSync", () => { throw new Error("fixture write interrupted"); });
+  assert.throws(() => marketplace.listSources(), /interrupted/);
+  assert.equal(fs.readFileSync(file, "utf8"), original);
+  rename.mock.restore();
+
+  const listed = marketplace.listSources();
+  const saved = marketplace.saveSources(listed);
+  const persisted = fs.readFileSync(file, "utf8");
+  assert.ok(!persisted.includes(secret));
+  if (process.platform !== "win32") assert.equal(fs.statSync(file).mode & 0o777, 0o600);
+  const escapedEcho = JSON.stringify([{ id: "echo", name: secret }]).replace(
+    secret,
+    [...secret].map((character) => `\\u${character.charCodeAt(0).toString(16).padStart(4, "0")}`).join(""),
+  );
+  const requests = [];
+  let mode = "empty";
+  t.mock.method(globalThis, "fetch", async (url, options) => {
+    requests.push([url, options.headers.Authorization, options.redirect]);
+    const body = mode === "echo" ? JSON.stringify([{ id: "echo", name: secret }]) : mode === "escaped" ? escapedEcho : "[]";
+    return new Response(body, { headers: { "content-type": "application/json" } });
+  });
+  const feed = await marketplace.listExtensions({ workspace: dir, refresh: true });
+  assert.deepEqual(requests[0], [source.url, "Bearer " + secret, "error"]);
+  mode = "echo";
+  const rejected = await marketplace.listExtensions({ workspace: dir, refresh: true });
+  assert.match(rejected.sources.find(row => row.id === "lab").error, /returned its credential/);
+  mode = "escaped";
+  assert.ok(!escapedEcho.includes(secret));
+  const escapedRejected = await marketplace.listExtensions({ workspace: dir, refresh: true });
+  assert.match(escapedRejected.sources.find(row => row.id === "lab").error, /returned its credential/);
+  assert.ok(!JSON.stringify(escapedRejected).includes(secret));
+  assert.ok(listed.find(row => row.id === "lab").hasToken);
+  marketplace.saveSources([{ ...source, url: "https://another.example/feed" }]);
+  await marketplace.listExtensions({ workspace: dir, refresh: true });
+  assert.equal(requests.at(-1)[1], undefined);
+  assert.equal(marketplace.saveSources([{ ...source, token: "replacement-fixture" }]).at(-1).hasToken, true);
+  assert.equal(marketplace.saveSources([{ ...source, token: "" }]).at(-1).hasToken, false);
+  assert.throws(() => marketplace.saveSources([{ ...source, token: "line\nbreak" }]), /Authorization header/);
+  for (const result of [listed, saved, feed, rejected, escapedRejected, marketplace.resetSources()]) {
+    assert.ok(!JSON.stringify(result).includes(secret));
+    assert.ok(!JSON.stringify(result).includes("encryptedToken"));
+  }
+});
+
+test("invalid migrated bearer values never leak through cached source errors", async (t) => {
+  const dir = tempDir("archimedes-source-redaction-");
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const file = path.join(dir, "extension-sources.json");
+  const secret = "legacy-source\ncredential";
+  const source = { id: "lab", type: "json", name: "Lab", url: "https://lab.example/feed", enabled: true };
+  fs.writeFileSync(file, JSON.stringify({ sources: [{ ...source, token: secret }] }));
+  const storage = { isEncryptionAvailable: () => true, encryptString: text => Buffer.from(text), decryptString: bytes => bytes.toString() };
+  marketplace.initialize(dir, storage);
+  marketplace.listSources();
+  let authorization = "";
+  t.mock.method(globalThis, "fetch", async (_url, options) => {
+    authorization = options.headers.Authorization;
+    throw new TypeError(`Request header 'authorization' with value '${authorization}' is invalid.`);
+  });
+  const feed = await marketplace.listExtensions({ workspace: dir, refresh: true });
+  const row = feed.sources.find((item) => item.id === "lab");
+  assert.equal(authorization, `Bearer ${secret}`);
+  assert.match(row.error, /\[redacted\]/);
+  assert.ok(!row.error.includes("legacy-source"));
+  assert.ok(!JSON.stringify(feed).includes("legacy-source"));
+  assert.ok(!JSON.stringify(feed).includes("credential"));
+});

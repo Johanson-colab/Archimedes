@@ -175,8 +175,8 @@ test("a window that vetoes Quit keeps its detached research database open", t =>
   const app = new (require("node:events").EventEmitter)();
   const registration = source.slice(source.lastIndexOf('app.on(', source.indexOf('  closeAllNativeClients();')));
   new Function("app", "store", "experimentRunner", "closeAllNativeClients", "closeAllTerminals", "collaborationServer", "presence",
-    "deepReadingRuns", "activeLiteratureSearches", "workspaceWatchers", "windowPreviewTokens", registration)(
-    app, store, { shutdownExperimentRuns() {} }, () => {}, () => {}, null, null, new Map(), new Map(), new Map(), new Map(),
+    "deepReadingRuns", "activeLiteratureSearches", "workspaceWatchers", "windowPreviewTokens", "harnessSetup", registration)(
+    app, store, { shutdownExperimentRuns() {} }, () => {}, () => {}, null, null, new Map(), new Map(), new Map(), new Map(), { shutdown() {} },
   );
   app.emit("before-quit");
   owner.updatePaper("seed-react", { notes: "finished after the canceled quit" });

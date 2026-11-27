@@ -12,9 +12,9 @@ function executableCandidates(binary = "codex") {
     if (!path.isAbsolute(binary) || !fs.statSync(binary, { throwIfNoEntry: false })?.isFile()) throw new Error("Choose an existing absolute Codex executable path.");
     return [binary];
   }
-  const names = process.platform === "win32" ? ["codex.exe", "codex.cmd"] : ["codex"];
+  const names = process.platform === "win32" ? ["codex.exe"] : ["codex"];
   const dirs = [...String(process.env.PATH || "").split(path.delimiter), "/opt/homebrew/bin", "/usr/local/bin", path.join(os.homedir(), ".local/bin"), path.join(os.homedir(), ".npm-global/bin")];
-  return dirs.filter((dir) => path.isAbsolute(dir)).flatMap((dir) => names.map((name) => path.join(dir, name))).filter((file) => fs.statSync(file, { throwIfNoEntry: false })?.isFile());
+  return [...dirs.filter((dir) => path.isAbsolute(dir)).flatMap((dir) => names.map((name) => path.join(dir, name))), require('./managed-clis.cjs').binaryPath('codex'), ...(process.platform === 'win32' ? dirs.filter(dir => path.isAbsolute(dir)).map(dir => path.join(dir, 'codex.cmd')) : [])].filter(Boolean).filter((file) => fs.statSync(file, { throwIfNoEntry: false })?.isFile());
 }
 
 class CodexClient extends EventEmitter {

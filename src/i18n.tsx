@@ -1,3 +1,4 @@
+import { researchAppsRuntime as researchAppsRuntimeStrings } from "./i18n/translations/researchAppsRuntime";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { benchmarkRadar as benchmarkRadarStrings } from "./i18n/translations/benchmarkRadar";
 import { app as appStrings } from "./i18n/translations/app";
@@ -51,6 +52,7 @@ const FILE_TEXT_SHORTCUTS_STORAGE_KEY = "archimedes-file-text-shortcuts";
 export const TEXT_SIZE_SCALE: Record<TextSize, number> = { smaller: 0.8, small: 0.9, default: 1, large: 1.1, larger: 1.2 };
 
 const translations: Record<string, string> = {
+  ...researchAppsRuntimeStrings,
   ...sessionCommentsStrings,
   ...sessionSnapshotStrings,
   ...researchGraphStrings,
@@ -179,6 +181,7 @@ export function UISettingsProvider({ children }: { children: React.ReactNode }) 
   useEffect(() => {
     window.localStorage.setItem(LANGUAGE_STORAGE_KEY, language);
     document.documentElement.lang = language === "zh" ? "zh-CN" : "en";
+    if (typeof window.researchDesk?.setUiLanguage === "function") window.researchDesk.setUiLanguage(language);
   }, [language]);
 
   useEffect(() => {

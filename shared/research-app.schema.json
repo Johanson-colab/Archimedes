@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Archimedes local Research App",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "id", "name", "category", "runtime"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "id": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$", "maxLength": 80 },
+    "name": { "type": "string", "minLength": 1, "maxLength": 80 },
+    "description": { "type": "string", "maxLength": 500 },
+    "version": { "type": "string", "maxLength": 40 },
+    "category": { "enum": ["discovery", "evidence", "experiments", "analysis", "writing"] },
+    "environment": { "type": "array", "maxItems": 10, "uniqueItems": true, "items": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]{0,100}_(API_KEY|TOKEN)$" } },
+    "agents": { "type": "array", "maxItems": 3, "uniqueItems": true, "items": { "enum": ["codex", "claude", "opencode"] } },
+    "skills": { "type": "array", "maxItems": 20, "uniqueItems": true, "items": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" } },
+    "frontend": { "type": "object", "additionalProperties": false, "required": ["kind"], "properties": { "kind": { "const": "react-vite" } } },
+    "runtime": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "entry"],
+      "properties": { "kind": { "enum": ["static", "python-http"] }, "entry": { "type": "string", "minLength": 1 } }
+    }
+  }
+}

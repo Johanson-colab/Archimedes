@@ -98,6 +98,8 @@ function terminalTabLabel(title: string, index: number) {
 export default function TerminalPanel({ bridge, open, theme, workspace, settings, orientation = "bottom", height, onHeightChange, onClose, onOpenSettings }: TerminalPanelProps) {
   const [tabs, setTabs] = useState<TerminalTab[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const resizeCleanupRef = useRef<(() => void) | null>(null);
+  useEffect(() => () => resizeCleanupRef.current?.(), []);
   const creatingRef = useRef(false);
   const tabsRef = useRef<TerminalTab[]>([]);
 
@@ -145,6 +147,7 @@ export default function TerminalPanel({ bridge, open, theme, workspace, settings
 
   function startResize(event: React.PointerEvent<HTMLDivElement>) {
     if (height == null || !onHeightChange) return;
+    resizeCleanupRef.current?.();
     const resize = onHeightChange;
     event.preventDefault();
     const startY = event.clientY;
@@ -156,11 +159,15 @@ export default function TerminalPanel({ bridge, open, theme, workspace, settings
     const onPointerUp = () => {
       window.removeEventListener("pointermove", onPointerMove);
       window.removeEventListener("pointerup", onPointerUp);
+      window.removeEventListener("pointercancel", onPointerUp);
       document.body.classList.remove("terminal-resizing");
+      resizeCleanupRef.current = null;
     };
+    resizeCleanupRef.current = onPointerUp;
     document.body.classList.add("terminal-resizing");
     window.addEventListener("pointermove", onPointerMove);
     window.addEventListener("pointerup", onPointerUp);
+    window.addEventListener("pointercancel", onPointerUp);
   }
 
   return <section className={[open ? "smart-terminal open" : "smart-terminal", orientation === "right" ? "in-workbench" : ""].join(" ")} aria-label="Terminal panel">

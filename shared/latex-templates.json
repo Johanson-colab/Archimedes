@@ -1,5 +1,15 @@
 [
   {
+    "id": "minimal-article",
+    "name": "Minimal article",
+    "category": "Default",
+    "description": "A plain LaTeX article with an abstract and a section to start writing.",
+    "delivery": "bundled",
+    "files": {
+      "main.tex": "\\documentclass{article}\n\n\\title{Untitled Research Paper}\n\\author{}\n\\date{}\n\n\\begin{document}\n\\maketitle\n\n\\begin{abstract}\nSummarize your research question and findings.\n\\end{abstract}\n\n\\section{Introduction}\nStart writing here.\n\n\\end{document}\n"
+    }
+  },
+  {
     "id": "archimedes",
     "name": "Archimedes",
     "category": "Default",
