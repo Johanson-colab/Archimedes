@@ -1,0 +1,12 @@
+[
+  {
+    "check": "final-ui-related-after",
+    "exitCode": 0,
+    "seconds": 0.662
+  },
+  {
+    "check": "final-ui-lint",
+    "exitCode": 0,
+    "seconds": 0.351
+  }
+]

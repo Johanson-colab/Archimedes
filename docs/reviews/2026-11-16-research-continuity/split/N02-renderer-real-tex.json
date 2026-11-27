@@ -1,0 +1,13 @@
+{
+  "ok": true,
+  "engine": "tectonic",
+  "managed": true,
+  "durationMs": 342,
+  "citations": 1,
+  "correctedMetadata": true,
+  "manualEntryPreserved": true,
+  "pdf": {
+    "bytes": 17078,
+    "sha256": "17bd7a6112eb8b8916811bbc3280b0750af317dab2d9b6a5cbeccaa155f4b13f"
+  }
+}

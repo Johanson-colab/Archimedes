@@ -1,0 +1,26 @@
+{
+  "checkedDate": "2026-11-16",
+  "githubLogin": "feiiiiii5",
+  "cliLogin": "feiiiiii5",
+  "upstream": "Johanson-colab/Archimedes",
+  "permissions": {
+    "admin": false,
+    "maintain": false,
+    "pull": true,
+    "push": false,
+    "triage": false
+  },
+  "remoteMain": "1f4b37581c446770d576440f9ebb9bca5c55bfb7",
+  "localBaseline": "1f4b37581c446770d576440f9ebb9bca5c55bfb7",
+  "configuredRemotes": [
+    "origin git@github.com:Johanson-colab/Archimedes.git"
+  ],
+  "userPublicForkObserved": false,
+  "details": [
+    "GitHub connector collaborator permission endpoint returned 403; repository permissions and gh REST both show pull true/push false.",
+    "Same-name user repo returned 404 and paginated upstream fork list returned no feiiiiii5 entry; no fork or remote was created.",
+    "No PR template or CONTRIBUTING file in baseline tree; AGENTS.md supplies contribution requirements.",
+    "No upstream issue or written core-team approval has been obtained by this task. No external discussion was opened.",
+    "Docker CLI exists but daemon was stopped; SSH/sshd and Tectonic 0.17.0 exist; latexmk/pdflatex were absent."
+  ]
+}

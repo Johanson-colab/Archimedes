@@ -1,0 +1,28 @@
+✔ annotation sync pushes local highlights and pulls shared reviews and presentations (64.651875ms)
+✔ annotation sync requires a shared project (27.96125ms)
+✔ local projects link to cloud projects and import without duplicating (60.480042ms)
+✔ cloud member sync preserves the local owner and tracks remote removals (32.3355ms)
+✔ cloud members cannot be synced into a project the local user cannot access (28.434625ms)
+✔ openapi defines the collaboration surface (1.966042ms)
+✔ postgres contract includes project ownership, scoped annotations, and RLS (0.268083ms)
+✔ sync and permission contracts are documented (0.081416ms)
+✔ project roles are ordered from viewer to owner (0.755ms)
+✔ capabilities map to the expected minimum role (0.181625ms)
+✔ unknown roles normalize to a safe viewer (0.215958ms)
+✔ every index in the schema block only references columns it declares (1.71175ms)
+✔ the schema block never indexes a column that ensureColumn adds later (0.325ms)
+✔ server enforces project membership and comment roles (63.310709ms)
+✔ server rejects unauthenticated access and invalid project roles (8.189375ms)
+✔ LAN host launcher binds explicitly and prints reachable URLs (1.192333ms)
+✔ governance documents export, audit, and open enterprise gaps (0.271541ms)
+(node:58131) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+﹣ two Supabase users can share a project through the API (0.35025ms) # SKIP
+ℹ tests 18
+ℹ suites 0
+ℹ pass 17
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 1
+ℹ todo 0
+ℹ duration_ms 723.543042

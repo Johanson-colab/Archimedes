@@ -1,0 +1,14 @@
+✔ new project tasks use returned records before rerender, and empty side chats forward the selected workspace (259.904ms)
+✔ new selections use only the chosen project workspace and session roots retain historical ownership (54.159667ms)
+✔ Library project selection commits the returned complete task only after loading succeeds (205.439709ms)
+✔ failed opening keeps the old coherent task and transcript available (1.202041ms)
+✔ a slower open cannot take over the task chosen by a newer request (1.520667ms)
+✔ an imported thread without local workspace fields resolves its own project default, never the data folder (0.216584ms)
+ℹ tests 6
+ℹ suites 0
+ℹ pass 6
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 424.2875

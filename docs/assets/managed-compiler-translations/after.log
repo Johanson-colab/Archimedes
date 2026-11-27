@@ -1,0 +1,13 @@
+$ node --test electron/ui-audit-managed-compiler-translations.test.cjs electron/i18n-translations.test.cjs
+✔ translation shards cover every string exactly once (7.590291ms)
+✔ keys stay sorted inside each shard so concurrent additions do not collide (2.571542ms)
+✔ the shell merges every shard and keeps the surfaces translated (1.99725ms)
+✔ managed compiler diagnostics are translatable keys (0.72175ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 114.611458

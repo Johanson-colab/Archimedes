@@ -1,0 +1,12 @@
+Base: 1f4b375 plus this feature only
+Host: macOS arm64, Node 26.13.0
+Command: node --test electron/git-state.test.cjs
+Observed output excerpt (timings omitted):
+
+✔ git state distinguishes none, empty, and ready folders
+✔ a linked worktree is reported as nested instead of a project root
+✔ a broken .git entry is suspicious
+✔ directory aliases share Git state without accepting a parent repository
+ℹ tests 4
+ℹ pass 4
+ℹ fail 0

@@ -1,0 +1,18 @@
+✔ same-named papers keep their owner and autosave on departure without replaying an old open request (259.004958ms)
+✔ a delayed save preserves later keystrokes and drains the newest snapshot to its old root (841.37725ms)
+✔ late reads, compile progress and build results update only their owner scope (63.85675ms)
+✔ failed departure autosaves keep the original draft and expose its save error on return (37.409042ms)
+✔ switching source files during an in-flight save retains and saves the final edit to the old file (849.7265ms)
+✔ the actual preload and compile handler preserve owner ids and legacy two-argument calls (5.303333ms)
+✔ Writing opens existing manuscripts before templates and restores the chosen document after remount (54.673209ms)
+✔ a main document at the execution root opens in place and a removed recent document returns to the chooser (30.427917ms)
+✔ compiling main waits for a pending save of another source file in the same manuscript (58.349875ms)
+✔ typing during the compile save barrier retains the new edit and does not compile an older source set (29.104875ms)
+ℹ tests 10
+ℹ suites 0
+ℹ pass 10
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 3028.973041

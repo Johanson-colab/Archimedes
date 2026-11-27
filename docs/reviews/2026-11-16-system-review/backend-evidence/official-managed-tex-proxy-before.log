@@ -1,0 +1,30 @@
+✖ real managed compiler fetches fonts/packages and recompiles with the server offline (2579.769166ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2716.671292
+
+✖ failing tests:
+
+test at electron/managed-latex-engine.live.test.cjs:11:1
+✖ real managed compiler fetches fonts/packages and recompiles with the server offline (2579.769166ms)
+  AssertionError [ERR_ASSERTION]: error: this bundle isn't cached, and we couldn't get it from the internet. Error: unexpected HTTP response code 502 Bad Gateway for URL http://127.0.0.1:50764/bundle.tar.index.gz
+  
+  
+  false !== true
+  
+      at TestContext.<anonymous> (/Users/fei/Desktop/Archimedes/electron/managed-latex-engine.live.test.cjs:41:10)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

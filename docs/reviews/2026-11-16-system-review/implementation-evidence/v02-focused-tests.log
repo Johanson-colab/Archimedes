@@ -1,0 +1,26 @@
+✔ CSV quoting, BOM, CRLF, multiline cells and TSV retain original values (82.554083ms)
+✔ missing tokens are excluded from numeric statistics without rewriting source data (0.274292ms)
+✔ real bundled examples retain documented shape, missingness, group sizes and full-data calculations (2.585458ms)
+✔ time-series dates are real dates, sorted and not truncated to the first 100 rows (6.20475ms)
+✔ display sampling retains endpoints and unsupported numeric fields return an empty plot (2.7545ms)
+✔ field inspection does not empty a valid plot; examples, pagination and bounded chat draft work (639.856125ms)
+✔ analysis owner changes retain each dataset and question, and delayed handoffs identify stale input (464.550416ms)
+✔ the actual analysis component saves full CSV plus SVG, reopens its configuration, and links an explicit source handoff (465.47775ms)
+✔ translation shards cover every string exactly once (15.544666ms)
+✔ keys stay sorted inside each shard so concurrent additions do not collide (3.0625ms)
+✔ the shell merges every shard and keeps the surfaces translated (4.003625ms)
+✔ actual panel requires confirmed mappings, saves once, shows all four categories and never promotes the run (87.525ms)
+✔ a late data chooser cannot inject source rows into another project scope (4.478416ms)
+✔ a changed run snapshot refreshes an open historical comparison as stale without discarding its values (16.854667ms)
+✔ CSV/JSON comparisons distinguish missing, incomparable, within and outside with explicit units/datasets/tolerance (5.266333ms)
+✔ ambiguous or unsupported inputs and mappings fail rather than choosing a column or flattening records (0.550584ms)
+✔ a saved report reopens with source/run fingerprints, while changes remain visible as stale history (64.804209ms)
+✔ actual IPC freezes chosen bytes, rejects cross-run tokens and binds saved numbers to the real current run (52.232667ms)
+ℹ tests 18
+ℹ suites 0
+ℹ pass 18
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2437.882792

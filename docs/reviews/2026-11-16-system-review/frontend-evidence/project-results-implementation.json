@@ -1,0 +1,38 @@
+{
+  "phase": "W04/W05 renderer + file package, core IPC integration and native validation still pending",
+  "tests": {
+    "focused": {
+      "tests": 46,
+      "pass": 46,
+      "fail": 0,
+      "skip": 0,
+      "exitCode": 0
+    },
+    "lint": {
+      "exitCode": 0
+    }
+  },
+  "actualBehavior": [
+    "Original complete CSV bytes plus exported SVG saved to visible execution-root research-results directory",
+    "Actual workspace readLines reads a non-preview final CSV row",
+    "Analysis remount restores dataset/config/question and binds later real session association to same saved id",
+    "Actual figure component A/B unsaved draft separation",
+    "Figure metadata then sequential per-file restore; same id save preserves reference bytes and provenance; no repeated remote image retrieval",
+    "Non-secret model settings persisted; API key excluded"
+  ],
+  "notYetVerified": [
+    "Electron four bridge integration",
+    "8\u201310MiB read_file boundary (backend assigned)",
+    "Native UI saved-result reopen/attach paths"
+  ],
+  "sha256": {
+    "electron/project-results.cjs": "8ddcb95828705a8bfe6e425ae352efa948c2007f6f9019e8bdde6b8c8de53c94",
+    "electron/project-results.test.cjs": "ddad3cf733b8c967587beb6d8212446adcd4b6521fb244da31b388f8733a0385",
+    "src/project-results.ts": "b7f81fb4e4bf4b5f5608e6e520404a07695c8ee4a36d5f140664d90bd3d09f2d",
+    "src/DataAnalysisView.tsx": "9d6cf0a6669041a8d281c1364902e466672e3caebc0479c38bdfade5b6e7028f",
+    "src/ImageCreationView.tsx": "58ce623113b2f01bfec00fe65cfd288486945e71f953329e2ca5468306d72b6a",
+    "src/App.tsx": "1a8079944e4b4b7ac3ce5642a72c3cc3a6b7581e630a83a542867070eb515c62",
+    "electron/data-analysis.test.cjs": "047bb139ed69d8d0d6250ad1f96d66d702435ecd8e923d10ac782881f8597a3b",
+    "electron/figure-project-results.test.cjs": "7190a5a9c62f98873ac8cccf12180a06bd91b5f10dd7196395fab7f256c617e9"
+  }
+}

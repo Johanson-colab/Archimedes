@@ -1,0 +1,1 @@
+{"platform":"Linux container","shellEntry":"non-TTY /bin/sh -> production bash -lc","processGroupMatchesPid":true,"descendantsStopped":true,"orphanMarker":false,"missingPsReportsFailure":true,"image":"neo4j:5.26.2 (entrypoint sh; no service)","pythonImage":"python:3.11-slim missing-ps case"}

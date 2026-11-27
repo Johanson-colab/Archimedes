@@ -1,6 +1,6 @@
 const assert = require("node:assert/strict");
 const { EventEmitter } = require("node:events");
-const { spawnSync } = require("node:child_process");
+const { spawn, spawnSync } = require("node:child_process");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
@@ -23,16 +23,17 @@ test("normalizes only workspace-relative TeX compile targets", () => {
   assert.throws(() => normalizePaperPath("../outside.tex"), /workspace-relative/);
 });
 
-test("creates a collision-safe paper template and discovers main documents", () => {
+test("creates a collision-safe paper template and discovers main documents", async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-latex-"));
   try {
     const first = createLatexProject(root, "paper");
     const second = createLatexProject(root, "paper");
     assert.equal(first.path, "paper/main.tex");
     assert.equal(second.path, "paper-2/main.tex");
-    const projects = listLatexProjects(root);
+    const projects = await listLatexProjects(root);
     assert.equal(projects.length, 2);
     assert.ok(projects.every((project) => project.main));
+    assert.deepEqual(projects.map(project => project.path), ["paper-2/main.tex", "paper/main.tex"].sort((a, b) => a.localeCompare(b)));
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -123,7 +124,7 @@ test("classifies known LaTeX compilers", () => {
   assert.equal(compilerKind("pdflatex.exe"), "pdflatex");
 });
 
-test("imports a complete LaTeX folder and selects its main document", () => {
+test("imports a complete LaTeX folder and selects its main document", async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-latex-workspace-"));
   const source = fs.mkdtempSync(path.join(os.tmpdir(), "conference-paper-"));
   try {
@@ -133,12 +134,12 @@ test("imports a complete LaTeX folder and selects its main document", () => {
     fs.writeFileSync(path.join(source, "references.bib"), "@article{test, title={Test}}\n");
     fs.writeFileSync(path.join(source, "fig", "plot.png"), Buffer.from([0x89, 0x50, 0x4e, 0x47]));
     fs.writeFileSync(path.join(source, ".git", "config"), "ignored");
-    const imported = importLatexProject(root, source);
+    const imported = await importLatexProject(root, source);
     assert.equal(imported.file_count, 3);
     assert.equal(imported.main_path, `${imported.directory}/main.tex`);
     assert.equal(fs.existsSync(path.join(root, imported.directory, "fig", "plot.png")), true);
     assert.equal(fs.existsSync(path.join(root, imported.directory, ".git")), false);
-    const second = importLatexProject(root, source);
+    const second = await importLatexProject(root, source);
     assert.notEqual(second.directory, imported.directory);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
@@ -146,13 +147,13 @@ test("imports a complete LaTeX folder and selects its main document", () => {
   }
 });
 
-test("finds the imported main document even when the workspace discovery cap is exhausted", () => {
+test("finds the imported main document even when the workspace discovery cap is exhausted", async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-latex-large-workspace-"));
   const source = fs.mkdtempSync(path.join(os.tmpdir(), "conference-paper-"));
   try {
     for (let index = 0; index < 4_100; index += 1) fs.writeFileSync(path.join(root, `old-${index}.tex`), "% archived\n");
     fs.writeFileSync(path.join(source, "main.tex"), "\\documentclass{article}\n\\begin{document}Ready\\end{document}\n");
-    const imported = importLatexProject(root, source);
+    const imported = await importLatexProject(root, source);
     assert.equal(imported.main_path, `${imported.directory}/main.tex`);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
@@ -291,4 +292,66 @@ test("missing-glyph diagnostics recover the symbol from XeTeX's code point and d
     { line: 680, message: 'Missing character: There is no – ("2013) in font ptmr8t!' },
   ]);
   assert.doesNotThrow(() => parseLatexDiagnostics('warning: main.tex:1: Missing character: There is no ? ("FFFFFF) in font test!'));
+});
+
+test("aborting an active compilation terminates its entire process group", { skip: process.platform === "win32" }, async () => {
+  const controller = new AbortController();
+  const { runCompiler } = require("./latex-workspace.cjs");
+  let descendant;
+  const code = `
+    const child = require("node:child_process").spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], { stdio: "ignore" });
+    process.stdout.write(String(child.pid) + "\\n");
+    setInterval(() => {}, 1000);
+  `;
+  const result = await runCompiler(process.execPath, ["-e", code], {
+    signal: controller.signal,
+    idleTimeoutMs: 3_000,
+    onOutput(chunk) {
+      const pid = Number(chunk.trim());
+      if (Number.isInteger(pid) && pid > 0) {
+        descendant = pid;
+        controller.abort();
+      }
+    },
+  });
+  assert.ok(descendant);
+  assert.equal(result.cancelled, true);
+  assert.equal(result.timedOut, false);
+  assert.match(result.output, /compilation cancelled/);
+  for (let attempt = 0; attempt < 50; attempt++) {
+    const status = spawnSync("ps", ["-o", "state=", "-p", String(descendant)], { encoding: "utf8" }).stdout.trim();
+    if (!status || status.startsWith("Z")) return;
+    await new Promise(resolve => setTimeout(resolve, 20));
+  }
+  assert.fail("the compiler descendant was still running");
+});
+
+test("selects explicit local pdfLaTeX and runs BibTeX for a referenced bibliography", { skip: process.platform === "win32" }, async t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-local-latex-"));
+  const tools = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-local-latex-tools-"));
+  t.after(() => { fs.rmSync(root, { recursive: true, force: true }); fs.rmSync(tools, { recursive: true, force: true }); });
+  createLatexProject(root, "paper");
+  const script = path.join(tools, "pdflatex");
+  for (const command of ["pdflatex", "bibtex"]) fs.writeFileSync(path.join(tools, command), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+  const commands = [];
+  const result = await compileLatexDocument(root, "paper/main.tex", {
+    localOnly: true,
+    env: { PATH: tools },
+    spawnImpl(command, args, options) {
+      commands.push(path.basename(command));
+      if (command === script) {
+        assert.ok(args.includes("-no-shell-escape"));
+        const target = args.find(arg => arg.startsWith("-output-directory=")).slice("-output-directory=".length);
+        fs.writeFileSync(path.join(target, "main.aux"), "\\bibdata{references}");
+        fs.writeFileSync(path.join(target, "main.pdf"), "%PDF fixture");
+      } else {
+        assert.equal(options.env.BIBINPUTS.split(path.delimiter)[0], fs.realpathSync(path.join(root, "paper")));
+        assert.deepEqual(args, ["main"]);
+      }
+      return spawn(command, args, options);
+    },
+  });
+  assert.equal(result.ok, true, result.log);
+  assert.equal(result.engine, "pdflatex");
+  assert.deepEqual(commands, ["pdflatex", "bibtex", "pdflatex", "pdflatex"]);
 });

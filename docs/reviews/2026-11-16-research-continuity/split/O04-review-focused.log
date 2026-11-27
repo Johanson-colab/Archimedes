@@ -1,0 +1,27 @@
+✔ same-named papers keep their owner and autosave on departure without replaying an old open request (198.074875ms)
+✔ a delayed save preserves later keystrokes and drains the newest snapshot to its old root (863.645458ms)
+✔ late reads, compile progress and build results update only their owner scope (100.917ms)
+✔ failed departure autosaves keep the original draft and expose its save error on return (37.852ms)
+✔ switching source files during an in-flight save retains and saves the final edit to the old file (880.257875ms)
+✔ the actual preload and compile handler preserve owner ids and legacy two-argument calls (5.6965ms)
+✔ Writing opens existing manuscripts before templates and restores the chosen document after remount (77.509708ms)
+✔ a main document at the execution root opens in place and a removed recent document returns to the chooser (27.3115ms)
+✔ compiling main waits for a pending save of another source file in the same manuscript (43.890208ms)
+✔ typing during the compile save barrier retains the new edit and does not compile an older source set (38.223917ms)
+✔ projects sharing one execution folder restore their own manuscript selection (33.519042ms)
+✔ returning to a clean cached manuscript reloads external edits before the next save (35.079625ms)
+✔ opening supporting sources preserves or resolves the actual manuscript compile target (35.152959ms)
+✔ shared note editor never reports edits before the document loads (0.420417ms)
+✔ paper writing only mounts the co-edit pane for a loaded document (0.105625ms)
+✔ shared dialog hook implements escape, tab trapping, scroll lock and focus return (0.742917ms)
+✔ all modal surfaces use the shared dialog shell (8.357125ms)
+✔ welcome composer stays quiet while resizers keep explicit focus styling (2.219667ms)
+✔ paper project dialog is dismissible before a project exists (1.1915ms)
+ℹ tests 19
+ℹ suites 0
+ℹ pass 19
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2917.332959

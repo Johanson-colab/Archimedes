@@ -1,0 +1,23 @@
+✔ imports a local PDF into a library and indexes it without duplicating identical files (703.527292ms)
+✔ opening a project hydrates only the first folder; project-wide browsing deduplicates shared papers (139.8125ms)
+✔ document switching mounts one reader and protects a running paper conversation (46.432042ms)
+✔ more than eight papers remain open and keep their reading positions (92.386458ms)
+✔ removing a paper removes only that folder membership; sync still includes annotations (23.910584ms)
+✔ a late folder refresh cannot overwrite a completed paper-state update (25.119875ms)
+✔ notes survive unmounting and failed saves; editing during save keeps the newer draft (8.44975ms)
+✔ metadata queue bounds concurrency, continues after errors and cancels queued work (2.930667ms)
+✔ search keeps a pasted title together, includes tags, and sorting leaves cache order intact (0.290333ms)
+✔ daily collection saves the current query, project purpose and degraded-source provenance (198.025625ms)
+✔ project reasons remain separate while personal notes stay shared, including after reopening the database (115.111834ms)
+✔ conference collection saves project purpose with the official discovery source (96.021291ms)
+✔ one paper retains independent project reasons and discovery snapshots while personal notes stay shared (93.558875ms)
+✔ paper/link/selection save rolls back as one operation, and viewers cannot change project reasons  (63.744542ms)
+✔ the real preload and main selection handlers preserve the selected project relationship (72.665792ms)
+ℹ tests 15
+ℹ suites 0
+ℹ pass 15
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1337.463875

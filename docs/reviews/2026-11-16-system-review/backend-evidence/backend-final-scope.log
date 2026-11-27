@@ -1,0 +1,44 @@
+✔ review retains the real build with its generated run ID and keeps its data-store lease through background ingestion (1010.620125ms)
+✔ failed run creation rolls back only its pin, and stale or mismatched inputs cannot create a new review (157.991916ms)
+✔ slides copy a historical manuscript to the real target session root with a durable source receipt and reject other projects (145.965791ms)
+✔ the global review database filters same-project-ID histories by data root without fabricating provenance for legacy rows (172.476334ms)
+✔ the actual existing prerequisite script reports local presence without exposing token values or treating optional QA as a generation blocker (540.752958ms)
+✔ missing Python and missing PATH tools produce explicit actionable checks rather than a ready result (137.47775ms)
+✔ the real presence script can permit a limited generation environment while preview and QA tools remain optional (2357.772083ms)
+✔ a stalled npm root subprocess is bounded and killed with the real Python probe process group (3209.076333ms)
+✔ real bridge saves to the canonical project root, registers only actual sessions, and cannot cross data stores (207.077042ms)
+✔ updates retain historical roots, validate session ownership before writes, and survive session deletion/reopen (300.663167ms)
+✔ viewers can reopen result files and see changed hashes but cannot save or inject credentials (169.585792ms)
+✔ a saved 9 MiB CSV is actually readable through the research agent at its final row with bounded output (208.566459ms)
+✔ a historical saved result creates a legitimate empty source session and stages hash-bound figures without editing the manuscript (141.809209ms)
+✔ manuscript figure staging rejects symlink destinations and project mixing without changing external files (97.981417ms)
+✔ Stop while checkout or backend preparation is deferred prevents every later stage and persists one stopped result (141.93425ms)
+✔ a real pilot waiting for its model reports cancellation as stopped and does not retry an incomplete model (2.716916ms)
+✔ shutdown is bounded for an unresponsive preparation and late completion cannot start a pilot or duplicate cleanup (74.704041ms)
+✔ a detached run retains its original database and persisted resource ownership until cleanup finishes (143.724083ms)
+✔ reopening recovers only persisted resources owned by this database and exact run (94.350458ms)
+✔ a directly copied database cannot reclaim an original data workspace's still-active run resources (114.899375ms)
+✔ real main IPC keeps run and late plan events scoped when two data roots contain the same reproduction ID (152.352417ms)
+✔ the actual quit handler waits for bounded run shutdown before closing stores and prevents duplicate cleanup (3.14525ms)
+✔ a new run cannot inherit the previous run's passed verdict, while immutable historical receipts survive reopen (164.655458ms)
+✔ actual Git commit/dirty and known paper/plan changes are recorded without claiming untracked environments (320.284792ms)
+✔ legacy reproduction binding is explicit and cannot move an existing record across project workspaces (85.705875ms)
+✔ basedOnThreadId creates an empty linked session in its real historical root and refuses conflicting owners (130.547625ms)
+✔ actual run history IPC returns each saved receipt and enforces parent project and data-root ownership (169.771125ms)
+✔ workspace facades retain SQL ownership across awaits, aliases, and deferred close (186.522792ms)
+✔ IPC pins the sender's data root while that window switches and thread creation rejects mixed roots (240.507291ms)
+✔ real terminal child persists in its data store after IPC returns and its execution folder has no database (326.176792ms)
+✔ context rejects thread/project/workspace/root mixing before any new turn and preserves historical execution (121.41925ms)
+✔ opening a freshly imported conversation binds the same local context used by run and remains readable to viewers (50.681833ms)
+✔ same imported thread id in two data stores has independent running/stop/approval identity (79.816959ms)
+✔ fresh-process recovery expires local executions, keeps final task output, and leaves cloud-only turns running (223.481167ms)
+✔ snapshot bounds actual text reads and skips generated Python environments while preserving metadata change detection (75.868166ms)
+✔ changing budget placement does not invent modifications and ordinary text still has meaningful line diffs (52.471041ms)
+ℹ tests 36
+ℹ suites 0
+ℹ pass 36
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 6542.024667

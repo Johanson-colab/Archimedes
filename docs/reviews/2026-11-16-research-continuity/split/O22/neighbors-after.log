@@ -1,0 +1,19 @@
+✔ standalone charts retains sorting, chart/table filters and the remote catalog (147.039542ms)
+✔ switching apps retains sort/search and closes menus and preview scroll locks (44.687667ms)
+✔ all twelve built-ins appear once in the five issue categories with four enabled (135.709708ms)
+✔ failed core visibility saves keep the switch unchanged and report an error (20.051ms)
+✔ legacy and categorized plugins share the catalog without duplicate install rows (58.376167ms)
+✔ sidebar order is independent of category; explicit plugin metadata overrides legacy sections (0.232166ms)
+✔ welcome reuses warm paper tokens and the shared accent (0.652375ms)
+✔ welcome board and composer are docked instead of clipped (0.935834ms)
+✔ welcome entrance motion is shortened and no longer loops (0.796333ms)
+✔ the welcome replication card opens the reproduce module (1.345333ms)
+✔ all welcome images resolve inside the app for file and web deployments (151.840875ms)
+ℹ tests 11
+ℹ suites 0
+ℹ pass 11
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 966.223417

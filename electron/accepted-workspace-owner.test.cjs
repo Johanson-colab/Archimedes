@@ -173,13 +173,17 @@ test("a window that vetoes Quit keeps its detached research database open", t =>
   const owner = store.createWorkspaceStore(root);
   t.after(() => { store.closeAllWorkspaces(); fs.rmSync(root, { recursive: true, force: true }); });
   const app = new (require("node:events").EventEmitter)();
+  const compile = new AbortController();
+  const latexCompiles = new Map([[1, new Map([["request", compile]])]]);
   const registration = source.slice(source.lastIndexOf('app.on(', source.indexOf('  closeAllNativeClients();')));
-  new Function("app", "store", "experimentRunner", "closeAllNativeClients", "closeAllTerminals", "collaborationServer", "presence", "harnessSetup", registration)(
-    app, store, { shutdownExperimentRuns() {} }, () => {}, () => {}, null, null, { shutdown() {} },
+  new Function("app", "store", "experimentRunner", "closeAllNativeClients", "closeAllTerminals", "collaborationServer", "presence", "latexCompiles", "harnessSetup", registration)(
+    app, store, { shutdownExperimentRuns() {} }, () => {}, () => {}, null, null, latexCompiles, { shutdown() {} },
   );
   app.emit("before-quit");
+  assert.equal(compile.signal.aborted, false);
   owner.updatePaper("seed-react", { notes: "finished after the canceled quit" });
   assert.equal(owner.getPaper("seed-react").notes, "finished after the canceled quit");
   app.emit("will-quit");
+  assert.equal(compile.signal.aborted, true);
   assert.throws(() => owner.getPaper("seed-react"), /Open a workspace/);
 });

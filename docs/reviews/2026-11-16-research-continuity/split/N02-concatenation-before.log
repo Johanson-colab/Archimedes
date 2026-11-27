@@ -1,0 +1,33 @@
+✔ library metadata updates preserve a manuscript key, manual fields, other entries and directives (145.808416ms)
+✔ new references avoid collisions and keep their key when metadata changes (0.728791ms)
+✖ updating a DOI-matched concatenated field consumes its whole expression and preserves unrelated bytes (0.891667ms)
+ℹ tests 3
+ℹ suites 0
+ℹ pass 2
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 296.901417
+
+✖ failing tests:
+
+test at electron/paper-writing-citations.test.cjs:50:1
+✖ updating a DOI-matched concatenated field consumes its whole expression and preserves unrelated bytes (0.891667ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + 'libraryKey'
+  - 'handKey'
+  
+      at TestContext.<anonymous> (/Users/fei/Desktop/Archimedes-pr-splits/manuscript-citations/electron/paper-writing-citations.test.cjs:57:10)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'libraryKey',
+    expected: 'handKey',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

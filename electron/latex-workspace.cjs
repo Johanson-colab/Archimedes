@@ -22,34 +22,34 @@ function normalizePaperPath(value) {
   return normalized;
 }
 
-function listLatexProjects(root, { maxFiles = 4_000, maxDepth = 10 } = {}) {
+async function listLatexProjects(root, { maxFiles = 4_000, maxDepth = 10 } = {}) {
   const documents = [];
   const workspace = workspaceFiles.workspacePath(root);
   let visited = 0;
-  function visit(directory, depth) {
+  async function visit(directory, depth) {
     if (depth > maxDepth || visited >= maxFiles) return;
     let entries;
-    try { entries = fs.readdirSync(directory, { withFileTypes: true }); } catch { return; }
+    try { entries = await fs.promises.readdir(directory, { withFileTypes: true }); } catch { return; }
     for (const entry of entries) {
       if (visited >= maxFiles || entry.isSymbolicLink() || SKIPPED_DIRECTORIES.has(entry.name)) continue;
       visited += 1;
       const target = path.join(directory, entry.name);
       if (entry.isDirectory()) {
-        visit(target, depth + 1);
+        await visit(target, depth + 1);
         continue;
       }
       if (!entry.isFile() || path.extname(entry.name).toLowerCase() !== ".tex") continue;
       let content = "";
       try {
-        const stats = fs.statSync(target);
-        if (stats.size <= 2_000_000) content = fs.readFileSync(target, "utf8");
+        const stats = await fs.promises.stat(target);
+        if (stats.size <= 2_000_000) content = await fs.promises.readFile(target, "utf8");
       } catch { /* Ignore unreadable candidates. */ }
       const relativePath = path.relative(workspace, target).split(path.sep).join("/");
       const title = /\\title\s*\{([^{}]{1,240})\}/s.exec(content)?.[1]?.replace(/\s+/g, " ").trim() || path.basename(entry.name, ".tex");
       documents.push({ path: relativePath, title, main: /\\documentclass(?:\[[^\]]*\])?\s*\{/s.test(content) });
     }
   }
-  visit(workspace, 0);
+  await visit(workspace, 0);
   return documents.sort((left, right) => Number(right.main) - Number(left.main) || left.path.localeCompare(right.path));
 }
 
@@ -115,7 +115,7 @@ function createLatexDirectory(root, requestedPath) {
   return { name: path.basename(target), path: relative, type: "directory" };
 }
 
-function importLatexProject(root, sourceDirectory) {
+async function importLatexProject(root, sourceDirectory) {
   const workspace = fs.realpathSync(workspaceFiles.workspacePath(root));
   const source = fs.realpathSync(path.resolve(String(sourceDirectory || "")));
   if (!fs.statSync(source).isDirectory()) throw new Error("Choose a folder containing a LaTeX project.");
@@ -168,7 +168,7 @@ function importLatexProject(root, sourceDirectory) {
   // workspace can hit the discovery cap before reaching a newly imported
   // folder in a large research checkout, which used to produce a false
   // "no .tex document" result.
-  const projects = listLatexProjects(destination);
+  const projects = await listLatexProjects(destination);
   const selected = projects.find((project) => project.main) || projects[0];
   const mainPath = selected ? `${directory}/${selected.path}` : "";
   return { name: path.basename(destination), directory, file_count: files.length, total_bytes: totalBytes, main_path: mainPath };
@@ -230,15 +230,35 @@ function parseLatexDiagnostics(output) {
   return diagnostics;
 }
 
+function stopCompilerTree(child) {
+  if (!child.pid) { child.kill("SIGKILL"); return; }
+  if (process.platform === "win32") {
+    const killer = spawn("taskkill.exe", ["/PID", String(child.pid), "/T", "/F"], { windowsHide: true, stdio: "ignore" });
+    killer.once("error", () => child.kill("SIGKILL"));
+    killer.unref();
+    return;
+  }
+  try { process.kill(-child.pid, "SIGKILL"); }
+  catch (error) { if (error.code !== "ESRCH") child.kill("SIGKILL"); }
+}
+
 function runCompiler(command, args, options = {}) {
   const timeoutMs = Math.min(options.managed ? 600_000 : 180_000, Math.max(10_000, Number(options.timeoutMs) || 90_000));
   const spawnImpl = options.spawnImpl || spawn;
   return new Promise((resolve, reject) => {
-    const child = spawnImpl(command, args, { cwd: options.cwd, env: options.env || process.env, stdio: ["ignore", "pipe", "pipe"] });
-    let output = "", timedOut = false, timeoutReason = "";
+    const { signal: abortSignal } = options;
+    abortSignal?.throwIfAborted();
+    const child = spawnImpl(command, args, { cwd: options.cwd, env: options.env || process.env, stdio: ["ignore", "pipe", "pipe"], detached: process.platform !== "win32" });
+    let output = "", stopReason = "";
     let idleTimer;
     const idleMs = Number(options.idleTimeoutMs) || 0;
-    const stop = (reason) => { if (timedOut) return; timedOut = true; timeoutReason = reason; child.kill("SIGKILL"); };
+    const stop = (reason) => {
+      if (stopReason) return;
+      stopReason = reason;
+      stopCompilerTree(child);
+    };
+    const abort = () => stop("cancelled");
+    abortSignal?.addEventListener("abort", abort, { once: true });
     const resetIdle = () => {
       clearTimeout(idleTimer);
       if (idleMs > 0) idleTimer = setTimeout(() => stop("idle"), idleMs);
@@ -258,16 +278,29 @@ function runCompiler(command, args, options = {}) {
     child.stderr?.on("data", (chunk) => decode(stderrDecoder, chunk));
     const timer = setTimeout(() => stop("total"), timeoutMs);
     resetIdle();
-    child.once("error", (error) => { clearTimeout(timer); clearTimeout(idleTimer); reject(error); });
+    const cleanup = () => {
+      clearTimeout(timer);
+      clearTimeout(idleTimer);
+      abortSignal?.removeEventListener("abort", abort);
+    };
+    child.once("error", (error) => { cleanup(); reject(error); });
     child.once("close", (code, signal) => {
       const stdoutTail = stdoutDecoder.end(), stderrTail = stderrDecoder.end();
       if (stdoutTail) append(stdoutTail);
       if (stderrTail) append(stderrTail);
-      clearTimeout(timer); clearTimeout(idleTimer);
-      if (timedOut) output += `\nLaTeX compilation timed out (${timeoutReason === "idle" ? "no compiler output" : "total time limit"}).`;
-      resolve({ code: timedOut ? 1 : Number.isInteger(code) ? code : 1, signal: signal || null, output, timedOut, timeoutReason });
+      cleanup();
+      const cancelled = stopReason === "cancelled";
+      const timedOut = Boolean(stopReason) && !cancelled;
+      if (timedOut) output += `\nLaTeX compilation timed out (${stopReason === "idle" ? "no compiler output" : "total time limit"}).`;
+      if (cancelled) output += "\nLaTeX compilation cancelled.";
+      resolve({ code: stopReason ? 1 : Number.isInteger(code) ? code : 1, signal: signal || null, output, timedOut, timeoutReason: timedOut ? stopReason : "", cancelled });
     });
   });
+}
+
+function findLocalLatexCompiler(env = process.env) {
+  const latexmk = findExecutable(["latexmk", "latexmk.exe", "/Library/TeX/texbin/latexmk", "/opt/homebrew/bin/latexmk", "/usr/local/bin/latexmk"], env);
+  return latexmk || findExecutable(["pdflatex", "pdflatex.exe", "/Library/TeX/texbin/pdflatex", "/opt/homebrew/bin/pdflatex", "/usr/local/bin/pdflatex"], env);
 }
 
 function compilerKind(executable) {
@@ -282,6 +315,7 @@ function manuscriptDiagnostic(messageKey, detail) {
 }
 
 async function compileLatexDocument(root, requestedPath, options = {}) {
+  options.signal?.throwIfAborted();
   root = workspaceFiles.workspacePath(root);
   const sourcePath = normalizePaperPath(requestedPath);
   const startedSource = captureManuscriptSources(root, sourcePath);
@@ -301,10 +335,8 @@ async function compileLatexDocument(root, requestedPath, options = {}) {
   }
 
   const compilerEnv = { ...process.env, ...(options.env || {}), LANG: "en_US.UTF-8", LC_ALL: "en_US.UTF-8" };
-  const latexmk = options.executable || findExecutable(["latexmk", "latexmk.exe", "/Library/TeX/texbin/latexmk", "/opt/homebrew/bin/latexmk", "/usr/local/bin/latexmk"], compilerEnv);
-  const pdflatex = latexmk ? "" : findExecutable(["pdflatex", "pdflatex.exe", "/Library/TeX/texbin/pdflatex", "/opt/homebrew/bin/pdflatex", "/usr/local/bin/pdflatex"], compilerEnv);
-  const tectonic = latexmk || pdflatex ? "" : findExecutable(["tectonic", "tectonic.exe", "/opt/homebrew/bin/tectonic", "/usr/local/bin/tectonic"], compilerEnv);
-  const executable = latexmk || pdflatex || tectonic;
+  const localCompiler = options.executable || findLocalLatexCompiler(compilerEnv);
+  const executable = localCompiler || (!options.localOnly && findExecutable(["tectonic", "tectonic.exe", "/opt/homebrew/bin/tectonic", "/usr/local/bin/tectonic"], compilerEnv));
   if (!executable) throw new Error("No LaTeX compiler was found. Install a TeX distribution (latexmk or pdflatex) or Tectonic, then try again.");
   const engineKind = compilerKind(executable);
   // A manual compile is expected to reflect changes outside the .tex source
@@ -326,9 +358,24 @@ async function compileLatexDocument(root, requestedPath, options = {}) {
   let run, manuscriptObservation;
   try {
     run = await runCompiler(executable, args, { ...runOptions, cwd: sourceDirectory, env: compilerEnv });
-    if (engineKind === "pdflatex" && run.code === 0) {
-      const secondPass = await runCompiler(executable, args, { ...runOptions, cwd: sourceDirectory, env: compilerEnv });
-      run = { ...secondPass, output: `${run.output}\n${secondPass.output}` };
+    if (engineKind === "pdflatex" && run.code === 0 && !options.signal?.aborted) {
+      const aux = path.join(buildDirectory, `${documentName}.aux`);
+      let passes = 1;
+      if (fs.existsSync(aux) && /\\bibdata\{/.test(fs.readFileSync(aux, "utf8"))) {
+        const bibtex = findExecutable([path.join(path.dirname(executable), process.platform === "win32" ? "bibtex.exe" : "bibtex"), "bibtex", "bibtex.exe"], compilerEnv);
+        if (!bibtex) throw new Error("Install BibTeX in the local TeX distribution and recompile.");
+        const bibEnv = { ...compilerEnv,
+          BIBINPUTS: sourceDirectory + path.delimiter + (compilerEnv.BIBINPUTS || ""),
+          BSTINPUTS: sourceDirectory + path.delimiter + (compilerEnv.BSTINPUTS || ""),
+        };
+        const bib = await runCompiler(bibtex, [documentName], { ...runOptions, cwd: buildDirectory, env: bibEnv });
+        run = { ...bib, output: `${run.output}\n${bib.output}` };
+        passes = 2;
+      }
+      for (let pass = 0; pass < passes && run.code === 0 && !options.signal?.aborted; pass++) {
+        const next = await runCompiler(executable, args, { ...runOptions, cwd: sourceDirectory, env: compilerEnv });
+        run = { ...next, output: `${run.output}\n${next.output}` };
+      }
     }
     manuscriptObservation = await observation.finish();
   } finally {
@@ -339,7 +386,8 @@ async function compileLatexDocument(root, requestedPath, options = {}) {
   const logPath = path.join(buildDirectory, `${documentName}.log`);
   const log = !run.timedOut && fs.existsSync(logPath) && fs.statSync(logPath).mtimeMs >= startedAt
     ? fs.readFileSync(logPath, "utf8").slice(-80_000) : run.output;
-  let ok = run.code === 0 && hasPdf;
+  const cancelled = Boolean(run.cancelled || options.signal?.aborted);
+  let ok = run.code === 0 && hasPdf && !cancelled;
   const diagnostics = parseLatexDiagnostics(`${run.output}\n${log}`);
   let finishedSource;
   try { finishedSource = captureManuscriptSources(root, sourcePath); }
@@ -371,6 +419,7 @@ async function compileLatexDocument(root, requestedPath, options = {}) {
   return {
     ok,
     timed_out: Boolean(run.timedOut),
+    cancelled,
     engine: path.basename(executable),
     source_path: sourcePath,
     pdf_path: ok ? path.relative(root, absolutePdf).split(path.sep).join("/") : "",
@@ -392,6 +441,7 @@ module.exports = {
   createLatexFile,
   createLatexProject,
   findExecutable,
+  findLocalLatexCompiler,
   importLatexProject,
   listLatexProjects,
   normalizePaperPath,

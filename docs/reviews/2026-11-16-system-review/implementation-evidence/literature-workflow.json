@@ -1,0 +1,30 @@
+{
+  "date": "2026-11-16",
+  "tasks": [
+    "W02",
+    "W03",
+    "X02"
+  ],
+  "status": "focused-passed; native-after and unified checks pending",
+  "command": "node --test electron/discovery-bibliography.test.cjs electron/daily-figures-ui.test.cjs electron/library-project-records.test.cjs electron/library-workspace.test.cjs electron/i18n-translations.test.cjs electron/ui-audit-module-headers.test.cjs",
+  "result": {
+    "tests": 32,
+    "pass": 32,
+    "fail": 0,
+    "skip": 0,
+    "exit": 0
+  },
+  "filesSha256": {
+    "src/discovery-state.ts": "da3c767497b72a397d9e2857a9b4f29eaa465a5a8d7845204d5ea49823f43d3b",
+    "src/bibliography.ts": "a667e8b80b8ae4fd89b1d1e0f85a01d9538b5d20ba32f58e139705e05474ae34",
+    "src/BibliographyDialog.tsx": "1ed8ea889260c9cef8db629c5dc602fa67e3fec7dde567ca10e57c5812fa0324",
+    "src/ProjectPaperContext.tsx": "d1f175ec573b4e83b3e0d356c6d4ff5d4b703830592c8da0ea8773ccf66fcf31",
+    "src/LibraryView.tsx": "60bc906dee33f32d4df07cb32b269301eca1b5dc32e939de5ef250c405e606f1",
+    "src/LibraryWorkspace.tsx": "e6ceec9c5bd1bec43a909b5e0ef6a42ba60674b8e7ea06bdd89ca8e6099ca4fe",
+    "src/ConferenceDiscovery.tsx": "765a7976cf2acc9e295c01e010302c04786d363508e9fb73291a9cbfda267304",
+    "src/library-preview.ts": "b718d778ff92a8b8b887cbafd85c03abb45ef5942551fd2cf500409ef6ce4916",
+    "src/library-workspace.css": "edf5bdd8009c2b749dc3d27d3cb2e6cfced5fcd4ea78f05a58510c3fb37b5ce9",
+    "src/i18n/translations/library.ts": "3d0f6bf70f23f6bafc5586594cde35049cbf9328b37bc3f60f2b600207ba40b5",
+    "electron/discovery-bibliography.test.cjs": "7a4013cffccfb19d675fa2e2f55e663a7c30f556d3339853428ec8c6e8601b94"
+  }
+}

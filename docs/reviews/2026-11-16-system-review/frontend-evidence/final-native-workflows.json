@@ -1,0 +1,177 @@
+{
+  "scope": "Four normal native workflows, using CUA + real Electron renderer/main/IPC + disposable SQLite/files and localhost fake provider only",
+  "result": "normal business workflows passed; standard repository gates and packaged-app audit handed to quality",
+  "renderer_build": {
+    "exit_code": 0,
+    "log": "final-native-renderer-build.log",
+    "warning": "Vite existing large-chunk warning"
+  },
+  "native_results": {
+    "csv_chart_manuscript": {
+      "passed": true,
+      "rows": 8,
+      "historical_execution_root": "/private/var/folders/y6/7f277x5n4z14sqwsw21h8ffm0000gn/T/archimedes-final-journeys-mi137r7a/manuscript-a",
+      "default_execution_root": "/private/var/folders/y6/7f277x5n4z14sqwsw21h8ffm0000gn/T/archimedes-final-journeys-mi137r7a/new-default-a",
+      "original_unsent_chat_preserved": true,
+      "png_sha256": "497cb3d53ae383eafcf0571fafa7d6852dcfa3b40251cd6482e8faf72ba14175",
+      "body_and_inserted_graphicx_preserved": true,
+      "actual_official_tectonic_build_ms": [
+        554,
+        472
+      ],
+      "source_result_reopened": true
+    },
+    "manuscript_review_revision_slides": {
+      "passed": true,
+      "actual_review_run_id": "23abc04d-c056-4167-afe7-5cf735c0f882",
+      "source_version": "c13c740d7206c3bad3556226592ffcf3bef5570398e23e057c4a2ded843eda70",
+      "pdf_sha256": "8121598a0999c5fb6eba5048b85a38cc2945b69c1daf681933e6710ae7da2712",
+      "revision_draft_retains_page_quote_version_and_original_root": true,
+      "slides_current_pdf_received": true,
+      "slides_missing_setup_next_step_appends_to_existing_draft": true,
+      "limit": "No MinerU upload, paid model or real PPTX generation; native slides acceptance stops at truthful missing-dependency setup action. Actual target-thread creation/staging has separate real App callback/SQLite/FS coverage."
+    },
+    "same_id_two_data_roots": {
+      "passed": true,
+      "A_status": "completed",
+      "A_response": "A_ONLY_NATIVE_FINAL_REPLY",
+      "B_turn_count_unchanged": 1,
+      "B_unsent_draft_preserved": true,
+      "A_attachment_not_shown_in_B": true,
+      "files": {
+        "A": "A_ONLY_NATIVE_DISK_RESULT\n",
+        "BExists": false,
+        "newDefaultBExists": false
+      }
+    },
+    "project_transfer_and_metrics": {
+      "passed": true,
+      "export_file_count": 17,
+      "restored_project_id": "31c44da2-14da-4035-acad-b71c59512cc7",
+      "restored_folder": "/private/var/folders/y6/7f277x5n4z14sqwsw21h8ffm0000gn/T/archimedes-final-journeys-mi137r7a/restored/Restored Workflow-31c44da2",
+      "new_ids_and_history_source_root": true,
+      "manuscript_continuation_saved": true,
+      "original_A_modified_by_restored_edit": false,
+      "original_eight_row_analysis_reopened": true,
+      "comparison_id": "332e5b0e-7281-4b7e-bdfb-725495a079d0",
+      "comparison_counts": {
+        "missing": 0,
+        "incomparable": 0,
+        "within": 1,
+        "outside": 0
+      },
+      "comparison_reopened_from_saved_history": true,
+      "rows": [
+        {
+          "row": 1,
+          "metric": "accuracy",
+          "expectedRaw": "0.9",
+          "actualRaw": "0.9",
+          "expected": "0.9",
+          "actual": "0.9",
+          "expectedUnit": "fraction",
+          "actualUnit": "fraction",
+          "expectedDataset": "fixture",
+          "actualDataset": "fixture",
+          "tolerance": "0",
+          "difference": "0",
+          "status": "within",
+          "reason": "The absolute difference is within the confirmed tolerance."
+        }
+      ]
+    },
+    "compact_layouts": {
+      "observed": true,
+      "writing": "Refresh remains a compact title action in existing manuscript chooser",
+      "daily": "New library is beside Save to; form initially collapsed"
+    }
+  },
+  "chooser_fix": "Transfer and metric file choosers were attached to their invoking window after actual selection could not complete. Final native retry includes CSV selection -> mapping -> compare/save -> leave/run reopen -> saved evidence.",
+  "evidence": {
+    "ui_observations": "final-native-observations.json",
+    "A_B_records": "final-native-owner-records.json",
+    "transfer_records": "final-native-transfer-records.json",
+    "metric_file_receipt": "final-native-metric-records.json",
+    "source_snapshot": "final-native-source-snapshot.json",
+    "retained_review_inputs": "final-native-retained-inputs.json",
+    "loaded_cjs_final_iteration": "final-native-loaded-modules.json"
+  },
+  "fingerprint_boundary": "Renderer build stayed fixed for all final journeys. The final loaded CJS fingerprint is from the last iteration after both chooser-parent corrections; earlier journeys preceded only those narrow chooser changes. Other frozen algorithms were unchanged.",
+  "source_sha256": {
+    "src/App.tsx": "0f3389ab2b7a0095f4ea26dc48af921b4526ed1150171ba88df112452619a23e",
+    "src/DataAnalysisView.tsx": "fbcea1e6214984fd51c0ae6578391093861616d34e6f57c373af162d0574b749",
+    "src/ImageCreationView.tsx": "2be377af1fe13d64e17f5bd7ba4d1001740905f342a245924369e47d97174091",
+    "src/PaperWritingView.tsx": "f518bc8093cfc890736d5590eda3f5f7e133eec7cc93873102605564fff5e6e9",
+    "src/PaperReviewView.tsx": "ba418c68745ad7d81012328eb2a514a098cf8859c99d7a92ec4f738b8d62491c",
+    "src/PaperToSlidesView.tsx": "f062b2d6442b2f6a655c1e034fd868cfdc92446c419e1d94e7a4f4d6f8ff7658",
+    "src/ReproduceView.tsx": "27015f910a6184eaa65c2e5c47cf2b65b8043287d1225a26a5d67b56dcd58cf2",
+    "src/NotesView.tsx": "23d1d6a3368186bc8d7a365b88f575766ccc754d45f628866f37e656864deb16",
+    "src/NewsView.tsx": "445afc80c438799c3682176011b2c2ce2ba6f08d190786d49d39f8132e175d28",
+    "src/figure-image.ts": "493c65dc36ead459af83bc79c5526cf1d3bc60c03ac49683c643c4f5e80ee9bf",
+    "src/project-results.ts": "3c7ca7c49920e90f6944473af8e90fca06868f7e35beb9e2e629a1e11b2d60b4",
+    "src/ProjectTransferDialog.tsx": "898b8d2b9fcdebf107b055b66d9ea030d049ed19b3af309a08f2838c80d98628",
+    "src/MetricComparisonPanel.tsx": "0febbca42eff3c5d84fabe9a27efc13fcb21ca75cf4bdb85875cecb9769ed4dc",
+    "src/LibraryView.tsx": "ecb3eea4121a924407ee64efa727b666f2facdc7ae586b094bf5e19d27fd38fe",
+    "src/workflow-continuity.css": "2d487840d63c1d80793efb6ec73813214da58caf846f6eec7fc98750046dc2cd",
+    "electron/main.cjs": "49d5023ebda2cfd6a8ce481de72efec0ec1b4d8136990a74bf7aebd6b763ba85",
+    "electron/preload.cjs": "d52752ba0198ce552b68140459555c0190ad4bdd8925d94df063b2aa843e74d1",
+    "electron/store.cjs": "3bf08867dae3761a807ed286be56030db8f261a8a2f622d0cd09e5a8e244d4fd",
+    "electron/project-result-commands.cjs": "9e5892cf2a9d0fca82cf338d80b7a379887e19f7dd72138f24c768aa89b8f92e",
+    "electron/project-transfer-commands.cjs": "cb7a0e623ee71e9e5fa4607d83e0323abdb9f61759db48516847ce34485a1a10",
+    "electron/metric-comparison-commands.cjs": "e7af969eec13bdb51d521b877817767ed0b7470188650539024b3d83cd70be30"
+  },
+  "renderer_assets_sha256": {
+    "dist/index.html": "43b9ac4a7e328dd33dc76d989c7d3f687c45ab3cb1a8bd82f62929e2e55f444b",
+    "dist/assets/ProjectTransferDialog-CMKAAz4Y.js": "b7ac3aac5bcbabcd352654ced501f4afaf123427f3fa6a30ec8435e75f60e83a",
+    "dist/assets/PaperReviewView-BumhJLeh.js": "93d4adf7f8ccf2686a3249c7c4a8932a9a69aafc43176b0d403aaa0a36ec5860",
+    "dist/assets/index-lzQkFasu.css": "1dea44e982c9b3743d015af0e1568c63a8e1442b8845091d8a2847efe7773b5b",
+    "dist/assets/PaperWritingView-a6ZtpqkA.js": "3e066a9a93a3a893b6120947aa265caa18a7094c84afc0a89a086fa26da05704",
+    "dist/assets/ReproduceView-QioRweGD.css": "5f97bd8f0d11c5019c1b0519ae0603216dbb99f074a9932e73479f7f74665054",
+    "dist/assets/ReproduceView-D2WA43bN.js": "97fc3106778d85e6ee1d71647a3778c5eacbb07dc93d3fe29b2bf4db942e1e85",
+    "dist/assets/DataAnalysisView-DRg1V7Y0.css": "5456c21bb46f27de88c5209e9ad1fd337e2633597f8f4480dd9f24d01a26fc5c",
+    "dist/assets/PaperToSlidesView-DcDqGCe-.js": "386c0326d2aea8b28c00be141a308ce82ff08354562b46a9d36fb242b52d46c4",
+    "dist/assets/ImageCreationView-B6FrNZHV.js": "8d683da7877d44a49bd66c3ff0e270ac43bf997845bfca372a77ca1fb44faa92",
+    "dist/assets/DataAnalysisView-DU_b35Iq.js": "d2b08346bca585a15c8614f5e305ce8ceb4e24a216f40fc547ef9e04a6373c81",
+    "dist/assets/PaperToSlidesView-D6-NTZcF.css": "7af311d432489c3b17ec23ccb48c7513295cbf467d528abb07f3c24f7107314d",
+    "dist/assets/PaperWritingView-D9FQG_5Z.css": "90dec2496da03063ed64081f9ab6d136e574ffb9f2bd2d2c00fb20806db8fff8",
+    "dist/assets/index-BBSJPVxM.js": "0b644f4eb5a4043750834282c6cea659007461bd1ca2fbb179c710236f81add4",
+    "dist/assets/ProjectTransferDialog-BhKrJAz6.css": "cc86dbf214a1f1412c5112b23acf4fe09c748b1317fa992d767bfa241ae7b904"
+  },
+  "images": {
+    "public_thumbnail_removed": "analysis-project-after.jpg moved to local frontend-evidence/analysis-project-after-thumbnail.jpg; no valid matched analysis pair is claimed",
+    "writing_daily_supplement": "New captures were Stage Manager thumbnails (226x232); excluded from public assets",
+    "metric": "metric-comparison-native.jpg is a real 3120x1960 native screenshot; standalone evidence, not a 2200x1898 matched pair",
+    "earlier_public_images": "Existing qualified pairs are retained for quality to select"
+  },
+  "cleanup": {
+    "native_windows": "Menu Quit observed noWindowsAvailable",
+    "task_electron": "Own PTY exited 0 after Ctrl-C cleanup; no remaining task Electron process",
+    "local_fake_provider": "PID 83295 stopped with SIGTERM",
+    "remaining_task_processes": [],
+    "fixtures": "Retained task-owned fixture and official TeX cache for final quality gate; no real user profile used"
+  },
+  "resources": {
+    "fixture": "/private/var/folders/y6/7f277x5n4z14sqwsw21h8ffm0000gn/T/archimedes-final-journeys-mi137r7a",
+    "wrapper": "/private/var/folders/y6/7f277x5n4z14sqwsw21h8ffm0000gn/T/archimedes-final-journeys-mi137r7a/launch-after.cjs",
+    "profile_runtime": "/private/var/folders/y6/7f277x5n4z14sqwsw21h8ffm0000gn/T/archimedes-final-journeys-mi137r7a/profile/latex-runtime",
+    "official_resources_handoff": "backend-evidence/official-tex-resource-handoff.json",
+    "conditional_resources_handoff": "backend-evidence/conditional-resource-handoff.json"
+  },
+  "limitations": [
+    "Simulated-review content is deterministic local fixture output, not model or scientific quality evidence.",
+    "The first short manuscript correctly stopped the review text preflight; a readable two-page fixture then completed the normal review.",
+    "One stale comments:list request during data-folder switching was rejected by its owner check; no current workflow impact or wrong-data write.",
+    "No commit/push/PR was performed by this frontend agent."
+  ],
+  "post_native_ui_patch": {
+    "scope": "Metric comparison styling and concise operational copy only; calculation, state and IPC unchanged",
+    "reason": "Actual native screenshot showed browser-default secondary buttons and repeated disclaimers",
+    "native_business_results_above": "Recorded before this visual-only patch; not rerun",
+    "validation_owner": "quality_review: existing component/i18n checks, lint and actual packaged-app UI",
+    "files_sha256": {
+      "src/MetricComparisonPanel.tsx": "e082e4d40adde0f73bcde64bbfea944415b120d59bae4cdd2df8f2c5a19a78fa",
+      "src/metric-comparison.css": "3437a906d855feafe92ee637347744070f86a403047298fb717c6698c9d54171",
+      "src/i18n/translations/metricComparison.ts": "b4cb98fccd6c0cebea29b2f22757d2d5a470e14d3fae7faf422a9d15d7f8b643"
+    }
+  }
+}

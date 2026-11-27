@@ -1,0 +1,7 @@
+Command change scans now apply the existing text budget before reading or hashing file contents and skip generated Python environments. Files outside the text budget retain size/time metadata. A tracking-mode change alone no longer marks an untouched file as modified. Command receipts retain metadata tracking, skipped directories and budget coverage. The UI reports limits when text or tracked-file budgets are reached; routine `.git` or dependency exclusions stay in the receipt.
+
+Split from https://github.com/Johanson-colab/Archimedes/pull/336 following the maintainer's request; base: upstream `main` at `1f4b375`.
+
+Validation: 11 focused actual filesystem, approved-command and existing capability checks pass; lint, build and theme checks pass. Standard `npm test`: 1,273 tests, 1,259 pass, 7 fail, 7 skip. The unchanged base has the same seven failures: three canonical Git/worktree checks, three Windows shell path fixtures on macOS and the library translation ordering check.
+
+The same controlled 39 MB directory causes 39,000,000 bytes / 150 reads before and 7,200,000 bytes / 8 reads after. A metadata-only file change and ordinary line differences remain detectable. The [measurement record](https://github.com/feiiiiii5/Archimedes/blob/f14da97cad4c14e11a04c3096a395fc0a917d303/docs/assets/workspace-snapshot-budget/behavior.md) and `node scripts/measure-workspace-snapshot.cjs` provide nonvisual before/after evidence. This is a snapshot I/O measurement.

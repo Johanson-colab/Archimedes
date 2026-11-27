@@ -1,0 +1,16 @@
+Base: 1f4b375 plus this feature only
+Host: macOS arm64, Node 26.13.0
+Command: node --test electron/terminal-shell.test.cjs
+Observed output excerpt (timings omitted):
+
+✔ Windows prefers PowerShell 7 when it is installed
+✔ Windows falls back to Windows PowerShell before cmd
+✔ Windows uses COMSPEC only as the last built-in fallback
+✔ explicit shell profiles do not fall through to a different shell
+✔ custom shell paths are honored when they exist
+✔ macOS and Linux use the login shell with -l
+✔ missing POSIX shells fall back to /bin/sh
+✔ Windows shell candidates use target paths for store installs and alternate drives
+ℹ tests 8
+ℹ pass 8
+ℹ fail 0

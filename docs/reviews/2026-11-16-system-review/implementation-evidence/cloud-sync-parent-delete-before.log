@@ -1,0 +1,10 @@
+                                                                                        ?column?                                                                                         
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ PASS: migration/backfill, same-ID final monotonicity, aggregate status, membership delete/retry/re-add, legacy DELETE, library tombstone, retained canonical paper, viewer/outsider RLS
+(1 row)
+
+PASS: concurrent final commit versus blocked stale running update; peer editor legacy DELETE preserves tombstone.
+Own container cleanup: removed
+exec -i archimedes-cloud-sync-78f6e532-bbd7-4a6b-9f10-be60b64ae241: ERROR:  parent deletion left child rows
+CONTEXT:  PL/pgSQL function inline_code_block line 6 at RAISE
+

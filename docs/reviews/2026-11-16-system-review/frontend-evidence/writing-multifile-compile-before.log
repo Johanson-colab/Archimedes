@@ -1,0 +1,28 @@
+✖ compiling main waits for a pending save of another source file in the same manuscript (219.27775ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 914.015458
+
+✖ failing tests:
+
+test at electron/paper-writing-workspace.test.cjs:277:1
+✖ compiling main waits for a pending save of another source file in the same manuscript (219.27775ms)
+  AssertionError [ERR_ASSERTION]: compiler ran before section save; it read "Original section\n"
+  
+  1 !== 0
+  
+      at TestContext.<anonymous> (/Users/fei/Desktop/Archimedes/electron/paper-writing-workspace.test.cjs:292:10)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 1,
+    expected: 0,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

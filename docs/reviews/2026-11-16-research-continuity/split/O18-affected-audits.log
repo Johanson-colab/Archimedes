@@ -1,0 +1,16 @@
+✔ Paper review remains available as a Writing & delivery app, hidden by default (1.224417ms)
+✔ Paper review is registry-hosted with a real bridge and in-page controls (0.265375ms)
+✔ Library Review tab is renamed Interactive paper and the old workbench reads as reading (0.1615ms)
+✔ Paper review exposes venue packs, model choice and a simulated-review disclaimer (1.51175ms)
+✔ Paper review API surface is wired through preload and main (0.195792ms)
+✔ Paper review strings are translated (0.122584ms)
+✔ a clicked directory link expands nested Files entries and can still open a skill file (363.86125ms)
+✔ newer path requests win over slower directory inspection (1.091625ms)
+ℹ tests 8
+ℹ suites 0
+ℹ pass 8
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 995.969084

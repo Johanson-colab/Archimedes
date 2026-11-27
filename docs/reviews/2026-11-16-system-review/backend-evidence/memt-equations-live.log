@@ -1,0 +1,18 @@
+✔ a single equality with a named function is sufficient (Post-Attention regression) (2.929708ms)
+✔ standalone sampling expressions with only one relation are detected (0.532333ms)
+✔ inline math in prose cannot chain multiple paragraphs into an equation (0.815542ms)
+✔ fraction, root, accents, and scripts remain part of their fixed-baseline equation (0.176459ms)
+✔ capital A operands do not become English articles during prose classification (0.135083ms)
+✔ column evidence keeps a display equation separate from adjacent-column prose (0.109209ms)
+✔ image contents are excluded without altering the image boundary (0.628125ms)
+✔ raw PDF transform adapter and detection scale together (0.401708ms)
+✔ empty / rotated pages do not produce equation boxes (0.105416ms)
+✔ MemT pages 6–8: 15 complete displays, no prose blocks, at five zoom levels (793.920083ms)
+ℹ tests 10
+ℹ suites 0
+ℹ pass 10
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 977.23225

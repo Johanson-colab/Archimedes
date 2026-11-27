@@ -1,0 +1,69 @@
+{
+  "version": 1,
+  "build_id": "4bf280b1-7882-4a50-8991-31f4e4f47fee",
+  "workspace": "/private/var/folders/y6/7f277x5n4z14sqwsw21h8ffm0000gn/T/archimedes-final-journeys-mi137r7a/manuscript-a",
+  "source_path": "paper/main.tex",
+  "project_path": "paper",
+  "created_at": "2026-11-16T08:03:10.878Z",
+  "engine": "tectonic",
+  "requested_source": {
+    "workspace": "/private/var/folders/y6/7f277x5n4z14sqwsw21h8ffm0000gn/T/archimedes-final-journeys-mi137r7a/manuscript-a",
+    "source_path": "paper/main.tex",
+    "project_path": "paper",
+    "coverage": "manuscript-directory",
+    "source_version": "c13c740d7206c3bad3556226592ffcf3bef5570398e23e057c4a2ded843eda70",
+    "observation_version": "0017a3369ee99302376cdbf1f439d1a259775c95bf04798ef35e4419ee6852b9",
+    "files": [
+      {
+        "path": "paper/figures/results/native-original-analysis-497cb3d53ae3-plot.png",
+        "bytes": 127174,
+        "sha256": "497cb3d53ae383eafcf0571fafa7d6852dcfa3b40251cd6482e8faf72ba14175"
+      },
+      {
+        "path": "paper/figures/results/native-original-analysis-497cb3d53ae3-plot.png.source.json",
+        "bytes": 543,
+        "sha256": "2d4dd90b620db13282cf9390bf2bd7d023a7f532832a9372d0f412476fef291b"
+      },
+      {
+        "path": "paper/main.tex",
+        "bytes": 296,
+        "sha256": "00a0028bbd2810129591bef5a8c12c6c8dd6788a28d853fba872975f96098e3b"
+      },
+      {
+        "path": "paper/section.tex",
+        "bytes": 1789,
+        "sha256": "c61c9b7a23df890a8e08d33395e5238464678474d422c0cacb4787e55881966f"
+      }
+    ],
+    "total_bytes": 129802,
+    "untracked_inputs": [],
+    "excluded_directories": [
+      ".archimedes",
+      ".git",
+      "node_modules",
+      "dist",
+      "build",
+      ".next",
+      ".venv",
+      "venv",
+      "__pycache__",
+      ".cache"
+    ]
+  },
+  "started_source_version": "c13c740d7206c3bad3556226592ffcf3bef5570398e23e057c4a2ded843eda70",
+  "finished_source_version": "c13c740d7206c3bad3556226592ffcf3bef5570398e23e057c4a2ded843eda70",
+  "source_changed": false,
+  "status": "current",
+  "pdf": {
+    "path": ".archimedes/latex-build/defc3a7a99c3/4bf280b1-7882-4a50-8991-31f4e4f47fee/main.pdf",
+    "bytes": 62494,
+    "sha256": "8121598a0999c5fb6eba5048b85a38cc2945b69c1daf681933e6710ae7da2712"
+  },
+  "log": {
+    "path": ".archimedes/latex-build/defc3a7a99c3/4bf280b1-7882-4a50-8991-31f4e4f47fee/build-output.log",
+    "bytes": 1499,
+    "sha256": "c956cb3ef542f173cbe55c581f06bde26e20f7bd93b2ee2516ca59a0b089eb45",
+    "retention": "bounded compiler output"
+  },
+  "manifest_path": ".archimedes/latex-build/defc3a7a99c3/4bf280b1-7882-4a50-8991-31f4e4f47fee/source-snapshot.json"
+}

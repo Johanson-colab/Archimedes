@@ -1,0 +1,39 @@
+{
+  "sourceCommit": "1f4b37581c446770d576440f9ebb9bca5c55bfb7",
+  "environment": "Electron 43.4.1; actual main/preload; isolated userData/data/projects; CUA UI actions; no model request or LaTeX compile",
+  "entryObservation": {
+    "existingFile": "project-b/paper/main.tex",
+    "directWritingEntry": "Template library, Create project and Import existing folder; no Open an existing project list and no main.tex. Closing chooser shows No project selected.",
+    "ordinaryFilesClick": "paper/main.tex opens in the generic Files code preview; it does not activate Paper Writing.",
+    "supportedAlternative": "A locally seeded chat message linking to paper/main.tex routes through the existing openChangedFile path and opens the existing B paper in Paper Writing. No model generated this fixture message.",
+    "screenshot": "writing-existing-folder-entry.png"
+  },
+  "crossRootSteps": [
+    "Open B paper through the existing chat file-link route.",
+    "Uncheck Auto compile.",
+    "Set the source textarea to a complete LaTeX document containing PENDING_B_LATEX_CROSS_ROOT_MARKER.",
+    "Immediately select project A workspace through the existing sidebar control, without Save or Compile.",
+    "Read both actual isolated paper/main.tex files.",
+    "Reopen Paper writing in A and observe that its editor now contains the B marker; Auto compile remains off."
+  ],
+  "beforeSwitch": {
+    "a": "\\documentclass{article}\n\\begin{document}\nProject A original.\n\\end{document}\n",
+    "b": "\\documentclass{article}\n\\begin{document}\nProject B original.\n\\end{document}\n"
+  },
+  "afterSwitch": [
+    {
+      "project": "a",
+      "path": "/tmp/archimedes-ui-review.lPAjgP/project-a/paper/main.tex",
+      "sha256": "9384331292413e98318705b9e87cc79f9096409e35a8f1d628187b34d9d98323",
+      "content": "\\documentclass{article}\n\\begin{document}\nPENDING_B_LATEX_CROSS_ROOT_MARKER\n\\end{document}\n"
+    },
+    {
+      "project": "b",
+      "path": "/tmp/archimedes-ui-review.lPAjgP/project-b/paper/main.tex",
+      "sha256": "d0e9870d557055f3351cdf1904b751504d907ef6f7166ba32da940ba38534187",
+      "content": "\\documentclass{article}\n\\begin{document}\nProject B original.\n\\end{document}\n"
+    }
+  ],
+  "observed": "A paper/main.tex is overwritten with the pending B draft, while B paper/main.tex remains original. The overwrite occurs without an explicit Save click.",
+  "causeNote": "The workspace-dependent activateProject callback retriggers the openRequest effect; openFile saves the old fileRef/draft using the new workspace before opening the new target."
+}

@@ -1,0 +1,6 @@
+{
+  "check": "package:desktop (includes TypeScript and renderer build)",
+  "exitCode": 0,
+  "seconds": 24.133,
+  "commit": "618d950481694881decc5f1f40f4615fa6ed09be"
+}

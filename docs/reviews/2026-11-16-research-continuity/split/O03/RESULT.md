@@ -1,0 +1,5 @@
+- Worktree `/Users/fei/Desktop/Archimedes-pr-splits/files-owner-saves`, branch `codex/files-owner-saves`; base `1f4b375`, independent of B1/A02/O22.
+- Narrow App file editor state/read/refresh/save/conflict/close callbacks plus `file-editor.ts` scopes. Keeps base execution-directory selection, store, IPC and composer unchanged.
+- 18 focused real filesystem/callback/component/helper checks passed; lint/build/theme passed. Standard npm test: 1,276 = 1,262 pass / same seven base failures / seven skips. Actual same-main base comparison remains `../product-base-npm-test.log`.
+- Before probe `before-save.cjs` ran untouched base callback with real A/B files and failed because B savedContent became A's saved text; output retained `before-save.log`. Actual head callback test verifies A written, B editor unchanged, return to A and ordinary conflict/save/reopen. No layout/control change; public nonvisual evidence `docs/assets/files-owner-saves/behavior.md`.
+- Published after coordinator review: https://github.com/Johanson-colab/Archimedes/pull/350 . Head e380b88, main base, seven-file remote scope checked; exact-commit behavior link in body.

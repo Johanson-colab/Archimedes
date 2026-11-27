@@ -1,0 +1,51 @@
+{"probe":"database-binding","rejection":"Research turn not found.","threadStatus":"running","turnStatus":"running","answer":""}
+{"probe":"process-recovery","threadStatus":"running","turnStatus":"running","actionStatus":"pending","interruptResult":false,"archiveError":"Stop the running research turn before archiving this chat."}
+✖ an in-flight API turn remains bound to its original database after another workspace opens (522.273417ms)
+✖ reopening after the owning process exits reconciles turns and stale approvals (128.056708ms)
+ℹ tests 2
+ℹ suites 0
+ℹ pass 0
+ℹ fail 2
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 758.968333
+
+✖ failing tests:
+
+test at docs/reviews/2026-11-16-system-review/backend-evidence/store-lifecycle.cjs:20:3
+✖ an in-flight API turn remains bound to its original database after another workspace opens (522.273417ms)
+  AssertionError [ERR_ASSERTION]: the original turn must finish independently of another window
+  + actual - expected
+  
+  + 'Research turn not found.'
+  - undefined
+  
+      at TestContext.<anonymous> (/Users/fei/Desktop/Archimedes/docs/reviews/2026-11-16-system-review/backend-evidence/store-lifecycle.cjs:52:12)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 'Research turn not found.',
+    expected: undefined,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at docs/reviews/2026-11-16-system-review/backend-evidence/store-lifecycle.cjs:56:3
+✖ reopening after the owning process exits reconciles turns and stale approvals (128.056708ms)
+  AssertionError [ERR_ASSERTION]: there is no surviving owner for this running record
+      at TestContext.<anonymous> (/Users/fei/Desktop/Archimedes/docs/reviews/2026-11-16-system-review/backend-evidence/store-lifecycle.cjs:71:12)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 'running',
+    expected: 'running',
+    operator: 'notStrictEqual',
+    diff: 'simple'
+  }

@@ -1,0 +1,112 @@
+{
+  "archive": "/Users/fei/Desktop/Archimedes/release/mac-arm64/Archimedes.app/Contents/Resources/app.asar",
+  "kind": "Actual packaged Archimedes executable/main/preload/renderer; inspector sets isolated profile before main entry",
+  "buildInfo": {
+    "version": "0.1.0",
+    "commit": "618d950481694881decc5f1f40f4615fa6ed09be",
+    "channel": "development",
+    "branch": "codex/research-workflow-integrity",
+    "sourceDirty": true,
+    "sourceFingerprint": "8c03032d9b914312fede3d85bd58490f772a67bbf3c21cf20633430eb46962db",
+    "capabilities": {
+      "cloudEntryPoints": true,
+      "defaultResearchApps": [
+        "library",
+        "daily",
+        "writing",
+        "data-analysis"
+      ],
+      "betaResearchApps": [
+        "reproduce",
+        "image-creation",
+        "data-charts",
+        "paper-to-slides"
+      ]
+    },
+    "platform": "darwin",
+    "arch": "arm64",
+    "packaged": true,
+    "electron": "43.4.1"
+  },
+  "nativePty": {
+    "exitCode": 0,
+    "text": "packaged-pty-ready"
+  },
+  "metricStyles": {
+    "buttonClass": "secondary-button",
+    "buttonFont": "12px",
+    "buttonBackground": "rgb(38, 38, 38)",
+    "titleFont": "13px",
+    "panelText": "Numerical comparisons\n\nChoose a CSV or JSON file, map its columns, and save a numerical comparison.\n\nChoose CSV or JSON data\nRefresh comparison history\nSAVED COMPARISONS\nLocal recorded experiment · Recorded comparison\nLocal recorded experiment\nMissing value\n0\nIncomparable\n0\nWithin tolerance\n1\nOutside tolerance\n0\nMetric\tExpected\tActual\tUnit\tDataset\tAbsolute tolerance\tResult\naccuracy\t0.9\t0.9\tfraction\tfixture\t0\tWithin tolerance\nThe absolute difference is within the confirmed tolerance.\nComparison evidence\nExport comparison JSON"
+  },
+  "buttons": [
+    "New research",
+    "Library",
+    "Daily papers",
+    "Reproduce\nBeta",
+    "Figure generation\nBeta",
+    "Analyze my data",
+    "Paper writing",
+    "Paper to Slides\nBeta",
+    "Paper review",
+    "Restored Workflow\n1",
+    "Tao House\n3",
+    "Workflow Project\n1",
+    "General\n1",
+    "Sign in",
+    "Tao House",
+    "Shared cloud task",
+    "Agent activity\n1 step · 1 edit",
+    "Archimedes",
+    "root-1",
+    "1%",
+    "Trajectory",
+    "Files",
+    "Changes",
+    "Notes",
+    "Terminal",
+    "Copy JSON",
+    "Expand all",
+    "user_message\n#1 · 2a408ff7-23c7-46ca-8cd4-cffc9b96f6d7\nNov 16, 3:50:18 PM",
+    "assistant_message\n#2 · 11860046-4d84-4a93-9965-dfa51909cb1b\nNov 16, 3:50:18 PM",
+    "user_message\n#1 · 75f55d82-2879-4c53-87ef-b69aa39e0c04\nNov 16, 4:06:06 PM",
+    "assistant_step\n#2 · 5a9f2160-ddf9-42c5-bded-531b40f1b6ee\nNov 16, 4:06:06 PM",
+    "tool_call\n#3 · 2c87f91a-6e9f-4f68-b060-dfcfc055a6e4\nNov 16, 4:06:06 PM",
+    "tool_result\n#4 · 17627627-ded7-4306-b44f-f5fd6692ed56\nNov 16, 4:08:48 PM",
+    "assistant_step\n#5 · a11ee29e-cb80-48b8-ac7e-f658a11f2aba\nNov 16, 4:08:58 PM",
+    "assistant_message\n#6 · 356fd774-23b3-4be8-b243-3325f4a5fccd\nNov 16, 4:08:58 PM",
+    "paper",
+    "research-results",
+    "All",
+    "Modified",
+    "Created",
+    "Deleted",
+    "Add to chat",
+    "Use as prompt"
+  ],
+  "keywordFallback": {
+    "status": "Semantic search unavailable; showing keyword results. Figure index image_emb.bin: HTTP 503",
+    "results": [
+      "Transformer architecture pipeline\nICLR · 2025 · 51.8\npipeline · transformer\nSelect reference"
+    ]
+  },
+  "requests": [
+    "qwdwqfwq.github.io/topconf-paper-figure-gallery/data/figures.json",
+    "127.0.0.1/topconf-paper-figure-gallery/data/figures.json",
+    "qwdwqfwq.github.io/topconf-paper-figure-gallery/forge/data/manifest.json",
+    "127.0.0.1/topconf-paper-figure-gallery/forge/data/manifest.json",
+    "qwdwqfwq.github.io/topconf-paper-figure-gallery/forge/data/figures.json",
+    "qwdwqfwq.github.io/topconf-paper-figure-gallery/forge/data/ids.json",
+    "qwdwqfwq.github.io/topconf-paper-figure-gallery/forge/data/bm25.json",
+    "127.0.0.1/topconf-paper-figure-gallery/forge/data/figures.json",
+    "127.0.0.1/topconf-paper-figure-gallery/forge/data/ids.json",
+    "127.0.0.1/topconf-paper-figure-gallery/forge/data/bm25.json",
+    "qwdwqfwq.github.io/topconf-paper-figure-gallery/forge/data/image_emb.bin",
+    "qwdwqfwq.github.io/topconf-paper-figure-gallery/forge/data/text_emb.bin",
+    "127.0.0.1/topconf-paper-figure-gallery/forge/data/image_emb.bin",
+    "127.0.0.1/topconf-paper-figure-gallery/forge/data/text_emb.bin",
+    "qwdwqfwq.github.io/topconf-paper-figure-gallery/images/iclr/final/local-transformer.jpg",
+    "127.0.0.1/topconf-paper-figure-gallery/images/iclr/final/local-transformer.jpg"
+  ],
+  "ok": true
+}

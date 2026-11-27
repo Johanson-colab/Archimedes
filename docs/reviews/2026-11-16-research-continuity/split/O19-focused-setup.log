@@ -1,0 +1,13 @@
+✔ actual slides view keeps source and target distinct, checks setup before starting, and isolates another data folder's input (113.149125ms)
+✔ the actual existing prerequisite script reports local presence without exposing token values or treating optional QA as a generation blocker (288.285833ms)
+✔ missing Python and missing PATH tools produce explicit actionable checks rather than a ready result (53.44975ms)
+✔ the real presence script can permit a limited generation environment while preview and QA tools remain optional (634.239166ms)
+✔ a stalled npm root subprocess is bounded and killed with the real Python probe process group (3205.430375ms)
+ℹ tests 5
+ℹ suites 0
+ℹ pass 5
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 4344.679834
