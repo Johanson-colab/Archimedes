@@ -1,0 +1,165 @@
+{
+  "executable": "/opt/homebrew/bin/tectonic",
+  "executable_sha256": "de122b4cd4cfb6f3c449aabc5862763a7d55dc263018ee1b6a23164c5c70b1b5",
+  "published_managed_sha256": "b52b5a730e2b0b33087304f7720f649603953f270a6b1c88bb031e1ae01f7f9c",
+  "engine": "Tectonic 0.17.0",
+  "bundle": "https://relay.fullyjustified.net/default_bundle_v33.tar",
+  "cache_provenance": "task-owned retained partial download cache",
+  "timeout_ms": 240000,
+  "fixture": "real Tectonic, article + section + bibliography",
+  "cold": {
+    "ok": true,
+    "timed_out": false,
+    "duration_ms": 149629,
+    "diagnostics": [],
+    "log": ".tex UTF-8 Oriya hyphenation patternsnote: downloading hyph-or.tex\n (hyph-or.tex))note: downloading loadhyph-pi.tex\n\n(loadhyph-pi.tex UTF-8 Pali hyphenation patternsnote: downloading hyph-pi.tex\n (hyph-pi.tex))note: downloading loadhyph-pa.tex\n\n(loadhyph-pa.tex UTF-8 Panjabi hyphenation patternsnote: downloading hyph-pa.tex\n (hyph-pa.tex))note: downloading loadhyph-ta.tex\n\n(loadhyph-ta.tex UTF-8 Tamil hyphenation patternsnote: downloading hyph-ta.tex\n (hyph-ta.tex))note: downloading loadhyph-te.tex\n\n(loadhyph-te.tex UTF-8 Telugu hyphenation patternsnote: downloading hyph-te.tex\n (hyph-te.tex))note: downloading loadhyph-id.tex\n\n(loadhyph-id.tex ASCII Indonesian hyphenation patternsnote: downloading hyph-id.tex\n (hyph-id.tex))note: downloading loadhyph-ia.tex\n\n(loadhyph-ia.tex ASCII Hyphenation patterns for Interlinguanote: downloading hyph-ia.tex\n (hyph-ia.tex))note: downloading loadhyph-ga.tex\n\n(loadhyph-ga.tex UTF-8 Irish hyphenation patternsnote: downloading hyph-ga.tex\n (hyph-ga.tex))note: downloading loadhyph-it.tex\n\n(loadhyph-it.tex UTF-8 Italian hyphenation patternsnote: downloading hyph-it.tex\n (hyph-it.tex)note: downloading hyph-quote-it.tex\n\n(hyph-quote-it.tex))note: downloading loadhyph-kmr.tex\n (loadhyph-kmr.tex UTF-8 Kurmanji hyphenation patternsnote: downloading hyph-kmr.tex\n\n(hyph-kmr.tex))note: downloading loadhyph-la-x-classic.tex\n (loadhyph-la-x-classic.tex\nUTF-8 Classical Latin hyphenation patterns, v.2.0 2019-07-03note: downloading hyph-la-x-classic.tex\n\n(hyph-la-x-classic.tex))note: downloading loadhyph-la.tex\n (loadhyph-la.tex UTF-8 Latin hyphenation patternsnote: downloading hyph-la.tex\n\n(hyph-la.tex))note: downloading loadhyph-la-x-liturgic.tex\n (loadhyph-la-x-liturgic.tex\nUTF-8 Liturgical Latin hyphenation patternsnote: downloading hyph-la-x-liturgic.tex\n (hyph-la-x-liturgic.tex))note: downloading loadhyph-lv.tex\n\n(loadhyph-lv.tex UTF-8 Latvian hyphenation patternsnote: downloading hyph-lv.tex\n (hyph-lv.tex))note: downloading loadhyph-lt.tex\n\n(loadhyph-lt.tex UTF-8 Lithuanian hyphenation patternsnote: downloading hyph-lt.tex\n (hyph-lt.tex))note: downloading loadhyph-mk.tex\n\n(loadhyph-mk.tex UTF-8 Macedonian hyphenation patternsnote: downloading hyph-mk.tex\n (hyph-mk.tex))note: downloading loadhyph-mn-cyrl.tex\n\n(loadhyph-mn-cyrl.tex UTF-8 (New) Mongolian hyphenation patternsnote: downloading hyph-mn-cyrl.tex\n\n(hyph-mn-cyrl.tex))note: downloading loadhyph-mn-cyrl-x-lmc.tex\n (loadhyph-mn-cyrl-x-lmc.tex\nUTF-8 Mongolian hyphenation patternsnote: downloading hyph-mn-cyrl-x-lmc.tex\n (hyph-mn-cyrl-x-lmc.tex))note: downloading loadhyph-nb.tex\n (loadhyph-nb.tex\n UTF-8 Norwegian Bokmal hyphenation patternsnote: downloading hyph-nb.tex\n (hyph-nb.texnote: downloading hyph-no.tex\n (hyph-no.tex)))note: downloading loadhyph-nn.tex\n\n(loadhyph-nn.tex UTF-8 Norwegian Nynorsk hyphenation patternsnote: downloading hyph-nn.tex\n (hyph-nn.tex\n(hyph-no.tex)))note: downloading loadhyph-oc.tex\n (loadhyph-oc.tex UTF-8 Occitan hyphenation patternsnote: downloading hyph-oc.tex\n\n(hyph-oc.tex)note: downloading hyph-quote-oc.tex\n (hyph-quote-oc.tex))note: downloading loadhyph-pms.tex\n (loadhyph-pms.tex\nUTF-8 Piedmontese hyphenation patternsnote: downloading hyph-pms.tex\n (hyph-pms.tex)note: downloading hyph-quote-pms.tex\n (hyph-quote-pms.tex))note: downloading loadhyph-pl.tex\n\n(loadhyph-pl.tex UTF-8 Polish hyphenation patternsnote: downloading hyph-pl.tex\n (hyph-pl.tex))note: downloading loadhyph-pt.tex\n\n(loadhyph-pt.tex UTF-8 Portuguese hyphenation patternsnote: downloading hyph-pt.tex\n (hyph-pt.tex))note: downloading loadhyph-ro.tex\n\n(loadhyph-ro.tex UTF-8 Romanian hyphenation patternsnote: downloading hyph-ro.tex\n (hyph-ro.tex))note: downloading loadhyph-rm.tex\n\n(loadhyph-rm.tex UTF-8 Romansh hyphenation patternsnote: downloading hyph-rm.tex\n (hyph-rm.tex)note: downloading hyph-quote-rm.tex\n\n(hyph-quote-rm.tex))note: downloading loadhyph-ru.tex\n (loadhyph-ru.tex UTF-8 Russian hyphenation patternsnote: downloading hyph-ru.tex\n\n(hyph-ru.tex))note: downloading loadhyph-sa.tex\n (loadhyph-sa.tex UTF-8 Sanskrit hyphenation patternsnote: downloading hyph-sa.tex\n\n(hyph-sa.tex))note: downloading loadhyph-sr-latn.tex\n (loadhyph-sr-latn.tex UTF-8 Serbian hyphenation patternsnote: downloading hyph-sh-latn.tex\n\n(hyph-sh-latn.tex)note: downloading hyph-sh-cyrl.tex\n (hyph-sh-cyrl.tex))note: downloading loadhyph-sr-cyrl.tex\n (loadhyph-sr-cyrl.tex\nUTF-8 Serbian hyphenation patterns (hyph-sh-latn.tex) (hyph-sh-cyrl.tex))note: downloading loadhyph-sk.tex\n\n(loadhyph-sk.tex UTF-8 Slovak hyphenation patternsnote: downloading hyph-sk.tex\n (hyph-sk.tex))note: downloading loadhyph-sl.tex\n\n(loadhyph-sl.tex UTF-8 Slovenian hyphenation patternsnote: downloading hyph-sl.tex\n (hyph-sl.tex))note: downloading loadhyph-es.tex\n\n(loadhyph-es.tex UTF-8 Spanish hyphenation patternsnote: downloading hyph-es.tex\n (hyph-es.tex))note: downloading loadhyph-sv.tex\n\n(loadhyph-sv.tex UTF-8 Swedish hyphenation patternsnote: downloading hyph-sv.tex\n (hyph-sv.tex))note: downloading loadhyph-th.tex\n\n(loadhyph-th.tex UTF-8 Thai hyphenation patternsnote: downloading hyph-th.tex\n (hyph-th.tex))note: downloading loadhyph-tr.tex\n\n(loadhyph-tr.tex UTF-8 Turkish hyphenation patternsnote: downloading hyph-tr.tex\n (hyph-tr.tex))note: downloading loadhyph-tk.tex\n\n(loadhyph-tk.tex UTF-8 Turkmen hyphenation patternsnote: downloading hyph-tk.tex\n (hyph-tk.tex))note: downloading loadhyph-uk.tex\n\n(loadhyph-uk.tex UTF-8 Ukrainian hyphenation patternsnote: downloading hyph-uk.tex\n (hyph-uk.tex)note: downloading hyph-quote-uk.tex\n\n(hyph-quote-uk.tex))note: downloading loadhyph-hsb.tex\n (loadhyph-hsb.tex\nUTF-8 Upper Sorbian hyphenation patternsnote: downloading hyph-hsb.tex\n (hyph-hsb.tex))note: downloading loadhyph-cy.tex\n (loadhyph-cy.tex\nUTF-8 Welsh hyphenation patternsnote: downloading hyph-cy.tex\n (hyph-cy.tex)))note: downloading latex2e-first-aid-for-external-files.ltx\n\n(latex2e-first-aid-for-external-files.ltx)\n ) ) ) )\nBeginning to dump on file texput.fmt\n (preloaded format=texput 0.0.0)\n88429 strings of total length 387256\n297567 memory locations dumped; current usage is 299&292789\n20858 multiletter control sequences\n\\font\\nullfont=nullfont\n\\font\\c__fp_exp_intarray=cmr10 at 0.00002pt\n\\font\\c__fp_trig_intarray=cmr10 at 0.00003pt\n\\font\\c_initex_cctab=cmr10 at 0.00005pt\n\\font\\c_other_cctab=cmr10 at 0.00006pt\n\\font\\c_str_cctab=cmr10 at 0.00008pt\n\\font\\g__regex_state_active_intarray=cmr10 at 0.00009pt\n\\font\\g__regex_thread_info_intarray=cmr10 at 0.0001pt\n\\font\\g__regex_submatch_prev_intarray=cmr10 at 0.00012pt\n\\font\\g__regex_submatch_begin_intarray=cmr10 at 0.00014pt\n\\font\\g__regex_submatch_end_intarray=cmr10 at 0.00015pt\n\\font\\g__regex_submatch_case_intarray=cmr10 at 0.00017pt\n\\font\\g__regex_balance_intarray=cmr10 at 0.00018pt\n\\font\\OMX/cmex/m/n/10=cmex10\n\\font\\tenln=line10\n\\font\\tenlnw=linew10\n\\font\\tencirc=lcircle10\n\\font\\tencircw=lcirclew10\n\\font\\OT1/cmr/m/n/5=cmr5\n\\font\\OT1/cmr/m/n/7=cmr7\n\\font\\OT1/cmr/m/n/10=cmr10\n\\font\\OML/cmm/m/it/5=cmmi5\n\\font\\OML/cmm/m/it/7=cmmi7\n\\font\\OML/cmm/m/it/10=cmmi10\n\\font\\OMS/cmsy/m/n/5=cmsy5\n\\font\\OMS/cmsy/m/n/7=cmsy7\n\\font\\OMS/cmsy/m/n/10=cmsy10\n\\font\\c_code_cctab=cmr10 at 0.0002pt\n\\font\\c_document_cctab=cmr10 at 0.00021pt\n469252 words of font info for 28 preloaded fonts\n1348 hyphenation exceptions\nHyphenation trie of length 577275 has 9543 ops out of 35111\n  143 for language 86\n  110 for language 85\n  138 for language 84\n  7 for language 83\n  12 for language 82\n  53 for language 81\n  127 for language 80\n  195 for language 79\n  71 for language 78\n  248 for language 77\n  66 for language 76\n  66 for language 75\n  15 for language 74\n  119 for language 73\n  43 for language 72\n  58 for language 71\n  7 for language 70\n  194 for language 69\n  37 for language 68\n  23 for language 67\n  852 for language 66\n  852 for language 65\n  21 for language 64\n  38 for language 63\n  38 for language 62\n  77 for language 61\n  58 for language 60\n  206 for language 59\n  25 for language 58\n  316 for language 57\n  27 for language 56\n  37 for language 55\n  229 for language 54\n  38 for language 53\n  21 for language 52\n  6 for language 51\n  7 for language 50\n  6 for language 49\n  12 for language 48\n  6 for language 47\n  6 for language 46\n  8 for language 45\n  6 for language 44\n  6 for language 43\n  6 for language 42\n  6 for language 41\n  6 for language 40\n  147 for language 39\n  185 for language 38\n  20 for language 37\n  44 for language 36\n  420 for language 35\n  424 for language 34\n  432 for language 33\n  39 for language 32\n  76 for language 31\n  40 for language 30\n  89 for language 29\n  6 for language 28\n  31 for language 27\n  3 for language 25\n  113 for language 24\n  145 for language 23\n  377 for language 22\n  224 for language 21\n  265 for language 20\n  60 for language 19\n  63 for language 18\n  19 for language 17\n  15 for language 16\n  111 for language 15\n  3 for language 14\n  21 for language 13\n  54 for language 12\n  36 for language 11\n  5 for language 10\n  2 for language 9\n  148 for language 7\n  78 for language 6\n  137 for language 5\n  438 for language 4\n  442 for language 3\n  2 for language 1\n  181 for language 0\nNo pages of output.\nTranscript written on texput.log.\nnote: Running TeX ...\n(main.tex\nLaTeX2e <2021-11-15> patch level 1\nL3 programming layer <2022-02-24>note: downloading article.cls\n (article.cls\nDocument Class: article 2021/10/04 v1.4n Standard LaTeX document class\nnote: downloading size10.clo\n(size10.clonote: downloading lmroman10-regular.otf\nnote: downloading tex-text.tec\n))note: downloading l3backend-xetex.def\n (l3backend-xetex.def)\nNo file main.aux.\nnote: downloading ts1cmr.fd\n(ts1cmr.fd) (sectionnote: downloading lmroman10-bold.otf\n\n\nLaTeX Warning: Citation `sample' on page 1 undefined on input line 1.\n\n)\nNo file main.bbl.\n[1] (main.aux)\n\nLaTeX Warning: There were undefined references.\n\n )\nOutput written on main.xdv (1 page, 672 bytes).\nTranscript written on main.log.\nnote: Running BibTeX on main.aux ...\nnote: downloading plain.bst\nnote: Rerunning TeX because bibtex was run ...\n(main.tex\nLaTeX2e <2021-11-15> patch level 1\nL3 programming layer <2022-02-24> (article.cls\nDocument Class: article 2021/10/04 v1.4n Standard LaTeX document class\n(size10.clo)) (l3backend-xetex.def) (main.aux) (ts1cmr.fd) (section\n\nLaTeX Warning: Citation `sample' on page 1 undefined on input line 1.\n\n) (main.bblnote: downloading lmroman12-regular.otf\nnote: downloading lmroman12-bold.otf\nnote: downloading lmroman10-italic.otf\n) [1] (main.aux)\n\nLaTeX Warning: There were undefined references.\n\n\nLaTeX Warning: Label(s) may have changed. Rerun to get cross-references right.\n\n )\nOutput written on main.xdv (1 page, 1424 bytes).\nTranscript written on main.log.\nnote: Rerunning TeX because \"main.aux\" changed ...\n(main.tex\nLaTeX2e <2021-11-15> patch level 1\nL3 programming layer <2022-02-24> (article.cls\nDocument Class: article 2021/10/04 v1.4n Standard LaTeX document class\n(size10.clo)) (l3backend-xetex.def) (main.aux) (ts1cmr.fd) (section) (main.bbl)\n [1] (main.aux) )\nOutput written on main.xdv (1 page, 1360 bytes).\nTranscript written on main.log.\nnote: Running xdvipdfmx ...\nnote: downloading pdftex.map\nnote: downloading kanjix.map\nnote: downloading ckx.map\nnote: downloading texglyphlist.txt\nnote: downloading pdfglyphlist.txt\nnote: downloading glyphlist.txt\n[1]9177 bytes written\nnote: Writing `/private/var/folders/y6/7f277x5n4z14sqwsw21h8ffm0000gn/T/archimedes-v03-real-crEd1q/.archimedes/latex-build/defc3a7a99c3/3954749e-6207-4bbd-a447-099ae3ed2380/main.log` (2.0556640625 KiB)\nnote: Writing `/private/var/folders/y6/7f277x5n4z14sqwsw21h8ffm0000gn/T/archimedes-v03-real-crEd1q/.archimedes/latex-build/defc3a7a99c3/3954749e-6207-4bbd-a447-099ae3ed2380/main.pdf` (8.9619140625 KiB)\nnote: Writing `/private/var/folders/y6/7f277x5n4z14sqwsw21h8ffm0000gn/T/archimedes-v03-real-crEd1q/.archimedes/latex-build/defc3a7a99c3/3954749e-6207-4bbd-a447-099ae3ed2380/main.blg` (185 B)\nnote: Skipped writing 2 intermediate files (use --keep-intermediates to keep them)\n",
+    "snapshot": {
+      "version": 1,
+      "build_id": "3954749e-6207-4bbd-a447-099ae3ed2380",
+      "workspace": "/private/var/folders/y6/7f277x5n4z14sqwsw21h8ffm0000gn/T/archimedes-v03-real-crEd1q",
+      "source_path": "paper/main.tex",
+      "project_path": "paper",
+      "created_at": "2026-11-16T05:21:41.656Z",
+      "engine": "tectonic",
+      "requested_source": {
+        "workspace": "/private/var/folders/y6/7f277x5n4z14sqwsw21h8ffm0000gn/T/archimedes-v03-real-crEd1q",
+        "source_path": "paper/main.tex",
+        "project_path": "paper",
+        "coverage": "manuscript-directory",
+        "source_version": "98f5fc31164bc34e4477d1fb7888403f097f1bae4548645c9f207af9cbb8bda2",
+        "observation_version": "7379b569f7926439413fd9bb14d3b37737ecc1c61dee6a6647bdb33fbb13e60e",
+        "files": [
+          {
+            "path": "paper/main.tex",
+            "bytes": 117,
+            "sha256": "fd940da1bb496de8c438d255fc3f3285ea61b3f9417f7a1d8862af003e2322fd"
+          },
+          {
+            "path": "paper/refs.bib",
+            "bytes": 93,
+            "sha256": "91b663ef45e8217adcb23b8c0ccec648728a1f8d248122ed28fdb50d1c9747b6"
+          },
+          {
+            "path": "paper/section.tex",
+            "bytes": 39,
+            "sha256": "aed784263443535ebc0a37fd1fe3288d443301a0377bf36530711f6187381a49"
+          }
+        ],
+        "total_bytes": 249,
+        "untracked_inputs": [],
+        "excluded_directories": [
+          ".archimedes",
+          ".git",
+          "node_modules",
+          "dist",
+          "build",
+          ".next",
+          ".venv",
+          "venv",
+          "__pycache__",
+          ".cache"
+        ]
+      },
+      "started_source_version": "98f5fc31164bc34e4477d1fb7888403f097f1bae4548645c9f207af9cbb8bda2",
+      "finished_source_version": "98f5fc31164bc34e4477d1fb7888403f097f1bae4548645c9f207af9cbb8bda2",
+      "source_changed": false,
+      "status": "current",
+      "pdf": {
+        "path": ".archimedes/latex-build/defc3a7a99c3/3954749e-6207-4bbd-a447-099ae3ed2380/main.pdf",
+        "bytes": 9177,
+        "sha256": "40985980d0916f1aa19c1b819c900754c87534f9917dae4f45b8430a06da1bfd"
+      },
+      "log": {
+        "path": ".archimedes/latex-build/defc3a7a99c3/3954749e-6207-4bbd-a447-099ae3ed2380/build-output.log",
+        "bytes": 18725,
+        "sha256": "9cdf624f9e290f76703e94315bebe588915f629edeb4ed8cc843ad186f723ccd",
+        "retention": "bounded compiler output"
+      },
+      "manifest_path": ".archimedes/latex-build/defc3a7a99c3/3954749e-6207-4bbd-a447-099ae3ed2380/source-snapshot.json"
+    }
+  },
+  "warm_offline": {
+    "ok": true,
+    "duration_ms": 306,
+    "diagnostics": [],
+    "log": "note: using only cached resource files\nnote: Running TeX ...\n(main.tex\nLaTeX2e <2021-11-15> patch level 1\nL3 programming layer <2022-02-24> (article.cls\nDocument Class: article 2021/10/04 v1.4n Standard LaTeX document class\n(size10.clo)) (l3backend-xetex.def)\nNo file main.aux.\n(ts1cmr.fd) (section\n\nLaTeX Warning: Citation `sample' on page 1 undefined on input line 1.\n\n)\nNo file main.bbl.\n[1] (main.aux)\n\nLaTeX Warning: There were undefined references.\n\n )\nOutput written on main.xdv (1 page, 684 bytes).\nTranscript written on main.log.\nnote: Running BibTeX on main.aux ...\nnote: Rerunning TeX because bibtex was run ...\n(main.tex\nLaTeX2e <2021-11-15> patch level 1\nL3 programming layer <2022-02-24> (article.cls\nDocument Class: article 2021/10/04 v1.4n Standard LaTeX document class\n(size10.clo)) (l3backend-xetex.def) (main.aux) (ts1cmr.fd) (section\n\nLaTeX Warning: Citation `sample' on page 1 undefined on input line 1.\n\n) (main.bbl) [1] (main.aux)\n\nLaTeX Warning: There were undefined references.\n\n\nLaTeX Warning: Label(s) may have changed. Rerun to get cross-references right.\n\n )\nOutput written on main.xdv (1 page, 1452 bytes).\nTranscript written on main.log.\nnote: Rerunning TeX because \"main.aux\" changed ...\n(main.tex\nLaTeX2e <2021-11-15> patch level 1\nL3 programming layer <2022-02-24> (article.cls\nDocument Class: article 2021/10/04 v1.4n Standard LaTeX document class\n(size10.clo)) (l3backend-xetex.def) (main.aux) (ts1cmr.fd) (section) (main.bbl)\n [1] (main.aux) )\nOutput written on main.xdv (1 page, 1392 bytes).\nTranscript written on main.log.\nnote: Running xdvipdfmx ...\n[1]9572 bytes written\nnote: Writing `/private/var/folders/y6/7f277x5n4z14sqwsw21h8ffm0000gn/T/archimedes-v03-real-crEd1q/.archimedes/latex-build/defc3a7a99c3/8ed74a12-c0a5-47f1-82a9-f42ebed18ea7/main.blg` (185 B)\nnote: Writing `/private/var/folders/y6/7f277x5n4z14sqwsw21h8ffm0000gn/T/archimedes-v03-real-crEd1q/.archimedes/latex-build/defc3a7a99c3/8ed74a12-c0a5-47f1-82a9-f42ebed18ea7/main.log` (2.0556640625 KiB)\nnote: Writing `/private/var/folders/y6/7f277x5n4z14sqwsw21h8ffm0000gn/T/archimedes-v03-real-crEd1q/.archimedes/latex-build/defc3a7a99c3/8ed74a12-c0a5-47f1-82a9-f42ebed18ea7/main.pdf` (9.34765625 KiB)\nnote: Skipped writing 2 intermediate files (use --keep-intermediates to keep them)\n",
+    "snapshot": {
+      "version": 1,
+      "build_id": "8ed74a12-c0a5-47f1-82a9-f42ebed18ea7",
+      "workspace": "/private/var/folders/y6/7f277x5n4z14sqwsw21h8ffm0000gn/T/archimedes-v03-real-crEd1q",
+      "source_path": "paper/main.tex",
+      "project_path": "paper",
+      "created_at": "2026-11-16T05:21:41.965Z",
+      "engine": "tectonic",
+      "requested_source": {
+        "workspace": "/private/var/folders/y6/7f277x5n4z14sqwsw21h8ffm0000gn/T/archimedes-v03-real-crEd1q",
+        "source_path": "paper/main.tex",
+        "project_path": "paper",
+        "coverage": "manuscript-directory",
+        "source_version": "af773a149b9f57bdb2422b6575d3b7a71cd203132ce6f6462c74dadc2eb96a36",
+        "observation_version": "7aa04134551a683c423b8732e19036faeb1031daabd93cc7195ea824ff1181d2",
+        "files": [
+          {
+            "path": "paper/main.tex",
+            "bytes": 117,
+            "sha256": "fd940da1bb496de8c438d255fc3f3285ea61b3f9417f7a1d8862af003e2322fd"
+          },
+          {
+            "path": "paper/refs.bib",
+            "bytes": 95,
+            "sha256": "3d96074e829bf648b59b53d2f17e75c61652a85e0453a0ed67e9d15c8312e10a"
+          },
+          {
+            "path": "paper/section.tex",
+            "bytes": 40,
+            "sha256": "a8eafd2df4cab24bdb33d295e337d05e5fa5ce5e00f403df46ba79c63ec1d73c"
+          }
+        ],
+        "total_bytes": 252,
+        "untracked_inputs": [],
+        "excluded_directories": [
+          ".archimedes",
+          ".git",
+          "node_modules",
+          "dist",
+          "build",
+          ".next",
+          ".venv",
+          "venv",
+          "__pycache__",
+          ".cache"
+        ]
+      },
+      "started_source_version": "af773a149b9f57bdb2422b6575d3b7a71cd203132ce6f6462c74dadc2eb96a36",
+      "finished_source_version": "af773a149b9f57bdb2422b6575d3b7a71cd203132ce6f6462c74dadc2eb96a36",
+      "source_changed": false,
+      "status": "current",
+      "pdf": {
+        "path": ".archimedes/latex-build/defc3a7a99c3/8ed74a12-c0a5-47f1-82a9-f42ebed18ea7/main.pdf",
+        "bytes": 9572,
+        "sha256": "b63655b8a3b6aa98c0a64d0fad66876f69031ac558f302a472941d836a92a67f"
+      },
+      "log": {
+        "path": ".archimedes/latex-build/defc3a7a99c3/8ed74a12-c0a5-47f1-82a9-f42ebed18ea7/build-output.log",
+        "bytes": 2288,
+        "sha256": "ca61dff7f96cd7bea1e80fdd9f3a8fb1040c4f1bcdc9c92af016e10cb1f8c308",
+        "retention": "bounded compiler output"
+      },
+      "manifest_path": ".archimedes/latex-build/defc3a7a99c3/8ed74a12-c0a5-47f1-82a9-f42ebed18ea7/source-snapshot.json"
+    }
+  },
+  "cleanup": true,
+  "retained_build_bytes": [
+    {
+      "pdf": 9177,
+      "log": 18725,
+      "manifest": 2320
+    },
+    {
+      "pdf": 9572,
+      "log": 2288,
+      "manifest": 2319
+    }
+  ],
+  "duration_ms": 149998
+}

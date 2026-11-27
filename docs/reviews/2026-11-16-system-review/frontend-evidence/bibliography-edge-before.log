@@ -1,0 +1,72 @@
+✔ discovery creates a library inline, saves provenance, and remounts without searching across data roots (218.509958ms)
+✔ project reasons remain separate while personal notes stay shared, including after reopening the database (41.436292ms)
+✔ BibTeX supports nested values, grouped authors, stable keys and explicit unsupported syntax (1.162ms)
+✖ BibTeX preserves literal braces and backslashes across its own export while retaining grouped capitalization (0.9545ms)
+✖ BibTeX only identifies arXiv eprints and normalizes the same identifiers as the actual store (22.352875ms)
+✖ citation keys are scoped to the target export, while paper identity still deduplicates across projects (35.066125ms)
+✔ real Library BibTeX preview preserves existing edits and notes; only selected metadata repair is applied (50.362292ms)
+✔ conference discovery restores the candidate page and saves official-source provenance without re-querying (71.774375ms)
+✔ leaving a BibTeX import stops subsequent operations after an in-flight add returns (33.683208ms)
+ℹ tests 9
+ℹ suites 0
+ℹ pass 6
+ℹ fail 3
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1178.596916
+
+✖ failing tests:
+
+test at electron/discovery-bibliography.test.cjs:150:1
+✖ BibTeX preserves literal braces and backslashes across its own export while retaining grouped capitalization (0.9545ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + 'Sets \\x, y\\ & C:\\textbackslash\\\\ data_2026'
+  - 'Sets {x, y} & C:\\data_2026'
+          ^
+  
+      at TestContext.<anonymous> (/Users/fei/Desktop/Archimedes/electron/discovery-bibliography.test.cjs:155:10)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'Sets \\x, y\\ & C:\\textbackslash\\\\ data_2026',
+    expected: 'Sets {x, y} & C:\\data_2026',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at electron/discovery-bibliography.test.cjs:162:1
+✖ BibTeX only identifies arXiv eprints and normalizes the same identifiers as the actual store (22.352875ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  'hal-04123456' !== ''
+  
+      at TestContext.<anonymous> (/Users/fei/Desktop/Archimedes/electron/discovery-bibliography.test.cjs:166:12)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'hal-04123456',
+    expected: '',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at electron/discovery-bibliography.test.cjs:178:1
+✖ citation keys are scoped to the target export, while paper identity still deduplicates across projects (35.066125ms)
+  AssertionError [ERR_ASSERTION]: another project's key cannot prevent this library's independent bibliography
+      at TestContext.<anonymous> (/Users/fei/Desktop/Archimedes/electron/discovery-bibliography.test.cjs:187:12)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }

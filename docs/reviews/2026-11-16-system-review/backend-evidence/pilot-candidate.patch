@@ -1,0 +1,344 @@
+diff --git a/electron/reproduction-contract.test.cjs b/electron/reproduction-contract.test.cjs
+index e6f20d0..ed59be5 100644
+--- a/electron/reproduction-contract.test.cjs
++++ b/electron/reproduction-contract.test.cjs
+@@ -58,6 +58,21 @@ test("entries, environment and budget are normalised", () => {
+   assert.deepEqual(contract.notes, ["Needs two GPUs"]);
+ });
+ 
++test("serialized runbooks preserve quoted whitespace and multiline shell commands when read back", () => {
++  const command = "printf '%s' 'dataset  alpha'\nprintf '%s' 'line  two'";
++  const contract = normalizeContract({
++    claims: [{ statement: "Result holds" }],
++    entrypoint: { command: `  ${command}  ` },
++    steps: [{ id: "run", title: "Evaluate", command: `  ${command}  `, check: { kind: "command", command: `  ${command}  ` }, status: "passed", evidence: "dataset  alpha" }],
++  });
++  // main presents persisted JSON through normalizeContract again on get/list.
++  const reopened = normalizeContract(JSON.parse(JSON.stringify(contract)));
++  assert.equal(reopened.entrypoint.command, command);
++  assert.equal(reopened.steps[0].command, command);
++  assert.equal(reopened.steps[0].check.command, command);
++  assert.equal(reopened.steps[0].status, "passed");
++});
++
+ test("the page digest prefers result pages and keeps page markers", () => {
+   const pages = Array.from({ length: 10 }, (_, index) => ({
+     page_number: index + 1,
+diff --git a/electron/reproduction-pilot.test.cjs b/electron/reproduction-pilot.test.cjs
+index 41b1b06..322d874 100644
+--- a/electron/reproduction-pilot.test.cjs
++++ b/electron/reproduction-pilot.test.cjs
+@@ -128,9 +128,9 @@ test("a failing command cannot prove that a step passed", async () => {
+   assert.equal(brain.prompts[2].includes("Refused"), false);
+ });
+ 
+-test("the agent can revise the runbook, and a kept id keeps its verdict", async () => {
++test("rewording a runbook step preserves its verdict when its execution and checks are unchanged", async () => {
+   const { result, brain } = await pilot({
+-    steps: [step("install"), step("run")],
++    steps: [step("install", { command: "make install" }), step("run")],
+     script: { "make install": { output: "installed into /workspace/.venv\n" } },
+     decisions: [
+       { action: "run", command: "make install" },
+@@ -168,6 +168,154 @@ test("a person is asked rather than guessed at", async () => {
+   assert.match(result.summary, /CL-bench is behind a login/);
+ });
+ 
++test("a changed command cannot inherit a verdict or reuse output from before its revision", async () => {
++  const { result, fake, brain } = await pilot({
++    steps: [step("run", { command: "old-check" })],
++    script: { "old-check": { output: "Old configuration passed\n" }, "new-check": { output: "New configuration passed\n" } },
++    decisions: [
++      { action: "run", command: "old-check" },
++      { action: "advance", step: "run", verdict: "passed", evidence: "Old configuration passed" },
++      { action: "revise", steps: [{ id: "run", title: "New experiment", command: "new-check" }] },
++      { action: "done" },
++      // Acceptance and display revisions must not make the earlier output eligible again.
++      { action: "revise", steps: [{ id: "run", title: "Reworded new experiment", checkpoint: "New conditions pass", source: "README" }] },
++      { action: "advance", step: "run", verdict: "passed", evidence: "Old configuration passed" },
++      { action: "run", command: "new-check" },
++      { action: "advance", step: "run", verdict: "passed", evidence: "New configuration passed" },
++      { action: "done" },
++    ],
++  });
++  assert.match(brain.prompts[4], /still has no verdict/);
++  assert.match(brain.prompts[6], /execution conditions changed/);
++  assert.equal(result.status, "verified");
++  assert.equal(result.runbook[0].command, "new-check");
++  assert.equal(result.steps[0].evidence, "New configuration passed");
++  assert.deepEqual(fake.calls, ["old-check", "new-check"]);
++  assert.match(result.log, /Old configuration passed/, "the original observation stays in the history");
++});
++
++test("changed acceptance criteria need a new verdict but can re-evaluate the same execution output", async () => {
++  const { result, fake, brain } = await pilot({
++    steps: [step("run", { command: "evaluate", checkpoint: "Score at least 0.8", check: { kind: "manual", reason: "Compare score with 0.8" } })],
++    script: { evaluate: { output: "Evaluation score: 0.95\n" } },
++    decisions: [
++      { action: "run", command: "evaluate" },
++      { action: "advance", step: "run", verdict: "passed", evidence: "Evaluation score: 0.95" },
++      { action: "revise", steps: [{ id: "run", title: "run", checkpoint: "Score at least 0.9", check: { kind: "manual", reason: "Compare score with 0.9" } }] },
++      { action: "done" },
++      { action: "advance", step: "run", verdict: "passed", evidence: "Evaluation score: 0.95", note: "The recorded score also meets 0.9." },
++      { action: "done" },
++    ],
++  });
++  assert.match(brain.prompts[4], /still has no verdict/);
++  assert.equal(result.status, "verified");
++  assert.equal(result.runbook[0].checkpoint, "Score at least 0.9");
++  assert.deepEqual(fake.calls, ["evaluate"], "changing a threshold does not force an expensive experiment to rerun");
++  assert.equal(result.steps[0].detail, "The recorded score also meets 0.9.");
++});
++
++test("reordering and changing only titles or source labels retains unchanged receipts", async () => {
++  const { result, fake } = await pilot({
++    steps: [step("a", { command: "check-a" }), step("b", { command: "check-b" })],
++    script: { "check-a": { output: "Check alpha passed\n" }, "check-b": { output: "Check beta passed\n" } },
++    decisions: [
++      { action: "run", command: "check-a" },
++      { action: "advance", step: "a", verdict: "passed", evidence: "Check alpha passed" },
++      { action: "run", command: "check-b" },
++      { action: "advance", step: "b", verdict: "passed", evidence: "Check beta passed" },
++      { action: "revise", steps: [{ id: "b", title: "Beta" }, { id: "a", title: "Alpha", source: "README section 2" }] },
++      { action: "done" },
++    ],
++  });
++  assert.equal(result.status, "verified");
++  assert.deepEqual(result.steps.map(entry => [entry.id, entry.status, entry.evidence]), [["b", "passed", "Check beta passed"], ["a", "passed", "Check alpha passed"]]);
++  assert.deepEqual(fake.calls, ["check-a", "check-b"]);
++});
++
++test("changing one step's execution does not clear an unrelated step's result", async () => {
++  const { result, fake } = await pilot({
++    steps: [step("a", { command: "check-a" }), step("b", { command: "check-b" })],
++    script: { "check-a": { output: "Original alpha passed\n" }, "check-b": { output: "Independent beta passed\n" }, "check-new-a": { output: "Revised alpha passed\n" } },
++    decisions: [
++      { action: "run", command: "check-a" },
++      { action: "advance", step: "a", verdict: "passed", evidence: "Original alpha passed" },
++      { action: "run", command: "check-b" },
++      { action: "advance", step: "b", verdict: "passed", evidence: "Independent beta passed" },
++      { action: "revise", steps: [{ id: "a", title: "New alpha", command: "check-new-a" }, { id: "b", title: "b" }] },
++      { action: "run", command: "check-new-a" },
++      { action: "advance", step: "a", verdict: "passed", evidence: "Revised alpha passed" },
++      { action: "done" },
++    ],
++  });
++  assert.equal(result.status, "verified");
++  assert.equal(result.steps[1].evidence, "Independent beta passed");
++  assert.deepEqual(fake.calls, ["check-a", "check-b", "check-new-a"]);
++});
++
++test("an explicit replacement command must have produced the cited output", async () => {
++  const { result, brain } = await pilot({
++    steps: [step("run", { command: "old-check" })],
++    script: { "old-check": { output: "Original configuration passed\n" } },
++    decisions: [
++      { action: "run", command: "old-check" },
++      { action: "advance", step: "run", verdict: "passed", evidence: "Original configuration passed", command: "new-check" },
++      { action: "done" },
++      { action: "ask", question: "Need to execute the replacement command." },
++    ],
++  });
++  assert.match(brain.prompts[2], /stated command must be the command that produced/);
++  assert.equal(result.status, "manual");
++  assert.equal(result.runbook[0].command, "old-check");
++  assert.equal(result.steps[0].status, "pending");
++  assert.equal(result.steps[0].evidence, "");
++});
++
++test("historical errors can explain a manual handoff but cannot fail changed execution conditions", async () => {
++  const { result, fake, brain } = await pilot({
++    steps: [step("run", { command: "evaluate", detail: "Read the old dataset" })],
++    script: { evaluate: { output: "ERROR: old dataset is unavailable\n", exitCode: 1 } },
++    decisions: [
++      { action: "run", command: "evaluate" },
++      { action: "advance", step: "run", verdict: "failed", evidence: "ERROR: old dataset is unavailable" },
++      { action: "revise", steps: [{ id: "run", title: "run", detail: "Read the replacement dataset" }] },
++      { action: "advance", step: "run", verdict: "failed", evidence: "ERROR: old dataset is unavailable" },
++      { action: "advance", step: "run", verdict: "manual", evidence: "ERROR: old dataset is unavailable", note: "Provide the replacement dataset before running again." },
++      { action: "done" },
++    ],
++  });
++  assert.match(brain.prompts[4], /execution conditions changed/);
++  assert.equal(result.status, "manual");
++  assert.equal(result.steps[0].status, "manual");
++  assert.equal(result.steps[0].detail, "Provide the replacement dataset before running again.");
++  assert.deepEqual(fake.calls, ["evaluate"]);
++});
++
++test("command receipts preserve meaningful quoted whitespace when matching or revising execution", async () => {
++  const original = "printf '%s' 'dataset  alpha'";
++  const different = "printf '%s' 'dataset alpha'";
++  const { result, fake, brain } = await pilot({
++    steps: [step("run", { command: original })],
++    script: { [original]: { output: "Selected dataset  alpha\n" }, [different]: { output: "Selected dataset alpha\n" } },
++    decisions: [
++      { action: "run", command: original },
++      { action: "advance", step: "run", verdict: "passed", evidence: "Selected dataset  alpha", command: different },
++      { action: "advance", step: "run", verdict: "passed", evidence: "Selected dataset  alpha", command: original },
++      { action: "revise", steps: [{ id: "run", title: "Renamed", source: "README" }] },
++      { action: "revise", steps: [{ id: "run", title: "run", command: different }] },
++      { action: "done" },
++      { action: "run", command: different },
++      { action: "advance", step: "run", verdict: "passed", evidence: "Selected dataset alpha", command: different },
++      { action: "done" },
++    ],
++  });
++  assert.match(brain.prompts[2], /stated command must be the command that produced/);
++  assert.match(brain.prompts[4], /dataset  alpha/, "a title-only revision must not rewrite the executed shell command");
++  assert.match(brain.prompts[6], /still has no verdict/, "changing whitespace inside a quoted argument changes execution");
++  assert.deepEqual(fake.calls, [original, different]);
++  assert.equal(result.status, "verified");
++  assert.equal(result.runbook[0].command, different);
++});
++
+ test("destructive commands never reach the machine", () => {
+   assert.match(refusal("rm -rf /"), /root directory/);
+   assert.match(refusal("sudo rm -rf ~"), /root directory/);
+diff --git a/electron/reproduction/contract.cjs b/electron/reproduction/contract.cjs
+index a8f6962..dcfbe37 100644
+--- a/electron/reproduction/contract.cjs
++++ b/electron/reproduction/contract.cjs
+@@ -21,6 +21,11 @@ function text(value, limit = 2_000) {
+   return String(value ?? "").replace(/\s+/g, " ").trim().slice(0, limit);
+ }
+ 
++function commandText(value, limit = 2_000) {
++  // Shell whitespace inside quotes and between lines is executable content.
++  return String(value ?? "").trim().slice(0, limit);
++}
++
+ function boundedNumber(value, fallback, min, max) {
+   const parsed = typeof value === "string" ? Number(value.replace(/[^0-9.eE+-]/g, "")) : Number(value);
+   if (!Number.isFinite(parsed)) return fallback;
+@@ -66,7 +71,7 @@ function normalizeClaim(input, index) {
+ function normalizeEntrypoint(input) {
+   const entry = input && typeof input === "object" ? input : {};
+   return {
+-    command: text(entry.command, 2_000),
++    command: commandText(entry.command, 2_000),
+     cwd: text(entry.cwd, 400) || ".",
+     outputs: Array.isArray(entry.outputs)
+       ? entry.outputs.filter((item) => typeof item === "string").map((item) => text(item, 400)).filter(Boolean).slice(0, 10)
+@@ -144,7 +149,7 @@ function normalizeCheck(input) {
+     return path && pattern ? { kind, path, pattern } : { kind: "manual", reason: "No path or pattern was given for this check." };
+   }
+   if (kind === "command") {
+-    const command = text(check.command, 1_000);
++    const command = commandText(check.command, 1_000);
+     return command ? { kind, command, expect: "exit_zero" } : { kind: "manual", reason: "No command was given for this check." };
+   }
+   if (kind === "http") {
+@@ -167,7 +172,7 @@ function normalizeStep(input, index) {
+     id: text(step.id, 80) || `step-${index + 1}`,
+     title,
+     detail: text(step.detail, 600),
+-    command: text(step.command, 2_000),
++    command: commandText(step.command, 2_000),
+     checkpoint: text(step.checkpoint, 400),
+     check: normalizeCheck(step.check),
+     source: text(step.source, 400),
+diff --git a/electron/reproduction/pilot.cjs b/electron/reproduction/pilot.cjs
+index 09fbf7a..42b337b 100644
+--- a/electron/reproduction/pilot.cjs
++++ b/electron/reproduction/pilot.cjs
+@@ -260,6 +260,14 @@ function statePrompt({ title, summary, claims, repo, notes, steps, findings, obs
+   ].filter(Boolean).join("\n");
+ }
+ 
++function stepSignatures(step) {
++  const normalized = normalizeStep(step, 0);
++  return {
++    execution: JSON.stringify([normalized.command, normalized.detail, normalized.blocked]),
++    acceptance: JSON.stringify([normalized.checkpoint, normalized.check]),
++  };
++}
++
+ function normalizeSteps(input, previous) {
+   const list = Array.isArray(input) ? input : [];
+   const kept = new Map((previous || []).map((step) => [step.id, step]));
+@@ -269,19 +277,22 @@ function normalizeSteps(input, previous) {
+     if (!raw || typeof raw !== "object") return;
+     const id = String(raw.id || "").trim();
+     const existing = id ? kept.get(id) : null;
+-    // A revision that only rewords a step should not silently drop the verdict
+-    // and the receipt that were already earned for it.
+     const merged = normalizeStep({ ...(existing || {}), ...raw }, index);
+     if (!merged) return;
++    const before = existing ? stepSignatures(existing) : null;
++    const after = stepSignatures(merged);
++    // Titles and source labels can change without changing what was executed
++    // or accepted. A new command, condition or check needs a new verdict.
++    const unchanged = before && before.execution === after.execution && before.acceptance === after.acceptance;
+     if (seen.has(merged.id)) merged.id = `${merged.id}-${index + 1}`;
+     seen.add(merged.id);
+     next.push({
+       ...merged,
+-      status: existing?.status || "pending",
+-      evidence: existing?.evidence || "",
+-      note: existing?.note || "",
+-      exit_code: existing?.exit_code ?? null,
+-      duration_ms: existing?.duration_ms || 0,
++      status: unchanged ? existing.status || "pending" : "pending",
++      evidence: unchanged ? existing.evidence || "" : "",
++      note: unchanged ? existing.note || "" : "",
++      exit_code: unchanged ? existing.exit_code ?? null : null,
++      duration_ms: unchanged ? existing.duration_ms || 0 : 0,
+     });
+   });
+   return next.length ? next : null;
+@@ -351,6 +362,9 @@ async function runPilot({
+   if (!steps.length) throw new Error("The runbook has no steps to execute.");
+   const findings = (Array.isArray(inputFindings) ? inputFindings : []).slice(-20);
+   const observations = [];
++  // This run's old output remains inspectable, but cannot certify execution
++  // conditions introduced later. Acceptance-only changes can re-evaluate it.
++  const evidenceAfter = new Map();
+   const readings = [];
+   const changes = [];
+   const outputToken = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+@@ -525,8 +539,17 @@ async function runPilot({
+         step.evidence = "";
+         step.exit_code = null;
+       } else {
+-        const cited = cite(observations, quote, verdict);
+-        if (cited.error) { turnHint = `The ${verdict} verdict was not recorded: ${cited.error}`; continue; }
++        // Passed/failed describe the current execution conditions. A historical
++        // error can still explain a manual handoff without claiming a new run.
++        const floor = verdict === "manual" ? 0 : evidenceAfter.get(step.id) || 0;
++        const actual = String(decision.command || "").trim();
++        const eligible = observations.filter((entry) => entry.index > floor &&
++          (!actual || String(entry.command || "").trim() === actual));
++        const cited = cite(eligible, quote, verdict);
++        if (cited.error) {
++          turnHint = `The ${verdict} verdict was not recorded: ${cited.error}${floor ? " Its execution conditions changed; cite output from a command run after the revision." : ""}${actual ? " The stated command must be the command that produced the quoted output." : ""}`;
++          continue;
++        }
+         step.status = verdict;
+         step.evidence = flatten(quote).slice(0, 600);
+         step.note = flatten(decision.note || "").slice(0, 400);
+@@ -535,10 +558,9 @@ async function runPilot({
+         // A command that needed three flags to work is the truth about this
+         // machine. Keeping the planner's guess would make the next run learn it
+         // all over again.
+-        const actual = String(decision.command || "").replace(/\s+/g, " ").trim().slice(0, 2_000);
+         if (actual && actual !== step.command) {
+           emit({ type: "pilot-thought", text: `Recorded the command that worked for "${step.title}".` });
+-          step.command = actual;
++          step.command = actual.slice(0, 2_000);
+         }
+       }
+       stalled = 0;
+@@ -551,6 +573,12 @@ async function runPilot({
+       const next = normalizeSteps(decision.steps, steps);
+       if (!next) { turnHint = "The revised runbook had no readable steps."; continue; }
+       const missing = steps.filter((step) => terminal(step.status) && !next.some((entry) => entry.id === step.id));
++      for (const step of next) {
++        const previous = steps.find((entry) => entry.id === step.id);
++        if (previous && stepSignatures(previous).execution !== stepSignatures(step).execution) {
++          evidenceAfter.set(step.id, index);
++        }
++      }
+       steps = next;
+       stalled = 0;
+       emit({

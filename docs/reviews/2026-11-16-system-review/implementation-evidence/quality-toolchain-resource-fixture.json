@@ -1,0 +1,9 @@
+{
+  "directory": "/tmp/archimedes-quality-worker-fixture",
+  "entry": "/tmp/archimedes-quality-worker-fixture/entry.cjs",
+  "archive": "/tmp/archimedes-quality-worker-fixture/resource-audit.asar",
+  "sourceArchive": null,
+  "worker": "semantic-worker-Bq-2bQd4.js",
+  "wasm": "ort-wasm-simd-threaded.jsep-Dt1SEu-e.wasm",
+  "module": "ort-wasm-simd-threaded.jsep-BdMRXSUM.mjs"
+}

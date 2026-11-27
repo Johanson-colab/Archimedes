@@ -1,0 +1,24 @@
+{
+  "appBytes": 984989051,
+  "asarBytes": 388530492,
+  "asarSha256": "5606948f0a3ce440171075af76134789db6d37a618487614d2021a3a32c61ab9",
+  "semanticWorker": {
+    "ok": true,
+    "workerImported": true,
+    "wasmBytes": 28352885,
+    "wasmCompiled": true,
+    "ortModuleLoaded": true,
+    "sourceArchive": "/Users/fei/Desktop/Archimedes/release/mac-arm64/Archimedes.app/Contents/Resources/app.asar",
+    "kind": "ASAR browser resource loading; not CLIP inference",
+    "remoteRequests": []
+  },
+  "normalEntry": {
+    "ok": true,
+    "packagedExecutable": true,
+    "nativePty": true,
+    "keywordFallback": true,
+    "metricSavedReportReopened": true
+  },
+  "runtimeSourceCommit": "618d950481694881decc5f1f40f4615fa6ed09be",
+  "productionCodeUnchangedAfterPackage": true
+}

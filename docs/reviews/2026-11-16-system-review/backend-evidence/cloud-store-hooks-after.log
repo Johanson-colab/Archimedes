@@ -1,0 +1,23 @@
+(node:57119) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ same-ID running turns deliver completed/failed/incomplete to another SQLite client, survive retries and old snapshots (314.908792ms)
+✔ library and membership tombstones survive reconnect/old pull while explicit re-add and other references remain valid (152.389834ms)
+✔ real main sync IPC captures A dataRoot through delayed pull, B open and A close (78.179125ms)
+✔ turn revisions reject terminal regression and cross-thread identity mixing (0.219417ms)
+✔ a first upload removed before its ACK remains deleted, including delayed library creation (78.951458ms)
+✔ one paper retains independent project reasons and discovery snapshots while personal notes stay shared (109.240083ms)
+✔ paper/link/selection save rolls back as one operation, and viewers cannot change project reasons or metadata (76.015708ms)
+✔ explicit metadata repair and bibliography survive identifier-changing imports without discarding PDF pages or notes (49.38825ms)
+✔ the real preload and main handlers save atomic selections into their sender's captured store (77.747958ms)
+✔ library sync pushes local libraries and pulls shared books and paper state (95.799042ms)
+✔ library sync requires a shared project (65.628584ms)
+✔ thread sync pushes local threads, turns, events, comments and pulls shared ones (100.128084ms)
+✔ thread sync requires a shared project (67.094583ms)
+ℹ tests 13
+ℹ suites 0
+ℹ pass 13
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 916.01375

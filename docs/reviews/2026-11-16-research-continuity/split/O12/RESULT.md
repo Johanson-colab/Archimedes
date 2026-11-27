@@ -1,0 +1,6 @@
+- Branch/worktree: `codex/project-paper-selection` / `/Users/fei/Desktop/Archimedes-pr-splits/project-paper-selection`.
+- Final local commit `2df7873ede42d7a4e5754d4bee0028a96fd921a2`; base `1f4b375`; independent of O11, O13 and B1. Code commit `d5807a0` precedes the screenshot-only amendment.
+- Scope: per-project manual selection reasons; saved discovery query/criteria/provider/time/degraded status and distinct machine match explanation; discovery save plus paper inspector editing. New narrow `project-paper-selection.cjs` avoids importing bibliography responsibilities.
+- Focused DB/IPC/component and Library neighbor checks: 15/15. Lint/build/theme pass. Full npm test: 1,276 tests, 1,262 pass, identical seven upstream failures, seven skips. Logs are in this directory; untouched base comparison is `../product-base-npm-test.log`.
+- Actual base/head renderer pair under `docs/assets/project-paper-selection/`, 1440×1000 charcoal English, same preview project/collection/selected paper. New reason was entered and saved. Preview images do not stand in for persistence checks.
+- Published after coordinator review: https://github.com/Johanson-colab/Archimedes/pull/344 . Normal main-base PR, exact head and 18-file scope verified; both raw screenshots return HTTP 200. PR body: `PR_BODY.md`.

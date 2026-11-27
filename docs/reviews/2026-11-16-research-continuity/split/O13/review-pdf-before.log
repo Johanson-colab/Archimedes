@@ -1,0 +1,28 @@
+✔ imports a local PDF into a library and indexes it without duplicating identical files (932.4375ms)
+✖ different local PDFs with the same filename retain their assets and indexed pages (159.673375ms)
+ℹ tests 2
+ℹ suites 0
+ℹ pass 1
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2398.383125
+
+✖ failing tests:
+
+test at electron/library-local-import.test.cjs:44:1
+✖ different local PDFs with the same filename retain their assets and indexed pages (159.673375ms)
+  AssertionError [ERR_ASSERTION]: Expected "actual" to be strictly unequal to:
+  
+  'c3e5af27-e78c-43d6-afe4-dcecf3ee4fe2'
+      at TestContext.<anonymous> (/Users/fei/Desktop/Archimedes-pr-splits/bibtex-interchange/electron/library-local-import.test.cjs:56:10)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'c3e5af27-e78c-43d6-afe4-dcecf3ee4fe2',
+    expected: 'c3e5af27-e78c-43d6-afe4-dcecf3ee4fe2',
+    operator: 'notStrictEqual',
+    diff: 'simple'
+  }

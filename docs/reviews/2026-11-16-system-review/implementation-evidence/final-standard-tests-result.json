@@ -1,0 +1,6 @@
+{
+  "check": "standard npm test",
+  "exitCode": 1,
+  "seconds": 28.098,
+  "commit": "19f33e57ed130c299ecb548c076ef8883d08ca89"
+}

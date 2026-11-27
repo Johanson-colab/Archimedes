@@ -1,0 +1,25 @@
+✖ real bridge saves to the canonical project root, registers only actual sessions, and cannot cross data stores (66.573584ms)
+✔ updates retain historical roots, validate session ownership before writes, and survive session deletion/reopen (54.265333ms)
+✔ viewers can reopen result files and see changed hashes but cannot save or inject credentials (43.957625ms)
+✔ saved analysis has real complete source/output files and metadata-only reopen with controlled per-file reads (13.414375ms)
+✔ figure binary references reopen byte-for-byte without a fabricated session or model credentials (2.445958ms)
+✔ the registered owner and fixed manifest path cannot be transplanted to another project or result (2.636208ms)
+✔ result writes and reads reject symbolic-link parents and leaves rather than touching external files (3.787333ms)
+✔ all package input is checked before writes and updating retains its owner and creation time (10.486209ms)
+ℹ tests 8
+ℹ suites 0
+ℹ pass 7
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 289.087166
+
+✖ failing tests:
+
+test at electron/project-result-commands.test.cjs:37:1
+✖ real bridge saves to the canonical project root, registers only actual sessions, and cannot cross data stores (66.573584ms)
+  TypeError [Error]: f.other.defaultResearchProject is not a function
+      at TestContext.<anonymous> (/Users/fei/Desktop/Archimedes-pr-splits/project-data-analysis/electron/project-result-commands.test.cjs:53:70)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3)

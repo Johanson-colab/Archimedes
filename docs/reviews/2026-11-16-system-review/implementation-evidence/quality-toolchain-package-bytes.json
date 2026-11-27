@@ -1,0 +1,23 @@
+{
+  "scope": "installed ONNX dependency bytes selected by electron-builder dependency matcher; not final installer size",
+  "onnxruntimeNode": {
+    "total": 301068136,
+    "kept": 0,
+    "files": 43
+  },
+  "excludedBytes": 301068136,
+  "rendererWasm": [
+    {
+      "file": "ort-wasm-simd-threaded.asyncify-CxOG5pUO.wasm",
+      "bytes": 26861777
+    },
+    {
+      "file": "ort-wasm-simd-threaded.jsep-Dt1SEu-e.wasm",
+      "bytes": 28352885
+    }
+  ],
+  "sourceDependencyVersions": {
+    "transformers": "4.3.2",
+    "onnxruntimeNode": "1.30.0"
+  }
+}

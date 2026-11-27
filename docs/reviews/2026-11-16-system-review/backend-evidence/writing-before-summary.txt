@@ -1,0 +1,9 @@
+Original PaperWritingView.tsx at 1f4b37581c446770d576440f9ebb9bca5c55bfb7; unchanged current component test with source/module paths redirected in a self-cleaning temp folder.
+not ok 1 - same-named papers keep their owner and autosave on departure without replaying an old open request
+  failureType: 'testCodeFailure'
+  error: |-
+# tests 1
+# pass 0
+# fail 1
+# skipped 0
+Exit=1

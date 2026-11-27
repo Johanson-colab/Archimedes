@@ -1,0 +1,34 @@
+✔ translation shards cover every string exactly once (4.372417ms)
+✔ keys stay sorted inside each shard so concurrent additions do not collide (2.32575ms)
+✔ the shell merges every shard and keeps the surfaces translated (3.221083ms)
+✖ actual panel requires confirmed mappings, saves once, shows all four categories and never promotes the run (68.654542ms)
+✔ a late data chooser cannot inject source rows into another project scope (4.90575ms)
+✔ a user-entered fixed tolerance reaches the bridge as its exact decimal text (25.742375ms)
+✔ a changed run snapshot refreshes an open historical comparison as stale without discarding its values (20.786458ms)
+ℹ tests 7
+ℹ suites 0
+ℹ pass 6
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 666.774833
+
+✖ failing tests:
+
+test at electron/metric-comparison-ui.test.cjs:43:1
+✖ actual panel requires confirmed mappings, saves once, shows all four categories and never promotes the run (68.654542ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /does not certify scientific reproduction/. Input:
+  
+  'Numerical comparisonsChoose a CSV or JSON file, map its columns, and save a numerical comparison.Choose CSV or JSON dataRefresh comparison historynumbers.csv · 2 metric rows · c2f77df45637415dPreview selected datametricexpectedactualunitdatasettoleranceaccuracy0.80.81ratiotest0.02recall0.9ratiotest0.02Comparison titleMetric or claim columnUse row numbersmetricexpectedactualunitdatasettoleranceExpected value columnChoose columnmetricexpectedactualunitdatasettoleranceActual value columnChoose columnmetricexpectedactualunitdatasettoleranceExpected unitEnter a fixed unitmetricexpectedactualunitdatasettoleranceActual unitSame confirmed unitmetricexpectedactualunitdatasettoleranceExpected datasetEnter a fixed datasetmetricexpectedactualunitdatasettoleranceActual datasetSame confirmed datasetmetricexpectedactualunitdatasettoleranceAbsolute tolerance columnUse fixed absolute tolerancemetricexpectedactualunitdatasettoleranceFixed absolute toleranceI confirm the expected/actual columns, dataset, unit and absolute tolerance for this comparison.Compare and save'
+  
+      at TestContext.<anonymous> (/Users/fei/Desktop/Archimedes/electron/metric-comparison-ui.test.cjs:47:10)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'Numerical comparisonsChoose a CSV or JSON file, map its columns, and save a numerical comparison.Choose CSV or JSON dataRefresh comparison historynumbers.csv · 2 metric rows · c2f77df45637415dPreview selected datametricexpectedactualunitdatasettoleranceaccuracy0.80.81ratiotest0.02recall0.9ratiotest0.02Comparison titleMetric or claim columnUse row numbersmetricexpectedactualunitdatasettoleranceExpected value columnChoose columnmetricexpectedactualunitdatasettoleranceActual value columnChoose columnmetricexpectedactualunitdatasettoleranceExpected unitEnter a fixed unitmetricexpectedactualunitdatasettoleranceActual unitSame confirmed unitmetricexpectedactualunitdatasettoleranceExpected datasetEnter a fixed datasetmetricexpectedactualunitdatasettoleranceActual datasetSame confirmed datasetmetricexpectedactualunitdatasettoleranceAbsolute tolerance columnUse fixed absolute tolerancemetricexpectedactualunitdatasettoleranceFixed absolute toleranceI confirm the expected/actual columns, dataset, unit and absolute tolerance for this comparison.Compare and save',
+    expected: /does not certify scientific reproduction/,
+    operator: 'match',
+    diff: 'simple'
+  }

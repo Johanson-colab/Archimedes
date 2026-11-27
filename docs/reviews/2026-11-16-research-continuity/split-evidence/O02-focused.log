@@ -1,0 +1,17 @@
+✔ Notes appends to its named chat, preserves explicit replace intent, and a late owner callback cannot navigate another session (213.604375ms)
+✔ attachment and pending request updates are isolated by session, including delayed adds (27.877541ms)
+✔ a failed run after switching sessions reports only to the original composer (91.18ms)
+✔ a delayed successful run clears only submitted attachment objects in its owner (0.898583ms)
+✔ a newly created session receives later text, attachments and queued follow-ups from its original draft only (0.844917ms)
+✔ the same imported cloud thread in different data folders cannot share text, attachments or pending handoffs (0.485875ms)
+✔ failed send restoration keeps the failed prompt and later typing in the original stored scope (0.300167ms)
+✔ late run events and completion cannot adopt an empty task in another project (117.543584ms)
+✔ a delayed approval uses its original task for command execution and completion (1.389042ms)
+ℹ tests 9
+ℹ suites 0
+ℹ pass 9
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 789.467541

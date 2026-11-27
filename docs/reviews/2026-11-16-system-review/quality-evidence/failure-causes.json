@@ -1,0 +1,50 @@
+{
+  "platform": "darwin",
+  "node": "v26.13.0",
+  "aliasDiffers": true,
+  "runs": [
+    {
+      "name": "seven-failures-alias",
+      "command": [
+        "node",
+        "--test",
+        "electron/git-state.test.cjs",
+        "electron/workspace-session-model.test.cjs",
+        "electron/i18n-translations.test.cjs",
+        "electron/terminal-shell.test.cjs"
+      ],
+      "tmpdirKind": "alias",
+      "exitCode": 1,
+      "error": null
+    },
+    {
+      "name": "git-physical",
+      "command": [
+        "node",
+        "--test",
+        "electron/git-state.test.cjs",
+        "electron/workspace-session-model.test.cjs"
+      ],
+      "tmpdirKind": "physical",
+      "exitCode": 0,
+      "error": null
+    }
+  ],
+  "gitIdentity": {
+    "lexicalPathsDiffer": true,
+    "canonicalPathsEqual": true,
+    "aliasState": "suspicious",
+    "physicalState": "ready",
+    "worktreeError": "Create a commit in the project repository before opening a worktree."
+  },
+  "shellSimulation": {
+    "hostSeparator": "/",
+    "selected": "cmd.exe",
+    "expected": "C:\\Program Files\\PowerShell\\7\\pwsh.exe",
+    "checkedCandidates": [
+      "C:\\Program Files/PowerShell/7/pwsh.exe",
+      "C:\\Windows/System32/WindowsPowerShell/v1.0/powershell.exe"
+    ],
+    "targetPlatformJoin": "C:\\Program Files\\PowerShell\\7\\pwsh.exe"
+  }
+}

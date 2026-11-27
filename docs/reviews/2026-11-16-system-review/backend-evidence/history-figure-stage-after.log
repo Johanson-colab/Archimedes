@@ -1,0 +1,26 @@
+✔ real bridge saves to the canonical project root, registers only actual sessions, and cannot cross data stores (94.10125ms)
+✔ updates retain historical roots, validate session ownership before writes, and survive session deletion/reopen (83.036458ms)
+✔ viewers can reopen result files and see changed hashes but cannot save or inject credentials (60.869458ms)
+✔ a saved 9 MiB CSV is actually readable through the research agent at its final row with bounded output (100.175375ms)
+✔ a historical saved result creates a legitimate empty source session and stages hash-bound figures without editing the manuscript (119.223042ms)
+✔ manuscript figure staging rejects symlink destinations and project mixing without changing external files (61.843334ms)
+✔ a new run cannot inherit the previous run's passed verdict, while immutable historical receipts survive reopen (81.343292ms)
+✔ actual Git commit/dirty and known paper/plan changes are recorded without claiming untracked environments (173.177583ms)
+✔ legacy reproduction binding is explicit and cannot move an existing record across project workspaces (52.881833ms)
+✔ basedOnThreadId creates an empty linked session in its real historical root and refuses conflicting owners (52.262667ms)
+✔ actual run history IPC returns each saved receipt and enforces parent project and data-root ownership (81.422333ms)
+✔ workspace facades retain SQL ownership across awaits, aliases, and deferred close (92.119541ms)
+✔ IPC pins the sender's data root while that window switches and thread creation rejects mixed roots (72.386625ms)
+✔ real terminal child persists in its data store after IPC returns and its execution folder has no database (105.8375ms)
+✔ context rejects thread/project/workspace/root mixing before any new turn and preserves historical execution (36.34075ms)
+✔ opening a freshly imported conversation binds the same local context used by run and remains readable to viewers (48.473583ms)
+✔ same imported thread id in two data stores has independent running/stop/approval identity (77.572459ms)
+✔ fresh-process recovery expires local executions, keeps final task output, and leaves cloud-only turns running (152.43125ms)
+ℹ tests 18
+ℹ suites 0
+ℹ pass 18
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1321.487791

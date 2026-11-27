@@ -1,0 +1,14 @@
+(node:51201) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ search treats LaTeX commands and regex punctuation literally (1.7295ms)
+✔ search ignores case and keeps original Unicode textarea offsets (0.29375ms)
+✔ highlights keep line-relative offsets and one identity across lines (0.192583ms)
+✔ newlines and trailing empty lines never add highlight text (0.113917ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 164.498292

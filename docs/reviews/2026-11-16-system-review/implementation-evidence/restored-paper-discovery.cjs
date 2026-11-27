@@ -1,0 +1,50 @@
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const assert = require('node:assert/strict');
+const { DatabaseSync } = require('node:sqlite');
+const { createHash } = require('node:crypto');
+const store = require('../../../../electron/store.cjs');
+const transfer = require('../../../../electron/project-transfer.cjs');
+
+const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'archimedes-restored-discovery-')));
+let bound, database;
+try {
+  const dataRoot = path.join(root, 'data'), packages = path.join(root, 'packages'), restored = path.join(root, 'restored');
+  for (const folder of [dataRoot, packages, restored]) fs.mkdirSync(folder);
+  bound = store.createWorkspaceStore(dataRoot);
+  const original = bound.createResearchProject({ name: 'Original' });
+  const sourceLibrary = bound.listLibraries(original.id)[0];
+  const input = { title: 'Same paper after restoration', doi: '10.5555/restore-selection', authors: ['A'] };
+  const sourcePaper = bound.addPaper(sourceLibrary.id, input);
+  bound.updatePaper(sourcePaper.id, { notes: 'Original private reading' });
+  const pdf = Buffer.from('%PDF-1.4 restored-paper-fixture');
+  const relative = `.archimedes/papers/${sourcePaper.id}.pdf`;
+  fs.mkdirSync(path.dirname(path.join(dataRoot, relative)), { recursive: true });
+  fs.writeFileSync(path.join(dataRoot, relative), pdf);
+  bound.replacePaperReaderAsset(sourcePaper.id, { relative_path: relative, sha256: createHash('sha256').update(pdf).digest('hex'), size_bytes: pdf.length, page_count: 1, pages: [{ page_number: 1, text: 'Restored selected evidence' }] });
+  bound.saveProjectPaperSelection(sourcePaper.id, original.id, { reason: 'Original selection reason' });
+  database = new DatabaseSync(path.join(dataRoot, '.archimedes/archimedes.db'));
+  const exported = transfer.exportProject(database, original.id, { dataRoot, userId: 'local-user', destinationParent: packages });
+  const imported = transfer.importProject(database, exported.path, { dataRoot, userId: 'local-user', targetParent: restored });
+  const targetLibrary = bound.listLibraries(imported.projectId)[0];
+  const restoredPaper = bound.listPapers(targetLibrary.id)[0];
+  assert.notEqual(restoredPaper.id, sourcePaper.id, 'restoration correctly keeps a new local identity');
+  bound.updatePaper(restoredPaper.id, { notes: 'Restored revised reading' });
+  const added = bound.addPaper(targetLibrary.id, input, { reason: 'New discovery after restoration' });
+  const after = bound.listPapers(targetLibrary.id);
+  console.log(JSON.stringify({ restoredId: restoredPaper.id, originalId: sourcePaper.id, addedId: added.id, count: after.length, notes: after.map(paper => paper.notes) }));
+  assert.equal(added.id, restoredPaper.id, 're-selecting a paper must reuse the target project copy');
+  assert.equal(after.length, 1);
+  assert.equal(after[0].notes, 'Restored revised reading');
+  assert.equal(bound.listPapers(sourceLibrary.id)[0].notes, 'Original private reading');
+  const asset = bound.getPaperReader(restoredPaper.id).asset;
+  assert.ok(fs.readFileSync(path.join(dataRoot, asset.relative_path)).equals(pdf));
+  assert.equal(bound.getPaperReader(restoredPaper.id).pages[0].text, 'Restored selected evidence');
+  assert.ok(fs.readFileSync(path.join(dataRoot, relative)).equals(pdf));
+  assert.equal(bound.getProjectPaperSelection(sourcePaper.id, original.id).reason, 'Original selection reason');
+  assert.equal(bound.getProjectPaperSelection(restoredPaper.id, imported.projectId).reason, 'New discovery after restoration');
+} finally {
+  database?.close(); bound?.close(); store.closeAllWorkspaces();
+  fs.rmSync(root, { recursive: true, force: true });
+}

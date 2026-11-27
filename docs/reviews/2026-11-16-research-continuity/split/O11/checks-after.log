@@ -1,0 +1,19 @@
+✔ discovery creates a library inline, saves a paper, and remounts without searching across data roots (183.218583ms)
+✔ conference discovery restores the candidate page without re-querying (77.720791ms)
+✔ a delayed save into library A does not mark an unsaved candidate in newly selected library B as saved (59.812542ms)
+✔ opening a project hydrates only the first folder; project-wide browsing deduplicates shared papers (107.452959ms)
+✔ document switching mounts one reader and protects a running paper conversation (46.693917ms)
+✔ more than eight papers remain open and keep their reading positions (63.635042ms)
+✔ removing a paper removes only that folder membership; sync still includes annotations (19.054708ms)
+✔ a late folder refresh cannot overwrite a completed paper-state update (24.46225ms)
+✔ notes survive unmounting and failed saves; editing during save keeps the newer draft (7.810875ms)
+✔ metadata queue bounds concurrency, continues after errors and cancels queued work (2.75725ms)
+✔ search keeps a pasted title together, includes tags, and sorting leaves cache order intact (0.208917ms)
+ℹ tests 11
+ℹ suites 0
+ℹ pass 11
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 837.301875

@@ -1,0 +1,27 @@
+✔ discovery creates a library inline, saves provenance, and remounts without searching across data roots (261.327459ms)
+✔ project reasons remain separate while personal notes stay shared, including after reopening the database (46.507292ms)
+✔ BibTeX supports nested values, grouped authors, stable keys and explicit unsupported syntax (1.567333ms)
+✔ BibTeX preserves literal braces and backslashes across its own export while retaining grouped capitalization (0.349542ms)
+✔ BibTeX only identifies arXiv eprints and normalizes the same identifiers as the actual store (29.336958ms)
+✔ citation keys are scoped to the target export, while paper identity still deduplicates across projects (54.749709ms)
+✔ real Library BibTeX preview preserves existing edits and notes; only selected metadata repair is applied (48.693166ms)
+✔ conference discovery restores the candidate page and saves official-source provenance without re-querying (64.75525ms)
+✔ leaving a BibTeX import stops subsequent operations after an in-flight add returns (34.10975ms)
+✔ same-named papers keep their owner and autosave on departure without replaying an old open request (249.311125ms)
+✔ a delayed save preserves later keystrokes and drains the newest snapshot to its old root (843.359584ms)
+✔ late reads, compile progress and build results update only their owner scope (71.703083ms)
+✔ failed departure autosaves keep the original draft and expose its save error on return (34.240959ms)
+✔ switching source files during an in-flight save retains and saves the final edit to the old file (839.972709ms)
+✔ the actual preload and compile handler preserve owner ids and legacy two-argument calls (3.913583ms)
+✔ Writing opens existing manuscripts before templates and restores the chosen document after remount (29.156125ms)
+✔ a main document at the execution root opens in place and a removed recent document returns to the chooser (23.238208ms)
+✔ compiling main waits for a pending save of another source file in the same manuscript (28.755584ms)
+✔ typing during the compile save barrier retains the new edit and does not compile an older source set (41.137875ms)
+ℹ tests 19
+ℹ suites 0
+ℹ pass 19
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2959.02075

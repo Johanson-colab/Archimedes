@@ -1,0 +1,23 @@
+✔ a real SQLite and disk package restores new local owners, source, PDFs, annotations, history and editable results (95.898ms)
+✔ repeated restore creates another project/root and preserves existing names and files (82.920625ms)
+✔ missing linked resources are explicit and configuration files cannot be selected as manuscript source (67.248458ms)
+✔ corrupt file bytes and record hashes fail before creating a project or target directory (84.013416ms)
+✔ V01 history keeps snapshots and full local logs but cannot carry Docker/SSH cleanup ownership (84.751375ms)
+✔ owned review runs retain PDF/log/manifest with new return owners, while unrelated or legacy owners are explicit (119.663167ms)
+✔ a database constraint failure rolls back imported records and only newly created files (84.753916ms)
+✔ a historical session root remains selectable and usable after the project default root changes (90.16225ms)
+✔ a persisted directory alias and its default root restore to the same usable source directory (84.716417ms)
+✔ results can be restored without their optional conversation (76.915334ms)
+✔ changed or missing research resources do not acquire a false ready receipt on restore (72.804708ms)
+✔ actual preload/IPC capture the source data owner across a destination chooser and reject another project root (82.885167ms)
+✔ serialized Windows drive and UNC source roots restore on the host without interpreting them as host paths (92.837333ms)
+✔ a conversation based on a standalone historical result restores its FK after the result, or clears it when omitted (87.167209ms)
+✔ numerical source/report files migrate with new run owners and an explicit stale historical run attachment (80.234917ms)
+ℹ tests 15
+ℹ suites 0
+ℹ pass 15
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1426.081084

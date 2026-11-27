@@ -1,0 +1,17 @@
+✔ git state distinguishes none, empty, and ready folders (172.131958ms)
+✔ a linked worktree is reported as nested instead of a project root (126.978625ms)
+✔ a broken .git entry is suspicious (7.315583ms)
+✔ opening an existing database attaches projects and sessions to a shared workspace (107.4295ms)
+✔ sessions are filtered by workspace and can be pinned and marked viewed (49.986958ms)
+✔ sandboxes copy project files without caches or app data (55.914333ms)
+✔ workspaces accept a user name and can be renamed later (45.075ms)
+✔ git projects can open and remove a worktree workspace (236.992875ms)
+✔ projects without git cannot create a worktree (39.574541ms)
+ℹ tests 9
+ℹ suites 0
+ℹ pass 9
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 655.282292

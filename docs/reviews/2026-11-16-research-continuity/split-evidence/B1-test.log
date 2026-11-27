@@ -1,0 +1,1728 @@
+
+> archimedes-research@0.1.0 test
+> node --test electron/*.test.cjs electron/figure-forge-upstream-*.mjs electron/agent/*.test.cjs server/*.test.cjs && node scripts/check-theme-tokens.mjs
+
+✔ About logo preserves the seven Paper blocks without an opaque background (2.058292ms)
+✔ About logo is decorative next to the existing accessible product name (0.216875ms)
+✔ About logo uses the active theme foreground rather than an opaque themed tile (1.491917ms)
+✔ maps pointer, typing, and scroll rates to a bounded score (0.494125ms)
+✔ smoothing reacts without jumping to the new maximum (0.0755ms)
+✔ activity levels drive the observation cadence (0.081542ms)
+✔ does not observe an idle or stale window (0.080042ms)
+✔ add_artifact registers an existing output and increments its version (88.402875ms)
+✔ add_artifact rejects missing, non-artifact, and escaping paths (70.007833ms)
+✔ a claimed thread keeps waiting for a human decision (22.496708ms)
+✔ an unclaimed thread fails fast instead of stranding the turn (5006.079208ms)
+✔ interrupting a run rejects a pending approval (1.479208ms)
+✔ workspace writes are refused unless the caller asks for them (12.776583ms)
+✔ command proposals are refused unless the caller asks for them (10.45325ms)
+✔ read-only tools keep working without any capability grant (2.186083ms)
+✔ large tool-free reconstruction requests reject truncated model output (1.177292ms)
+✔ retries OpenAI-compatible models with max_completion_tokens when requested (16.254667ms)
+✔ retries a nonstandard empty stream as a non-streaming completion (10.975167ms)
+✔ completes without a text callback, as the proactive agent does (0.256583ms)
+✔ model requests retry rate limits without rerunning any tool (3.251333ms)
+✔ uses a paper PDF URL and derives arXiv PDFs only from public abstract URLs (0.715292ms)
+✔ blocks private targets before downloading an attached paper PDF (47.935417ms)
+✔ transient review workers include their active turn in the in-memory context (0.868667ms)
+✔ bounds active tool history without leaving orphan tool messages (4.274042ms)
+✔ large latest result is explicitly truncated while preserving its call (0.986708ms)
+✔ removes the oldest complete group first (0.53025ms)
+✔ large reconstruction output is opt-in and rejects Anthropic truncation (1.84525ms)
+✔ translates tool calls and results into Anthropic message blocks (0.969083ms)
+✔ streams Anthropic text and tool input as normalized agent calls (4.270875ms)
+✔ discovers skills lazily and reads only bounded resources beneath their root (11.241291ms)
+✔ stdio protocol correlates replies and refuses unknown requests without shell (4.495708ms)
+✔ explicit app-server arguments are placed before the app-server subcommand (0.949208ms)
+✔ RPC timeouts do not replay and process exit rejects pending requests (23.3755ms)
+✔ invalid and oversized protocol input fails closed (0.459708ms)
+✔ only identical successful local history can resume; forks, undo and dirty delivery cannot (0.16275ms)
+✔ streaming uses restricted policy, rejects foreign events and persists only completed continuity (5.862542ms)
+✔ native approval is returned once and denied unless explicitly approved (2.976541ms)
+✔ unsupported server requests are denied; failed/uncertain turns preserve partial text without continuity (2.7985ms)
+✔ abort stops the native turn and closes the child (0.933875ms)
+✔ configuration never stores arbitrary secrets and account checks always close (1.904333ms)
+✔ native client negotiates experimental questions while suppressing private reasoning deltas (0.371542ms)
+✔ outbound native protocol rejects oversized UTF-8 and escaped payloads before serialization or writes (25.351417ms)
+✔ unsupported initialize capabilities fail explicitly without fallback and close the child (0.473416ms)
+✔ outbound JSON preflight rejects serialization hooks without invoking them (0.160458ms)
+✔ outbound JSON byte counts match actual escaping, surrogate and nested representations (0.167916ms)
+✔ native setup omits API instructions and resumes native history without reimport (10.262208ms)
+✔ ordinary Codex turns disable IdeaSpark skills discovered from the workspace (2.336875ms)
+✔ Research uses a native Codex skill input and restores its run on the next native turn (97.834958ms)
+✔ permissions stay bounded and explicit effort is validated against native model catalog (5.884334ms)
+✔ native activities preserve item identities, bound output and separate commentary from final text (5.784917ms)
+✔ native usage uses last request rather than lifetime and snapshots plan and diff (0.81725ms)
+✔ steer and questions target active native identity; stale and empty answers fail (8.562125ms)
+✔ native compaction resumes identical binding, records native context completion and cleans up (3.499292ms)
+✔ final-answer phase takes precedence over partial messages and resolved native questions expire (1.079875ms)
+✔ compaction timeout and abort close clients and leave uncertain bindings dirty (35.441958ms)
+✔ one-shot network command approval displays endpoint and never accepts policy grants (5.896167ms)
+✔ resolved native approval expires its local wait and never replies after expiration (14.625708ms)
+✔ explicit effort uses the effective native configuration when model is left empty (3.105458ms)
+✔ oversized file changes are identified as truncated and never approved from incomplete display (11.623583ms)
+✔ snapshot persistence failure still closes the native client and releases active handles (4.861416ms)
+✔ aggregate visible-history import fails before starting a native operation and preserves stored turns (7.280792ms)
+✔ resumed native history is authoritative even when old visible history exceeds import limits (1.503459ms)
+✔ native question answers preserve prototype-like IDs as own JSON keys (2.979833ms)
+✔ malformed native question IDs are rejected rather than coerced or truncated (1.075833ms)
+✔ delayed native output emitter failures reject the run without an uncaught exception (82.713625ms)
+✔ all three permission presets reach both native setup and turn requests (2.39925ms)
+✔ model catalog lookup closes the native client without starting a chat (0.513958ms)
+✔ Paper to Slides sends the Codex-specific skill and token only to the child environment (27.134ms)
+✔ paper reading attaches the bundled skill to the native Codex turn (1.298292ms)
+✔ command result includes actual output, exit status, duration and a bounded private log (298.868708ms)
+✔ large command output is bounded for the model while the log is retained (260.08225ms)
+✔ timeout and cancellation stop a real command (323.671084ms)
+✔ approved command output reaches the next model request, and denial never executes (217.046625ms)
+✔ command cwd cannot escape the workspace through a symlink (81.712208ms)
+✔ interrupting while awaiting approval rejects the pending action and never runs the command (90.6065ms)
+✔ project instructions and the compacted summary reach the model before new messages (1.59675ms)
+✔ uses the Free chat instructions without falling back to Idea spark (0.128875ms)
+✔ adds the selected reasoning policy to the system instructions (0.07575ms)
+✔ keeps expanded long-turn context without the previous 40k clipping limit (1.396083ms)
+✔ still marks a message that exceeds the expanded per-message safety limit (0.317792ms)
+✔ accepts the selected extra-long context budget when preserving history (0.35675ms)
+✔ restores bounded complete tool groups while excluding worker and orphan results (1.256083ms)
+✔ new chat modes use their own instructions and unknown modes fall back to Standard (0.49775ms)
+✔ distinguishes discovered papers from PDF pages actually read (3.7555ms)
+✔ records visual page interpretation with its PDF page (0.147542ms)
+✔ external resume requires backend workspace model and completed local turn (0.525291ms)
+✔ Claude native result streams visible text and dirties continuity before sending (2.694125ms)
+✔ external backends reject unsupported permissions and attachments before delivery (0.996333ms)
+✔ Claude check initializes without user prompt or native IDs in result (0.230708ms)
+✔ unimplemented native controls fail explicitly (1.249041ms)
+✔ Claude maps native effort and permission selections onto its CLI flags (0.255416ms)
+✔ Claude Research installs native skills and appends its workflow without changing permissions (38.789417ms)
+✔ OpenCode Research installs its skills and explicitly requests the workflow through ACP (55.333625ms)
+✔ OpenCode validates model via ACP config and does not render session replay or thoughts (0.806792ms)
+✔ lost prompt acknowledgement leaves dirty binding and never retries (0.431583ms)
+✔ pending one-shot native approval is aborted when the turn ends (3.411458ms)
+✔ aborting native request closes its client and preserves dirty binding (0.350667ms)
+✔ emitter failure during final activity cleanup still closes child (1.504417ms)
+✔ Claude catalog exposes labels and complete context input usage (0.588375ms)
+✔ Claude streams distinct assistant messages through tool loops and authoritative final text (0.533125ms)
+✔ Claude unsupported interactive question is denied without opening approval (0.938875ms)
+✔ OpenCode rejects image prompts when native ACP image capability is unavailable (0.675916ms)
+✔ Claude excludes subagent text from the parent response stream (8.943292ms)
+✔ native activity updates coalesce and persist only the last bounded snapshot (7.480125ms)
+✔ Paper to Slides sends the official Claude skill and token through the native launch (32.588541ms)
+✔ advertises only native thinking effort controls for known compatible models (1.64275ms)
+✔ uses a conservative context-length capability and character cap (0.430458ms)
+✔ keeps native OpenAI tool calls as the primary protocol (0.752458ms)
+✔ normalizes DSML content into structured tool calls (1.220875ms)
+✔ streams ordinary assistant text (0.105125ms)
+✔ does not leak chunked DSML into assistant text (0.099583ms)
+✔ rejects malformed DSML instead of rendering it (0.194291ms)
+✔ replaces previously stored DSML with a diagnostic message (0.100791ms)
+✔ retries transient responses and network errors before a stream is consumed (12.372209ms)
+✔ does not retry invalid requests or canceled requests (1.784ms)
+✔ OpenCode free quota errors give actionable guidance without exposing provider secrets (1.152458ms)
+✔ ACP authentication-required code asks for native provider login without exposing its error data (0.733042ms)
+✔ native transport parses batched lines separately and fails oversized JSON lines (1.977292ms)
+✔ native transport closes its real detached child on abort (36.968333ms)
+✔ native transport fails malformed JSON without surfacing raw contents (0.278167ms)
+✔ native transport writes Claude control envelopes and matches acknowledgements (159.307709ms)
+✔ native transport writes ACP JSON RPC and fails request errors without raw provider data (176.456666ms)
+✔ native transport drains buffered stdout after exit before treating close as final (0.538042ms)
+✔ Windows native cleanup targets only its owned PID tree without a shell (0.342916ms)
+✔ Windows tree cleanup failures fall back to the owned child and release helper timeout (0.273375ms)
+✔ Windows tree cleanup bounds a stuck helper then kills the owned child (25.559875ms)
+✔ Windows tree cleanup rejects invalid PIDs and catches taskkill launch errors (2.645958ms)
+✔ normalizes and bounds PDF page ranges (3.7795ms)
+✔ reconstructs readable lines from PDF text items (0.775459ms)
+✔ normalizes unknown reasoning effort to medium (0.416209ms)
+✔ scales agent verification budgets with reasoning effort (0.109834ms)
+✔ maps native reasoning controls for compatible endpoints (0.566834ms)
+✔ leaves unsupported provider requests portable (0.056041ms)
+✔ blocks local and non-HTTPS page destinations (1.724959ms)
+✔ extracts readable article text without page boilerplate (163.097ms)
+✔ finds page passages with offsets for follow-up reading (0.182541ms)
+✔ extracts documentation text when article detection fails (29.438833ms)
+✔ Research alone never installs IdeaSpark; only an explicit request does (1.863416ms)
+✔ all native harnesses receive the complete relocatable package without credentials (199.836958ms)
+✔ Explicit IdeaSpark resumes its original run after a restart and never overwrites phase output (112.42825ms)
+✔ workspace changes allocate a new run and tampered persisted paths fail before traversal (190.397208ms)
+✔ user-owned or modified skill folders are preserved and never silently replaced (74.9585ms)
+✔ linked skill roots and linked run directories are rejected (108.439833ms)
+✔ read labels require a native read of the installed skill rather than just mentioning it (0.347792ms)
+✔ bundled navigator executes from a foreign cwd and reports the first stage without retrieval (258.213208ms)
+✔ API Research installs and resumes its own IdeaSpark package (111.526917ms)
+✔ API resume exposes incomplete phase checkpoints without declaring their outcome (94.233208ms)
+✔ No mode resumes an old IdeaSpark skill without an explicit request (109.010917ms)
+✔ built-in, MCP and Research App adapters use the same events and validated result contract (2.314083ms)
+✔ external tools require authorization, cannot overwrite built-ins and cannot mutate advertised schemas (0.79375ms)
+✔ bad input and failed tools record one correlated call and result without running unauthorized code (0.23125ms)
+✔ aborting while an external authorization waits prevents execution (13.233542ms)
+✔ an abandoned external authorization is released on cancellation (1.131667ms)
+✔ oversized tool results are rejected instead of inflating the model context (4.431375ms)
+✔ registered external adapters are advertised and invoked through the actual API agent loop (82.693791ms)
+✔ API IdeaSpark invokes a fresh isolated model context and records correlated phase events (154.116625ms)
+✔ an existing output is not proof that an isolated phase wrote it (5.878583ms)
+✔ API harness initializes IdeaSpark only when the user explicitly selects it (201.14675ms)
+✔ line ranges handle large text and explicit pagination (2.5195ms)
+✔ workspace search finds literal line matches while skipping hidden and linked files (3.022208ms)
+✔ precise edit requires a unique match and detects changes before approval (3.380708ms)
+✔ approval applies the edit to the project workspace, even when its data store is elsewhere (77.0105ms)
+✔ new files created while awaiting approval and symlinked paths are preserved (5.166542ms)
+✔ approved writes create new nested files and rejected edits leave their source untouched (93.974584ms)
+✔ command log pages preserve UTF-8 characters at byte boundaries (3.105625ms)
+✔ annotation sync pushes local highlights and pulls shared reviews and presentations (71.976292ms)
+✔ annotation sync requires a shared project (115.664708ms)
+✔ shared logo preserves the seven original Paper blocks and shadow (0.758583ms)
+✔ renderer marks have unique shadow IDs, themed foregrounds and optional decorative semantics (158.4645ms)
+✔ ICO includes independent correctly bounded 16–256px frames with legacy DIB small sizes (10.680542ms)
+✔ ICNS contains decodable standard and Retina PNG representations through 1024px (14.0685ms)
+✔ PNG assets have correct sizes, transparent outer corners and neutral visible backing (11.388333ms)
+✔ native selection uses Windows ICO and high-resolution macOS Dock PNG only on macOS (1.013875ms)
+✔ web head exposes SVG, ICO fallback and iOS touch resources (0.431416ms)
+✔ Windows EXE, installer, uninstaller and wizard all reference the approved multi-size ICO (3.384292ms)
+✔ macOS bundle and DMG both reference the ICNS and keep native dependency rebuilds enabled (0.125292ms)
+✔ macOS Info.plist declares microphone access for the opt-in voice input (0.131708ms)
+✔ packaged Dock and window icons resolve outside ASAR, with development fallbacks (8.738ms)
+✔ packaging includes server/shared runtime code, excludes env files and uses file-safe renderer URLs (1.027334ms)
+✔ development windows override the Electron taskbar group icon with complete relaunch metadata (0.550916ms)
+✔ packaged relaunch metadata uses only the app executable, while non-Windows windows are untouched (0.307541ms)
+✔ window icon properties are assigned before the Windows window first becomes visible (6.073583ms)
+✔ defaults to system with no overrides (2.703291ms)
+✔ normalizes invalid presets, accents, and radii (1.173417ms)
+✔ normalizes surface, depth, and density (0.109833ms)
+✔ migrates the legacy theme key into appearance v2 (0.155625ms)
+✔ normalizes per-surface overrides (0.18925ms)
+✔ surface CSS targets only the configured surface wrappers (0.756375ms)
+✔ round-trips a theme pack through export and import (0.349834ms)
+✔ migrates a schema v1 pack to v2 (0.077667ms)
+✔ rejects malformed theme packs (0.301792ms)
+✔ flags accent and surface pairs below WCAG AA (0.726167ms)
+✔ resolves OKLab color-mix values for contrast checks (0.088083ms)
+✔ writes v2 and keeps the legacy key in sync (0.123792ms)
+✔ resolves system and explicit presets (0.056875ms)
+✔ derives readable accent tokens (0.086667ms)
+✔ radius tokens clamp to the supported range (0.074083ms)
+✔ surface tokens derive a coherent ladder from one color (0.13375ms)
+✔ density tokens cover compact, comfortable, and spacious (0.05925ms)
+✔ maps style presets to component tokens (0.080125ms)
+✔ normalizes global motion and component presets, and keeps them out of surface styles (0.079167ms)
+✔ applies and clears inline appearance variables (0.235541ms)
+✔ paper workspace tree keeps readable file names on hover (1.170708ms)
+✔ theme selection fills are distinct from code backgrounds and keep text readable (2.17225ms)
+✔ CodeMirror and native preview selections use the theme variable (2.028625ms)
+✔ classifies artifact paths and display types (49.98225ms)
+✔ merges explicit artifacts and change sets with explicit paths winning (12.288791ms)
+✔ groups this turn separately and filters by artifact family (1.510167ms)
+✔ formats sizes and preview navigation deterministically (0.521833ms)
+✔ artifacts are per thread, versioned by path, and keep the newest metadata (82.614833ms)
+✔ artifacts track unseen state and reject path traversal (73.677208ms)
+✔ artifact kind detection covers images, documents, data, and web output (1.611708ms)
+✔ auth flow opens the system browser and exchanges the loopback code (52.621ms)
+✔ auth flow can return a session immediately when confirmation is disabled (0.676ms)
+✔ auth flow reports browser errors and closes the loopback server (8.43975ms)
+✔ public index records are adapted to the desktop record shape (1.260834ms)
+✔ public index rejects malformed payloads and drops nameless records (0.272417ms)
+✔ fetchPublicIndex surfaces HTTP failures, oversize bodies, and 304 responses (6.940375ms)
+✔ fetchPublicIndex sends the cached ETag and normalizes a fresh body (1.276292ms)
+✔ refreshPublicIndex skips a fresh cache, writes a stale one, and keeps the old cache on failure (7.875208ms)
+✔ refreshPublicIndex reuses the cache when the server answers 304 (3.364875ms)
+✔ readIndexFile ignores truncated or foreign cache files (2.852708ms)
+✔ indexPayload shares one record list between the radar and library tabs (0.214333ms)
+✔ Benchmark Radar reads only public indexes and normalizes visible records (11.222625ms)
+✔ Benchmark Radar rejects an explicit root without both public indexes (2.635ms)
+✔ Benchmark Radar falls back to the bundled snapshot without a checkout (5.324167ms)
+✔ Benchmark Radar prefers a newer cache over the bundled snapshot (2.874584ms)
+✔ Benchmark Radar explains how to get data when nothing is available (1.790917ms)
+✔ an empty busy turn shows Thinking immediately (163.5525ms)
+✔ low verbosity plus expands and collapses activity steps (34.348292ms)
+✔ typing leaves long history and navigation untouched while history updates remain visible (457.341875ms)
+✔ parent activity updates preserve history callbacks while using their latest implementations (32.994041ms)
+✔ wide chat content cannot push history and composer out of the viewport (1784.237667ms)
+✔ local projects link to cloud projects and import without duplicating (53.582417ms)
+✔ cloud member sync preserves the local owner and tracks remote removals (72.344416ms)
+✔ cloud members cannot be synced into a project the local user cannot access (41.738083ms)
+✔ defines a complete code palette for charcoal and paper (1.009167ms)
+✔ maps Prism tokens to shared palette variables (2.500667ms)
+✔ uses theme variables instead of the inactive inline Prism theme (1.147584ms)
+✔ main Work dispatch works without API key; native bindings stay out of forks and export (592.810042ms)
+✔ native approval is not executed again by the renderer terminal (0.648166ms)
+✔ external owner cancellation interrupts native runs and releases signal listeners on every exit (214.578958ms)
+✔ collaboration API sends the user token and maps project/member routes (3.148084ms)
+✔ collaboration API maps library and paper routes (0.979959ms)
+✔ collaboration API maps highlights, reviews, and presentations (0.830792ms)
+✔ collaboration API maps thread, turn, event, and comment routes (1.075041ms)
+✔ collaboration API creates, redeems, and revokes guest share links (0.596333ms)
+✔ collaboration API exports a project and reads admin audit events (0.181791ms)
+✔ collaboration API maps CRDT shared document reads and updates (0.3075ms)
+✔ collaboration API maps shared agent-run controls (0.809833ms)
+✔ collaboration API requires sign-in and surfaces API errors (0.904958ms)
+✔ openapi defines the collaboration surface (5.398667ms)
+✔ postgres contract includes project ownership, scoped annotations, and RLS (0.282875ms)
+✔ sync and permission contracts are documented (0.0805ms)
+✔ project roles are ordered from viewer to owner (6.083208ms)
+✔ capabilities map to the expected minimum role (0.282ms)
+✔ unknown roles normalize to a safe viewer (0.484875ms)
+✔ thread comments can be created, resolved, reopened, and deleted (72.46175ms)
+✔ comments require project access and are hidden inside private drafts (69.442833ms)
+✔ image attachments preview and remove independently alongside other context (305.806459ms)
+✔ conference search bounds years and accounts for biennial conferences (3.055084ms)
+✔ only accepted main conference records are imported and presentation does not imply a decision (1.393416ms)
+✔ oral and poster sessions deduplicate with official oral evidence retained (0.645708ms)
+✔ OpenReview forum links always fall back to the public official paper page (0.10775ms)
+✔ schedule enrichments match real paper titles without adding agenda or workshop entries (121.772833ms)
+✔ search filters the entire catalog before pagination and reuses cached catalogs (19.065458ms)
+✔ source failures are distinct from unpublished catalogs and stale data is disclosed (5.023875ms)
+✔ anthology parser excludes proceedings front matter and Findings (35.161709ms)
+✔ AAAI parser uses real PDF download links and excludes retractions (33.784959ms)
+✔ raster and vector thumbnails retain aspect ratio and fit a 416px box (37.54625ms)
+✔ oversized rasters and external SVG resources are refused before rendering (1.013583ms)
+✔ thumbnail requests coalesce and survive a fresh cache instance without network (47.234292ms)
+✔ corrupt thumbnails regenerate and corrupt metadata is safely replaced (25.795125ms)
+✔ failed thumbnail generation falls back to the original and has a short cooldown (20.191208ms)
+✔ expired sources refresh, misses retry soon, and non-arXiv originals stay browser-only (22.950708ms)
+✔ source records and disk usage remain bounded (262.935ms)
+✔ image downloads reject foreign redirects and overlarge bodies (0.714917ms)
+✔ a read-only or unavailable disk cache still returns the generated thumbnail (53.267583ms)
+✔ GIF and WebP previews keep their original without an extra backend download (10.276416ms)
+✔ only visible thumbnails request IPC; reopening renders immediately from the bounded cache (159.149791ms)
+✔ visible requests precede prefetches, duplicates coalesce, and abandoned queued work is removed (9.549292ms)
+✔ thumbnail memory cache evicts old entries and refuses unbounded payloads (384.405041ms)
+✔ large preview displays the cached thumbnail while the original loads and falls back safely (74.334875ms)
+✔ an observer callback delivered after unmount cannot start a stale request (6.2585ms)
+✔ CSV quoting, BOM, CRLF, multiline cells and TSV retain original values (74.227416ms)
+✔ missing tokens are excluded from numeric statistics without rewriting source data (2.020167ms)
+✔ real bundled examples retain documented shape, missingness, group sizes and full-data calculations (9.744209ms)
+✔ time-series dates are real dates, sorted and not truncated to the first 100 rows (36.924709ms)
+✔ display sampling retains endpoints and unsupported numeric fields return an empty plot (5.500917ms)
+✔ field inspection does not empty a valid plot; examples, pagination and bounded chat draft work (1273.130583ms)
+✔ standalone charts retains sorting, chart/table filters and the remote catalog (520.43025ms)
+✔ switching apps retains sort/search and closes menus and preview scroll locks (69.86125ms)
+✔ normalizes deep-search input and bounds generated plans (2.338875ms)
+✔ deduplicates cross-provider papers and preserves richer metadata (1.561666ms)
+✔ falls back transparently when no model is configured (2.551334ms)
+✔ collapses repeated provider warnings into one counted line (0.106916ms)
+✔ normalizes workspace paths and ignores system or unsafe targets (1.568375ms)
+✔ extracts write targets from shell commands (1.325791ms)
+✔ reads paths from patch payloads (0.769125ms)
+✔ counts artifacts only for write-like tools (0.525458ms)
+✔ collects every touched path from tool payloads (0.355792ms)
+✔ extension marketplace lists the bundled index and installs a skill package (9.190875ms)
+✔ extension marketplace normalizes custom sources and keeps the bundled index (1.504709ms)
+✔ claude runs through the real child and main Work orchestrator without an API call (515.277584ms)
+✔ opencode runs through the real child and main Work orchestrator without an API call (527.192ms)
+✔ design contract clamps model output into known bounds (5.061208ms)
+✔ a contract is only usable when it carries measured evidence (0.245709ms)
+✔ contract rendering keeps exact values for the SVG path (1.375834ms)
+✔ the bitmap guide drops coordinates but keeps palette, density and strokes (2.360875ms)
+✔ evidence transport sends original and render as images with the role-specific prompt (6.010458ms)
+✔ authentication failures are recognizable by the reconstruction queue without exposing credentials (1.012ms)
+✔ native reconstruction exporters retain individually editable objects (22.131042ms)
+✔ paper to references, SVG and editable scene uses the real model transport against a local stub (124.434292ms)
+✔ paper extraction prefers relevant pages and retains page labels within the budget (2.41675ms)
+✔ evidence requests use distinct upstream prompts and do not embed image data in catalogs (9.437166ms)
+✔ reconstruction rejects whole-page bitmap and escapes model-provided text (2.510375ms)
+✔ SVG reconstruction preserves multiline text styling and arrowheads (0.2215ms)
+✔ visual comparison detects a missing source object (17.413875ms)
+✔ Top-Conf retrieval rejects misaligned metadata and ranks lexical matches (8.470458ms)
+✔ index loader verifies metadata and embedding sizes before semantic search (7.861458ms)
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+✔ generated SVG is decomposed into editable objects for native exports (244.849208ms)
+✔ generated SVG strips executable content and external references (210.658875ms)
+PASS quality guards: normalized non-square coordinates, mixed panels, crop containment, text geometry, regional retry, complete recovery and failure stop
+✔ electron/figure-forge-upstream-test-bitmap-quality-guards.mjs (300.825208ms)
+reconstruction catalog, crop identity, geometry and layout: OK
+✔ electron/figure-forge-upstream-test-reconstruction-core.mjs (248.496167ms)
+Semantic patches: atomicity, ownership, conflicts, split/merge and dense primitives OK
+Source evidence: cached false lines, real/dashed lines, paper ink, occlusion and idempotence OK
+Native-resolution detail coverage and inherited ownership tests passed
+Targeted content preservation, paint order, dash style and shared grid tests passed
+✔ electron/figure-forge-upstream-test-reconstruction-pipeline.mjs (503.541417ms)
+PASS source-only inventory, native crops, early draft, one whole call, one repair round, no retries, local/global rollback, QA failure, cancellation
+PASS evidence IDs/OCR/color/position/layers/counts/uncertainty and immutable-object patch guards
+PASS deterministic normalization, retained valid inventory, malformed diagnosis regions, no invented evidence or false acceptance
+PASS visual failure required for fallback OCR repair; uncertain inventory never authorizes rewriting or acceptance
+PASS failed inventory-ID diagnosis resolves bounded existing nodes only; broad panel titles never authorize OCR replacement
+PASS native region planning, crop-relative inventory, translation of every geometry type, crossing objects, source assets, atomic failure and real orchestration
+PASS bounded regional concurrency commits source order and preserves successful siblings on failure
+✔ electron/figure-forge-upstream-test-step4-partial-recovery.mjs (339.938833ms)
+✔ host adapter runs inventory, native recognition and visual verification through the model transport (108.757334ms)
+✔ session provider configuration is explicit and rejects insecure destinations (9.329541ms)
+✔ paper planning calls the configured model without tools and returns its draft (0.397958ms)
+✔ paper planning rejects missing credentials, short text and empty model output (0.191625ms)
+✔ paper planning limits input before sending to the model (0.0985ms)
+✔ PDF analysis falls back to text only for explicit unsupported-document errors (0.38725ms)
+✔ reference analysis returns a measured design contract instead of prose (2.315ms)
+✔ reference analysis refuses a response that carries no usable evidence (0.963167ms)
+✔ SVG generation requires inputs and does not silently accept empty output (4.760625ms)
+✔ bitmap generation routes GPT Image references through multipart edits (26.733791ms)
+✔ Infistar Gemini images use the native image endpoint and retain reference images (2.043375ms)
+✔ reconstruction requires valid dimensions and multiple scene objects (0.591917ms)
+✔ accepts editable text and rejects binary or oversized files (44.55125ms)
+✔ normalizes CRLF while editing and restores it when saving (0.307042ms)
+✔ keeps dirty buffers and reports external conflicts (0.550708ms)
+✔ formats a line comment as a readable chat request (0.211417ms)
+✔ tracks a successful save without dropping later keystrokes (0.142042ms)
+✔ the repository whose README names the paper is accepted (2.63025ms)
+✔ a reachable repository that never mentions the paper is not accepted (1.077458ms)
+✔ a repository that does not answer is dropped before any README is read (0.182459ms)
+✔ non-GitHub candidates are ignored instead of guessed at (0.409834ms)
+✔ the same repository proposed twice is only checked once (0.159583ms)
+✔ provided candidates skip the model entirely (0.207084ms)
+✔ no candidates means no search and no answer (0.246667ms)
+✔ title tokens ignore filler words and short words (0.065083ms)
+✔ a keyless search runs before the model (0.197875ms)
+✔ the model is used when the search found nothing usable (0.611917ms)
+✔ a popular list repository that mentions everything is not accepted (0.4115ms)
+✖ git state distinguishes none, empty, and ready folders (161.132292ms)
+✖ a linked worktree is reported as nested instead of a project root (345.315292ms)
+✔ a broken .git entry is suspicious (36.098208ms)
+✔ normalizes only public GitHub owner/repository URLs (2.025458ms)
+✔ keeps implementation, configuration, and small data manifests in the evidence snapshot (13.036417ms)
+✔ keeps the branch a README links to, including names with slashes (0.139291ms)
+✔ a plain repository URL carries no branch (0.086542ms)
+✔ harness picker exposes four entries, switches only supported runtimes and opens Models (232.237584ms)
+✔ busy state disables switching and failed saves keep the current harness (20.904208ms)
+✔ an established chat explains that another harness starts a new chat (8.24175ms)
+✔ translation shards cover every string exactly once (6.761417ms)
+✖ keys stay sorted inside each shard so concurrent additions do not collide (3.810916ms)
+✔ the shell merges every shard and keeps the surfaces translated (4.639083ms)
+✔ detects error events and nested tool result errors (0.546708ms)
+✔ uses the latest assistant response as the resolution boundary (0.151875ms)
+✔ keeps errors after the latest answer or in failed turns unresolved (0.082459ms)
+✔ failed or interrupted answers do not resolve earlier errors (0.066125ms)
+✔ treats a failed assistant message as an error even without an error field (0.067708ms)
+✔ only the final chunk of a turn waits for an answer (0.066334ms)
+✔ an error on the final assistant response stays unresolved (0.053709ms)
+✔ uses thread-wide ordinals when turns restart their sequences (0.063625ms)
+✔ does not merge when chapters already fit (2.929458ms)
+✔ splits early chapters into several batches and keeps the recent ones (0.3745ms)
+✔ never exceeds the chapter limit and covers every chunk exactly once (0.597917ms)
+✔ a single visible chapter folds everything into one batch (0.474334ms)
+✔ journey settings expose the documented defaults (0.61675ms)
+✔ journey settings clamp ranges and reject unknown options (0.178708ms)
+✔ journey settings persist, merge, and reset (8.524292ms)
+✔ journey snapshots persist per thread and can be cleared (7.665334ms)
+✔ summarizer parses fenced JSON and validates ids (11.752292ms)
+✔ claims are validated against supplied sources (0.618125ms)
+✔ claims fall back to the previous snapshot when the model omits them (0.170583ms)
+✔ chapter plans are contiguous, validated, and capped (0.196125ms)
+✔ economy model overrides the active model without mutating config (0.128833ms)
+✔ summarizer retries once when the model returns invalid JSON (0.119417ms)
+✔ empty JSON is retried before accepting the fallback (0.114917ms)
+✔ summarizer falls back to previous text when output is incomplete (0.10775ms)
+✔ summarizer rejects missing model credentials and invalid JSON (0.329042ms)
+✔ prompt includes ids, length guidance, and token budget (0.188333ms)
+✔ parse and validate tolerate partial output (0.078375ms)
+✔ PPTD pages are authored with safe geometry and Kimi's page file contract (0.896083ms)
+✔ PPTD slide normalization rejects missing evidence and malformed model output (1.836ms)
+✔ a verified fallback page keeps a malformed single-page response from failing the deck (0.399958ms)
+﹣ Kimi desktop checker and converter accept generated PPTD files (0.047666ms) # SKIP
+✔ presentation planner prepares source-grounded content for native PowerPoint authoring (0.946083ms)
+✔ Kimi Slides adapter normalizes a 15-page academic deck with an outline (0.910167ms)
+✔ Kimi Slides adapter accepts evidence-led 15–18 page decks and rejects unfinished endings (0.488541ms)
+✔ Kimi Slides adapter rejects decks without an outline or the complete evidence arc (0.12075ms)
+✔ normalizes only workspace-relative TeX compile targets (3.460167ms)
+✔ creates a collision-safe paper template and discovers main documents (28.828458ms)
+✔ creates LaTeX files and folders without overwriting workspace entries (2.723375ms)
+✔ creates projects from built-in templates with a bibliography (2.971583ms)
+✔ falls back to tectonic and passes its CLI arguments (9.468833ms)
+✔ classifies known LaTeX compilers (0.265375ms)
+✔ imports a complete LaTeX folder and selects its main document (21.870583ms)
+✔ finds the imported main document even when the workspace discovery cap is exhausted (1708.348667ms)
+✔ extracts line-oriented LaTeX diagnostics (0.358958ms)
+﹣ built-in templates compile before and after adding a citation (0.083708ms) # latexmk is not installed
+✔ a missing TeX font reports an installation fix instead of a source line (0.085583ms)
+✔ a failed recompile does not expose the PDF left by a previous successful build (3.516708ms)
+✔ a stalled compiler returns its partial log and a dependency timeout diagnostic (3.237209ms)
+✔ an active first build keeps its longer budget but still reaches the total deadline (0.173167ms)
+✔ compiler logs preserve UTF-8 symbols split across stdout and stderr chunks (0.335958ms)
+✔ missing-glyph diagnostics recover the symbol from XeTeX's code point and deduplicate damaged text (0.562292ms)
+✔ local libraries and papers link to cloud ids and import shared libraries (111.035583ms)
+✔ cloud paper import keeps canonical identity and applies remote user state (113.231ms)
+✔ paper sync requires editor access to the library project (47.682791ms)
+✔ imports a local PDF into a library and indexes it without duplicating identical files (691.415166ms)
+✔ library sync pushes local libraries and pulls shared books and paper state (97.122708ms)
+✔ library sync requires a shared project (90.304209ms)
+✔ opening a project hydrates only the first folder; project-wide browsing deduplicates shared papers (232.74975ms)
+✔ document switching mounts one reader and protects a running paper conversation (94.710458ms)
+✔ more than eight papers remain open and keep their reading positions (238.431167ms)
+✔ removing a paper removes only that folder membership; sync still includes annotations (54.719041ms)
+✔ a late folder refresh cannot overwrite a completed paper-state update (86.154084ms)
+✔ notes survive unmounting and failed saves; editing during save keeps the newer draft (29.080084ms)
+✔ metadata queue bounds concurrency, continues after errors and cancels queued work (3.620334ms)
+✔ search keeps a pasted title together, includes tags, and sorting leaves cache order intact (0.719917ms)
+✔ retries a timed-out literature request (14.427584ms)
+✔ names a rate limit in plain language and stops retrying it (4022.999542ms)
+✔ bounds daily discovery options (1.096375ms)
+✔ uses topic defaults and longer daily discovery ranges (0.097417ms)
+✔ maps focused research topics and discards retired filters (0.085459ms)
+✔ accepts an unbounded daily discovery range (0.0515ms)
+✔ maps the added daily topics to their categories (0.066167ms)
+✔ deep-search retrieval combines Semantic Scholar and OpenAlex (5.642875ms)
+✔ reads the first real figure out of an arXiv HTML page (0.425583ms)
+✔ reads vector figures published as <object> instead of <img> (0.141292ms)
+✔ resolves a paper figure and caches the miss (1.197875ms)
+✔ figure discovery stops streaming once the first figure URL is found (28.75025ms)
+✔ a stalled primary host falls back once without a retry loop (0.783083ms)
+✔ duplicate lookups share a request and the figure resolver never exceeds three slots (16.32ms)
+✔ an oversized stream chunk still yields a figure inside the bounded prefix (3.845834ms)
+✔ a full title becomes one arXiv phrase, not an AND of every word (0.076666ms)
+✔ a title search ignores the selected topic, a short query keeps it (0.05875ms)
+✔ punctuation and hyphens do not break the local match (0.509042ms)
+✔ local identity persists a stable user and device across launches (30.763708ms)
+✔ display name updates are trimmed, validated, and persisted (1.386834ms)
+✔ a corrupt identity file is backed up and replaced (1.075959ms)
+✔ Windows home expansion supports both separators and a Unicode user profile (0.958583ms)
+✔ Windows home expansion supports network profiles (0.100166ms)
+✔ POSIX home expansion keeps POSIX path semantics (0.278208ms)
+✔ explicit paths pass through without shell evaluation (0.304292ms)
+✔ unsupported named homes and missing home directories fail explicitly (0.370875ms)
+﹣ real managed compiler fetches fonts/packages and recompiles with the server offline (0.41275ms) # Set ARCHIMEDES_TEX_TEST_BUNDLE to a local TeX fixture
+✔ extracts executable bytes from tar.gz and deflated Windows ZIP without writing archive paths (3.190959ms)
+✔ concurrent first use downloads once; verified warm cache works offline and corrupt cache is replaced (28.550583ms)
+✔ checksum and download failures leave no executable, and retry can recover (7.553917ms)
+✔ packaged archive is verified and unpacked without network access; invalid archive never downloads a replacement (5.510333ms)
+✔ unsupported platforms and oversized downloads fail explicitly (0.655833ms)
+✔ native compiler inherits Electron HTTP proxy and preserves explicit proxy environment (0.4795ms)
+✔ compiler log stages distinguish downloading, initialization and typesetting (0.18325ms)
+✔ turn attachments persist, load images lazily, and survive forks (149.315959ms)
+✔ sent image loads for display and opens a larger preview (1001.128125ms)
+✔ chat markdown links keep their underline and color without a fill (1.13875ms)
+✔ model settings assertions never hand live DOM objects to Node's diff formatter (1.633458ms)
+✔ API and Agent tabs keep separate actions, keyboard navigation and unsaved drafts (373.761458ms)
+✔ checking Codex does not activate it; explicit activation and API reset persist separately (105.623041ms)
+✔ keyboard switching to Harnesses closes the API model picker portal (85.190542ms)
+✔ failed save keeps the actual active backend and displays an error (84.20425ms)
+✔ connection errors are visible without silently changing the saved backend (45.290583ms)
+✔ in-flight checks lock configuration and never show an unverified connected state (62.550291ms)
+✔ configuration load failure is recoverable without a silent default backend (42.917834ms)
+✔ Proactive remains API-only and never loads native backend controls (15.01325ms)
+✔ agent cards collapse without changing the backend and binary edits invalidate detection (56.564917ms)
+✔ repeated mounting and tab switching never starts native agents or accumulates configuration loads (1314.067625ms)
+✔ development StrictMode double mounting remains bounded and never checks Codex automatically (1163.10775ms)
+✔ native selects share the same style and load supported effort options when expanded (64.24125ms)
+✔ a failed catalog request keeps the saved effort and can retry (69.863709ms)
+✔ Claude and OpenCode settings use independent drafts and explicit native activation (144.358167ms)
+✔ Harnesses are three expandable cards and OpenCode keeps readable static permission copy (89.310666ms)
+✔ Claude Code exposes native effort and permission modes (44.107708ms)
+✔ API execution preferences can be changed in Models without switching the harness (28.20475ms)
+✔ catalog loading is bounded and ignores results for a changed executable (39.646708ms)
+✔ requires provider-qualified model IDs for OpenRouter (0.759584ms)
+✔ allows endpoint-specific model IDs for custom proxies (0.0745ms)
+✔ extracts model identifiers from OpenAI and Model Studio catalog shapes (9.795542ms)
+✔ accepts new providers without reusing another provider's API key (4.541ms)
+✔ reads the legacy flat model config as the Agent role (2.451334ms)
+✔ keeps the Agent and Proactive models separate and supports inheritance (2.217125ms)
+✔ Anthropic model listing and connection test use native API paths (0.479542ms)
+✔ native IPC resolves the local thread and rejects paper or inactive turns before dispatch (3.592042ms)
+✔ native usage stays unknown until the server reports a window, never uses lifetime totals (223.191458ms)
+✔ live snapshots replace only matching native item IDs and remain bounded (8.48ms)
+✔ latest native turn hides previous turn snapshots while history remains replayable (6.832792ms)
+✔ questions arriving in a background chat are kept until their resolution event (0.131875ms)
+✔ native context reports unknown and displays last-request tokens without API estimates (210.135041ms)
+✔ same-title native tools remain distinct with expandable output and correct stopped state (7.83425ms)
+✔ native turn shows Thinking before the first tool or answer (7.07425ms)
+✔ native question options send the selected answer once and blank answers stay disabled (16.910334ms)
+✔ native question IDs can match JavaScript prototype property names (12.950083ms)
+✔ existing Codex bindings migrate in place with a Codex backend default (85.093625ms)
+✔ native bindings preserve backend identity without publishing native IDs in research threads or forks (66.166583ms)
+✔ a conversation stays with its first harness, including after reopening and forking (181.814042ms)
+✔ legacy histories identify their native binding or API harness (99.518ms)
+✔ switching native Harnesses retains independent executable, model and permission profiles (11.311625ms)
+✔ legacy Codex settings migrate without inheriting another agents executable or permissions (3.731083ms)
+✔ mode selection inserts an editable research example without overwriting a draft (225.433792ms)
+✔ clustering groups the same story across sources and splits unrelated stories (16.400667ms)
+✔ settings normalisation clamps values and drops invalid feeds (1.706625ms)
+✔ public settings never return secrets and report configuration state (7.8875ms)
+✔ canonicalUrl strips tracking params and trailing slashes (0.599709ms)
+✔ item ids are stable across tracking parameters (0.563958ms)
+✔ parseHackerNews keeps points, comments, domain and discussion link (6.593166ms)
+✔ parseGitHub exposes repo metadata and trending rank (0.898792ms)
+✔ parseArxiv reads Atom entries, authors and categories (0.94225ms)
+✔ parseLobsters keeps score, comments and tags (0.552583ms)
+✔ parseRssFeed handles RSS items, images and entity decoding (2.430792ms)
+✔ parseRssFeed handles Atom entries (1.6665ms)
+✔ parseReddit keeps subreddit, flair, score and preview image (0.739792ms)
+✔ parseX resolves author and media from includes (0.328459ms)
+✔ parsers tolerate empty and malformed payloads (0.110417ms)
+✔ store keeps items, read state, saved state and source summaries (18.326166ms)
+✔ store upsert preserves read/saved flags and refreshes metadata (6.035875ms)
+✔ store filters by source, query and time window (9.785584ms)
+✔ store records per-source health and conditional request state (17.450625ms)
+✔ prune drops stale unsaved items but keeps saved ones (10.900166ms)
+✔ downloads verified assets and reuses verified cache without network access (32.149125ms)
+✔ rejects unsafe asset paths and sources before downloading (0.186875ms)
+✔ a failed download does not create a partial paper project (0.608792ms)
+✔ binary template figures survive download, caching and project creation (5.764ms)
+✔ bundled ACM class and starter create a complete project without network access (6.945875ms)
+✔ bundled assets and starter overlays reject traversal, corruption and source collisions (2.74225ms)
+✔ desktop drop uses Electron's native File path API and rejects synthetic files (5.08275ms)
+✔ paper chat passes dropped attachments into the model context (0.438208ms)
+✔ Enter submits, Shift+Enter and IME composition do not (167.770125ms)
+✔ paper chat keeps its column bounded and oversized content locally scrollable (1.701292ms)
+✔ paper chat retains a resizable width on narrow layouts (0.315625ms)
+✔ the blinking generation cursor does not style the selected passage (137.2745ms)
+✔ paper composer avoids per-keystroke layout measurement when browser supports content sizing (8.984416ms)
+✔ generation uses the window workspace and canonical paper, then saves a renderable report (25.144375ms)
+✔ cancel is sender-scoped and failed regeneration preserves the previous report (5.060958ms)
+✔ export cancellation writes nothing; successful export contains offline HTML, both Markdown files and images (11.182042ms)
+✔ native operations require a concrete user decision and cancellation cannot approve them (8.729209ms)
+✔ illustrated readings survive restart and keep presentation-compatible legacy fields (124.710708ms)
+✔ saved illustrated reading is restored, exports, and survives a failed rerun (262.192208ms)
+✔ cancellation stops progress while preserving the existing reading (30.808209ms)
+✔ switching papers rejects late restoration from the previous paper and retains legacy text (68.742333ms)
+✔ an older desktop bridge shows a restart message instead of invoking missing methods (40.742041ms)
+✔ the isolated document accepts source navigation only from its own frame and within PDF bounds (177.397459ms)
+✔ structured readings preserve bilingual evidence and reject unsafe or incomplete content (9.679833ms)
+✔ offline rendering keeps originals, formulas, navigation and language/player state (642.643333ms)
+✔ real PDF parsing and vision crop feed seven sequential model-authored chapters and offline artifacts (176.080958ms)
+✔ cancellation and invalid model JSON stop with bounded retries (6.652542ms)
+✔ reading stages use one native Codex context and pass the bundled skill and page images (0.58325ms)
+✔ native execution failures are not replayed, while invalid output can be repaired in the same context (0.133042ms)
+✔ native reading resumes completed planning, figures and chapters after interruption (50.222667ms)
+✔ deadline cancellation reports the actual reason instead of a user cancellation (7.01375ms)
+✔ opening a workspace fills in repositories named by the abstracts (218.887791ms)
+✔ a record that already names a repository keeps it (1.30575ms)
+✔ an arXiv record borrows the repository named in the paper (0.880042ms)
+✔ a link that names a branch beats the repository root (0.417834ms)
+✔ a link in the first pages is used when the abstract has none (0.101458ms)
+✔ trailing punctuation is not part of the URL (1.25125ms)
+✔ a paper with no repository yields nothing rather than a guess (0.087917ms)
+✔ github-like URLs are recognised precisely (0.059583ms)
+✔ arXiv references accept IDs, abs URLs and pdf URLs (0.598541ms)
+✔ Markdown export includes scores, evidence and the simulation disclaimer (14.611292ms)
+✔ a gate result exports a readable reason without inventing a review (0.300833ms)
+✔ the local score pool stays local and excludes the current run (22.389292ms)
+✔ extractJsonObject handles plain, fenced and chatty responses (1.32675ms)
+✔ OpenAI-compatible requests carry the model, messages and usage (1.238542ms)
+✔ Anthropic requests use messages and the system field (0.739208ms)
+✔ malformed JSON gets one schema-preserving repair pass (0.321959ms)
+✔ reasoning endpoints that reject temperature are retried without it (0.366708ms)
+✔ custom provider resolution validates required fields (0.145125ms)
+✔ agent mode inherits the main agent provider and model (1.085542ms)
+✔ preflight flags parser coverage, page limits and instruction-shaped text (3.103291ms)
+✔ paper excerpts keep page markers and prioritize review-relevant pages (0.874083ms)
+✔ selection fallback returns array positions even when reviewer indexes differ (0.781417ms)
+✔ calibration reconciles overall with subdimensions and clamps to the venue scale (1.292375ms)
+✔ the full pipeline produces score-conditioned reviewers, a selection and a calibrated review (8.370959ms)
+✔ a reviewer that fails JSON parsing is retried with a compact schema (4.3825ms)
+✔ an unreadable paper stops at the preflight gate without calling the model (0.119334ms)
+✔ defaults to the main agent model and the first venue pack (15.933041ms)
+✔ custom provider settings persist without exposing the key (2.46675ms)
+✔ normalisation clamps concurrency and falls back on unknown venues (1.628042ms)
+✔ store keeps documents, runs, findings, scores and local score pools (20.103416ms)
+✔ interrupted runs are marked when the app reopens (10.714875ms)
+✔ venue packs load and cover the public conference set (16.550709ms)
+✔ public venue metadata omits prompts and keeps the review scale (0.2055ms)
+✔ decision bands map a score to a venue label (0.196584ms)
+✔ venue validation fails closed on missing labels and decision gaps (1.032041ms)
+(node:18024) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ search treats LaTeX commands and regex punctuation literally (2.152792ms)
+✔ search ignores case and keeps original Unicode textarea offsets (0.263125ms)
+✔ highlights keep line-relative offsets and one identity across lines (0.635208ms)
+✔ newlines and trailing empty lines never add highlight text (0.122833ms)
+✔ paper chats do not appear as research sessions in the sidebar (69.231125ms)
+✔ a thread linked to a paper is migrated out of the sidebar (59.584291ms)
+✔ paper chat stays under its paper while research conversations remain visible (126.308292ms)
+✔ paper run events and completion do not update Work state (2.322042ms)
+✔ selected PDF is copied to an isolated workspace task without overwriting the source (12.208666ms)
+✔ Codex and Claude install distinct bundled skills, preserve user changes, and resume (51.188042ms)
+✔ page opens a PDF, switches example and sends the selected harness and settings (1366.998208ms)
+✔ a single equality with a named function is sufficient (Post-Attention regression) (1.408375ms)
+✔ standalone sampling expressions with only one relation are detected (0.4605ms)
+✔ inline math in prose cannot chain multiple paragraphs into an equation (0.824917ms)
+✔ fraction, root, accents, and scripts remain part of their fixed-baseline equation (0.9325ms)
+✔ capital A operands do not become English articles during prose classification (0.5045ms)
+✔ column evidence keeps a display equation separate from adjacent-column prose (0.664625ms)
+✔ image contents are excluded without altering the image boundary (24.996333ms)
+✔ raw PDF transform adapter and detection scale together (1.171625ms)
+✔ empty / rotated pages do not produce equation boxes (0.125ms)
+﹣ MemT pages 6–8: 15 complete displays, no prose blocks, at five zoom levels (0.085583ms) # SKIP
+✔ saved highlights stop at the selected character instead of painting the whole span (1.023375ms)
+✔ saved highlights map across spans with collapsed whitespace (2.576917ms)
+✔ saved highlight notes travel with their exact segment (1.789542ms)
+﹣ PDF.js measuring canvases cannot resize the desktop or create root scrollbars (0.404166ms) # requires an explicitly enabled Electron desktop session
+✔ highlights a search phrase across PDF text spans and removes it when cleared (203.600459ms)
+✔ normalizes line-end hyphens and leaves saved-highlight classes alone (18.2025ms)
+✔ uses the caption-adjacent rule group, not a page header or following prose (0.985833ms)
+✔ handles captions below a table and does not include the caption (0.332958ms)
+✔ falls back to a compact cluster of repeated table cells for borderless tables (2.051042ms)
+✔ does not treat grid lines from an adjacent-column chart as a table (0.10125ms)
+✔ keeps a long table whose body has sparse section rules (0.701458ms)
+✔ prefers the caption-aligned table over a wider table immediately above it (1.691375ms)
+✔ recognizes caption labels but rejects prose references that begin with Figure (0.844666ms)
+✔ detects a paragraph-shaped caption fallback as prose (0.331583ms)
+✔ operator-backed figure wins over an overlapping heuristic table (1.085375ms)
+✔ presence joins a project channel, tracks collaborators, and leaves (6.947541ms)
+✔ presence requires a signed-in token (0.340833ms)
+✔ parses fenced JSON and rejects prose-only answers (1.868ms)
+✔ observation must cite supplied evidence ids and a safe action (0.243708ms)
+✔ unsafe or missing actions degrade to a draft (0.118416ms)
+✔ prompts keep tools off and require evidence (0.129208ms)
+✔ builds a vision observation message and validates screenshots (0.889875ms)
+✔ captures only the visible app window and downsizes it in memory (0.242625ms)
+✔ runs both model roles through the injected completer (0.338083ms)
+✔ libraries are scoped to their owning project (99.54525ms)
+✔ a paper can live in libraries owned by different projects without duplicating the paper (83.637583ms)
+✔ library access follows project membership and the last library is protected (93.436625ms)
+✔ opening a workspace creates a local owner and migrates existing projects (72.998291ms)
+✔ new projects record an owner and support explicit members and roles (100.900084ms)
+✔ threads are filtered and guarded by project membership (93.6855ms)
+✔ projects bind directories and new sessions inherit the project folder (172.6295ms)
+✔ legacy projects adopt the primary workspace and reject missing folders (155.00175ms)
+✔ thread summaries expose pending approvals for the review filter (81.123292ms)
+✔ two branches of one repository are two checkouts (3.6395ms)
+✔ a reader with the branch reads that branch and nothing else (20.306583ms)
+✔ an attachment without a branch means the default checkout (0.179125ms)
+✔ inspects only files inside a cloned code audit checkout (276.655667ms)
+✔ resolves exact and unique code references, but never guesses ambiguous paths (105.987ms)
+✔ a contract without a verifiable claim is rejected (2.695083ms)
+✔ claims keep their evidence and clamp the tolerance (0.623708ms)
+✔ a claim without a reported number stays unverifiable (0.802917ms)
+✔ entries, environment and budget are normalised (0.994333ms)
+✔ the page digest prefers result pages and keeps page markers (0.444083ms)
+✔ planning runs the agent and normalises its contract (0.5605ms)
+✔ planning fails loudly when the agent returns no contract (0.637292ms)
+✔ entrypoint evidence survives normalisation (0.494125ms)
+✔ entrypoint verification is a no-op without a repository (0.442417ms)
+✔ a runbook is kept in order and synthesised when missing (0.318792ms)
+✔ a checkpoint carries a check the runner could evaluate (0.469084ms)
+✔ an unusable check degrades to manual instead of pretending (0.202042ms)
+✔ plans written before checkpoints still render (0.09475ms)
+✔ an approved contract stays frozen when it is read back (0.084417ms)
+✔ a plan can be replaced until it is approved, and not after (0.077ms)
+✔ a runbook read back keeps its verdicts and the quote behind them (0.080375ms)
+✔ a freshly planned step has no verdict at all (0.910167ms)
+✔ environment requirements are names, never values (0.241209ms)
+✔ a value is single-quoted and an embedded quote survives (0.703333ms)
+✔ the file ends with a newline and skips invalid names (0.381ms)
+✔ the prelude sources the file with export-all around it (0.154042ms)
+✔ whoami identifies the token by its display name (0.579167ms)
+✔ a 401 says the token was rejected, not that the network failed (0.191458ms)
+✔ a network failure is reported as unreachable (0.097292ms)
+✔ an empty saved value is refused before any request (0.065625ms)
+✔ the token is sent as a bearer header (0.083458ms)
+✔ values round-trip and are not written in clear text (8.080167ms)
+✔ removing one variable leaves the others alone (5.129125ms)
+✔ an empty value clears the variable (7.14ms)
+✔ names are normalised and invalid ones are refused (2.864583ms)
+✔ one reproduction cannot read another's values (4.270417ms)
+✔ the file is private to the user (4.081ms)
+✔ a resolver conflict points at the pins, not at the network (2.608417ms)
+✔ an ABI error is not reported as a missing package (0.95425ms)
+✔ no matching distribution separates index, python and platform (0.101792ms)
+✔ a build failure mentions the toolchain (0.067459ms)
+✔ hints are capped and empty output yields none (0.083042ms)
+✔ a path written the way a README writes it also resolves at the checkout root (1.05325ms)
+✔ the written path is always tried first (0.547625ms)
+✔ a first segment that is not the repository name is never stripped (0.096125ms)
+✔ a path equal to the repository name is left alone (0.065ms)
+✔ case differences between the README and the checkout do not break the match (1.391167ms)
+✔ paths are normalised before they are looked up (0.250208ms)
+✔ the repository name comes from the URL, not from a guess (0.4785ms)
+✔ only the reproduction output directory is writable (0.659792ms)
+✔ the agent runs a command and finishes when the evidence is real (6.568584ms)
+✔ a verdict with an invented quote is refused and the step stays open (8.684417ms)
+✔ a failing command cannot prove that a step passed (3.349291ms)
+✔ the agent can revise the runbook, and a kept id keeps its verdict (2.37075ms)
+✔ a person is asked rather than guessed at (0.133708ms)
+✔ destructive commands never reach the machine (0.171042ms)
+✔ a destructive command is refused and the run continues (0.191709ms)
+✔ the agent is stopped when it keeps running commands without moving the runbook (0.376958ms)
+✔ the prompt carries what earlier runs learned and the last output (0.17425ms)
+✔ done is refused while a runbook step has no verdict (0.16275ms)
+✔ a reopened run keeps the verdicts the last one earned (0.157583ms)
+✔ an error-driven fix is written back to the runbook (0.150791ms)
+✔ a long output is kept on the machine and its path is offered (2.185ms)
+✔ a short output is not copied anywhere (0.357041ms)
+✔ a finding counts as progress, so diagnosis does not look like a stall (1.327792ms)
+✔ the stall message says which command it gave up on (0.878709ms)
+✔ the agent sees which keys are set, never their values (0.142667ms)
+✔ each turn announces itself so the run panel can show progress (0.104958ms)
+✔ read_paper puts the requested slice in front of the model, not the whole paper (3.862708ms)
+✔ read_file returns numbered lines and a paging hint (0.387292ms)
+✔ write_file writes inside the checkout and announces it (0.128917ms)
+✔ edit_file refuses ambiguous text and records a unique replacement (0.150125ms)
+✔ a fenced or chatty reply still yields the contract (3.205459ms)
+✔ trailing commas are repaired instead of rejected (0.138041ms)
+✔ only the first balanced object is read (0.068125ms)
+✔ a cut-off reply is reported as cut off, not as malformed (0.207125ms)
+✔ a malformed reply quotes its own tail so the failure is debuggable (0.075958ms)
+✔ a broken first reply is retried once and the retry is used (0.671375ms)
+✔ two unusable replies surface the original reason (0.123708ms)
+✔ names come from .env.example, not only from the model (0.243208ms)
+✔ file checks pass or fail against the checkout (1.720333ms)
+✔ anything that needs execution is reported, never assumed (0.148209ms)
+✔ an invalid pattern fails loudly instead of throwing (0.109458ms)
+✔ a read error never takes down the whole preflight (1.471834ms)
+✔ a path written with the repository name in front still resolves (0.680708ms)
+✔ the written path wins when both readings exist (0.136125ms)
+✔ an unrelated leading directory is not stripped to force a match (0.166084ms)
+✔ a run left running by a killed app is reconciled on the next open (128.369334ms)
+✔ a verified reproduction is left alone (53.849541ms)
+✔ one repository and branch maps to one directory on the server (1.178833ms)
+✔ a trailing slash or .git in the URL does not change the directory (0.327792ms)
+✔ a non-GitHub URL still produces a usable directory (0.660334ms)
+✔ commands survive quoting, including single quotes in a path (0.364083ms)
+✔ the probe output is parsed into facts (0.2805ms)
+✔ a machine without docker or a GPU says so instead of guessing (0.720125ms)
+✔ the probe command asks only for things it can report (0.105209ms)
+✔ a remote path lets the server expand the home directory (0.077042ms)
+✔ commands run through a login shell so the profile's proxy applies (0.087084ms)
+✔ the backend implements everything the runner calls (4.535833ms)
+✔ a run keeps the verdicts each step reached, newest first (48.493792ms)
+✔ deleting a reproduction takes its runs with it (46.908084ms)
+✔ a run cannot be attached to a reproduction that does not exist (51.003959ms)
+✔ diagnosis attempts keep their order and their verdict (55.899833ms)
+✔ all twelve built-ins appear once in the five issue categories with four enabled (320.468333ms)
+✔ failed core visibility saves keep the switch unchanged and report an error (37.473333ms)
+✔ legacy and categorized plugins share the catalog without duplicate install rows (136.6175ms)
+✔ sidebar order is independent of category; explicit plugin metadata overrides legacy sections (0.611791ms)
+✔ legacy paper reviews and personal paper state migrate on open (167.81325ms)
+✔ reviews and presentations are isolated by project (104.100916ms)
+✔ highlights are project-scoped and support private visibility (72.95025ms)
+✔ paper reading state is per user, while paper metadata remains shared (68.059458ms)
+✔ paper chat threads are keyed by project and paper (73.862833ms)
+(node:18134) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ anchors keep their document y and attach to the selected message (1.312667ms)
+✔ whitespace anchors retain an offset after the nearest message (0.387917ms)
+✔ paginated message anchors wait for history rather than attaching to the wrong text (0.075375ms)
+✔ raw y anchors clamp to content and legacy or invalid anchors are rejected (0.133333ms)
+(node:18135) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ summary widths follow the conversation pane and have readable bounds (1.123834ms)
+✔ summaries show the opening text without destroying Unicode or multiline content (0.169ms)
+✔ composer stays near the clicked point rather than jumping to the right edge (0.466333ms)
+✔ composer shifts and flips at the conversation viewport edges (0.091916ms)
+✔ hover previews do not cover the summary button, even when flipped above it (0.084791ms)
+✔ session comment positions survive reopening, peer access, and cloud anchor aliases (158.660208ms)
+✔ session sync pushes position anchors, pulls peer anchors, and updates resolution (11.863875ms)
+(node:18138) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ partial exports include only selected turns, sources, and opted-in diagnostics (1.056917ms)
+✔ scope selection does not mutate the immutable snapshot (0.136041ms)
+✔ guest links cannot widen a partial or private selection or run signed out (0.08525ms)
+✔ filenames preserve readable Unicode while removing unsafe filename characters (0.168541ms)
+✔ the sessions popover constrains its list so the list can scroll (0.893875ms)
+✔ Settings navigation is grouped and keeps only durable modules (108.788833ms)
+✔ legacy settings entry points resolve to their new module and subview (2.149584ms)
+✔ Workbench owns layout, terminal, and research path settings (3.916042ms)
+✔ Research aids groups Proactive with comments and snapshots (0.883459ms)
+✔ Workspace groups the folder and project members (0.167125ms)
+✔ session tools preferences normalize, persist, and drive the conversation toolbar (1.711916ms)
+✔ provider and harness marks render without white tiles, and Custom has no icon (4.026875ms)
+✔ saved IDs sort available entries while preserving unseen new entries (0.791ms)
+✔ drag moves before or after target without duplicating entries (0.104ms)
+✔ workspaces reorder per parent without changing the other lists (0.150666ms)
+✔ stale order IDs are pruned and storage handles invalid JSON/failures (0.287834ms)
+✔ sidebar plugin installs verify checksums and land in the app plugin root (14.743875ms)
+✔ sidebar plugin installs reject checksum mismatches and missing coverage (3.083833ms)
+✔ sidebar plugin installs gate on the official source and engine compatibility (0.569125ms)
+✔ sidebar plugin manifests are validated before install (0.161875ms)
+✔ research categories preserve old manifests and validate explicit app metadata (0.114041ms)
+✔ the plugin file resolver blocks traversal and missing files (1.441667ms)
+✔ sidebar plugins can be disabled and removed (4.2655ms)
+✔ new installations show the four complete default Research Apps (1.62625ms)
+✔ visibility toggles persist without reapplying defaults (3.791708ms)
+✔ legacy default-all installations adopt Research Apps defaults in every old layout (2.257583ms)
+✔ legacy custom visibility is preserved while grouped layout is retired (2.632167ms)
+✔ legacy layout IPC cannot restore grouped navigation or reset app choices (1.427667ms)
+✔ corrupt settings fall back safely and unknown ids are sanitized (0.950875ms)
+✔ split charts inherits Image creation visibility once and keeps later independent choices (0.821625ms)
+✔ upgrading version 3 keeps explicit all-visible preferences (0.577625ms)
+✔ parses scalar and block skill descriptions (1.978041ms)
+✔ indexes collections and reads a catalog skill (4.056875ms)
+✔ transcribes audio through the configured OpenAI-compatible endpoint (21.055958ms)
+✔ allows a transcription model override (0.1835ms)
+✔ rejects missing audio and keys (0.272041ms)
+✔ surfaces provider transcription errors (0.166ms)
+✔ a server is saved, listed and readable again (5.667833ms)
+✔ the saved file is private to the user (2.010291ms)
+✔ host:port typing is understood (1.770541ms)
+✔ a server without a host or user is refused (1.524958ms)
+✔ a host that ssh could not parse is refused (1.544084ms)
+✔ the port has to be a real port (1.319417ms)
+✔ an identity file must be an absolute path or start at ~ (1.922292ms)
+✔ named-user home paths are rejected instead of pointing to the current user's home (0.391083ms)
+✔ saving an existing id replaces it instead of adding a second copy (1.021084ms)
+✔ deleting removes exactly one server (2.759583ms)
+✔ the connection command is non-interactive and names the key (0.262583ms)
+✔ a password is stored encrypted and never listed (0.934958ms)
+✔ leaving the password empty keeps the saved one, clearing it removes it (1.104958ms)
+✔ a password makes the connection promptable instead of fail-fast (0.051709ms)
+✔ an identity path starting with ~ is expanded before ssh sees it (0.054875ms)
+✔ every index in the schema block only references columns it declares (5.905458ms)
+✔ the schema block never indexes a column that ensureColumn adds later (0.795708ms)
+✔ retains official conference provenance and presentation when saving and reopening a library (143.118458ms)
+✔ finds phrases across PDF whitespace, soft hyphens, and a line-ending hyphen (186.835125ms)
+✔ shows only successfully opened PDF pages and web pages as reply sources (133.001084ms)
+✔ persists excerpts and page numbers while keeping search hits as leads (111.443917ms)
+✔ restores the research thread linked to a paper (175.780708ms)
+✔ persists a completed paper review when reopening the workspace (138.139917ms)
+✔ keeps reviews written by the original review_json schema (107.614541ms)
+✔ persists presentations separately from their source review (126.304375ms)
+✔ retains all 17 content slides so a final limitations discussion can be saved (127.959209ms)
+✔ permanently deletes an archived research chat and its turns (132.227416ms)
+✔ sign-in persists an encrypted session and restores it on launch (4.769958ms)
+✔ sign-up without a session reports that confirmation is required (1.619209ms)
+✔ unconfigured auth reports a useful state (3.031666ms)
+✔ email-link, recovery, provider, and profile actions use Supabase auth (1.391833ms)
+✔ terminal settings start with safe defaults (10.43525ms)
+✔ terminal settings persist and normalize values (0.496167ms)
+✔ invalid profiles fall back to auto (1.856584ms)
+✔ tabby is available as a cross-platform external terminal (6.246167ms)
+✔ disabled external terminal does not spawn anything (1.273541ms)
+✖ Windows prefers PowerShell 7 when it is installed (4.507959ms)
+✖ Windows falls back to Windows PowerShell before cmd (0.154667ms)
+✔ Windows uses COMSPEC only as the last built-in fallback (0.108ms)
+✖ explicit shell profiles do not fall through to a different shell (1.554459ms)
+✔ custom shell paths are honored when they exist (0.18825ms)
+✔ macOS and Linux use the login shell with -l (0.602083ms)
+✔ missing POSIX shells fall back to /bin/sh (0.280875ms)
+✖ fork persists a separate history with remapped events, visibility and compaction boundary (182.753291ms)
+✔ undo persists the shortened thread and a private recoverable backup without touching files (121.947958ms)
+✔ manual compaction replaces only model context and includes future turns exactly once (81.323916ms)
+✔ running turns and empty history cannot be undone or compacted (83.684166ms)
+✔ compaction summarizes all chunks and preserves the previous summary (2.109375ms)
+✔ Init loads workspace instructions and rejects an AGENTS.md symlink escaping the project (87.08875ms)
+✔ Markdown export includes full messages and source URLs (0.500125ms)
+✖ main Work native compaction bypasses the API summary and preserves visible history (57.648833ms)
+✔ native compaction requires editor access before starting or persisting its result (75.3225ms)
+✔ IPC exports Markdown or JSON and canceling the dialog writes nothing (99.442916ms)
+✔ a rejected or stale model summary never replaces stored history (66.563959ms)
+✔ thread sync pushes local threads, turns, events, comments and pulls shared ones (127.615208ms)
+✔ thread sync requires a shared project (74.393042ms)
+✔ threads default to project visibility and can become private drafts (80.645542ms)
+✔ thread snapshots capture a frozen manifest and are project-scoped (65.091042ms)
+✔ paper and charcoal have one readable primary accent (12.291333ms)
+✔ primary actions share accent, control height and focus tokens (0.778083ms)
+✔ the app owns appearance instead of a single theme key (0.903708ms)
+✔ the appearance model persists v2 and migrates the legacy key (0.230209ms)
+✔ Settings > Appearance exposes accent, surface, density, radius, and reset controls (0.215458ms)
+✔ accent, surface, and component styles can be scoped to reader, writing, and agent (0.322583ms)
+✔ the appearance editor has no live preview section (0.51525ms)
+✔ the Style section maps button, dialog, shape, and shadow presets (0.153541ms)
+✔ Motion is a global Full / Reduced / None preference (0.474958ms)
+✔ Components exposes global input, card, and menu presets (0.5855ms)
+✔ appearance can be exported, imported, and checked for contrast (0.145042ms)
+✔ the new appearance copy is translated (3.215167ms)
+✔ custom appearance controls use tokens (1.560666ms)
+✔ Artifacts is an independent, default-hidden workbench tab (2.177542ms)
+✔ the gallery is a square-card album with grouped output and filters (1.55775ms)
+✔ image artifacts open a large keyboard-navigable lightbox (0.398ms)
+✔ Markdown, data, and web artifacts have dedicated previews (0.090625ms)
+✔ the agent can register durable outputs as artifacts (0.251ms)
+✔ Files remains the file browser and the old Artifacts page name is gone (0.812833ms)
+✔ Supabase auth is configured with public client credentials (1.275625ms)
+✔ auth sessions are encrypted, restorable, and explicit about confirmation (0.125708ms)
+✔ Account settings exposes cloud sign-in without replacing local identity (0.180292ms)
+✔ the account chip and auth modal keep local work available (0.571167ms)
+✔ chat renders an inline activity timeline between the prompt and answer (1.524209ms)
+✔ the old running row and yellow assistant mark are removed from chat (0.476792ms)
+✔ default verbosity is grouped steps with collapsible activity (1.295416ms)
+✔ activity rows share one column track so labels never overlap details (1.548667ms)
+✔ activity is derived from raw trajectory events when a thread is reopened (0.086916ms)
+✔ Claude-style menu and dialog tokens are in place (8.519542ms)
+✔ menus support selected rows, chevrons, and the compact harness layout (1.115125ms)
+✔ dialogs use the compact Attempt B size where appropriate (2.752625ms)
+✔ desktop hosts the collaboration API and exposes cloud share actions (0.71675ms)
+✔ member panel exposes cloud sharing, invites, import, and local fallback (0.344833ms)
+✔ thread sharing creates a scoped read-only guest link (0.140958ms)
+✔ shared project note is a CRDT document with optimistic updates (0.203542ms)
+✔ LaTeX source can use the shared CRDT document (0.091125ms)
+✔ shared agent runs expose driver, co-prompt, and approval controls (2.602375ms)
+✔ API and SQL expose member role updates and removal with role checks (0.7325ms)
+✔ shared note editor never reports edits before the document loads (0.965208ms)
+✔ paper writing only mounts the co-edit pane for a loaded document (0.378ms)
+✔ local identity is persisted and exposed without gating local features (0.849792ms)
+✔ Account settings shows the local profile and device without a login wall (0.304667ms)
+✔ project ownership and membership are persisted and access checked (0.221ms)
+✔ comments are project-scoped, author-attributed, and auditable (1.265417ms)
+✔ comment IPC and session-position annotations are wired without a modal (0.848333ms)
+✔ comment input is click-anchored and saved markers expose responsive text previews (0.146417ms)
+✔ composer textarea no longer paints its own focus outline (1.145958ms)
+✔ composer focus no longer changes the container border (1.098708ms)
+✔ conversation composers keep their resting border while focused (1.428125ms)
+✔ chat-like side inputs share the quiet focus contract (1.422333ms)
+✔ chat send controls are unfilled up-arrows (3.011125ms)
+✔ main composer supports a minimal voice button beside send (5.583292ms)
+✔ composer input has IME protection and grows with the draft (0.575958ms)
+✔ composer uses harness selection while execution preferences live in Models (0.339292ms)
+✔ context usage exposes a readable breakdown without runtime chrome (3.65425ms)
+✔ composer drafts are persisted per thread and restored after a failed send (1.976625ms)
+✔ composer accepts dropped and pasted files through the existing bridge (0.483166ms)
+✔ composer exposes history recall, focus shortcut and disabled-send reason (0.39925ms)
+✔ composer queues follow-ups while the agent is busy (1.198875ms)
+✔ composer exposes slash commands and an @ context shortcut (0.577625ms)
+✔ slash menu presents the requested commands and connects all actions (15.056917ms)
+✔ IdeaSpark is opt-in from the Research slash menu and never auto-runs (3.058958ms)
+✔ chat modes retain explicit choices and map legacy conversations using skill records (156.231833ms)
+✔ composer exposes the current file and a clear-all attachment action (0.955208ms)
+✔ composer can attach the current editor selection and shows attachment size (0.719959ms)
+✔ code blocks and previews expose a copy action (0.838667ms)
+✔ copy feedback and touch affordances are styled (1.273833ms)
+✔ clearing the search box restores the live feed without a button (3.997584ms)
+✔ the range control offers an all-time option (1.784667ms)
+✔ speech and audio is offered as a daily topic (0.171125ms)
+✔ daily rows pair the copy with the paper figure on the right (0.797ms)
+✔ a daily row opens a large paper preview without losing its inline actions (1.881083ms)
+✔ quick and deep search share one send button and search surface (0.806084ms)
+✔ the open-paper link sits on the row surface instead of an accent chip (0.769125ms)
+✔ the save action sits beside the open-paper link (0.301375ms)
+✔ conference rows reuse the daily row structure (0.363167ms)
+✔ dark PDF reader bar uses the night panel background (0.45175ms)
+✔ dark PDF reader bar controls use night ink tokens (0.441292ms)
+✔ high-frequency metadata uses the denser 10–12px scale (1.476208ms)
+✔ daily dates use an explicit English locale (0.165417ms)
+✔ zero counts stay hidden and archived projects keep an independent section (0.237167ms)
+✔ shared dialog hook implements escape, tab trapping, scroll lock and focus return (1.6375ms)
+✔ all modal surfaces use the shared dialog shell (5.358542ms)
+✔ welcome composer stays quiet while resizers keep explicit focus styling (2.409916ms)
+✔ paper project dialog is dismissible before a project exists (0.745834ms)
+✔ all modal surfaces use the shared dialog shell and skin (20.175625ms)
+✔ native confirms are replaced by the shared confirm provider (7.391209ms)
+✔ lightboxes and extension dialogs participate in focus management (0.484ms)
+✔ non-modal pickers and filters do not claim dialog semantics (0.907417ms)
+✔ file tabs open a context menu with close and copy actions (0.942666ms)
+✔ close others and close all guard unsaved drafts (0.439875ms)
+✔ absolute paths follow the workspace separator (0.237208ms)
+✔ both Files surfaces wire the new menu callbacks (0.191292ms)
+✔ file text size helpers define safe defaults and platform formatting (0.457167ms)
+✔ UI settings persist the size and the user-recorded shortcuts (0.096709ms)
+✔ file previews listen for the bindings and drive one CSS size token (2.879042ms)
+✔ Settings records three customizable shortcuts and can restore defaults (0.723167ms)
+✔ simplified icons stay one-per-function at the collision points (3.341208ms)
+✔ replaced Lucide icons are no longer referenced in TSX (40.346333ms)
+✔ Paper diagrams is a view inside Image creation, not a second Create destination (1.0555ms)
+✔ Image creation keeps Paper diagrams and FigureForge without Data charts or Templates (0.538417ms)
+✔ the tab row does not draw a divider above the search bar (1.261416ms)
+✔ Data charts is a separate app with chart types and tables, but no field or venue filter (0.493625ms)
+✔ images lead and text is a single secondary line (3.164584ms)
+✔ filter facets fold into one popover instead of a permanent block (0.482167ms)
+✔ FigureForge opens as a separate workspace without a gallery composer (1.327875ms)
+✔ FigureForge reads as four numbered steps with one primary action each (4.086875ms)
+✔ FigureForge reference search is decoupled, explainable and never stale silently (2.259667ms)
+✔ FigureForge measures the references before generating and lets you edit the contract (1.40375ms)
+✔ journey lives in Workbench > Research path with all controls (1.56225ms)
+✔ journey defaults are shared by the renderer and the electron store (0.268292ms)
+✔ journey story uses chapters, a scrubber, evidence, and a pinned next move (3.069459ms)
+✔ journey settings control view, merging, cadence, and pins (0.486167ms)
+✔ journey summaries are loaded, updated on cadence, and stored per thread (0.850666ms)
+✔ claims and manual chapter titles are first-class journey data (1.158416ms)
+✔ manual merge and split persist by event range (0.620958ms)
+✔ journey chapter rows keep actions clear of meta and only dot attention episodes (1.926625ms)
+✔ selected journey chapters do not draw an accent left border (1.462666ms)
+✔ library API exposes project libraries, papers, and per-user paper state (0.476ms)
+✔ desktop library view can push and pull shared libraries (0.415834ms)
+✔ canonical papers are shared without cross-project metadata overwrites (0.155541ms)
+✔ project members expose role management and audit activity (1.014875ms)
+✔ every dropdown / overflow menu renders through the shared MenuSurface (5.506666ms)
+✔ menu semantics only live in the primitive (4.883042ms)
+✔ menu primitive owns positioning, dismissal and keyboard behaviour (0.974542ms)
+✔ menu style presets apply to the shared surface (1.052417ms)
+✔ legacy and dead menu implementations are removed (3.3695ms)
+✔ context picker, filters and model catalog expose correct roles (0.519875ms)
+✔ module actions share the main toolbar slot (0.750875ms)
+✔ module-specific title headers are removed (0.890875ms)
+✔ library actions live on the library canvas while extensions stay headerless (0.854708ms)
+✔ folder browsing keeps search and filters in a compact toolbar (0.488334ms)
+✔ the toolbar uses one title line and no module subtitle (0.453042ms)
+✔ removing the second header reclaims vertical space (0.719292ms)
+✔ News is a Discovery & tracking app ordered between Daily papers and Benchmark Radar (2.894792ms)
+✔ News view is registry-hosted with a real bridge, not a static import (0.24475ms)
+✔ News defaults to the single-column feed and offers a board toggle (0.40725ms)
+✔ News controls live in the page, not the global toolbar (0.409959ms)
+✔ News cards render the source structure and its original media (0.598167ms)
+✔ News actions save to Library, ask the agent and open the original (0.084209ms)
+✔ News API surface is wired through preload and main (2.41875ms)
+✔ News keeps secrets out of the renderer and ships default feeds (0.085ms)
+✔ News strings are translated (0.167791ms)
+✔ paper AI drops the redundant panel title and keeps one compact mode switch (1.275042ms)
+✔ paper AI messages use the main agent conversation structure (0.341292ms)
+✔ paper AI uses the rounded agent composer with the send action in the footer (1.746917ms)
+✔ the paper reader exposes Canvas beside the original paper and review (1.848375ms)
+✔ PDF selection, figure capture, and highlights can seed the canvas (0.207708ms)
+✔ canvas documents default to private and persist locally per paper (0.337459ms)
+✔ canvas keeps the compact floating chrome from the mockup (1.312875ms)
+✔ paper secondary text and workspace switcher use accessible colors (1.892208ms)
+✔ paper modal scrim preserves light-theme context (1.060042ms)
+✔ saved presentations render as a keyboard-navigable academic deck with PDF visuals (0.588916ms)
+✔ presentation slides keep source captions concise and structured grids contained (0.772375ms)
+✔ Paper review remains available as a Writing & delivery app, hidden by default (0.932167ms)
+✔ Paper review is registry-hosted with a real bridge and in-page controls (0.194542ms)
+✔ Library Review tab is renamed Interactive paper and the old workbench reads as reading (0.140375ms)
+✔ Paper review exposes venue packs, model choice and a simulated-review disclaimer (1.467291ms)
+✔ Paper review API surface is wired through preload and main (0.609417ms)
+✔ Paper review strings are translated (0.153291ms)
+✔ PDF stage reserves the scrollbar gutter and owns the scroll (1.458083ms)
+✔ a cached paper reader locks the shared scroll area only while visible (241.203375ms)
+✔ fit-to-width observes the stage instead of the scrollbar-sensitive surface (0.245834ms)
+✔ width updates only on meaningful changes and use the stage content box (0.178542ms)
+✔ the PDF stage keeps its flexible row before and after the first page (0.318542ms)
+✔ desktop presence uses a Supabase realtime channel per project window (0.757625ms)
+✔ the toolbar shows live collaborator avatars (0.497917ms)
+✔ settings surfaces share the settings primitives (19.751542ms)
+✔ state and notice surfaces share the feedback primitives (1.917209ms)
+✔ every modal delegates portalling, focus, and ARIA to Dialog (11.362834ms)
+✔ proactive is opt-in and starts off (1.601083ms)
+✔ the floating layer drags, resizes, clamps, and persists (0.320917ms)
+✔ research path keeps the thread state and drops the old chrome (0.320458ms)
+✔ the research path state is lifted to the thread owner (2.116583ms)
+✔ proactive output always carries evidence, why-now, and one primary action (0.413625ms)
+✔ the engine dedupes, expires, budgets, and learns from dismissal (0.255833ms)
+✔ the hook gates on composer focus and uses the dock as the shown boundary (0.128541ms)
+✔ L0 signals are emitted by the surfaces that own the evidence (0.138375ms)
+✔ toolbar opens the floating panels without stealing focus (0.770375ms)
+✔ proactive settings expose mode, budget, quiet hours, and L0 sources (0.146791ms)
+✔ the proactive header is output-first and uses an amber status mark (0.835833ms)
+✔ panels float over the workspace and share one surface (2.204167ms)
+✔ proactive shows the latest output only and hides the composer until asked (0.071292ms)
+✔ proactive suggestions are read-only and replies use the Proactive model (2.155167ms)
+✔ proactive action labels follow the interface language (0.060209ms)
+✔ live observation follows the local activity pulse (0.07525ms)
+✔ L2 captures the Archimedes window only, never the desktop (0.306583ms)
+✔ Proactive model lives inside the Proactive agent page (0.076917ms)
+✔ the research path is thread-scoped and can be pinned globally (0.663167ms)
+✔ configured model starts auto from the dock and random mode opens on signals (0.520959ms)
+✔ libraries are project-owned and migrated to their project (0.606708ms)
+✔ library IPC and renderer pass the active project (0.272042ms)
+✔ projects persist a bound folder and sessions snapshot their inherited folder (0.998667ms)
+✖ agent and review runs separate the data workspace from the execution folder (1.213292ms)
+✔ live running and review states refresh without reopening the data workspace (0.181042ms)
+✔ the renderer resolves session → project → primary workspace for tools (0.237584ms)
+✔ new projects choose a folder and existing projects can rebind it (0.256875ms)
+✔ default project workspaces receive stable random library names (0.660791ms)
+✔ the composer surfaces the effective working folder (2.20875ms)
+✔ folder previews and watches do not move the window's primary workspace (0.484792ms)
+✔ reader back, tabs, and actions share one compact bar (1.997709ms)
+✔ reader controls start open and can be toggled without hovering (1.450542ms)
+✔ research path checkpoints offer only actions that change state (0.590375ms)
+✔ paper annotations and personal state are scoped in the schema (2.204958ms)
+✔ projectId is threaded through reader, review, presentation, and chat IPC (0.395458ms)
+✔ renderer passes the active project to annotation operations (0.243084ms)
+✔ scrollbars share theme tokens and hide native arrow buttons (0.641458ms)
+✔ conversation scrollbar reveals only while hovering the transcript (2.653458ms)
+✔ intentionally hidden scrollbars stay hidden (2.817209ms)
+✔ guest links require login and cannot widen custom or private exports (1.719167ms)
+✔ snapshot exports have range selection, privacy controls, and explicit feedback (0.2025ms)
+✔ long images paginate without clipping and do not fetch external resources (0.186208ms)
+✔ settings chrome drops the decorative marks (0.899833ms)
+✔ proactive, web, and terminal use the shared settings page language (0.159ms)
+✔ shared settings action row is styled once (0.433042ms)
+✔ text size defaults to 100 percent with 10 percent steps (0.069625ms)
+✔ Settings leaves the main nav and lives in the sidebar footer as an icon action (3.841875ms)
+✔ footer shows package version and only conditionally shows an update action (4.820208ms)
+✔ compact AccountChip is avatar-only when signed in and a single Sign in action when guest (0.391209ms)
+✔ sidebar is one Research Apps list above Work with a management entry (2.207125ms)
+✔ navigation is registry-driven and every entry has a command (0.264875ms)
+✔ sidebar modules are declared with mount semantics, not scattered conditions (0.770083ms)
+✔ runtime plugins flow through the same registry projection (0.440375ms)
+✔ Files and Artifacts leave the sidebar but stay command reachable (0.697083ms)
+✔ Projects lists workspaces and exposes New project directly without filters (0.599833ms)
+✔ Research Apps settings groups apps into categories without a layout selector (0.26375ms)
+✔ section labels match project-row typography and New project is a direct icon action (2.8145ms)
+✔ only the selected workspace is highlighted, not its parent project (0.806958ms)
+✔ project overflow actions collapse into one vertical menu (0.402708ms)
+✔ projects and workspaces expose pointer-positioned context menus (0.81225ms)
+✔ projects, archived projects, and workspaces can be reordered locally (0.883ms)
+✔ Work row typography matches the Knowledge items (0.822542ms)
+✔ running uses the Journey-style sheen and review keeps an open ring (0.687208ms)
+✔ Extensions uses Installed, Available, and Updates with Workbench tabs (0.249417ms)
+✔ account chip is global and the composer drops duplicate runtime controls (1.733917ms)
+✔ search opens a command palette and Ctrl/Cmd+K is wired (0.155458ms)
+✔ a second launch focuses the existing window instead of starting a second process (0.501333ms)
+✔ the ready handler does not initialise services without the lock (0.172584ms)
+✔ button style tokens cover primary and secondary variants (2.8255ms)
+✔ paper overrides keep the same button tokens (0.34725ms)
+✔ dialog style tokens cover settings, project, and gallery surfaces (1.108042ms)
+✔ default geometry follows the Attempt B scale (0.759416ms)
+✔ Supabase API uses user JWT and publishable key only (0.489417ms)
+✔ project/member SQL revokes anon and checks roles (0.273875ms)
+✔ charcoal uses the neutral canvas and sidebar surfaces (1.951042ms)
+✔ charcoal conversation text stays neutral (1.005125ms)
+✔ workbench chrome shares the conversation canvas and keeps structural rules (2.802667ms)
+✔ the workbench shell keeps its canvas while reserving a single seam (0.141584ms)
+✔ the shared tab primitive handles roving focus and ARIA (1.476042ms)
+✔ all true tab groups use the primitive (4.924833ms)
+✔ filters use filter groups instead of tab semantics (2.578083ms)
+✔ actions are kept outside tab lists (0.495875ms)
+✔ canceled groups keep their existing tab implementation (0.9165ms)
+✔ charcoal terminal uses the workbench surface colour (3.357917ms)
+✔ paper terminal theme is left intact (0.648ms)
+✔ tokens.css is the first stylesheet imported (0.786125ms)
+✔ both themes define the semantic surface layer (0.341792ms)
+✔ legacy --night-* names are aliases to semantic tokens (0.549ms)
+✔ theme tokens are not re-declared outside tokens.css (7.542792ms)
+✔ scoped component palettes live in tokens.css (0.210625ms)
+✔ font tokens live in tokens.css (0.14075ms)
+✔ the hardcoded-color baseline is a ratchet (0.067541ms)
+✔ the theme guard passes (201.39975ms)
+✔ threads have owner and visibility, and snapshots are persisted (1.656958ms)
+✔ thread visibility and snapshot APIs are exposed (0.327792ms)
+✔ thread snapshots can be inspected and downloaded from a share dialog (0.193459ms)
+✔ the composer no longer duplicates the thread visibility toggle (0.915875ms)
+✔ Windows uses a hidden overlay title bar while macOS keeps inset traffic lights (1.754208ms)
+✔ the second native menu row is hidden on Windows and Linux (0.221417ms)
+✔ renderer exposes platform and updates the title bar with the theme (0.114208ms)
+✔ overlay title bar exposes drag regions and reserves native control space (1.459084ms)
+✔ macOS inset traffic lights get clearance and the chrome stays draggable (0.92875ms)
+✔ conversation turns get a rail inside the scroll area (0.683833ms)
+✔ turn rail ticks are short lines with a gold hover state (1.325708ms)
+✔ warm type layer loads after the layout stylesheet (3.681542ms)
+✔ charcoal uses a neutral runtime surface and ink (0.426125ms)
+✔ paper keeps a warm light palette (0.27875ms)
+✔ primary UI text moves to a 14px/15px scale (0.099042ms)
+✔ conversation and projects share one readable scale (0.280959ms)
+✔ reading and settings surfaces use a clearer hierarchy (0.260834ms)
+✔ settings metadata no longer drops below 11px (0.164333ms)
+✔ right workbench metadata moves above the 10px floor (0.759459ms)
+✔ mono and editorial surfaces follow the selected font tokens (0.579334ms)
+✔ code terminal and trace text keeps an 11px floor (1.417541ms)
+✔ remaining knowledge surfaces keep an 11px floor (0.782625ms)
+✔ Geist Sans and Geist Mono are bundled locally (8.212041ms)
+✔ paper writing file list matches the Files rail type scale (0.125166ms)
+✔ welcome reuses warm paper tokens and the shared accent (0.618625ms)
+✔ welcome board and composer are docked instead of clipped (0.908291ms)
+✔ welcome entrance motion is shortened and no longer loops (0.748459ms)
+✔ the welcome replication card opens the reproduce module (1.609791ms)
+✔ all welcome images resolve inside the app for file and web deployments (243.95325ms)
+✔ Browser is an optional workbench tab that starts hidden (1.396958ms)
+✔ Browser panel is mounted only after its tab is opened (0.52425ms)
+✔ Browser loads one isolated https/http page without node access (0.238875ms)
+✔ Browser blocks permissions, downloads, and popups stay out of the app (0.871042ms)
+✔ workbench and full editor share the tabbed file shell (3.97625ms)
+✔ file tabs are larger and view actions are plain text (2.605417ms)
+✔ comment composer shares the chat surface language (1.359542ms)
+✔ file icons default to the real OpenCode sprite and switch across styles (12.228375ms)
+✔ the full Files view keeps the conversation title and a compact tab-strip return action (19.298375ms)
+✔ full Files floats view actions over the file and animates between modes (1.964041ms)
+✔ file tabs use a floating scrollbar and map wheel to horizontal scroll (3.598958ms)
+✔ file and terminal tab rows share the same height and label style (2.348667ms)
+✔ pane collapse buttons are plain icons without a grouped background (1.78575ms)
+✔ Files preview surfaces and the terminal viewport share the conversation canvas (10.105041ms)
+✔ workbench layout model stores split panes with a bounded orientation (1.342291ms)
+✔ workbench panes render a tab strip, body and drop preview per pane (2.176291ms)
+✔ workbench panels are partitioned so a tab never mounts twice (1.749417ms)
+✔ split layout persists through the workbench settings bridge (0.287125ms)
+✔ split panes follow the workbench visual language (0.744958ms)
+✔ split pane controls are translated (0.118583ms)
+✔ workbench tabs are registry-driven, reorderable, and configurable (1.128375ms)
+✔ Changes tab aggregates agent changes without duplicating the chat card (0.9525ms)
+✔ Notes tab autosaves per conversation and sends into the composer (0.881291ms)
+✔ terminal lives in the right workbench instead of the bottom panel (1.354416ms)
+✔ workbench shares the sidebar top edge and overlays only on narrow screens (0.765416ms)
+✔ terminal sessions stay mounted when the workbench is hidden (0.087917ms)
+✔ workbench supports keyboard toggle and resizing (0.164417ms)
+✔ files use a compact workbench pane with drill-down and split modes (2.555292ms)
+✔ files use a tab-first header without a path strip (1.669292ms)
+✔ the full editor shares the workbench shell and hides duplicate titles (1.06275ms)
+✔ terminal is a workbench tab with no dock or duplicate close controls (1.589791ms)
+✔ paper workbench toggle uses a warm active tone instead of green (3.320625ms)
+✔ files and trajectory share one row token system (3.11375ms)
+✔ terminal settings sit in the terminal tab row with a distinct icon (0.491375ms)
+✔ dirty file changes are protected when the workbench closes (0.285167ms)
+✔ agent trajectory mirrors the OpenCode context structure (2.199833ms)
+✔ raw trajectory json is highlighted without changing copied json (0.908208ms)
+✔ terminal settings expose platform shell, font and external terminal controls (0.304833ms)
+✔ paper chat code paths jump to the exact codebase lines (1.140083ms)
+✔ agent journey is derived from raw trajectory events (0.668208ms)
+✔ knowledge and create pages inherit one shell canvas (1.532375ms)
+✔ projects, environments, workspaces and sessions share one local database (0.886375ms)
+✔ git state is detected without making git a project requirement (0.316708ms)
+✔ workspace and session actions cross the desktop bridge (0.776083ms)
+✔ the main toolbar carries a breadcrumb and one session chip instead of tabs (3.0085ms)
+✔ session search, filters, pinning, archiving and status are exposed (11.237416ms)
+✔ the switcher only sees the active workspace and preserves sessions across switches (1.625542ms)
+✔ workspace switching and isolated workspace creation are wired in the renderer (0.460958ms)
+✔ the workspace dialog accepts a custom name, a type, and later renames (0.092334ms)
+✔ the naming library is exposed through the store and suggestions skip used names (0.406584ms)
+✔ the switcher adapts to narrow screens as a full-height sheet (1.863416ms)
+✔ workspace selection is explicit and auxiliary action hover does not add button fills (5.55875ms)
+✔ session picker separates context, search, groups, and a single create action (0.348667ms)
+✔ workspace and session strings are translated (2.740167ms)
+✔ searches general web results through Brave and returns links (2.431125ms)
+✔ uses the news endpoint and freshness filter (0.480375ms)
+✔ rejects missing keys and malformed result rows (2.2595ms)
+✔ runs several filtered web queries and merges duplicate URLs (0.478333ms)
+✔ migrates a saved Brave key and keeps provider keys separate (3.547042ms)
+✔ routes Tavily, Exa, and Firecrawl through their own API and normalizes results (0.782875ms)
+✔ Firecrawl news results use the news response group (0.302542ms)
+✔ native execution is canceled on owning window destruction without sending to closed contents (1.501458ms)
+✔ normal completion, rejection and already closed windows cannot retain lifecycle listeners (0.335417ms)
+✔ API execution is canceled when its owning window closes (0.112ms)
+✔ workbench notes persist per key and survive reload (5.259875ms)
+✔ workbench notes clear empty content and delete explicitly (5.00475ms)
+✔ workbench notes reject empty keys (0.906041ms)
+✔ workbench settings normalize unknown and duplicate tabs (0.954042ms)
+✔ workbench settings hide optional tabs by default and keep explicit choices (0.147542ms)
+✔ workbench defaults hide Journey while existing preferences keep it (0.981792ms)
+✔ workbench settings always keep one tab visible (0.340709ms)
+✔ workbench settings default to one full-width pane (0.14775ms)
+✔ workbench settings keep split panes stable and readable (2.49925ms)
+✔ workbench settings recover from empty and orphaned panes (1.055042ms)
+✔ workbench settings persist and reset (1.571583ms)
+✔ a clicked directory link expands nested Files entries and can still open a skill file (308.663875ms)
+✔ newer path requests win over slower directory inspection (0.875083ms)
+✔ lists complete directories lazily and ignores dependency folders (13.10025ms)
+✔ inspects files and nested directories without escaping the workspace (6.7445ms)
+✔ reads and writes text without allowing workspace escapes (11.296208ms)
+✔ computes line changes for direct writes and command snapshots (3.055583ms)
+✔ snapshots bound retained file contents without losing change detection (72.695709ms)
+✔ resolves local file links within the workspace on macOS and Windows (31.704208ms)
+✔ clicking real Markdown file links opens the existing file preview and cancels navigation (217.171834ms)
+✔ the workspace name library has around one hundred unique entries (0.552042ms)
+✔ suggestions walk the library and skip names already in use (2.688708ms)
+✔ random suggestions use an unused library name (1.547708ms)
+✔ once the library is exhausted, fallback names are still unique building names (1.399292ms)
+✔ workspace names are trimmed and checked per project (0.993625ms)
+✔ workspace skills accept Windows separators and path casing (53.0735ms)
+✔ workspace classification respects directory and drive boundaries (0.116542ms)
+✔ UNC paths preserve the server and share boundary (0.137625ms)
+✔ extended Windows paths compare to their ordinary spelling (0.065542ms)
+✔ POSIX paths retain case sensitivity and literal backslashes (0.065709ms)
+✔ relative, empty, malformed and above-root paths are not workspace paths (0.067833ms)
+✔ workspace labels use the final directory without altering its case or Unicode (0.186834ms)
+✔ root labels and empty-workspace fallbacks remain meaningful (1.36025ms)
+✔ opening an existing database attaches projects and sessions to a shared workspace (236.054625ms)
+✔ sessions are filtered by workspace and can be pinned and marked viewed (88.325375ms)
+✔ sandboxes copy project files without caches or app data (67.265542ms)
+✔ workspaces accept a user name and can be renamed later (69.572917ms)
+✔ git projects can open and remove a worktree workspace (354.812833ms)
+✔ projects without git cannot create a worktree (47.19625ms)
+✔ an in-flight window request retains its database through another selection and its window close (79.878625ms)
+✔ canonical aliases share one data store and same-ID runtime identities remain distinct across roots (59.297292ms)
+✔ a synchronously failing IPC invocation releases its store lease (40.087042ms)
+✔ real terminal child persists in its data store after IPC returns and its execution folder has no database (127.638083ms)
+✔ same imported thread id in two data stores has independent running/stop/approval identity (78.569625ms)
+✔ server enforces project membership and comment roles (96.211417ms)
+✔ server rejects unauthenticated access and invalid project roles (17.67775ms)
+✔ LAN host launcher binds explicitly and prints reachable URLs (6.690625ms)
+✔ governance documents export, audit, and open enterprise gaps (2.850583ms)
+﹣ two signed-in users see each other on a Realtime project channel (0.98475ms) # SKIP
+(node:18249) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+﹣ two Supabase users can share a project through the API (0.465166ms) # SKIP
+ℹ tests 1275
+ℹ suites 0
+ℹ pass 1259
+ℹ fail 9
+ℹ cancelled 0
+ℹ skipped 7
+ℹ todo 0
+ℹ duration_ms 16407.744667
+
+✖ failing tests:
+
+test at electron/git-state.test.cjs:19:1
+✖ git state distinguishes none, empty, and ready folders (161.132292ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + 'suspicious'
+  - 'empty'
+  
+      at TestContext.<anonymous> (/Users/fei/Desktop/Archimedes-pr-splits/workspace-store-context/electron/git-state.test.cjs:26:10)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.start (node:internal/test_runner/test:1262:17)
+      at startSubtestAfterBootstrap (node:internal/test_runner/harness:387:17) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'suspicious',
+    expected: 'empty',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at electron/git-state.test.cjs:41:1
+✖ a linked worktree is reported as nested instead of a project root (345.315292ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + 'suspicious'
+  - 'ready'
+  
+      at TestContext.<anonymous> (/Users/fei/Desktop/Archimedes-pr-splits/workspace-store-context/electron/git-state.test.cjs:52:10)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'suspicious',
+    expected: 'ready',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at electron/i18n-translations.test.cjs:36:1
+✖ keys stay sorted inside each shard so concurrent additions do not collide (3.810916ms)
+  AssertionError [ERR_ASSERTION]: library.ts is out of order at "back to reading"
+      at TestContext.<anonymous> (/Users/fei/Desktop/Archimedes-pr-splits/workspace-store-context/electron/i18n-translations.test.cjs:40:14)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+
+test at electron/terminal-shell.test.cjs:5:1
+✖ Windows prefers PowerShell 7 when it is installed (4.507959ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + 'cmd.exe'
+  - 'C:\\Program Files\\PowerShell\\7\\pwsh.exe'
+  
+      at TestContext.<anonymous> (/Users/fei/Desktop/Archimedes-pr-splits/workspace-store-context/electron/terminal-shell.test.cjs:13:10)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.start (node:internal/test_runner/test:1262:17)
+      at startSubtestAfterBootstrap (node:internal/test_runner/harness:387:17) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'cmd.exe',
+    expected: 'C:\\Program Files\\PowerShell\\7\\pwsh.exe',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at electron/terminal-shell.test.cjs:17:1
+✖ Windows falls back to Windows PowerShell before cmd (0.154667ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + 'cmd.exe'
+  - 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
+  
+      at TestContext.<anonymous> (/Users/fei/Desktop/Archimedes-pr-splits/workspace-store-context/electron/terminal-shell.test.cjs:25:10)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'cmd.exe',
+    expected: 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at electron/terminal-shell.test.cjs:39:1
+✖ explicit shell profiles do not fall through to a different shell (1.554459ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + 'cmd.exe'
+  - 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
+  
+      at TestContext.<anonymous> (/Users/fei/Desktop/Archimedes-pr-splits/workspace-store-context/electron/terminal-shell.test.cjs:50:10)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'cmd.exe',
+    expected: 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at electron/thread-commands.test.cjs:25:1
+✖ fork persists a separate history with remapped events, visibility and compaction boundary (182.753291ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + '/private/var/folders/y6/7f277x5n4z14sqwsw21h8ffm0000gn/T/archimedes-commands-4oqD3d'
+  - '/var/folders/y6/7f277x5n4z14sqwsw21h8ffm0000gn/T/archimedes-commands-4oqD3d'
+  
+      at TestContext.<anonymous> (/Users/fei/Desktop/Archimedes-pr-splits/workspace-store-context/electron/thread-commands.test.cjs:33:10)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.start (node:internal/test_runner/test:1262:17)
+      at startSubtestAfterBootstrap (node:internal/test_runner/harness:387:17) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '/private/var/folders/y6/7f277x5n4z14sqwsw21h8ffm0000gn/T/archimedes-commands-4oqD3d',
+    expected: '/var/folders/y6/7f277x5n4z14sqwsw21h8ffm0000gn/T/archimedes-commands-4oqD3d',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at electron/thread-commands.test.cjs:123:1
+✖ main Work native compaction bypasses the API summary and preserves visible history (57.648833ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + '/private/var/folders/y6/7f277x5n4z14sqwsw21h8ffm0000gn/T/archimedes-commands-RZqbkI'
+  - '/var/folders/y6/7f277x5n4z14sqwsw21h8ffm0000gn/T/archimedes-commands-RZqbkI'
+  
+      at Object.compact (/Users/fei/Desktop/Archimedes-pr-splits/workspace-store-context/electron/thread-commands.test.cjs:134:51)
+      at /Users/fei/Desktop/Archimedes-pr-splits/workspace-store-context/electron/thread-commands.cjs:97:29
+      at TestContext.<anonymous> (/Users/fei/Desktop/Archimedes-pr-splits/workspace-store-context/electron/thread-commands.test.cjs:137:63)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '/private/var/folders/y6/7f277x5n4z14sqwsw21h8ffm0000gn/T/archimedes-commands-RZqbkI',
+    expected: '/var/folders/y6/7f277x5n4z14sqwsw21h8ffm0000gn/T/archimedes-commands-RZqbkI',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at electron/ui-audit-project-workspace.test.cjs:25:1
+✖ agent and review runs separate the data workspace from the execution folder (1.213292ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /store\.openWorkspace\(dataWorkspace\);/. Input:
+  
+  'const { app, BrowserWindow, Menu, ipcMain: electronIpcMain, dialog, nativeTheme, net, protocol, clipboard, shell, session, safeStorage, systemPreferences, Notification } = require("electron");\n' +
+    'const { spawn } = require("node:child_process");\n' +
+    'const { randomUUID } = require("node:crypto");\n' +
+    'const os = require("node:os");\n' +
+    'const fs = require("node:fs");\n' +
+    'const path = require("node:path");\n' +
+    'const { windowIconPath, configureAppIcon, configureWindowIcon } = require("./app-icons.cjs");\n' +
+    'const { pathToFileURL } = require("node:url");\n' +
+    'const pty = require("node-pty");\n' +
+    'const agent = require("./agent.cjs");\n' +
+    'const { registerThreadCommands } = require("./thread-commands.cjs");\n' +
+    'const { generateDeepReading, createCodexReadingCall } = require("./paper-deep-reading.cjs");\n' +
+    'const { renderReport: renderDeepReading, markdown: deepReadingMarkdown } = require("./paper-deep-reading-render.cjs");\n' +
+    'const deepReadingRuns = new Map();\n' +
+    'const kimiSlidesSkill = require("./kimi-slides-skill.cjs");\n' +
+    'const runKimiSlidesPlan = kimiSlidesSkill.runKimiSlidesPlan || kimiSlidesSkill.runKimiSlidesPresentation;\n' +
+    'const runPaperPresentationPlan = kimiSlidesSkill.runPaperPresentationPlan || runKimiSlidesPlan;\n' +
+    'const { generateNativePptx } = require("./native-pptx.cjs");\n' +
+    'const { browserUse } = require("./agent/browser-use.cjs");\n' +
+    'const { loadLocalAgentEnvironment } = require("./config.cjs");\n' +
+    'const terminalSettings = require("./terminal-settings.cjs");\n' +
+    'const journeySettings = require("./journey-settings.cjs");\n' +
+    'const journeySnapshots = require("./journey-snapshots.cjs");\n' +
+    'const workbenchSettings = require("./workbench-settings.cjs");\n' +
+    'const sidebarSettings = require("./sidebar-settings.cjs");\n' +
+    'const news = require("./news.cjs");\n' +
+    'const paperReview = require("./paper-review.cjs");\n' +
+    'const workbenchNotes = require("./workbench-notes.cjs");\n' +
+    'const localIdentity = require("./local-identity.cjs");\n' +
+    'const { createClient } = require("@supabase/supabase-js");\n' +
+    'const { createSupabaseAuth } = require("./supabase-auth.cjs");\n' +
+    'const { createAuthFlow } = require("./auth-flow.cjs");\n' +
+    'const { createCollaborationApi } = require("./collaboration-api.cjs");\n' +
+    'const { createLibrarySync } = require("./library-sync.cjs");\n' +
+    'const { createAnnotationSync } = require("./annotation-sync.cjs");\n' +
+    'const { createThreadSync } = require("./thread-sync.cjs");\n' +
+    'const { createPresence } = require("./presence.cjs");\n' +
+    'const { createSupabaseServer } = require("../server/supabase-server.cjs");\n' +
+    'const supabaseConfig = require("../shared/supabase-config.json");\n' +
+    'const journeySummarizer = require("./journey-summarizer.cjs");\n' +
+    'const modelConfig = require("./model-config.cjs");\n' +
+    'const agentBackendConfig = require("./agent-backend-config.cjs");\n' +
+    'const nativeAgent = require("./agent/external-backend.cjs");\n' +
+    'const { registerNativeAgentCommands } = require("./native-agent-commands.cjs");\n' +
+    'const { runWindowAgent } = require("./window-agent-run.cjs");\n' +
+    'const { closeAllNativeClients } = require("./agent/external-backend.cjs");\n' +
+    'const { planReproduction } = require("./reproduction/planner.cjs");\n' +
+    'const { normalizeContract } = require("./reproduction/contract.cjs");\n' +
+    'const { prepareRepositoryItem } = require("./reproduction/repository-context.cjs");\n' +
+    'const { runPreflight } = require("./reproduction/preflight.cjs");\n' +
+    'const { repoNameFromUrl } = require("./reproduction/paths.cjs");\n' +
+    'const { findRepositoryUrl } = require("./paper-repository.cjs");\n' +
+    'const { findRepository, githubSearchCandidates } = require("./reproduction/find-repository.cjs");\n' +
+    'const { runPilot } = require("./reproduction/pilot.cjs");\n' +
+    'const { completeJson } = require("./paper-review-model.cjs");\n' +
+    'const { createDockerBackend } = require("./reproduction/docker.cjs");\n' +
+    'const { createSshBackend } = require("./reproduction/remote.cjs");\n' +
+    'const reproductionEnv = require("./reproduction/env-store.cjs");\n' +
+    'const { testHuggingFaceToken } = require("./reproduction/env-test.cjs");\n' +
+    'const proactiveAgent = require("./proactive-agent.cjs");\n' +
+    'const figureForge = require("./figure-forge.cjs");\n' +
+    'const { getModelCapabilities, normalizeContextLength, normalizeReasoningEffort } = require("./agent/model-capabilities.cjs");\n' +
+    'const webSearch = require("./web-search.cjs");\n' +
+    'const sshServers = require("./ssh-servers.cjs");\n' +
+    'const { discoverDailyPapers, normalizeDailyOptions, resolveArxivFigure, searchAcademicPapers } = require("./literature.cjs");\n' +
+    'const { createDailyFigureCache } = require("./daily-figure-cache.cjs");\n' +
+    'const { deepSearchPapers } = require("./deep-paper-search.cjs");\n' +
+    'const { searchConferencePapers } = require("./conferences.cjs");\n' +
+    'const skillCatalog = require("./skill-catalog.cjs");\n' +
+    'const speech = require("./speech.cjs");\n' +
+    'const store = require("./store.cjs");\n' +
+    'const { createWorkspaceIpc } = require("./workspace-context.cjs");\n' +
+    'const workspaceFiles = require("./workspace-files.cjs");\n' +
+    'const latexWorkspace = require("./latex-workspace.cjs");\n' +
+    'const { preparePaperReader } = require("./library-reader.cjs");\n' +
+    'const { importLocalPaper } = require("./library-local-import.cjs");\n' +
+    'const { loadGithubRepository, normalizeGithubRepositoryUrl } = require("./github-repository.cjs");\n' +
+    'const { cloneRepositoryCheckout, getRepositoryCheckout, listRepositoryCheckoutDirectory, readRepositoryCheckoutFile, resolveAuditPath, resolveRepositoryCodeReference } = require("./repository-checkout.cjs");\n' +
+    'const { getBenchmarkRadarData } = require("./benchmark-radar.cjs");\n' +
+    'const extensionMarketplace = require("./extensions-marketplace.cjs");\n' +
+    'const sidebarPlugins = require("./sidebar-plugins.cjs");\n' +
+    '\n' +
+    'const commandSessions = new Map();\n' +
+    'const interactiveTerminalSessions = new Map();\n' +
+    'const windowWorkspaces = new Map();\n' +
+    'const windowPreviewTokens = new Map();\n' +
+    'const previewTokenWorkspaces = new Map();\n' +
+    'const workspaceWatchers = new Map();\n' +
+    'const allowedContextPaths = new Set();\n' +
+    'const WORKSPACE_STATE_FILE = "last-workspace.json";\n' +
+    'const MAX_CLIPBOARD_IMAGE_BYTES = 6 * 1024 * 1024;\n' +
+    'const WORKBENCH_BROWSER_PARTITION = "archimedes-browser";\n' +
+    'let browserSessionHardened = false;\n' +
+    '\n' +
+    'app.setName("Archimedes");\n' +
+    'app.setAppUserModelId("com.archimedes.research");\n' +
+    'protocol.registerSchemesAsPrivileged([\n' +
+    '  {\n' +
+    '    scheme: "archimedes-file",\n' +
+    '    privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true, corsEnabled: true },\n' +
+    '  },\n' +
+    '  {\n' +
+    '    scheme: "archimedes-plugin",\n' +
+    '    privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true, corsEnabled: true },\n' +
+    '  },\n' +
+    ']);\n' +
+    '\n' +
+    'function cleanTerminalEnvironment() {\n' +
+    '  return Object.fromEntries(Object.entries({\n' +
+    '    ...process.env,\n' +
+    '    TERM: "xterm-256color",\n' +
+    '    COLORTERM: "truecolor",\n' +
+    '    TERM_PROGRAM: "Archimedes",\n' +
+    '    TERM_PROGRAM_VERSION: app.getVersion(),\n' +
+    '  }).filter(([, value]) => typeof value === "string"));\n' +
+    '}\n' +
+    '\n' +
+    'function getInteractiveTerminal(event, sessionId) {\n' +
+    '  const session = interactiveTerminalSessions.get(sessionId);\n' +
+    '  if (!session || session.senderId !== event.sender.id) throw new Error("Terminal session not found.");\n' +
+    '  return session;\n' +
+    '}\n' +
+    '\n' +
+    'function closeInteractiveTerminal(sessionId) {\n' +
+    '  const session = interactiveTerminalSessions.get(sessionId);\n' +
+    '  if (!session) return;\n' +
+    '  interactiveTerminalSessions.delete(sessionId);\n' +
+    '  try {\n' +
+    '    session.process.kill();\n' +
+    '  } catch {\n' +
+    '    // The shell may already have exited.\n' +
+    '  }\n' +
+    '}\n' +
+    '\n' +
+    'function closeAllTerminals() {\n' +
+    '  for (const sessionId of interactiveTerminalSessions.keys()) closeInteractiveTerminal(sessionId);\n' +
+    '  for (const session of commandSessions.values()) session.process.kill("SIGTERM");\n' +
+    '  commandSessions.clear();\n' +
+    '}\n' +
+    '\n' +
+    'function closeWindowTerminals(senderId) {\n' +
+    '  for (const [sessionId, session] of interactiveTerminalSessions) {\n' +
+    '    if (session.senderId === senderId) closeInteractiveTerminal(sessionId);\n' +
+    '  }\n' +
+    '  for (const [sessionId, session] of commandSessions) {\n' +
+    '    if (session.senderId !== senderId) continue;\n' +
+    '    session.process.kill("SIGTERM");\n' +
+    '    commandSessions.delete(sessionId);\n' +
+    '  }\n' +
+    '}\n' +
+    '\n' +
+    'function stopWorkspaceWatcher(senderId) {\n' +
+    '  const current = workspaceWatchers.get(senderId);\n' +
+    '  if (!current) return;\n' +
+    '  if (current.timer) clearTimeout(current.timer);\n' +
+    '  current.watcher.close();\n' +
+    '  workspaceWatchers.delete(senderId);\n' +
+    '}\n' +
+    '\n' +
+    'function setWindowWorkspace(senderId, workspace) {\n' +
+    '  windowWorkspaces.set(senderId, workspace);\n' +
+    '  let token = windowPreviewTokens.get(senderId);\n' +
+    '  if (!token) {\n' +
+    '    token = randomUUID();\n' +
+    '    windowPreviewTokens.set(senderId, token);\n' +
+    '  }\n' +
+    '  previewTokenWorkspaces.set(token, workspace);\n' +
+    '  return token;\n' +
+    '}\n' +
+    '\n' +
+    'function createPreviewToken(senderId, workspace) {\n' +
+    "  // Execution folders (project directories) can differ from the window's data\n" +
+    "  // workspace. Preview tokens must not move the window's primary workspace.\n" +
+    '  let token = windowPreviewTokens.get(senderId);\n' +
+    '  if (!token) {\n' +
+    '    token = randomUUID();\n' +
+    '    windowPreviewTokens.set(senderId, token);\n' +
+    '  }\n' +
+    '  previewTokenWorkspaces.set(token, workspace);\n' +
+    '  return token;\n' +
+    '}\n' +
+    '\n' +
+    'function workspaceStatePath() {\n' +
+    '  return path.join(app.getPath("userData"), WORKSPACE_STATE_FILE);\n' +
+    '}\n' +
+    '\n' +
+    'function validWorkspace(value) {\n' +
+    '  return typeof value === "string" && value.trim() && fs.existsSync(value) && fs.statSync(value).isDirectory();\n' +
+    '}\n' +
+    '\n' +
+    'function rememberWorkspace(workspace) {\n' +
+    '  if (!validWorkspace(workspace)) return;\n' +
+    '  try {\n' +
+    '    fs.writeFileSync(workspaceStatePath(), JSON.stringify({ workspace, updatedAt: new Date().toISOString() }, null, 2));\n' +
+    '  } catch {\n' +
+    '    // The active window still works if user-data storage is temporarily unavailable.\n' +
+    '  }\n' +
+    '}\n' +
+    '\n' +
+    'function lastWorkspace() {\n' +
+    '  try {\n' +
+    '    const saved = JSON.parse(fs.readFileSync(workspaceStatePath(), "utf8"));\n' +
+    '    return validWorkspace(saved?.workspace) ? saved.workspace : null;\n' +
+    '  } catch {\n' +
+    '    return null;\n' +
+    '  }\n' +
+    '}\n' +
+    '\n' +
+    'function startupWorkspace() {\n' +
+    '  const saved = lastWorkspace();\n' +
+    '  if (saved) return saved;\n' +
+    '  // During local development, the application lives inside its default research workspace.\n' +
+    '  const developmentWorkspace = process.env.VITE_DEV_SERVER_URL ? path.dirname(app.getAppPath()) : null;\n' +
+    '  return validWorkspace(developmentWorkspace) ? developmentWorkspace : null;\n' +
+    '}\n' +
+    '\n' +
+    'function watchWorkspace(sender, workspace) {\n' +
+    '  stopWorkspaceWatcher(sender.id);\n' +
+    '  try {\n' +
+    '    const state = { wa'... 122647 more characters
+  
+      at TestContext.<anonymous> (/Users/fei/Desktop/Archimedes-pr-splits/workspace-store-context/electron/ui-audit-project-workspace.test.cjs:27:10)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: `const { app, BrowserWindow, Menu, ipcMain: electronIpcMain, dialog, nativeTheme, net, protocol, clipboard, shell, session, safeStorage, systemPreferences, Notification } = require("electron");\nconst { spawn } = require("node:child_process");\nconst { randomUUID } = require("node:crypto");\nconst os = require("node:os");\nconst fs = require("node:fs");\nconst path = require("node:path");\nconst { windowIconPath, configureAppIcon, configureWindowIcon } = require("./app-icons.cjs");\nconst { pathToFileURL } = require("node:url");\nconst pty = require("node-pty");\nconst agent = require("./agent.cjs");\nconst { registerThreadCommands } = require("./thread-commands.cjs");\nconst { generateDeepReading, createCodexReadingCall } = require("./paper-deep-reading.cjs");\nconst { renderReport: renderDeepReading, markdown: deepReadingMarkdown } = require("./paper-deep-reading-render.cjs");\nconst deepReadingRuns = new Map();\nconst kimiSlidesSkill = require("./kimi-slides-skill.cjs");\nconst runKimiSlidesPlan = kimiSlidesSkill.runKimiSlidesPlan || kimiSlidesSkill.runKimiSlidesPresentation;\nconst runPaperPresentationPlan = kimiSlidesSkill.runPaperPresentationPlan || runKimiSlidesPlan;\nconst { generateNativePptx } = require("./native-pptx.cjs");\nconst { browserUse } = require("./agent/browser-use.cjs");\nconst { loadLocalAgentEnvironment } = require("./config.cjs");\nconst terminalSettings = require("./terminal-settings.cjs");\nconst journeySettings = require("./journey-settings.cjs");\nconst journeySnapshots = require("./journey-snapshots.cjs");\nconst workbenchSettings = require("./workbench-settings.cjs");\nconst sidebarSettings = require("./sidebar-settings.cjs");\nconst news = require("./news.cjs");\nconst paperReview = require("./paper-review.cjs");\nconst workbenchNotes = require("./workbench-notes.cjs");\nconst localIdentity = require("./local-identity.cjs");\nconst { createClient } = require("@supabase/supabase-js");\nconst { createSupabaseAuth } = require("./supabase-auth.cjs");\nconst { createAuthFlow } = require("./auth-flow.cjs");\nconst { createCollaborationApi } = require("./collaboration-api.cjs");\nconst { createLibrarySync } = require("./library-sync.cjs");\nconst { createAnnotationSync } = require("./annotation-sync.cjs");\nconst { createThreadSync } = require("./thread-sync.cjs");\nconst { createPresence } = require("./presence.cjs");\nconst { createSupabaseServer } = require("../server/supabase-server.cjs");\nconst supabaseConfig = require("../shared/supabase-config.json");\nconst journeySummarizer = require("./journey-summarizer.cjs");\nconst modelConfig = require("./model-config.cjs");\nconst agentBackendConfig = require("./agent-backend-config.cjs");\nconst nativeAgent = require("./agent/external-backend.cjs");\nconst { registerNativeAgentCommands } = require("./native-agent-commands.cjs");\nconst { runWindowAgent } = require("./window-agent-run.cjs");\nconst { closeAllNativeClients } = require("./agent/external-backend.cjs");\nconst { planReproduction } = require("./reproduction/planner.cjs");\nconst { normalizeContract } = require("./reproduction/contract.cjs");\nconst { prepareRepositoryItem } = require("./reproduction/repository-context.cjs");\nconst { runPreflight } = require("./reproduction/preflight.cjs");\nconst { repoNameFromUrl } = require("./reproduction/paths.cjs");\nconst { findRepositoryUrl } = require("./paper-repository.cjs");\nconst { findRepository, githubSearchCandidates } = require("./reproduction/find-repository.cjs");\nconst { runPilot } = require("./reproduction/pilot.cjs");\nconst { completeJson } = require("./paper-review-model.cjs");\nconst { createDockerBackend } = require("./reproduction/docker.cjs");\nconst { createSshBackend } = require("./reproduction/remote.cjs");\nconst reproductionEnv = require("./reproduction/env-store.cjs");\nconst { testHuggingFaceToken } = require("./reproduction/env-test.cjs");\nconst proactiveAgent = require("./proactive-agent.cjs");\nconst figureForge = require("./figure-forge.cjs");\nconst { getModelCapabilities, normalizeContextLength, normalizeReasoningEffort } = require("./agent/model-capabilities.cjs");\nconst webSearch = require("./web-search.cjs");\nconst sshServers = require("./ssh-servers.cjs");\nconst { discoverDailyPapers, normalizeDailyOptions, resolveArxivFigure, searchAcademicPapers } = require("./literature.cjs");\nconst { createDailyFigureCache } = require("./daily-figure-cache.cjs");\nconst { deepSearchPapers } = require("./deep-paper-search.cjs");\nconst { searchConferencePapers } = require("./conferences.cjs");\nconst skillCatalog = require("./skill-catalog.cjs");\nconst speech = require("./speech.cjs");\nconst store = require("./store.cjs");\nconst { createWorkspaceIpc } = require("./workspace-context.cjs");\nconst workspaceFiles = require("./workspace-files.cjs");\nconst latexWorkspace = require("./latex-workspace.cjs");\nconst { preparePaperReader } = require("./library-reader.cjs");\nconst { importLocalPaper } = require("./library-local-import.cjs");\nconst { loadGithubRepository, normalizeGithubRepositoryUrl } = require("./github-repository.cjs");\nconst { cloneRepositoryCheckout, getRepositoryCheckout, listRepositoryCheckoutDirectory, readRepositoryCheckoutFile, resolveAuditPath, resolveRepositoryCodeReference } = require("./repository-checkout.cjs");\nconst { getBenchmarkRadarData } = require("./benchmark-radar.cjs");\nconst extensionMarketplace = require("./extensions-marketplace.cjs");\nconst sidebarPlugins = require("./sidebar-plugins.cjs");\n\nconst commandSessions = new Map();\nconst interactiveTerminalSessions = new Map();\nconst windowWorkspaces = new Map();\nconst windowPreviewTokens = new Map();\nconst previewTokenWorkspaces = new Map();\nconst workspaceWatchers = new Map();\nconst allowedContextPaths = new Set();\nconst WORKSPACE_STATE_FILE = "last-workspace.json";\nconst MAX_CLIPBOARD_IMAGE_BYTES = 6 * 1024 * 1024;\nconst WORKBENCH_BROWSER_PARTITION = "archimedes-browser";\nlet browserSessionHardened = false;\n\napp.setName("Archimedes");\napp.setAppUserModelId("com.archimedes.research");\nprotocol.registerSchemesAsPrivileged([\n  {\n    scheme: "archimedes-file",\n    privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true, corsEnabled: true },\n  },\n  {\n    scheme: "archimedes-plugin",\n    privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true, corsEnabled: true },\n  },\n]);\n\nfunction cleanTerminalEnvironment() {\n  return Object.fromEntries(Object.entries({\n    ...process.env,\n    TERM: "xterm-256color",\n    COLORTERM: "truecolor",\n    TERM_PROGRAM: "Archimedes",\n    TERM_PROGRAM_VERSION: app.getVersion(),\n  }).filter(([, value]) => typeof value === "string"));\n}\n\nfunction getInteractiveTerminal(event, sessionId) {\n  const session = interactiveTerminalSessions.get(sessionId);\n  if (!session || session.senderId !== event.sender.id) throw new Error("Terminal session not found.");\n  return session;\n}\n\nfunction closeInteractiveTerminal(sessionId) {\n  const session = interactiveTerminalSessions.get(sessionId);\n  if (!session) return;\n  interactiveTerminalSessions.delete(sessionId);\n  try {\n    session.process.kill();\n  } catch {\n    // The shell may already have exited.\n  }\n}\n\nfunction closeAllTerminals() {\n  for (const sessionId of interactiveTerminalSessions.keys()) closeInteractiveTerminal(sessionId);\n  for (const session of commandSessions.values()) session.process.kill("SIGTERM");\n  commandSessions.clear();\n}\n\nfunction closeWindowTerminals(senderId) {\n  for (const [sessionId, session] of interactiveTerminalSessions) {\n    if (session.senderId === senderId) closeInteractiveTerminal(sessionId);\n  }\n  for (const [sessionId, session] of commandSessions) {\n    if (session.senderId !== senderId) continue;\n    session.process.kill("SIGTERM");\n    commandSessions.delete(sessionId);\n  }\n}\n\nfunction stopWorkspaceWatcher(senderId) {\n  const current = workspaceWatchers.get(senderId);\n  if (!current) return;\n  if (current.timer) clearTimeout(current.timer);\n  current.watcher.close();\n  workspaceWatchers.delete(senderId);\n}\n\nfunction setWindowWorkspace(senderId, workspace) {\n  windowWorkspaces.set(senderId, workspace);\n  let token = windowPreviewTokens.get(senderId);\n  if (!token) {\n    token = randomUUID();\n    windowPreviewTokens.set(senderId, token);\n  }\n  previewTokenWorkspaces.set(token, workspace);\n  return token;\n}\n\nfunction createPreviewToken(senderId, workspace) {\n  // Execution folders (project directories) can differ from the window's data\n  // workspace. Preview tokens must not move the window's primary workspace.\n  let token = windowPreviewTokens.get(senderId);\n  if (!token) {\n    token = randomUUID();\n    windowPreviewTokens.set(senderId, token);\n  }\n  previewTokenWorkspaces.set(token, workspace);\n  return token;\n}\n\nfunction workspaceStatePath() {\n  return path.join(app.getPath("userData"), WORKSPACE_STATE_FILE);\n}\n\nfunction validWorkspace(value) {\n  return typeof value === "string" && value.trim() && fs.existsSync(value) && fs.statSync(value).isDirectory();\n}\n\nfunction rememberWorkspace(workspace) {\n  if (!validWorkspace(workspace)) return;\n  try {\n    fs.writeFileSync(workspaceStatePath(), JSON.stringify({ workspace, updatedAt: new Date().toISOString() }, null, 2));\n  } catch {\n    // The active window still works if user-data storage is temporarily unavailable.\n  }\n}\n\nfunction lastWorkspace() {\n  try {\n    const saved = JSON.parse(fs.readFileSync(workspaceStatePath(), "utf8"));\n    return validWorkspace(saved?.workspace) ? saved.workspace : null;\n  } catch {\n    return null;\n  }\n}\n\nfunction startupWorkspace() {\n  const saved = lastWorkspace();\n  if (saved) return saved;\n  // During local development, the application lives inside its default research workspace.\n  const developmentWorkspace = process.env.VITE_DEV_SERVER_URL ? path.dirname(app.getAppPath()) : null;\n  return validWorkspace(developmentWorkspace) ? developmentWorkspace : null;\n}\n\nfunction watchWorkspace(sender, workspace) {\n  stopWorkspaceWatcher(sender.id);\n  try {\n    const state = { wa`... 122647 more characters,
+    expected: /store\.openWorkspace\(dataWorkspace\);/,
+    operator: 'match',
+    diff: 'simple'
+  }

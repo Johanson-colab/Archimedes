@@ -1,0 +1,61 @@
+(node:55883) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✖ same-ID running turns deliver completed/failed/incomplete to another SQLite client, survive retries and old snapshots (135.774709ms)
+✖ library and membership tombstones survive reconnect/old pull while explicit re-add and other references remain valid (79.360958ms)
+
+Interrupted while running:
+
+⚠ electron/cloud-sync-integrity.test.cjs (electron/cloud-sync-integrity.test.cjs:1:1)
+✖ electron/cloud-sync-integrity.test.cjs (97236.026291ms)
+ℹ tests 3
+ℹ suites 0
+ℹ pass 0
+ℹ fail 2
+ℹ cancelled 1
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 97240.604417
+
+✖ failing tests:
+
+test at electron/cloud-sync-integrity.test.cjs:31:1
+✖ same-ID running turns deliver completed/failed/incomplete to another SQLite client, survive retries and old snapshots (135.774709ms)
+  AssertionError [ERR_ASSERTION]: a stale local pull must also remain monotonic
+  + actual - expected
+  
+  + 'running'
+  - 'completed'
+  
+      at TestContext.<anonymous> (/Users/fei/Desktop/Archimedes/electron/cloud-sync-integrity.test.cjs:61:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 'running',
+    expected: 'completed',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at electron/cloud-sync-integrity.test.cjs:66:1
+✖ library and membership tombstones survive reconnect/old pull while explicit re-add and other references remain valid (79.360958ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  0 !== 1
+  
+      at TestContext.<anonymous> (/Users/fei/Desktop/Archimedes/electron/cloud-sync-integrity.test.cjs:78:10)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 0,
+    expected: 1,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at electron/cloud-sync-integrity.test.cjs:1:1
+✖ electron/cloud-sync-integrity.test.cjs (97236.026291ms)
+  'Promise resolution is still pending but the event loop has already resolved'

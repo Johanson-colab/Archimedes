@@ -1,0 +1,17 @@
+✔ a local title-only candidate cannot override a conflict-free global strong identifier (129.112333ms)
+✔ BibTeX supports nested values, grouped authors, stable keys and explicit unsupported syntax (2.700917ms)
+✔ BibTeX preserves literal braces and backslashes across its own export while retaining grouped capitalization (0.526125ms)
+✔ BibTeX only identifies arXiv eprints and normalizes the same identifiers as the actual store (73.098708ms)
+✔ citation keys are scoped to the target export, while paper identity still deduplicates across projects (106.785959ms)
+✔ real Library BibTeX preview preserves existing edits and notes; only selected metadata repair is applied (211.820875ms)
+✔ leaving a BibTeX import stops subsequent operations after an in-flight add returns (99.014625ms)
+✔ explicit metadata repair and bibliography survive identifier-changing imports without discarding PDF pages or notes (135.306167ms)
+✔ bibliography keys and explicit repairs persist through the actual preload and main handlers (97.830542ms)
+ℹ tests 9
+ℹ suites 0
+ℹ pass 9
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2394.924625

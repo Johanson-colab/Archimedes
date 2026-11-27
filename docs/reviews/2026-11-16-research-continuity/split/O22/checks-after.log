@@ -1,0 +1,32 @@
+✔ standalone charts retains sorting, chart/table filters and the remote catalog (203.706875ms)
+✔ switching apps retains sort/search and closes menus and preview scroll locks (72.23525ms)
+✔ home, proactive and sidebar routes enable their actual app before showing it (258.337459ms)
+✔ palette extensions and a paper's reproduction callback retain their selected destination (4.427208ms)
+✔ opening waits for persisted visibility, and a failed save keeps the current page reachable (0.829458ms)
+✔ all twelve built-ins appear once in the five issue categories with four enabled (167.364625ms)
+✔ failed core visibility saves keep the switch unchanged and report an error (24.540875ms)
+✔ legacy and categorized plugins share the catalog without duplicate install rows (84.136041ms)
+✔ sidebar order is independent of category; explicit plugin metadata overrides legacy sections (0.299459ms)
+✔ Paper diagrams is a view inside Image creation, not a second Create destination (1.78975ms)
+✔ Image creation keeps Paper diagrams and FigureForge without Data charts or Templates (0.738584ms)
+✔ the tab row does not draw a divider above the search bar (1.607333ms)
+✔ Data charts is a separate app with chart types and tables, but no field or venue filter (0.561875ms)
+✔ images lead and text is a single secondary line (3.725334ms)
+✔ filter facets fold into one popover instead of a permanent block (1.26775ms)
+✔ FigureForge opens as a separate workspace without a gallery composer (1.60125ms)
+✔ FigureForge reads as four numbered steps with one primary action each (1.556083ms)
+✔ FigureForge reference search is decoupled, explainable and never stale silently (0.437333ms)
+✔ FigureForge measures the references before generating and lets you edit the contract (0.682833ms)
+✔ welcome reuses warm paper tokens and the shared accent (1.232667ms)
+✔ welcome board and composer are docked instead of clipped (2.271167ms)
+✔ welcome entrance motion is shortened and no longer loops (1.237667ms)
+✔ the welcome replication card opens the reproduce module (1.671125ms)
+✔ all welcome images resolve inside the app for file and web deployments (265.150291ms)
+ℹ tests 24
+ℹ suites 0
+ℹ pass 24
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1544.583916

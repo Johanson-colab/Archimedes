@@ -1,0 +1,40 @@
+✔ review retains the real build with its generated run ID and keeps its data-store lease through background ingestion (908.724208ms)
+✔ failed run creation rolls back only its pin, and stale or mismatched inputs cannot create a new review (44.437458ms)
+✔ slides copy a historical manuscript to the real target session root with a durable source receipt and reject other projects (43.103708ms)
+✔ the global review database filters same-project-ID histories by data root without fabricating provenance for legacy rows (39.256125ms)
+✔ Docker structured files reject external directory/final symlinks and preserve ordinary nested edits (28.709959ms)
+✔ SSH production file scripts preserve stdin/quoting, refuse linked paths and never truncate a complete-read result silently (255.347209ms)
+✔ large command output is complete on the target and bounded in the process capture, with its real exit code (258.303667ms)
+✔ local process cancellation stops its descendant group and removes abort listeners (1686.614375ms)
+✔ remote cleanup only signals the matching owned process group and leaves unrelated PIDs untouched (256.05175ms)
+✔ Docker cleanup verifies exact labels even after prepare fails and never removes another owner's container (2.896208ms)
+✔ Stop while checkout or backend preparation is deferred prevents every later stage and persists one stopped result (85.303792ms)
+✔ a real pilot waiting for its model reports cancellation as stopped and does not retry an incomplete model (2.574208ms)
+✔ shutdown is bounded for an unresponsive preparation and late completion cannot start a pilot or duplicate cleanup (114.531208ms)
+✔ a detached run retains its original database and persisted resource ownership until cleanup finishes (163.434333ms)
+✔ reopening recovers only persisted resources owned by this database and exact run (87.896708ms)
+✔ the actual quit handler waits for bounded run shutdown before closing stores and prevents duplicate cleanup (1.988917ms)
+✔ one repository and branch maps to one directory on the server (6.188917ms)
+✔ a trailing slash or .git in the URL does not change the directory (0.161416ms)
+✔ a non-GitHub URL still produces a usable directory (0.867083ms)
+✔ commands survive quoting, including single quotes in a path (0.182125ms)
+✔ the probe output is parsed into facts (1.092458ms)
+✔ a machine without docker or a GPU says so instead of guessing (0.148666ms)
+✔ the probe command asks only for things it can report (0.318542ms)
+✔ a remote path lets the server expand the home directory (0.098125ms)
+✔ commands run through a login shell so the profile's proxy applies (0.390959ms)
+✔ the backend implements everything the runner calls (3.886416ms)
+✔ a new run cannot inherit the previous run's passed verdict, while immutable historical receipts survive reopen (139.333792ms)
+✔ actual Git commit/dirty and known paper/plan changes are recorded without claiming untracked environments (300.940958ms)
+✔ legacy reproduction binding is explicit and cannot move an existing record across project workspaces (60.348666ms)
+✔ basedOnThreadId creates an empty linked session in its real historical root and refuses conflicting owners (57.400291ms)
+✔ snapshot bounds actual text reads and skips generated Python environments while preserving metadata change detection (57.684167ms)
+✔ changing budget placement does not invent modifications and ordinary text still has meaningful line diffs (42.766167ms)
+ℹ tests 32
+ℹ suites 0
+ℹ pass 32
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2673.949917

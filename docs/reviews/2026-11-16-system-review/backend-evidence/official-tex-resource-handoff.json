@@ -1,0 +1,68 @@
+{
+  "resourceRoot": "/private/var/folders/y6/7f277x5n4z14sqwsw21h8ffm0000gn/T/archimedes-v03-resources-6KgBeb",
+  "bundle": "/private/var/folders/y6/7f277x5n4z14sqwsw21h8ffm0000gn/T/archimedes-v03-resources-6KgBeb/flat-live-bundle",
+  "resources": "/private/var/folders/y6/7f277x5n4z14sqwsw21h8ffm0000gn/T/archimedes-v03-resources-6KgBeb/managed-resources",
+  "executable": "/private/var/folders/y6/7f277x5n4z14sqwsw21h8ffm0000gn/T/archimedes-v03-resources-6KgBeb/official-runtime/engines/0.17.0/darwin-arm64/tectonic",
+  "engineVersion": "0.17.0",
+  "archiveBytes": 21704674,
+  "archiveSha256": "a3f1cac7c5678f01661a92212f58480ae3b0634115d880dbc59e2953ded45667",
+  "executableSha256": "b52b5a730e2b0b33087304f7720f649603953f270a6b1c88bb031e1ae01f7f9c",
+  "fonts": [
+    {
+      "name": "phvb.tfm",
+      "bytes": 2300,
+      "reused": true,
+      "sha256": "7539db98bb44c317ba3e7db5dad7c823c262d240e5c9081927775d1797856a6d"
+    },
+    {
+      "name": "phvb.vf",
+      "bytes": 1516,
+      "reused": true,
+      "sha256": "02d435651f1c5644822d9ec770829a8fecac02c66a950d3f07945ef946f17de9"
+    },
+    {
+      "name": "phvb8r.tfm",
+      "bytes": 4484,
+      "reused": true,
+      "sha256": "84991788fb7693d3e3c36b24ee597867e91bc895791489b10ab38a43b302d306"
+    },
+    {
+      "name": "8r.enc",
+      "bytes": 4850,
+      "reused": true,
+      "sha256": "66dad15c944f0d457a095fd6e9dba30059a4882b1ffb1f4bf62850ce52c8f136"
+    },
+    {
+      "name": "uhvb8a.pfb",
+      "bytes": 35941,
+      "reused": true,
+      "sha256": "a7a8cf4b173b410fff6d8f006ace207322bc52183bf219d2ce996cab8a14000c"
+    }
+  ],
+  "runtimeRoot": "/private/var/folders/y6/7f277x5n4z14sqwsw21h8ffm0000gn/T/archimedes-v03-resources-6KgBeb/official-runtime",
+  "defaultCache": "/private/var/folders/y6/7f277x5n4z14sqwsw21h8ffm0000gn/T/archimedes-v03-resources-6KgBeb/official-runtime/tex-cache",
+  "defaultBundle": "https://relay.fullyjustified.net/default_bundle_v33.tar",
+  "flatSubsetFiles": 255,
+  "source": "https://relay.fullyjustified.net/default_bundle_v33.tar",
+  "cleanup": "Retain this task-owned resource directory until unified acceptance, then remove it.",
+  "original_live_test": "passed 1/1, zero skip; cold HTTP fixture + server offline warm rebuild",
+  "local_fixture_environment": {
+    "NO_PROXY": "127.0.0.1,localhost,::1",
+    "no_proxy": "127.0.0.1,localhost,::1",
+    "ARCHIMEDES_TEX_TEST_BUNDLE": "/private/var/folders/y6/7f277x5n4z14sqwsw21h8ffm0000gn/T/archimedes-v03-resources-6KgBeb/flat-live-bundle",
+    "ARCHIMEDES_TEX_TEST_RESOURCES": "/private/var/folders/y6/7f277x5n4z14sqwsw21h8ffm0000gn/T/archimedes-v03-resources-6KgBeb/managed-resources"
+  },
+  "package_prefeed_cache": ".archimedes/latex-package/mac-arm64/engine.tar.gz (not copied or packaged in this phase)",
+  "system_engine_not_used": true,
+  "download": {
+    "first_bound_seconds": 120,
+    "first_exit": 28,
+    "partial_bytes_retained": 17169125,
+    "resume_bound_seconds": 90,
+    "resume_exit": 0,
+    "final_bytes": 21704674,
+    "cold_reset": false
+  },
+  "default_bundle_cached_smoke": "Official checksum-verified binary, production default bundle URL, --only-cached article + Helvetica passed (1277ms); other manuscript packages may need their first download.",
+  "native_profile_prefeed": "Copy the task-owned runtimeRoot contents into the isolated test profile userData/latex-runtime; never write a real user profile. This seeds the official engine plus original-default-bundle cache."
+}

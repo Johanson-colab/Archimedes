@@ -1,0 +1,52 @@
+{
+  "stage": "frontend implementation, renderer build and native acceptance pending",
+  "checks": {
+    "focused": {
+      "tests": 91,
+      "pass": 91,
+      "fail": 0,
+      "skip": 0,
+      "log": "frontend-final-batch-tests.log"
+    },
+    "graphicx_insert_compile_normal_flow": {
+      "tests": 13,
+      "pass": 13,
+      "fail": 0,
+      "log": "figure-insert-package-tests.log"
+    },
+    "lint_exit": 0,
+    "diff_check_exit": 0
+  },
+  "meaningful_behaviors": [
+    "saved old-root unlinked analysis derives its real associated session from the registered result after project root changes; actual original CSV last row is read",
+    "real registered PNG stage handler copies bytes and source receipt but does not write main.tex; writing preserves later input and inserts at current cursor",
+    "explicit graphicx action modifies the main draft and compile saves that owner; actual engine native check pending",
+    "Figure late generation is labeled earlier on input change and excluded from current save; inactive owner retains valid work; new PDF starts independent result identity",
+    "Reproduce same copied ID across data roots filters actual React listeners by captured owner and renders immutable historical commands/logs separately",
+    "Notes normal Add to chat appends to named session; explicit Use as prompt retains replace meaning; older callback cannot navigate another selected session"
+  ],
+  "limits": [
+    "React tests use JSDOM and deterministic provider/file timing; they do not replace real Electron UI acceptance",
+    "PNG rasterization uses real browser canvas in production; its visual/real-engine manuscript result remains to be observed",
+    "No real credentials or model charges; no commit/push/PR"
+  ],
+  "files_sha256": {
+    "src/App.tsx": "0f3389ab2b7a0095f4ea26dc48af921b4526ed1150171ba88df112452619a23e",
+    "src/ImageCreationView.tsx": "2be377af1fe13d64e17f5bd7ba4d1001740905f342a245924369e47d97174091",
+    "src/DataAnalysisView.tsx": "fbcea1e6214984fd51c0ae6578391093861616d34e6f57c373af162d0574b749",
+    "src/PaperWritingView.tsx": "f518bc8093cfc890736d5590eda3f5f7e133eec7cc93873102605564fff5e6e9",
+    "src/PaperToSlidesView.tsx": "f062b2d6442b2f6a655c1e034fd868cfdc92446c419e1d94e7a4f4d6f8ff7658",
+    "src/PaperReviewView.tsx": "ba418c68745ad7d81012328eb2a514a098cf8859c99d7a92ec4f738b8d62491c",
+    "src/ReproduceView.tsx": "27015f910a6184eaa65c2e5c47cf2b65b8043287d1225a26a5d67b56dcd58cf2",
+    "src/NotesView.tsx": "23d1d6a3368186bc8d7a365b88f575766ccc754d45f628866f37e656864deb16",
+    "src/NewsView.tsx": "445afc80c438799c3682176011b2c2ce2ba6f08d190786d49d39f8132e175d28",
+    "src/project-results.ts": "3c7ca7c49920e90f6944473af8e90fca06868f7e35beb9e2e629a1e11b2d60b4",
+    "src/figure-image.ts": "493c65dc36ead459af83bc79c5526cf1d3bc60c03ac49683c643c4f5e80ee9bf",
+    "electron/project-results.cjs": "7f6c70af7ff1814519a10dcc3c5b4dd2d6a307bda16d03e41a049a77df405d76",
+    "electron/figure-project-results.test.cjs": "dee17d76b261f27492da482930aeec75e66b864e75f068d0fbeff2dd232529a1",
+    "electron/paper-writing-workspace.test.cjs": "1687a53800492cc948971ae2c9671c9fd4d3f02d39b4eda883b6835cf8fe4aa5",
+    "electron/manuscript-workflow-ui.test.cjs": "c5935ab2fe599a2e666793933cd186729e4397b00bae6b5bfb8e25b1230ae336",
+    "electron/reproduction-owner-view.test.cjs": "acfe41e7141f9ef45a321fb93533b9983ceb310ef9ce92d901b1bf5dd76066ad",
+    "electron/composer-handoff-ui.test.cjs": "98ab792d6e70dd88dc0e50275d81b80d89ea3ac4ec4a8ea82c2452b23042933c"
+  }
+}

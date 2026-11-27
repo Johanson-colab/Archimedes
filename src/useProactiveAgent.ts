@@ -180,8 +180,8 @@ export function useProactiveAgent({
       const nextSignal: ProactiveSignal = {
         ...signal,
         workspace: signal.workspace ?? contextRef.current.workspace,
-        threadId: signal.threadId ?? contextRef.current.threadId,
-        projectId: signal.projectId ?? contextRef.current.projectId,
+        threadId: signal.threadId === undefined ? contextRef.current.threadId : signal.threadId,
+        projectId: signal.projectId === undefined ? contextRef.current.projectId : signal.projectId,
       };
       setState((current) => recordSignal(current, nextSignal, Date.now()));
     });
@@ -466,9 +466,15 @@ export function useProactiveAgent({
   }, []);
 
   const accept = useCallback((suggestion: ProactiveSuggestion) => {
+    const current = contextRef.current;
+    if (suggestion.source === "latex" && suggestion.action.kind === "insert" &&
+        (suggestion.workspace !== current.workspace || suggestion.projectId !== current.projectId || suggestion.threadId !== current.threadId)) {
+      onNotice?.("Return to the source manuscript conversation to apply this suggestion.");
+      return;
+    }
     setState((current) => markSuggestionAccepted(current, suggestion.id, Date.now()));
     void onRun(suggestion);
-  }, [onRun]);
+  }, [onNotice, onRun]);
 
   const dismiss = useCallback((suggestion: ProactiveSuggestion) => {
     const now = Date.now();

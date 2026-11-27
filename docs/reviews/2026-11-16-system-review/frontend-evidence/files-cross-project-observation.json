@@ -1,0 +1,33 @@
+{
+  "sourceCommit": "1f4b37581c446770d576440f9ebb9bca5c55bfb7",
+  "environment": "Electron 43.4.1; actual main/preload; isolated userData/data/projects in /tmp; CUA UI actions",
+  "steps": [
+    "Open project A Session A and README.md in Files/Edit.",
+    "Replace editor text with # Project A plus UNSAVED_A_CROSS_PROJECT_MARKER; do not save.",
+    "Select project B workspace/Session B, then open README.md.",
+    "Observe A draft in B editor, without discard confirmation.",
+    "Confirm disk B still contains Original B content.",
+    "Click Save while header, Session and execution folder all identify B.",
+    "Read both isolated files from disk."
+  ],
+  "beforeSave": {
+    "a": "# Project A\n\nOriginal A content.\n",
+    "b": "# Project B\n\nOriginal B content.\n"
+  },
+  "afterSave": [
+    {
+      "project": "a",
+      "path": "/tmp/archimedes-ui-review.lPAjgP/project-a/README.md",
+      "sha256": "a728aaeba3ceec519fe7ef8b2f69c828adab3dab04eb7b9ccb5b3c8e0e983bab",
+      "content": "# Project A\n\nOriginal A content.\n"
+    },
+    {
+      "project": "b",
+      "path": "/tmp/archimedes-ui-review.lPAjgP/project-b/README.md",
+      "sha256": "fc808fdc1ff90ca1834950b4dfcd84112276188fa1daea30c906fe579b8529d7",
+      "content": "# Project A\n\nUNSAVED_A_CROSS_PROJECT_MARKER\n"
+    }
+  ],
+  "observed": "Project A disk stays original. Project B README.md is overwritten with A unsaved draft.",
+  "screenshot": "files-project-b-shows-a-draft.png"
+}

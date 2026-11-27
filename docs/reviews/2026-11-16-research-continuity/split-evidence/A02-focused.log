@@ -1,0 +1,25 @@
+✔ context rejects thread/project/workspace/root mixing before any new turn and preserves historical execution (32.157ms)
+✔ opening a freshly imported conversation binds the same local context used by run and remains readable to viewers (28.657417ms)
+✔ late run events and completion cannot adopt an empty task in another project (126.778666ms)
+✔ a delayed approval uses its original task for command execution and completion (1.388166ms)
+✔ new selections use only the chosen project workspace and session roots retain historical ownership (32.86475ms)
+✔ Library project selection commits the returned complete task only after loading succeeds (89.046292ms)
+✔ failed opening keeps the old coherent task and transcript available (0.682542ms)
+✔ a slower open cannot take over the task chosen by a newer request (0.570625ms)
+✔ an imported thread without local workspace fields resolves its own project default, never the data folder (0.116291ms)
+✔ projects persist a bound folder and sessions snapshot their inherited folder (1.406375ms)
+✔ agent and review runs separate the data workspace from the execution folder (0.275208ms)
+✔ live running and review states refresh without reopening the data workspace (0.1785ms)
+✔ the renderer resolves session → project → primary workspace for tools (0.281292ms)
+✔ new projects choose a folder and existing projects can rebind it (0.243875ms)
+✔ default project workspaces receive stable random library names (0.390083ms)
+✔ the composer surfaces the effective working folder (0.891584ms)
+✔ folder previews and watches do not move the window's primary workspace (0.14425ms)
+ℹ tests 17
+ℹ suites 0
+ℹ pass 17
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 677.000542

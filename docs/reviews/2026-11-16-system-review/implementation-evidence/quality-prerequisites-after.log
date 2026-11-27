@@ -1,0 +1,30 @@
+✔ git state distinguishes none, empty, and ready folders (227.608583ms)
+✔ a linked worktree is reported as nested instead of a project root (241.484542ms)
+✔ a broken .git entry is suspicious (20.008458ms)
+✔ directory aliases share Git state without accepting a parent repository (357.388834ms)
+✔ translation shards cover every string exactly once (13.797417ms)
+✔ keys stay sorted inside each shard so concurrent additions do not collide (3.403542ms)
+✔ the shell merges every shard and keeps the surfaces translated (5.20825ms)
+✔ Windows prefers PowerShell 7 when it is installed (6.498833ms)
+✔ Windows falls back to Windows PowerShell before cmd (0.149666ms)
+✔ Windows uses COMSPEC only as the last built-in fallback (0.089833ms)
+✔ explicit shell profiles do not fall through to a different shell (0.9245ms)
+✔ custom shell paths are honored when they exist (0.239875ms)
+✔ macOS and Linux use the login shell with -l (0.630791ms)
+✔ missing POSIX shells fall back to /bin/sh (0.095209ms)
+✔ Windows shell candidates use target paths for store installs and alternate drives (0.22175ms)
+✔ opening an existing database attaches projects and sessions to a shared workspace (136.086709ms)
+✔ sessions are filtered by workspace and can be pinned and marked viewed (61.182042ms)
+✔ sandboxes copy project files without caches or app data (69.318292ms)
+✔ workspaces accept a user name and can be renamed later (115.092458ms)
+✔ git projects can open and remove a worktree workspace (404.867916ms)
+✔ projects without git cannot create a worktree (65.537667ms)
+✔ a Git project opened through a directory alias can create and remove a worktree (343.729709ms)
+ℹ tests 22
+ℹ suites 0
+ℹ pass 22
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1413.835459
