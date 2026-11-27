@@ -1091,8 +1091,14 @@ app.whenReady().then(async () => {
       const encodedPath = result.pdf_path.split("/").map(encodeURIComponent).join("/");
       return { ...result, preview_url: `archimedes-file://${token}/${encodedPath}?v=${Date.now()}` };
     } catch (error) {
-      if (!abort.signal.aborted) throw error;
-      return { ok: false, cancelled: true, timed_out: false, engine: "", source_path: input.path, pdf_path: "", duration_ms: 0, diagnostics: [], log: "LaTeX compilation cancelled." };
+      if (abort.signal.aborted) return { ok: false, cancelled: true, timed_out: false, engine: "", source_path: input.path, pdf_path: "", duration_ms: 0, diagnostics: [], log: "LaTeX compilation cancelled." };
+      if (input.engine !== "local") {
+        const localCompiler = latexWorkspace.findLocalLatexCompiler();
+        if (localCompiler) return { ok: false, cancelled: false, timed_out: false, engine: "managed", source_path: input.path, pdf_path: "", duration_ms: 0,
+          diagnostics: [{ line: null, message: "The managed LaTeX compiler could not be prepared.", help: "Retry the download, or switch to the installed local compiler." }],
+          log: error instanceof Error ? error.message : String(error), local_compiler: path.basename(localCompiler) };
+      }
+      throw error;
     } finally {
       if (jobs.get(key) === abort) jobs.delete(key);
       if (jobs.size === 0 && latexCompiles.get(senderId) === jobs) latexCompiles.delete(senderId);
