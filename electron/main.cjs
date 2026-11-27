@@ -2042,7 +2042,7 @@ app.whenReady().then(async () => {
     return resolveRepositoryCodeReference(resolveWorkspace(workspace || windowWorkspaces.get(event.sender.id)), url, filePath);
   });
 
-  ipcMain.handle("clipboard:read-text", () => clipboard.readText().slice(0, 100_000));
+  ipcMain.handle("clipboard:read-text", () => clipboard.readText());
 
   ipcMain.handle("app:open-external", async (_event, url) => {
     if (typeof url !== "string" || url.length > 4_096 || !isWebPage(url)) {
@@ -2054,7 +2054,7 @@ app.whenReady().then(async () => {
 
   ipcMain.handle("clipboard:write-text", (_event, { text } = {}) => {
     if (typeof text !== "string") throw new Error("Clipboard text must be a string.");
-    clipboard.writeText(text.slice(0, 100_000));
+    clipboard.writeText(text);
   });
 
   ipcMain.handle("clipboard:read-image", () => {
