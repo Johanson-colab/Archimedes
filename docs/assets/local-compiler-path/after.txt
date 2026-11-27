@@ -1,0 +1,20 @@
+$ node --test --test-name-pattern="case-insensitive Path" electron/latex-workspace.test.cjs
+✔ finds local compilers through a case-insensitive Path variable (1.237333ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 106.86925
+$ node --test electron/latex-workspace.test.cjs  # known pre-existing failure
+✖ failing tests:
+
+test at electron/latex-workspace.test.cjs:299:1
+✖ aborting an active compilation terminates its entire process group (86.301542ms)
+  TypeError [Error]: Cannot read properties of undefined (reading 'trim')
+      at TestContext.<anonymous> (/Users/fei/Desktop/Archimedes/electron/latex-workspace.test.cjs:324:108)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3)

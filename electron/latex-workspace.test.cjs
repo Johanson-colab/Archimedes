@@ -11,6 +11,8 @@ const {
   createLatexDirectory,
   createLatexFile,
   createLatexProject,
+  findExecutable,
+  findLocalLatexCompiler,
   importLatexProject,
   listLatexProjects,
   normalizePaperPath,
@@ -354,4 +356,16 @@ test("selects explicit local pdfLaTeX and runs BibTeX for a referenced bibliogra
   assert.equal(result.ok, true, result.log);
   assert.equal(result.engine, "pdflatex");
   assert.deepEqual(commands, ["pdflatex", "bibtex", "pdflatex", "pdflatex"]);
+});
+
+test("finds local compilers through a case-insensitive Path variable", () => {
+  const tools = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-compiler-"));
+  try {
+    const executable = path.join(tools, "latexmk.exe");
+    fs.writeFileSync(executable, "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+    assert.equal(findExecutable(["latexmk.exe"], { Path: tools }), executable);
+    assert.equal(findLocalLatexCompiler({ Path: tools }), executable);
+  } finally {
+    fs.rmSync(tools, { recursive: true, force: true });
+  }
 });
