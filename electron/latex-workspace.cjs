@@ -175,7 +175,8 @@ async function importLatexProject(root, sourceDirectory) {
 }
 
 function findExecutable(names, env = process.env) {
-  const pathEntries = String(env.PATH || "").split(path.delimiter).filter(Boolean);
+  const pathKey = Object.keys(env).find(key => key.toLowerCase() === "path");
+  const pathEntries = String(pathKey ? env[pathKey] : "").split(path.delimiter).filter(Boolean);
   const candidates = [];
   for (const name of names) {
     if (path.isAbsolute(name)) candidates.push(name);
