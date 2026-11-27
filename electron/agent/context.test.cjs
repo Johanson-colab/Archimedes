@@ -1,6 +1,10 @@
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
 const test = require("node:test");
 const { prepareConversation } = require("./context.cjs");
+const store = require("../store.cjs");
 
 test("project instructions and the compacted summary reach the model before new messages", () => {
   const result = prepareConversation({ thread: { context_summary: "Earlier decision: use dataset A", turns: [{ id: "new", user_message: "Continue", assistant_message: "" }] }, currentTurnId: "new", mode: "free-chat", projectInstructions: "Run npm test after editing." });
@@ -96,18 +100,37 @@ test("accepts the selected extra-long context budget when preserving history", (
   assert.equal(conversation.messages.filter((message) => message.role === "assistant").length, 8);
 });
 
-test('restores bounded complete tool groups while excluding worker and orphan results', () => {
+test('reads stored tool groups in their original order across a checkpoint', t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'model-context-checkpoint-'));
+  t.after(() => { store.closeAllWorkspaces(); fs.rmSync(root, { recursive: true, force: true }); });
+  store.openWorkspace(root);
+  const threadId = store.createResearchThread({ prompt: 'Fixture', mode: 'free-chat' }).id;
+  const start = prompt => store.startResearchTurn({ threadId, prompt, mode: 'free-chat' });
+  const checkpoint = start('Earlier decision');
+  store.finishResearchTurn(checkpoint.id, { response: 'Settled' });
+  store.compactResearchThread(threadId, 'Earlier decision: preserve the evidence', checkpoint.id);
+  const old = start('Read it');
   const call = { id: 'call-1', type: 'function', function: { name: 'read_workspace_file', arguments: '{"path":"a.md"}' } };
-  const thread = { context_summary: '', turns: [{ id: 'old', user_message: 'Read it', assistant_message: 'Done' }, { id: 'new', user_message: 'Continue', assistant_message: '' }], events: [
-    { turn_id: 'old', type: 'assistant_step', payload: { tool_calls: [call], content: '' } },
-    { turn_id: 'old', type: 'tool_result', payload: { call_id: 'call-1', content: '{"text":"evidence"}' } },
-    { turn_id: 'old', type: 'tool_result', payload: { call_id: 'call-1', worker_id: 'worker', content: 'private worker data' } },
-    { turn_id: 'old', type: 'assistant_step', payload: { tool_calls: [{ ...call, id: 'orphan' }] } },
-  ] };
-  const result = prepareConversation({ thread, currentTurnId: 'new', mode: 'free-chat' });
-  assert.deepEqual(result.messages.map(m => m.role), ['system', 'user', 'assistant', 'tool', 'assistant', 'user']);
-  assert.equal(result.messages[3].tool_call_id, 'call-1');
-  assert.doesNotMatch(JSON.stringify(result.messages), /private worker data|orphan/);
+  const append = event => store.appendResearchEvent({ threadId, turnId: old.id, ...event });
+  append({ type: 'assistant_step', payload: { tool_calls: [{ ...call, id: 'out-of-scope' }] } });
+  append({ type: 'tool_result', payload: { call_id: 'out-of-scope', content: 'outside the 200-event cap' } });
+  for (let number = 0; number < 200; number++) append({ type: 'status', payload: { number } });
+  [
+    { type: 'assistant_step', payload: { tool_calls: [call], content: '' } },
+    { type: 'tool_result', payload: { call_id: 'call-1', content: '{"text":"evidence"}' } },
+    { type: 'tool_result', payload: { call_id: 'call-1', worker_id: 'worker', content: 'private worker data' } },
+    { type: 'assistant_step', payload: { tool_calls: [{ ...call, id: 'orphan' }] } },
+  ].forEach(append);
+  store.finishResearchTurn(old.id, { response: 'Done' });
+  const next = start('Continue');
+  const thread = store.getResearchThreadContext(threadId);
+  const full = store.getResearchThread(threadId);
+  assert.deepEqual(thread.events, full.events.filter(event => event.turn_id !== checkpoint.id));
+  assert.deepEqual(thread.turns, full.turns.slice(1));
+  const result = prepareConversation({ thread, currentTurnId: next.id, mode: 'free-chat' });
+  assert.deepEqual(result.messages.map(m => m.role), ['system', 'system', 'user', 'assistant', 'tool', 'assistant', 'user']);
+  assert.equal(result.messages[4].tool_call_id, 'call-1');
+  assert.doesNotMatch(JSON.stringify(result.messages), /private worker data|orphan|out-of-scope/);
 });
 
 

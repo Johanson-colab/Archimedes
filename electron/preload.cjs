@@ -91,6 +91,7 @@ contextBridge.exposeInMainWorld("researchDesk", {
     ipcRenderer.on("paper:compile-progress", listener);
     return () => ipcRenderer.removeListener("paper:compile-progress", listener);
   },
+  getResearchThreadEventChanges: (threadId, cursor, workspace) => ipcRenderer.invoke("research-thread:event-changes", { threadId, cursor, workspace }),
   getResearchThread: (threadId, workspace) => ipcRenderer.invoke("research-thread:get", { threadId, workspace }),
   getResearchTurnImage: (threadId, turnId, position, workspace) => ipcRenderer.invoke("research-thread:attachment-image", { threadId, turnId, position, workspace }),
   getResearchSnapshot: () => ipcRenderer.invoke("research:snapshot"),

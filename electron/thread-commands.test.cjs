@@ -186,3 +186,25 @@ test("a rejected or stale model summary never replaces stored history", async (t
   assert.equal(store.getResearchThread(thread.id).context_summary, "");
   assert.equal(store.getResearchThread(thread.id).turns.length, 2);
 });
+
+test("event polling returns only appended events and recovers turn order after a rewrite", t => {
+  const { thread } = fixture(t);
+  const first = addTurn(thread.id, "First question", "First reply");
+  const second = addTurn(thread.id, "Second question", "Second reply");
+  const before = store.getResearchThread(thread.id);
+  const poll = cursor => store.getResearchThreadEventChanges(thread.id, cursor);
+  assert.deepEqual(poll(before.eventCursor).events, []);
+  store.appendResearchEvent({ threadId: thread.id, turnId: second.id, type: "note", payload: { text: "new" } });
+  const delta = poll(before.eventCursor);
+  assert.equal(delta.reset, false);
+  assert.deepEqual([...before.events, ...delta.events], store.getResearchThread(thread.id).events);
+  assert.deepEqual(poll(delta.cursor).events, []);
+  store.appendResearchEvent({ threadId: thread.id, turnId: first.id, type: "note", payload: { text: "late" } });
+  const reordered = poll(delta.cursor);
+  assert.equal(reordered.reset, true);
+  assert.deepEqual(reordered.events, store.getResearchThread(thread.id).events);
+  store.undoResearchTurn(thread.id);
+  const afterUndo = poll(reordered.cursor);
+  assert.equal(afterUndo.reset, true);
+  assert.deepEqual(afterUndo.events, store.getResearchThread(thread.id).events);
+});
