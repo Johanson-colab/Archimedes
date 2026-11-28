@@ -1,0 +1,47 @@
+$ node --test electron/bibliography-interchange.test.cjs
+✔ a redundant title-only row cannot hide a later paper with a distinct DOI (75.002375ms)
+✔ the preview points to the same source locations in English and Chinese, and imports valid entries (146.762125ms)
+✔ article and proceedings previews identify fields and author groups that the actual export omits (97.765833ms)
+✔ a local title-only candidate cannot override a conflict-free global strong identifier (88.29825ms)
+✔ BibTeX supports nested values, grouped authors, stable keys and explicit unsupported syntax (0.793333ms)
+✔ BibTeX decodes TeX accents and exports caret and tilde as literal characters (1.518875ms)
+✔ BibTeX export retains explicit keys and disambiguates every generated key after normalization (0.295291ms)
+✔ BibTeX export uses booktitle for proceedings and round-trips TeX character escapes (0.216083ms)
+✔ BibTeX ignores commented-out entries with nested braces and tolerates whitespace after the opener (0.121709ms)
+✔ quoted parentheses in skipped directives preserve the following references (0.089333ms)
+✔ BibTeX preview rejects citation keys that collide only by case (96.927208ms)
+✔ BibTeX preserves literal braces and backslashes across its own export while retaining grouped capitalization (0.527084ms)
+✔ BibTeX only identifies arXiv eprints and normalizes the same identifiers as the actual store (100.658917ms)
+✔ citation keys are scoped to the target export, while paper identity still deduplicates across projects (104.191458ms)
+✔ a shared paper cannot take a citation key already used in another collection (76.283042ms)
+✔ a conflicting replacement rolls back attaching the imported paper (89.174958ms)
+✔ real Library BibTeX preview preserves existing edits and notes; only selected metadata repair is applied (101.678042ms)
+✔ applying a BibTeX import invalidates the previous export preview (97.007875ms)
+✔ leaving a BibTeX import stops subsequent operations after an in-flight add returns (92.445083ms)
+✔ BibTeX stores the first key and explicit replacement through the desktop bridge (108.934125ms)
+✔ BibTeX stores the first key and explicit replacement through the browser bridge (24.780208ms)
+✔ browser BibTeX import leaves collection links and the old key intact on a rejected replacement (0.390083ms)
+✔ BibTeX preview and import keep distinct same-title works and match author name order (104.423042ms)
+✔ a DOI-matched row can connect a subsequent arXiv alias without hiding a conflicting DOI (0.302583ms)
+✔ BibTeX imports learned identifier conflicts into SQLite with an empty library (83.550125ms)
+✔ BibTeX imports learned identifier conflicts into SQLite with a saved representative (76.929833ms)
+✔ a title alias from a strong match deduplicates a later compatible row, while the conflicting work imports (74.598333ms)
+✔ a selected title repair preserves the paper ID resolved for a later row (81.25725ms)
+✔ two retained DOI claims resolve against the saved identity of a title-only paper (101.207708ms)
+✔ contradictory identifier claims are blocked before writing and unrelated rows can be imported (87.937542ms)
+✔ a retained bibliography key cannot be assigned to a conflicting enriched reference (78.390834ms)
+✔ a learned identifier cannot join a saved paper with a conflicting DOI (115.669208ms)
+✔ retained title keys and truncated authors agree in the preview and the saved library (100.82925ms)
+✔ URL fields retain literal URI characters instead of text-mode TeX commands (0.313042ms)
+✔ a repeat import can repair exact legacy TeX spellings while guarding the author and year (381.609042ms)
+✔ a literal TeX command remains distinct from its Unicode character in both directions (0.281334ms)
+✔ DOIs with literal BibTeX delimiters keep their strong identity across export (0.200125ms)
+✔ legacy author fallback accepts a title already repaired to decoded text (0.375792ms)
+ℹ tests 38
+ℹ suites 0
+ℹ pass 38
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 3577.213209

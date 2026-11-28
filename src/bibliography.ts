@@ -293,7 +293,7 @@ export function matchBibliographyPaper<T extends AcademicSearchResult>(incoming:
   // Recover the exact spelling saved by the old parser for this citation.
   const legacy = legacySpellings.get(incoming);
   return legacy && papers.find(paper => "citekey" in paper && paper.citekey === legacy.citekey
-    && paper.title === legacy.title && compatible(paper) && (
+    && (paper.title === legacy.title || title(paper.title) === title(incoming.title)) && compatible(paper) && (
       compatibleTitleMetadata(incoming, paper) || compatibleTitleMetadata({ ...incoming, authors: legacy.authors }, paper)
     ));
 }

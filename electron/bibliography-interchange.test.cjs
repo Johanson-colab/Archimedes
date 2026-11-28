@@ -840,3 +840,10 @@ test("DOIs with literal BibTeX delimiters keep their strong identity across expo
     assert.equal(scope.matchBibliographyPaper(imported, [paper], { strongOnly: true }), paper);
   }
 });
+
+test("legacy author fallback accepts a title already repaired to decoded text", () => {
+  const source = String.raw`@article{legacy,title={Garc{\'i}a~on scaling},author={Jos{\'e} Garc{\'i}a},year=2024}`;
+  const incoming = scope.parseBibliography(source).entries[0].paper;
+  const saved = { ...incoming, title: "García on scaling", authors: [String.raw`Jos\'e Garc\'ia`], year: 2024, citekey: "legacy" };
+  assert.equal(scope.matchBibliographyPaper(incoming, [saved]), saved);
+});
