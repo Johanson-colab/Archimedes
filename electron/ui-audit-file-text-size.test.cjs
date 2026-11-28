@@ -37,8 +37,8 @@ test("UI settings persist the size and the user-recorded shortcuts", () => {
   assert.match(i18nSource, /resetFileTextSize/);
   assert.match(i18nSource, /setFileTextShortcut/);
   assert.match(i18nSource, /resetFileTextShortcuts/);
-  assert.match(i18nSource, /window\.localStorage\.setItem\(FILE_TEXT_SIZE_STORAGE_KEY/);
-  assert.match(i18nSource, /window\.localStorage\.setItem\(FILE_TEXT_SHORTCUTS_STORAGE_KEY/);
+  assert.match(i18nSource, /displayPreferenceStorage\.setItem\(FILE_TEXT_SIZE_STORAGE_KEY/);
+  assert.match(i18nSource, /displayPreferenceStorage\.setItem\(FILE_TEXT_SHORTCUTS_STORAGE_KEY/);
 });
 
 test("file previews listen for the bindings and drive one CSS size token", () => {

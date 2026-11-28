@@ -18,10 +18,10 @@ const css = read("src", "styles.css");
 
 test("the app owns appearance instead of a single theme key", () => {
   assert.match(app, /import \{ applyAppearance, readAppearance, resolveTheme, writeAppearance/);
-  assert.match(app, /useState<AppearanceSettings>\(readAppearance\)/);
+  assert.match(app, /useState<AppearanceSettings>\(\(\) => readAppearance\(displayPreferenceStorage\)\)/);
   assert.match(app, /const theme = resolveTheme\(appearance\.preset, systemAppearance\)/);
   assert.match(app, /applyAppearance\(document\.documentElement, appearance, theme\)/);
-  assert.match(app, /writeAppearance\(appearance\)/);
+  assert.match(app, /writeAppearance\(appearance, displayPreferenceStorage\)/);
   assert.doesNotMatch(app, /readThemePreference/);
   assert.doesNotMatch(app, /localStorage\.setItem\("archimedes-theme"/);
 });

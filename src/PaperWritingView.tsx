@@ -1,14 +1,18 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { AlertTriangle, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, ChevronDown, ChevronRight, CircleDot, Cloud, FileCode2, FileImage, FilePlus2, FileText, Folder, FolderOpen, FolderPlus, FolderUp, LoaderCircle, MessageCircle, Play, RefreshCw, Search, X } from "lucide-react";
-import { useUISettings } from "./i18n";
+import { displayPreferenceStorage, useUISettings } from "./i18n";
 import SharedNoteEditor from "./SharedNoteEditor";
 import PaperTemplateLibrary from "./PaperTemplateLibrary";
 import { Dialog } from "./Dialog";
 import { StateView } from "./StateView";
+import { Tab, Tabs } from "./Tabs";
 import { fingerprintFor } from "./proactive-engine";
 import { emitProactiveSignal } from "./proactive-signals";
 import { findSourceMatches, sourceMarksByLine, type SourceMark } from "./paper-source-search";
+import { manuscriptSourcePaths } from "./paper-writing-sources";
+import { createWritingScope, editWritingDocument, isWritingSourceConflict, readWritingDocument, saveWritingDocument, readWritingLocation, rememberWritingLocation, type WritingScope } from "./paper-writing-state";
 import "./paper-source-search.css";
+import "./paper-writing-workspace.css";
 
 
 const EDITABLE = new Set(["tex", "bib", "bst", "cls", "sty", "cfg"]);
@@ -35,14 +39,30 @@ function browserTrackFor(width: number) {
 }
 
 function readStoredNumber(key: string, fallback: number, min: number, max: number) {
-  if (typeof window === "undefined") return fallback;
-  const stored = Number(window.localStorage.getItem(key));
+  const stored = Number(displayPreferenceStorage.getItem(key));
   return Number.isFinite(stored) && stored > 0 ? clampSetting(stored, min, max) : fallback;
 }
 
-function readStoredFlag(key: string) {
-  if (typeof window === "undefined") return false;
-  return window.localStorage.getItem(key) === "true";
+function useStoredPaneSize(key: string, value: number) {
+  const latest = useRef(value);
+  const pending = useRef<number | undefined>(undefined);
+
+  useEffect(() => {
+    if (latest.current === value) return;
+    latest.current = value;
+    window.clearTimeout(pending.current);
+    pending.current = window.setTimeout(() => {
+      pending.current = undefined;
+      displayPreferenceStorage.setItem(key, String(value));
+    }, 200);
+  }, [key, value]);
+
+  useEffect(() => () => {
+    if (pending.current === undefined) return;
+    window.clearTimeout(pending.current);
+    pending.current = undefined;
+    displayPreferenceStorage.setItem(key, String(latest.current));
+  }, [key]);
 }
 
 function lineStart(content: string, line: number) {
@@ -128,128 +148,265 @@ function HighlightLine({ text, problem, marks, activeMatch }: { text: string; pr
 
 export type PaperOpenRequest = { path: string; token: number } | null;
 
-export default function PaperWritingView({ bridge, workspace, projectId, openRequest, onRefresh, onAskAI, active = true }: {
-  bridge: ResearchDeskBridge; workspace: string; projectId?: string | null; openRequest: PaperOpenRequest; onRefresh: () => Promise<void> | void; onAskAI: (path: string) => void; active?: boolean;
+export default function PaperWritingView({ bridge, workspace, projectId = null, threadId = null, openRequest, onRefresh, onAskAI, active = true }: {
+  bridge: ResearchDeskBridge; workspace: string; projectId?: string | null; threadId?: string | null; openRequest: PaperOpenRequest; onRefresh: () => Promise<void> | void; onAskAI: (path: string) => void; active?: boolean;
 }) {
   const { t } = useUISettings();
-  // Project discovery deliberately stays out of the entry dialog: selecting a
-  // project should always mean creating one or importing an explicit folder.
-  const projects: LatexProjectSummary[] = [];
-  const [activeProject, setActiveProject] = useState("");
-  const [tree, setTree] = useState<WorkspaceFileTree>({ entries: [], count: 0, truncated: false });
-  const [loading, setLoading] = useState<Set<string>>(new Set());
-  const [mainPath, setMainPath] = useState("");
-  const [file, setFile] = useState<WorkspaceFilePreview | null>(null);
-  const [draft, setDraft] = useState("");
-  const [savedDraft, setSavedDraft] = useState("");
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const [activeDirectory, setActiveDirectory] = useState("");
-  const [saveState, setSaveState] = useState<"saved" | "saving" | "unsaved">("saved");
-  const [searchOpen, setSearchOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchOffset, setSearchOffset] = useState(0);
+  const scopesRef = useRef(new Map<string, WritingScope>());
+  const mountedRef = useRef(true);
+  const [, renderScope] = useState(0);
+  const refreshScope = useCallback(() => { if (mountedRef.current) renderScope((value) => value + 1); }, []);
+  const scopeKey = JSON.stringify([workspace, projectId ?? null]);
+  let scope = scopesRef.current.get(scopeKey);
+  if (!scope) {
+    scope = createWritingScope(workspace);
+    const sameRoot = [...scopesRef.current.values()].find(item => item.workspace === workspace);
+    if (sameRoot) {
+      scope.documents = sameRoot.documents;
+      scope.documentReads = sameRoot.documentReads;
+    }
+    scopesRef.current.set(scopeKey, scope);
+  }
+  const owner = scope;
+  const activeCompileContext = useRef({ owner, threadId });
+  activeCompileContext.current = { owner, threadId };
+  function scoped<K extends keyof WritingScope>(key: K): [WritingScope[K], React.Dispatch<React.SetStateAction<WritingScope[K]>>] {
+    return [owner[key], (action) => { owner[key] = typeof action === "function" ? (action as (current: WritingScope[K]) => WritingScope[K])(owner[key]) : action; refreshScope(); }];
+  }
+  const [activeProject, setActiveProject] = scoped("activeProject");
+  const projects = owner.projects;
+  const [chooserTab, setChooserTab] = scoped("chooserTab");
+  const [tree] = scoped("tree");
+  const [loading] = scoped("loading");
+  const [mainPath, setMainPath] = scoped("mainPath");
+  const currentDocument = owner.documents.get(owner.selectedPath);
+  const file = currentDocument?.file || null;
+  const draft = currentDocument?.draft || "";
+  const savedDraft = currentDocument?.savedDraft || "";
+  const saveState = currentDocument?.saveState || "saved";
+  const openingSource = Boolean(owner.pendingOpen);
+  const setDraft = (content: string) => { if (currentDocument) { editWritingDocument(currentDocument, content); refreshScope(); } };
+  const [expanded, setExpanded] = scoped("expanded");
+  const [activeDirectory, setActiveDirectory] = scoped("activeDirectory");
+  const [searchOpen, setSearchOpen] = scoped("searchOpen");
+  const [searchQuery, setSearchQuery] = scoped("searchQuery");
+  const [searchOffset, setSearchOffset] = scoped("searchOffset");
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const searchId = useId();
   const searchMatches = useMemo(() => searchOpen ? findSourceMatches(draft, searchQuery) : [], [draft, searchOpen, searchQuery]);
   const searchMarks = useMemo(() => sourceMarksByLine(draft, searchMatches), [draft, searchMatches]);
   const nextMatchIndex = searchMatches.findIndex((match) => match.start >= searchOffset);
   const activeMatchIndex = searchMatches.length ? Math.max(0, nextMatchIndex) : -1;
-  const [buildLogOpen, setBuildLogOpen] = useState(false);
+  const [buildLogOpen, setBuildLogOpen] = scoped("buildLogOpen");
   const buildLogId = useId();
-  const [compileLog, setCompileLog] = useState("");
-  const [compileElapsed, setCompileElapsed] = useState(0);
-  const [compilePhase, setCompilePhase] = useState("Preparing compiler");
-  const compileTargetRef = useRef("");
-  const [compileState, setCompileState] = useState<"idle" | "compiling" | "success" | "error">("idle");
-  const [compileResult, setCompileResult] = useState<LatexCompileResult | null>(null);
-  const [activeProblem, setActiveProblem] = useState<number | null>(null);
-  const [error, setError] = useState("");
+  const [compileLog, setCompileLog] = scoped("compileLog");
+  const [compileElapsed, setCompileElapsed] = scoped("compileElapsed");
+  const [compilePhase, setCompilePhase] = scoped("compilePhase");
+  const [compileState, setCompileState] = scoped("compileState");
+  const [compileResult, setCompileResult] = scoped("compileResult");
+  const [activeProblem, setActiveProblem] = scoped("activeProblem");
+  const [workspaceError, setError] = scoped("error");
+  const error = workspaceError || currentDocument?.error || "";
+  const sourceConflict = Boolean(currentDocument && isWritingSourceConflict(currentDocument.error));
   const [autoCompile, setAutoCompile] = useState(true);
-  const [coedit, setCoedit] = useState(false);
-  const [chooserOpen, setChooserOpen] = useState(true);
+  const [coedit, setCoedit] = scoped("coedit");
+  const [chooserOpen, setChooserOpen] = scoped("chooserOpen");
   const [projectName, setProjectName] = useState("paper");
-  const [creating, setCreating] = useState(false);
+  const [creating, setCreating] = scoped("creating");
   const [templateId, setTemplateId] = useState("minimal-article");
   const [browserWidth, setBrowserWidth] = useState(() => readStoredNumber("archimedes-paper-browser-width", BROWSER_DEFAULT_WIDTH, BROWSER_MIN_WIDTH, BROWSER_MAX_WIDTH));
   const [previewSplit, setPreviewSplit] = useState(() => readStoredNumber("archimedes-paper-split", PREVIEW_SPLIT_DEFAULT, PREVIEW_SPLIT_MIN, PREVIEW_SPLIT_MAX));
-  const [browserCollapsed, setBrowserCollapsed] = useState(() => readStoredFlag("archimedes-paper-browser-collapsed"));
+  const [browserCollapsed, setBrowserCollapsed] = useState(() => displayPreferenceStorage.getItem("archimedes-paper-browser-collapsed") === "true");
   const [widePanes, setWidePanes] = useState(() => typeof window === "undefined" || window.matchMedia("(min-width: 861px)").matches);
   const [paneWidth, setPaneWidth] = useState(0);
-  const [importing, setImporting] = useState(false);
-  const [createKind, setCreateKind] = useState<"file" | "folder" | null>(null);
+  const [importing, setImporting] = scoped("importing");
+  const [createKind, setCreateKind] = scoped("createKind");
   const dialogOpen = chooserOpen && active;
   const createOpen = Boolean(createKind) && active;
-  const [createName, setCreateName] = useState("");
+  const [createName, setCreateName] = scoped("createName");
   const editorRef = useRef<HTMLTextAreaElement | null>(null);
   const lineNumbersRef = useRef<HTMLDivElement | null>(null);
   const highlightRef = useRef<HTMLPreElement | null>(null);
   const workspaceRef = useRef<HTMLDivElement | null>(null);
   const paneDragRef = useRef<{ kind: "browser" | "preview"; startX: number; startBrowser: number; startSplit: number } | null>(null);
-  const fileRef = useRef<WorkspaceFilePreview | null>(null);
-  const draftRef = useRef("");
-  const savedRef = useRef("");
-  const saveSequence = useRef(0);
-  const compileSequence = useRef(0);
+  const consumedOpenRequest = useRef<string | null>(null);
+  const compileRequestPrefix = useId();
+  const compileRequestSequence = useRef(0);
 
   const loadDirectory = useCallback(async (directory: string, root = false) => {
-    setLoading((current) => new Set(current).add(directory));
+    const request = (owner.directoryRequests.get(directory) || 0) + 1;
+    owner.directoryRequests.set(directory, request);
+    owner.loading.add(directory);
+    const project = owner.activeProject;
+    refreshScope();
     try {
-      const listing = await bridge.listWorkspaceFiles(workspace, directory);
-      setTree((current) => root ? listing : { ...current, entries: replaceChildren(current.entries, directory, listing.entries) });
+      const listing = await bridge.listWorkspaceFiles(owner.workspace, directory);
+      if (owner.directoryRequests.get(directory) !== request || owner.activeProject !== project) return;
+      owner.tree = root ? listing : { ...owner.tree, entries: replaceChildren(owner.tree.entries, directory, listing.entries) };
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : String(nextError));
+      if (owner.directoryRequests.get(directory) === request && owner.activeProject === project) owner.error = nextError instanceof Error ? nextError.message : String(nextError);
     } finally {
-      setLoading((current) => { const next = new Set(current); next.delete(directory); return next; });
+      if (owner.directoryRequests.get(directory) === request) owner.loading.delete(directory);
+      refreshScope();
     }
-  }, [bridge, workspace]);
+  }, [bridge, owner, refreshScope]);
 
-  const openFile = useCallback(async (path: string) => {
+  const openFile = useCallback(async (path: string, refreshClean = false) => {
     if (!editable(path)) return;
-    compileTargetRef.current = "";
-    ++compileSequence.current;
-    setCompileResult(null); setCompileLog(""); setCompileState("idle");
+    const cached = owner.documents.get(path);
+    const keepDraft = cached && (cached.draft !== cached.savedDraft || cached.saveState !== "saved");
+    if (refreshClean && (!cached || keepDraft)) return;
+    const request = ++owner.openSequence;
+    owner.pendingOpen = keepDraft ? 0 : request;
+    if (!refreshClean) {
+      owner.compileTarget = "";
+      ++owner.compileSequence;
+      owner.compileResult = null; owner.compileLog = ""; owner.compileState = "idle";
+    }
+    const previous = owner.documents.get(owner.selectedPath);
+    if (previous && previous.draft !== previous.savedDraft) void saveWritingDocument(previous, bridge.writeWorkspaceFile, refreshScope).catch(() => {});
+    const savedAtStart = cached?.savedDraft;
+    refreshScope();
     try {
-      if (fileRef.current && draftRef.current !== savedRef.current) await bridge.writeWorkspaceFile(workspace, fileRef.current.path, draftRef.current);
-      const next = await bridge.readWorkspaceFile(workspace, path);
-      const content = next.content || "";
-      fileRef.current = next; draftRef.current = content; savedRef.current = content;
+      const opened = keepDraft ? cached : await readWritingDocument(owner, path, bridge.readWorkspaceFile);
+      if (request !== owner.openSequence) return;
+      if (refreshClean && savedAtStart !== opened.savedDraft) {
+        ++owner.compileSequence; owner.compileTarget = "";
+        owner.compileResult = null; owner.compileLog = ""; owner.compileState = "idle";
+      }
+      owner.selectedPath = path;
+      owner.activeProblem = null; owner.error = ""; owner.activeDirectory = projectRoot(path);
+      if (ext(path) === "tex" && /\\documentclass(?:\[[^\]]*\])?\s*\{/s.test(opened.draft)) owner.mainPath = path;
       setSearchOffset(0);
-      setFile(next); setDraft(content); setSavedDraft(content); setSaveState("saved"); setCompileResult(null); setActiveProblem(null); setError("");
-      if (ext(path) === "tex" && /\\documentclass(?:\[[^\]]*\])?\s*\{/s.test(content)) setMainPath(path);
-      setActiveDirectory(projectRoot(path));
-    } catch (nextError) { setError(nextError instanceof Error ? nextError.message : String(nextError)); }
-  }, [bridge, workspace]);
+      refreshScope();
+    } catch (nextError) {
+      if (request === owner.openSequence) { owner.error = nextError instanceof Error ? nextError.message : String(nextError); refreshScope(); }
+    } finally {
+      if (owner.pendingOpen === request) {
+        owner.pendingOpen = 0;
+        refreshScope();
+      }
+    }
+  }, [bridge, owner, refreshScope]);
 
   const activateProject = useCallback(async (path: string) => {
-    const root = projectRoot(path);
-    if (!root) { setError("Move this document into its own folder before opening it. Paper Writing only shows files belonging to one paper project."); return; }
-    compileTargetRef.current = "";
-    ++compileSequence.current;
-    setCompileResult(null); setCompileLog(""); setCompileState("idle");
-    setActiveProject(root); setActiveDirectory(root); setExpanded(new Set([root])); setChooserOpen(false); setError("");
-    await loadDirectory(root, true);
-    await openFile(path);
-  }, [loadDirectory, openFile]);
+    const request = ++owner.activationSequence;
+    owner.pendingActivation = request;
+    const openSequence = owner.openSequence;
+    const isCurrent = () => request === owner.activationSequence && owner.openSequence === openSequence;
+    try {
+      const projects = await bridge.listLatexProjects(owner.workspace);
+      if (!isCurrent()) return;
+      owner.projects = projects;
+      const contains = (main: string) => {
+        const directory = projectRoot(main);
+        return !directory || path.startsWith(`${directory}/`);
+      };
+      const main = projects.find(item => item.path === path && item.main)?.path
+        || (owner.mainPath && contains(owner.mainPath) ? owner.mainPath : "")
+        || projects.filter(item => item.main && contains(item.path)).sort((a, b) => projectRoot(b.path).length - projectRoot(a.path).length)[0]?.path
+        || (ext(path) === "tex" ? path : "");
+      const root = projectRoot(main || path) || ".";
+      owner.compileTarget = "";
+      ++owner.compileSequence;
+      setCompileResult(null); setCompileLog(""); setCompileState("idle");
+      owner.mainPath = main;
+      setActiveProject(root); setActiveDirectory(root); setExpanded(new Set([root])); setChooserOpen(false); setError("");
+      await loadDirectory(root, true);
+      if (isCurrent()) await openFile(path);
+    } catch (error) {
+      if (isCurrent()) { owner.error = error instanceof Error ? error.message : String(error); refreshScope(); }
+    } finally {
+      if (owner.pendingActivation === request) owner.pendingActivation = 0;
+    }
+  }, [bridge, loadDirectory, openFile, owner, refreshScope]);
+
+  const refreshProjects = useCallback(async () => {
+    const request = ++owner.projectListSequence;
+    owner.projectsLoading = true;
+    refreshScope();
+    try {
+      const found = await bridge.listLatexProjects(owner.workspace);
+      if (request !== owner.projectListSequence) return;
+      owner.projects = found;
+      if (!owner.restorationAttempted && !owner.selectedPath && !owner.activationSequence) {
+        owner.restorationAttempted = true;
+        const saved = readWritingLocation(displayPreferenceStorage, owner.workspace, projectId);
+        if (saved && found.some((item) => item.path === saved.mainPath)) {
+          const activation = owner.activationSequence + 1;
+          const mainOpen = owner.openSequence + 1;
+          await activateProject(saved.mainPath);
+          if (owner.activationSequence !== activation || owner.openSequence !== mainOpen
+            || owner.mainPath !== saved.mainPath || owner.selectedPath !== saved.mainPath) return;
+          if (saved.selectedPath !== saved.mainPath && (saved.projectPath === "." || saved.selectedPath.startsWith(`${saved.projectPath}/`))) {
+            const nextOpen = owner.openSequence + 1;
+            await openFile(saved.selectedPath);
+            if (owner.activationSequence !== activation || owner.openSequence !== nextOpen) return;
+          }
+          owner.mainPath = saved.mainPath;
+        }
+      }
+    } catch (error) {
+      if (request === owner.projectListSequence) owner.error = error instanceof Error ? error.message : String(error);
+    } finally {
+      if (request === owner.projectListSequence) owner.projectsLoading = false;
+      refreshScope();
+    }
+  }, [activateProject, bridge, openFile, owner, projectId, refreshScope]);
+
+  useEffect(() => {
+    if (!active) return;
+    void refreshProjects();
+    // A fresh root listing lets the existing expanded nodes reload their children.
+    if (owner.activeProject) void loadDirectory(owner.activeProject, true);
+    if (owner.selectedPath && !owner.pendingActivation && !owner.pendingOpen) void openFile(owner.selectedPath, true);
+  }, [active, loadDirectory, openFile, owner, refreshProjects]);
+  useEffect(() => {
+    if (!activeProject || !mainPath || !file?.path) return;
+    rememberWritingLocation(displayPreferenceStorage, owner.workspace, projectId, { projectPath: activeProject, mainPath, selectedPath: file.path });
+  }, [activeProject, file?.path, mainPath, owner.workspace, projectId]);
 
   const compile = useCallback(async (target = mainPath) => {
     if (!target) return;
-    compileTargetRef.current = target;
+    owner.compileTarget = target;
+    const requestId = `${compileRequestPrefix}:${++compileRequestSequence.current}`;
+    owner.compileRequestId = requestId;
     setCompilePhase("Preparing compiler"); setCompileLog(""); setCompileElapsed(0);
-    const sequence = ++compileSequence.current;
+    const sequence = ++owner.compileSequence;
     setCompileState("compiling"); setCompileResult(null); setError("");
     try {
-      if (fileRef.current && draftRef.current !== savedRef.current) {
-        await bridge.writeWorkspaceFile(workspace, fileRef.current.path, draftRef.current);
-        savedRef.current = draftRef.current; setSavedDraft(draftRef.current); setSaveState("saved");
+      const contents = new Map<string, string>();
+      for (const [path, document] of owner.documents) {
+        contents.set(path, document.draft);
+        contents.set(document.file.path, document.draft);
       }
-      const result = await bridge.compileLatexDocument(workspace, target);
-      if (sequence !== compileSequence.current) return;
+      if (!contents.has(target)) {
+        try { contents.set(target, (await bridge.readWorkspaceFile(owner.workspace, target)).content ?? ""); }
+        catch { /* The compiler will report a missing or unreadable main document. */ }
+      }
+      const sourcePaths = manuscriptSourcePaths(target, contents);
+      const root = projectRoot(target);
+      const documents = [...owner.documents.entries()].filter(([path, document]) => {
+        const candidates = [path, document.file.path];
+        // Folder builds snapshot the whole manuscript directory. Root-level
+        // builds have no folder boundary, so only reachable sources are safe.
+        return candidates.some(candidate => sourcePaths.has(candidate) || (root && candidate.startsWith(`${root}/`)));
+      }).map(([, document]) => document);
+      await Promise.all(documents.map((document) => saveWritingDocument(document, bridge.writeWorkspaceFile, refreshScope)));
+      if (sequence !== owner.compileSequence) return;
+      if (documents.some((document) => document.draft !== document.savedDraft)) throw new Error(t("The sources changed while saving. Compile again to use the latest edits."));
+      const result = await bridge.compileLatexDocument(owner.workspace, target, requestId);
+      if (sequence !== owner.compileSequence) return;
       setCompileResult({ ...result, preview_url: result.ok ? result.preview_url : undefined }); setCompileState(result.ok ? "success" : "error"); setActiveProblem(result.ok ? null : result.diagnostics.find((item) => item.line)?.line ?? null);
-      if (!result.ok && result.diagnostics.length) {
+      if (!result.ok && result.diagnostics.length && mountedRef.current &&
+          activeCompileContext.current.owner === owner && activeCompileContext.current.threadId === threadId) {
         const diagnostic = result.diagnostics.find((item) => item.line) ?? result.diagnostics[0];
         const output = result.diagnostics.slice(0, 3).map((item) => `${item.line ? `line ${item.line}: ` : ""}${item.message}`).join("\n");
         emitProactiveSignal({
           source: "latex",
+          workspace: owner.workspace,
+          projectId,
+          threadId,
           title: `Build failed: ${diagnostic.message.slice(0, 90)}`,
           whyNow: `The last LaTeX build of ${target}${diagnostic.line ? ` failed on line ${diagnostic.line}` : " failed"}.`,
           evidence: [{
@@ -266,35 +423,50 @@ export default function PaperWritingView({ bridge, workspace, projectId, openReq
             text: `The LaTeX build failed. Help me fix it without changing the argument.\n\nFile: ${target}${diagnostic.line ? `\nLine: ${diagnostic.line}` : ""}\nProblem: ${diagnostic.message}\n\nBuild log:\n${(result.log ?? output).slice(0, 1600)}`,
           },
           confidence: 0.9,
-          fingerprint: fingerprintFor("latex", `${target}:${diagnostic.line ?? 0}:${diagnostic.message}:${result.diagnostics.length}`),
+          fingerprint: fingerprintFor("latex", JSON.stringify([owner.workspace, projectId, threadId, target, diagnostic.line, diagnostic.message, result.diagnostics.length])),
         });
       }
     } catch (nextError) {
-      if (sequence !== compileSequence.current) return;
+      if (sequence !== owner.compileSequence) return;
       setCompileState("error");
       const message = nextError instanceof Error ? nextError.message : String(nextError);
       setError(t(message.replace(/^Error invoking remote method '[^']+':\s*(?:Error:\s*)?/, "")));
     }
-  }, [bridge, mainPath, t, workspace]);
+  }, [bridge, compileRequestPrefix, mainPath, owner, projectId, refreshScope, t, threadId]);
 
   useEffect(() => bridge.onLatexCompileProgress?.((input) => {
-    if (input.path === compileTargetRef.current) {
-      setCompilePhase(input.stage);
-      if (input.log) setCompileLog((current) => (current + input.log).slice(-16000));
-    }
-  }), [bridge]);
+    const target = [...scopesRef.current.values()].find(item => item.workspace === input.workspace && item.compileRequestId === input.requestId);
+    if (!target || target.compileState !== "compiling" || target.compileTarget !== input.path || !input.requestId || target.compileRequestId !== input.requestId) return;
+    target.compilePhase = input.stage;
+    if (input.log) target.compileLog = (target.compileLog + input.log).slice(-16000);
+    refreshScope();
+  }), [bridge, refreshScope]);
 
   useEffect(() => {
     if (compileState !== "compiling") return;
     const started = Date.now();
     const timer = window.setInterval(() => setCompileElapsed(Math.floor((Date.now() - started) / 1000)), 1000);
     return () => window.clearInterval(timer);
-  }, [compileState]);
+  }, [compileState, owner]);
 
-  useEffect(() => { if (openRequest?.path) void activateProject(openRequest.path); }, [activateProject, openRequest?.path, openRequest?.token]);
-  useEffect(() => { window.localStorage.setItem("archimedes-paper-browser-width", String(browserWidth)); }, [browserWidth]);
-  useEffect(() => { window.localStorage.setItem("archimedes-paper-split", String(previewSplit)); }, [previewSplit]);
-  useEffect(() => { window.localStorage.setItem("archimedes-paper-browser-collapsed", String(browserCollapsed)); }, [browserCollapsed]);
+  useEffect(() => {
+    if (!openRequest?.path) return;
+    const request = JSON.stringify([openRequest.token, openRequest.path]);
+    if (consumedOpenRequest.current === request) return;
+    consumedOpenRequest.current = request;
+    void activateProject(openRequest.path);
+  }, [activateProject, openRequest?.path, openRequest?.token]);
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
+  useEffect(() => () => {
+    // Writing autosaves on departure as well as on its debounce. Do not park an
+    // unsaved buffer indefinitely just because another root becomes visible.
+    for (const item of owner.documents.values()) if (item.draft !== item.savedDraft) void saveWritingDocument(item, bridge.writeWorkspaceFile, refreshScope).catch(() => {});
+  }, [bridge, owner, refreshScope]);
+  useStoredPaneSize("archimedes-paper-browser-width", browserWidth);
+  useStoredPaneSize("archimedes-paper-split", previewSplit);
+  useEffect(() => {
+    displayPreferenceStorage.setItem("archimedes-paper-browser-collapsed", String(browserCollapsed));
+  }, [browserCollapsed]);
   useEffect(() => () => document.body.classList.remove("paper-pane-resizing"), []);
   useEffect(() => {
     const query = window.matchMedia("(min-width: 861px)");
@@ -312,20 +484,43 @@ export default function PaperWritingView({ bridge, workspace, projectId, openReq
     return () => observer.disconnect();
   }, []);
   useEffect(() => {
-    if (!file || draft === savedDraft) return;
-    setSaveState("unsaved");
-    const sequence = ++saveSequence.current;
+    if (!currentDocument || draft === savedDraft) return;
     const timer = window.setTimeout(async () => {
-      setSaveState("saving");
       try {
-        await bridge.writeWorkspaceFile(workspace, file.path, draft);
-        if (sequence !== saveSequence.current) return;
-        savedRef.current = draft; setSavedDraft(draft); setSaveState("saved");
-        if (autoCompile && mainPath) void compile(mainPath);
-      } catch (nextError) { if (sequence === saveSequence.current) { setSaveState("unsaved"); setError(nextError instanceof Error ? nextError.message : String(nextError)); } }
+        await saveWritingDocument(currentDocument, bridge.writeWorkspaceFile, refreshScope);
+        if (autoCompile && mainPath && owner.selectedPath === currentDocument.file.path && owner.mainPath === mainPath) void compile(mainPath);
+      } catch { /* The owner's buffer retains its unsaved text and save error. */ }
     }, 750);
-    return () => window.clearTimeout(timer);
-  }, [autoCompile, bridge, compile, draft, file, mainPath, savedDraft, workspace]);
+    return () => {
+      window.clearTimeout(timer);
+      if (owner.selectedPath !== currentDocument.file.path && currentDocument.draft !== currentDocument.savedDraft) void saveWritingDocument(currentDocument, bridge.writeWorkspaceFile, refreshScope).catch(() => {});
+    };
+  }, [autoCompile, bridge, compile, currentDocument, draft, mainPath, owner, refreshScope, savedDraft]);
+
+  async function keepDraftAfterConflict() {
+    const document = currentDocument;
+    if (!document || !isWritingSourceConflict(document.error)) return;
+    try {
+      let disk;
+      try { disk = await bridge.readWorkspaceFile(document.workspace, document.file.path); }
+      catch (cause) {
+        if (!isWritingSourceConflict(String(cause))) throw cause;
+        disk = { ...document.file, content: "", size: 0 };
+      }
+      document.file = disk;
+      document.savedDraft = disk.content || "";
+      document.version += 1;
+      document.saveState = document.draft === document.savedDraft ? "saved" : "unsaved";
+      document.error = "";
+      refreshScope();
+      await saveWritingDocument(document, bridge.writeWorkspaceFile, refreshScope);
+      if (autoCompile && mainPath && owner.selectedPath === document.file.path && owner.mainPath === mainPath) void compile(mainPath);
+    } catch (nextError) {
+      document.saveState = "unsaved";
+      document.error = (nextError instanceof Error ? nextError.message : String(nextError)).replace(/^Error invoking remote method '[^']+':\s*(?:Error:\s*)?/, "");
+      refreshScope();
+    }
+  }
 
   async function createProject() {
     if (creating) return;
@@ -350,12 +545,13 @@ export default function PaperWritingView({ bridge, workspace, projectId, openReq
     const name = createName.trim().replaceAll("\\", "/").replace(/^\/+/, "");
     if (!name || !createKind || !activeProject) return;
     const parent = activeDirectory || activeProject;
+    const entryPath = parent === "." ? name : `${parent}/${name}`;
     try {
       if (createKind === "file") {
-        const created = await bridge.createLatexFile(workspace, `${parent}/${name}`);
+        const created = await bridge.createLatexFile(workspace, entryPath);
         setCreateKind(null); await loadDirectory(parent, parent === activeProject); await openFile(created.path);
       } else {
-        const created = await bridge.createLatexDirectory(workspace, `${parent}/${name}`);
+        const created = await bridge.createLatexDirectory(workspace, entryPath);
         setCreateKind(null); setActiveDirectory(created.path); setExpanded((current) => new Set(current).add(created.path)); await loadDirectory(parent, parent === activeProject);
       }
       await onRefresh();
@@ -491,7 +687,11 @@ export default function PaperWritingView({ bridge, workspace, projectId, openReq
 
   const lines = useMemo(() => draft.split("\n"), [draft]);
   const problemLines = useMemo(() => new Set(compileResult?.diagnostics.flatMap((item) => item.line ? [item.line] : []) ?? []), [compileResult]);
-  const projectLabel = activeProject.split("/").at(-1) || "New project";
+  const projectLabel = activeProject === "." ? t("Project folder") : activeProject.split("/").at(-1) || t("New project");
+  const availableProjects = projects.some((project) => project.main) ? projects.filter((project) => project.main) : projects;
+  const projectDocuments = projects.filter((project) => activeProject === "." || project.path.startsWith(`${activeProject}/`));
+  const mainDocuments = projectDocuments.some((project) => project.main) ? projectDocuments.filter((project) => project.main) : projectDocuments;
+  const mainChoices = mainPath && !mainDocuments.some((project) => project.path === mainPath) ? [{ path: mainPath, title: mainPath, main: true }, ...mainDocuments] : mainDocuments;
   const browserTrack = browserCollapsed ? 0 : Math.min(browserWidth, browserTrackFor(paneWidth));
   const availableTrack = Math.max(1, paneWidth - browserTrack);
   const minPreviewSplit = paneWidth ? Math.min(PREVIEW_SPLIT_MAX, PREVIEW_MIN_WIDTH / availableTrack) : PREVIEW_SPLIT_MIN;
@@ -505,9 +705,8 @@ export default function PaperWritingView({ bridge, workspace, projectId, openReq
 
   return <div className="paper-writing-page" data-surface="writing">
     <div className={browserCollapsed && widePanes ? "paper-writing-workspace browser-collapsed" : "paper-writing-workspace"} ref={workspaceRef} style={paneStyle}>
-      <aside className="paper-source-browser"><div className="paper-browser-title"><FolderOpen size={14} /><strong>{projectLabel}</strong>{activeProject && <div className="paper-browser-actions"><button onClick={() => { setCreateKind("file"); setCreateName("section.tex"); }} aria-label="New LaTeX file"><FilePlus2 size={14} /></button><button onClick={() => { setCreateKind("folder"); setCreateName("figures"); }} aria-label="New folder"><FolderPlus size={14} /></button></div>}</div><label className="paper-main-document">Main document<select value={mainPath} disabled={!activeProject} onChange={(event) => { setMainPath(event.target.value); void openFile(event.target.value); }}>{!activeProject && <option value="">Choose a project first</option>}{mainPath && <option value={mainPath}>{mainPath.split("/").at(-1)}</option>}</select></label><div className="paper-tree-scroll">{activeProject ? tree.entries.map((entry) => <TreeNode key={entry.path} entry={entry} depth={0} selected={file?.path || ""} activeDirectory={activeDirectory} expanded={expanded} loading={loading} onToggle={toggleDirectory} onLoad={(path) => void loadDirectory(path)} onOpen={(path) => void openFile(path)} />) : <StateView compact className="paper-project-placeholder" icon={<FolderOpen size={20} />} title="No project selected" description="Start a blank paper or import an existing LaTeX folder." />}</div><div className="paper-pane-resizer" role="separator" aria-orientation="vertical" aria-label="Resize file browser" title="Drag to resize · double-click to reset" aria-valuemin={BROWSER_MIN_WIDTH} aria-valuemax={BROWSER_MAX_WIDTH} aria-valuenow={Math.round(browserWidth)} tabIndex={0} onPointerDown={(event) => beginPaneResize("browser", event)} onPointerMove={movePaneResize} onPointerUp={endPaneResize} onPointerCancel={endPaneResize} onDoubleClick={() => setBrowserWidth(BROWSER_DEFAULT_WIDTH)} onKeyDown={(event) => handlePaneResizeKey("browser", event)} /></aside>
-      <section className="latex-editor-pane" onKeyDown={handleSourceKey}><div className="paper-pane-toolbar"><button className="paper-browser-toggle" onClick={() => setBrowserCollapsed((collapsed) => !collapsed)} title={browserCollapsed ? "Show file browser" : "Hide file browser"} aria-label={browserCollapsed ? "Show file browser" : "Hide file browser"} aria-pressed={!browserCollapsed}>{browserCollapsed ? <ArrowRight size={13} /> : <ArrowLeft size={13} />}</button><FileCode2 size={14} /><strong>{file?.name || "No source selected"}</strong><button className={searchOpen ? "paper-pane-action icon active" : "paper-pane-action icon"} disabled={!file} onClick={() => searchOpen ? closeSearch() : openSearch()} title={`${t("Search source")} (Ctrl/Cmd+F)`} aria-label={t("Search source")} aria-expanded={searchOpen} aria-controls={searchId}><Search size={14} /></button><span className={`paper-save-state ${saveState}`}>{saveState === "saving" ? <LoaderCircle className="spin" size={11} /> : saveState === "saved" ? <Check size={11} /> : <CircleDot size={11} />}{saveState === "saving" ? "Saving" : saveState === "saved" ? "Saved" : "Unsaved"}</span><button className={coedit ? "paper-pane-action active" : "paper-pane-action"} disabled={!file || !projectId} onClick={() => { setCoedit((value) => !value); setSearchOpen(false); }} title="Co-edit this source with project members"><Cloud size={13} /><span>{coedit ? "Co-editing" : "Co-edit"}</span></button></div>
-        {searchOpen && file && <div className="latex-source-search" id={searchId} role="search" aria-label={t("Search source")}>
+      <aside className="paper-source-browser"><div className="paper-browser-title"><FolderOpen size={14} /><strong>{projectLabel}</strong>{activeProject && <div className="paper-browser-actions"><button onClick={() => { setCreateKind("file"); setCreateName("section.tex"); }} aria-label="New LaTeX file"><FilePlus2 size={14} /></button><button onClick={() => { setCreateKind("folder"); setCreateName("figures"); }} aria-label="New folder"><FolderPlus size={14} /></button></div>}</div><label className="paper-main-document">Main document<select value={mainPath} disabled={!activeProject} onChange={(event) => { setMainPath(event.target.value); void openFile(event.target.value); }}>{!activeProject && <option value="">Choose a project first</option>}{mainChoices.map((project) => <option key={project.path} value={project.path}>{project.path}</option>)}</select></label><div className="paper-tree-scroll">{activeProject ? tree.entries.map((entry) => <TreeNode key={entry.path} entry={entry} depth={0} selected={file?.path || ""} activeDirectory={activeDirectory} expanded={expanded} loading={loading} onToggle={toggleDirectory} onLoad={(path) => void loadDirectory(path)} onOpen={(path) => void openFile(path)} />) : <StateView compact className="paper-project-placeholder" icon={<FolderOpen size={20} />} title={t("No project selected")} description={t("Choose an existing manuscript or start a new one.")} />}</div><div className="paper-pane-resizer" role="separator" aria-orientation="vertical" aria-label="Resize file browser" title="Drag to resize · double-click to reset" aria-valuemin={BROWSER_MIN_WIDTH} aria-valuemax={BROWSER_MAX_WIDTH} aria-valuenow={Math.round(browserWidth)} tabIndex={0} onPointerDown={(event) => beginPaneResize("browser", event)} onPointerMove={movePaneResize} onPointerUp={endPaneResize} onPointerCancel={endPaneResize} onDoubleClick={() => setBrowserWidth(BROWSER_DEFAULT_WIDTH)} onKeyDown={(event) => handlePaneResizeKey("browser", event)} /></aside>
+      <section className="latex-editor-pane" onKeyDown={handleSourceKey}><div className="paper-pane-toolbar"><button className="paper-browser-toggle" onClick={() => setBrowserCollapsed((collapsed) => !collapsed)} title={browserCollapsed ? "Show file browser" : "Hide file browser"} aria-label={browserCollapsed ? "Show file browser" : "Hide file browser"} aria-pressed={!browserCollapsed}>{browserCollapsed ? <ArrowRight size={13} /> : <ArrowLeft size={13} />}</button><FileCode2 size={14} /><strong>{file?.name || "No source selected"}</strong><button className={searchOpen ? "paper-pane-action icon active" : "paper-pane-action icon"} disabled={!file} onClick={() => searchOpen ? closeSearch() : openSearch()} title={`${t("Search source")} (Ctrl/Cmd+F)`} aria-label={t("Search source")} aria-expanded={searchOpen} aria-controls={searchId}><Search size={14} /></button><span className={`paper-save-state ${openingSource ? "saving" : saveState}`} aria-live="polite">{openingSource || saveState === "saving" ? <LoaderCircle className="spin" size={11} /> : saveState === "saved" ? <Check size={11} /> : <CircleDot size={11} />}{openingSource ? t("Opening source…") : saveState === "saving" ? "Saving" : saveState === "saved" ? "Saved" : "Unsaved"}</span><button className={coedit ? "paper-pane-action active" : "paper-pane-action"} disabled={!file || !projectId} onClick={() => { setCoedit((value) => !value); setSearchOpen(false); }} title="Co-edit this source with project members"><Cloud size={13} /><span>{coedit ? "Co-editing" : "Co-edit"}</span></button></div>        {searchOpen && file && <div className="latex-source-search" id={searchId} role="search" aria-label={t("Search source")}>
           <Search size={14} aria-hidden="true" />
           <input ref={searchInputRef} type="text" value={searchQuery} onChange={(event) => changeSearch(event.target.value)} onKeyDown={(event) => {
             if (event.key === "Enter" && !event.nativeEvent.isComposing) { event.preventDefault(); navigateSearch(event.shiftKey ? -1 : 1); }
@@ -517,15 +716,22 @@ export default function PaperWritingView({ bridge, workspace, projectId, openReq
           <button type="button" disabled={!searchMatches.length} onClick={() => navigateSearch(1)} title={`${t("Next match")} (Enter)`} aria-label={t("Next match")}><ArrowDown size={14} /></button>
           <button type="button" onClick={closeSearch} title={`${t("Close search")} (Esc)`} aria-label={t("Close search")}><X size={14} /></button>
         </div>}
-        {file ? <>{coedit && projectId && <div className="latex-coedit-pane"><SharedNoteEditor bridge={bridge} projectId={projectId} docKey={`latex:${file.path}`} initialText={draft} title={`Co-editing ${file.name}`} onTextChange={(text) => { draftRef.current = text; setDraft(text); }} /></div>}<div className={coedit ? "latex-editor-body coediting" : "latex-editor-body"}><div className="latex-line-numbers" ref={lineNumbersRef}>{lines.map((_, index) => <span key={index} className={problemLines.has(index + 1) ? "diagnostic" : ""}>{problemLines.has(index + 1) ? <AlertTriangle size={10} /> : index + 1}</span>)}</div><div className="latex-editor-layer"><pre className="latex-highlight" ref={highlightRef} aria-hidden="true">{lines.map((line, index) => <HighlightLine key={index} text={line} marks={searchMarks.get(index)} activeMatch={activeMatchIndex} problem={problemLines.has(index + 1) || activeProblem === index + 1} />)}</pre><textarea className="latex-editor-textarea" ref={editorRef} value={draft} onChange={(event) => { draftRef.current = event.target.value; setDraft(event.target.value); }} onKeyDown={(event) => { if (event.key === "Tab") { event.preventDefault(); const target = event.currentTarget; const next = `${draft.slice(0, target.selectionStart)}  ${draft.slice(target.selectionEnd)}`; const start = target.selectionStart; draftRef.current = next; setDraft(next); window.requestAnimationFrame(() => target.setSelectionRange(start + 2, start + 2)); } if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") { event.preventDefault(); void compile(); } }} onScroll={(event) => syncScroll(event.currentTarget)} spellCheck={false} aria-label={`Edit ${file.path}`} /></div></div></> : <StateView className="paper-writing-empty" icon={<FileText size={25} />} title="No LaTeX project open" description="Choose a template or import a complete folder to start writing." action={<button className="primary-button" onClick={() => setChooserOpen(true)}><FolderOpen size={14} />Open project</button>} />}{buildLogOpen && <section id={buildLogId} className="latex-live-log" aria-label={t("Build log")}><strong>{t("Build log")}</strong><pre tabIndex={0}>{compileState === "compiling" ? compileLog || t("Waiting for compiler output…") : compileResult?.log || compileLog || t("No build log yet.")}</pre></section>}{(error || compileResult?.diagnostics.length || (compileResult && !compileResult.ok)) && <div className="latex-diagnostics"><header><AlertTriangle size={13} /><strong>{error ? "Workspace error" : `Problems · ${compileResult?.diagnostics.length || 1}`}</strong><span>{error ? "Resolve this before compiling again." : "Select a problem to jump to the source line."}</span></header>{error && <p>{error}</p>}{compileResult?.diagnostics.map((diagnostic, index) => <button key={`${diagnostic.line}-${index}`} className={diagnostic.line === activeProblem ? "active" : ""} onClick={() => jumpToProblem(diagnostic)}><b>{diagnostic.line ? `Line ${diagnostic.line}` : "LaTeX"}</b><span>{diagnostic.messageKey ? t(diagnostic.messageKey, { detail: t(diagnostic.detail ?? "") }).trimEnd() : t(diagnostic.message)}{diagnostic.help && <small className="latex-diagnostic-help">{t(diagnostic.help)}</small>}</span></button>)}{compileResult && !compileResult.ok && compileResult.log && <details><summary>Show full build log</summary><pre>{compileResult.log}</pre></details>}</div>}<div className="paper-pane-resizer" role="separator" aria-orientation="vertical" aria-label="Resize PDF preview" title="Drag to resize · double-click to reset" aria-valuemin={Math.round(PREVIEW_SPLIT_MIN * 100)} aria-valuemax={Math.round(PREVIEW_SPLIT_MAX * 100)} aria-valuenow={Math.round(effectivePreviewSplit * 100)} tabIndex={0} onPointerDown={(event) => beginPaneResize("preview", event)} onPointerMove={movePaneResize} onPointerUp={endPaneResize} onPointerCancel={endPaneResize} onDoubleClick={() => setPreviewSplit(PREVIEW_SPLIT_DEFAULT)} onKeyDown={(event) => handlePaneResizeKey("preview", event)} /></section>
-      <section className="paper-pdf-pane"><div className="paper-pane-toolbar"><FileText size={14} /><strong>PDF preview</strong><label className="paper-auto-compile"><input type="checkbox" checked={autoCompile} onChange={(event) => setAutoCompile(event.target.checked)} />Auto compile</label><span className={`paper-compile-state ${compileState}`}>{compileState === "compiling" ? <LoaderCircle className="spin" size={11} /> : compileState === "success" ? <Check size={11} /> : compileState === "error" ? <AlertTriangle size={11} /> : null}{compileState === "success" ? `${compileResult?.duration_ms ?? 0} ms` : compileState === "error" ? "Build failed" : compileState === "compiling" ? `${t(compilePhase)} · ${compileElapsed}s` : "Not built"}</span><div className="paper-pane-actions"><button className={buildLogOpen ? "paper-pane-action active" : "paper-pane-action"} onClick={() => setBuildLogOpen((open) => !open)} title={t("Build log")} aria-label={t("Build log")} aria-expanded={buildLogOpen} aria-controls={buildLogId}><FileText size={13} /><span>{t("Build log")}</span></button>{file && <button className="paper-pane-action" onClick={() => onAskAI(file.path)} title="Ask AI about this file"><MessageCircle size={13} /><span>Ask AI</span></button>}<button className="paper-pane-action icon" onClick={() => setChooserOpen(true)} title="Projects" aria-label="Projects"><FolderOpen size={13} /></button>{activeProject && <><button className="paper-pane-action icon" disabled={importing} onClick={() => void importFolder()} title="Import folder" aria-label="Import folder">{importing ? <LoaderCircle className="spin" size={13} /> : <FolderUp size={13} />}</button><button className="paper-pane-action primary" disabled={!mainPath || compileState === "compiling"} onClick={() => void compile()} title="Recompile">{compileState === "compiling" ? <LoaderCircle className="spin" size={13} /> : <Play size={13} />}<span>{compileState === "compiling" ? "Compiling…" : "Recompile"}</span></button></>}</div></div>{compileResult?.ok && compileResult.preview_url ? <iframe key={compileResult.preview_url} src={compileResult.preview_url} title="Compiled paper PDF" /> : <StateView className="paper-writing-empty" icon={<FileText size={27} />} title="Compile to preview" description="The generated PDF appears here. Any build problem is listed beside the source with its line number." action={mainPath ? <button className="primary-button" disabled={compileState === "compiling"} onClick={() => void compile()}><Play size={14} />Compile paper</button> : undefined} />}</section>
+        {file ? <>{coedit && projectId && <div className="latex-coedit-pane"><SharedNoteEditor bridge={bridge} projectId={projectId} docKey={`latex:${file.path}`} initialText={draft} title={`Co-editing ${file.name}`} onTextChange={(text) => { setDraft(text); }} /></div>}<div className={coedit ? "latex-editor-body coediting" : "latex-editor-body"}><div className="latex-line-numbers" ref={lineNumbersRef}>{lines.map((_, index) => <span key={index} className={problemLines.has(index + 1) ? "diagnostic" : ""}>{problemLines.has(index + 1) ? <AlertTriangle size={10} /> : index + 1}</span>)}</div><div className="latex-editor-layer"><pre className="latex-highlight" ref={highlightRef} aria-hidden="true">{lines.map((line, index) => <HighlightLine key={index} text={line} marks={searchMarks.get(index)} activeMatch={activeMatchIndex} problem={problemLines.has(index + 1) || activeProblem === index + 1} />)}</pre><textarea className="latex-editor-textarea" ref={editorRef} value={draft} readOnly={openingSource} onChange={(event) => { if (!owner.pendingOpen) setDraft(event.target.value); }} onKeyDown={(event) => { if (!owner.pendingOpen && event.key === "Tab") { event.preventDefault(); const target = event.currentTarget; const next = `${draft.slice(0, target.selectionStart)}  ${draft.slice(target.selectionEnd)}`; const start = target.selectionStart; setDraft(next); window.requestAnimationFrame(() => target.setSelectionRange(start + 2, start + 2)); } if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") { event.preventDefault(); if (!owner.pendingOpen) void compile(); } }} onScroll={(event) => syncScroll(event.currentTarget)} spellCheck={false} aria-label={`Edit ${file.path}`} /></div></div></> : <StateView className="paper-writing-empty" icon={<FileText size={25} />} title="No LaTeX project open" description={t("Open an existing manuscript, or create a new paper from a template.")} action={<button className="primary-button" onClick={() => { setChooserTab("existing"); setChooserOpen(true); void refreshProjects(); }}><FolderOpen size={14} />Open project</button>} />}{buildLogOpen && <section id={buildLogId} className="latex-live-log" aria-label={t("Build log")}><strong>{t("Build log")}</strong><pre tabIndex={0}>{compileState === "compiling" ? compileLog || t("Waiting for compiler output…") : compileResult?.log || compileLog || t("No build log yet.")}</pre></section>}{(error || compileResult?.diagnostics.length || (compileResult && !compileResult.ok)) && <div className="latex-diagnostics"><header><AlertTriangle size={13} /><strong>{error ? "Workspace error" : `Problems · ${compileResult?.diagnostics.length || 1}`}</strong><span>{error ? "Resolve this before compiling again." : "Select a problem to jump to the source line."}</span></header>{workspaceError && <p>{t(workspaceError)}</p>}{currentDocument?.error && <p>{t(currentDocument.error)}</p>}{sourceConflict && <div className="latex-conflict-actions"><button type="button" className="secondary-button" disabled={saveState === "saving"} onClick={() => void keepDraftAfterConflict()} title={t("Use the current disk contents as the save baseline, then save your draft over them.")}>{t("Keep my draft")}</button></div>}{compileResult?.diagnostics.map((diagnostic, index) => <button key={`${diagnostic.line}-${index}`} className={diagnostic.line === activeProblem ? "active" : ""} onClick={() => jumpToProblem(diagnostic)}><b>{diagnostic.line ? `Line ${diagnostic.line}` : "LaTeX"}</b><span>{t(diagnostic.message)}{diagnostic.help && <small className="latex-diagnostic-help">{t(diagnostic.help)}</small>}</span></button>)}{compileResult && !compileResult.ok && compileResult.log && <details><summary>Show full build log</summary><pre>{compileResult.log}</pre></details>}</div>}<div className="paper-pane-resizer" role="separator" aria-orientation="vertical" aria-label="Resize PDF preview" title="Drag to resize · double-click to reset" aria-valuemin={Math.round(PREVIEW_SPLIT_MIN * 100)} aria-valuemax={Math.round(PREVIEW_SPLIT_MAX * 100)} aria-valuenow={Math.round(effectivePreviewSplit * 100)} tabIndex={0} onPointerDown={(event) => beginPaneResize("preview", event)} onPointerMove={movePaneResize} onPointerUp={endPaneResize} onPointerCancel={endPaneResize} onDoubleClick={() => setPreviewSplit(PREVIEW_SPLIT_DEFAULT)} onKeyDown={(event) => handlePaneResizeKey("preview", event)} /></section>
+      <section className="paper-pdf-pane"><div className="paper-pane-toolbar"><FileText size={14} /><strong>PDF preview</strong><label className="paper-auto-compile"><input type="checkbox" checked={autoCompile} onChange={(event) => setAutoCompile(event.target.checked)} />Auto compile</label><span className={`paper-compile-state ${compileState}`}>{compileState === "compiling" ? <LoaderCircle className="spin" size={11} /> : compileState === "success" ? <Check size={11} /> : compileState === "error" ? <AlertTriangle size={11} /> : null}{compileState === "success" ? `${compileResult?.duration_ms ?? 0} ms` : compileState === "error" ? "Build failed" : compileState === "compiling" ? `${t(compilePhase)} · ${compileElapsed}s` : "Not built"}</span><div className="paper-pane-actions"><button className={buildLogOpen ? "paper-pane-action active" : "paper-pane-action"} onClick={() => setBuildLogOpen((open) => !open)} title={t("Build log")} aria-label={t("Build log")} aria-expanded={buildLogOpen} aria-controls={buildLogId}><FileText size={13} /><span>{t("Build log")}</span></button>{file && <button className="paper-pane-action" onClick={() => void Promise.resolve(onAskAI(file.path)).catch((reason) => setError(String(reason)))} title="Ask AI about this file"><MessageCircle size={13} /><span>Ask AI</span></button>}<button className="paper-pane-action icon" onClick={() => { setChooserTab("existing"); setChooserOpen(true); void refreshProjects(); }} title="Projects" aria-label="Projects"><FolderOpen size={13} /></button>{activeProject && <><button className="paper-pane-action icon" disabled={importing} onClick={() => void importFolder()} title="Import folder" aria-label="Import folder">{importing ? <LoaderCircle className="spin" size={13} /> : <FolderUp size={13} />}</button><button className="paper-pane-action primary" disabled={!mainPath || compileState === "compiling"} onClick={() => void compile()} title="Recompile">{compileState === "compiling" ? <LoaderCircle className="spin" size={13} /> : <Play size={13} />}<span>{compileState === "compiling" ? "Compiling…" : "Recompile"}</span></button></>}</div></div>{compileResult?.ok && compileResult.preview_url ? <iframe key={compileResult.preview_url} src={compileResult.preview_url} title="Compiled paper PDF" /> : <StateView className="paper-writing-empty" icon={<FileText size={27} />} title="Compile to preview" description="The generated PDF appears here. Any build problem is listed beside the source with its line number." action={mainPath ? <button className="primary-button" disabled={compileState === "compiling"} onClick={() => void compile()}><Play size={14} />Compile paper</button> : undefined} />}</section>
     </div>
     <Dialog open={dialogOpen} onClose={() => setChooserOpen(false)} size="gallery" className="paper-project-dialog" overlayClassName="paper-create-backdrop app-dialog-overlay" ariaLabelledBy="paper-project-title">
-        <header className="app-dialog-header"><div><h2 id="paper-project-title">{t("Template library")}</h2><p>Each paper owns its own folder, source files, figures, bibliography, and build output.</p></div><button className="app-dialog-close" onClick={() => setChooserOpen(false)} aria-label="Close project chooser"><X size={16} /></button></header>
+        <header className="app-dialog-header"><div><h2 id="paper-project-title">{t("Continue writing")}</h2><p>{t("Open a manuscript in this project folder. Source files stay in place.")}</p></div><button className="app-dialog-close" onClick={() => setChooserOpen(false)} aria-label={t("Close project chooser")}><X size={16} /></button></header>
         <div className="app-dialog-body paper-project-body">
-          <PaperTemplateLibrary selected={templateId} onSelect={setTemplateId} projectName={projectName} onNameChange={setProjectName} creating={creating} importing={importing} error={error}
-            onCreate={() => void createProject()} onImport={() => void importFolder()} onSource={(url) => void bridge.openExternalUrl(url)} />
-          {projects.some((project) => project.main && projectRoot(project.path)) && <div className="paper-existing-projects"><h3>Open an existing project</h3>{projects.filter((project) => project.main && projectRoot(project.path)).map((project) => <button key={project.path} onClick={() => void activateProject(project.path)}><FileCode2 size={14} /><span><strong>{project.title}</strong><small>{projectRoot(project.path)}</small></span><ChevronRight size={15} /></button>)}</div>}
+          <Tabs label={t("Writing project options")} value={chooserTab} onChange={(value) => setChooserTab(value as "existing" | "new")}><Tab value="existing">{t("Existing manuscripts")}</Tab><Tab value="new">{t("New manuscript")}</Tab></Tabs>
+          {chooserTab === "existing" ? <div className="paper-existing-projects">
+            <div className="paper-existing-project-heading"><h3>{t("Existing manuscripts")}</h3><button className="secondary-button" onClick={() => void refreshProjects()} disabled={owner.projectsLoading}><RefreshCw size={14} className={owner.projectsLoading ? "spin" : ""} />{t("Refresh")}</button></div>
+            <p>{t("Choose the main document to continue editing. No compiler is needed to open a source file.")}</p>
+            {owner.projectsLoading && <p role="status">{t("Looking for manuscripts…")}</p>}
+            {!owner.projectsLoading && !availableProjects.length && <StateView compact icon={<FileText size={22} />} title={t("No manuscripts found")} description={t("Create a new manuscript or import an existing folder.")} action={<button className="primary-button" onClick={() => setChooserTab("new")}>{t("New manuscript")}</button>} />}
+            {availableProjects.map((project) => <button key={project.path} onClick={() => void activateProject(project.path)}><FileCode2 size={14} /><span><strong>{project.title}</strong><small>{project.path}</small></span><ChevronRight size={15} /></button>)}
+            {error && <p role="alert">{error}</p>}
+          </div> : <PaperTemplateLibrary selected={templateId} onSelect={setTemplateId} projectName={projectName} onNameChange={setProjectName} creating={creating} importing={importing} error={error}
+            onCreate={() => void createProject()} onImport={() => void importFolder()} onSource={(url) => void bridge.openExternalUrl(url)} />}
         </div>
     </Dialog>
     <Dialog open={createOpen} onClose={() => setCreateKind(null)} size="compact" className="paper-create-dialog" overlayClassName="paper-create-backdrop app-dialog-overlay" as="form" onSubmit={(event) => void createEntry(event)}><span className="page-kicker">{projectLabel}</span><h2>{createKind === "file" ? "New LaTeX file" : "New folder"}</h2><p>Creating in <strong>{activeDirectory || activeProject}</strong></p><label>{createKind === "file" ? "File name" : "Folder name"}<input autoFocus value={createName} onChange={(event) => setCreateName(event.target.value)} placeholder={createKind === "file" ? "section.tex" : "figures"} /></label><div><button type="button" className="secondary-button" onClick={() => setCreateKind(null)}>Cancel</button><button type="submit" className="primary-button" disabled={!createName.trim()}>Create</button></div></Dialog>

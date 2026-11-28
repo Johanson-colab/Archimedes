@@ -75,7 +75,7 @@ import SessionComments, { type SessionCommentsScope } from "./SessionComments";
 import AccountChip from "./AccountChip";
 import packageMetadata from "../package.json";
 import AuthModal from "./AuthModal";
-import { useUISettings } from "./i18n";
+import { displayPreferenceStorage, useUISettings } from "./i18n";
 import { moveSidebarOrder, orderSidebarIds, readSidebarOrder, reconcileSidebarOrder, writeSidebarOrder, type SidebarOrderGroup } from "./sidebar-order";
 import { readSidebarSectionCollapse, writeSidebarSectionCollapse, type SidebarSectionId } from "./sidebar-section-collapse";
 import { type PaperOpenRequest } from "./PaperWritingView";
@@ -1342,23 +1342,23 @@ function clampSidebarWidth(value: number) {
 
 function readSidebarWidth() {
   if (typeof window === "undefined") return SIDEBAR_DEFAULT_WIDTH;
-  const stored = Number(window.localStorage.getItem("archimedes-sidebar-width"));
+  const stored = Number(displayPreferenceStorage.getItem("archimedes-sidebar-width"));
   return Number.isFinite(stored) && stored > 0 ? clampSidebarWidth(stored) : SIDEBAR_DEFAULT_WIDTH;
 }
 
 function readSidebarHidden() {
   if (typeof window === "undefined") return false;
-  return window.localStorage.getItem("archimedes-sidebar-hidden") === "true";
+  return displayPreferenceStorage.getItem("archimedes-sidebar-hidden") === "true";
 }
 
 function readResearchPanelOpen() {
   if (typeof window === "undefined") return false;
-  return window.localStorage.getItem("archimedes-research-panel-open") === "true";
+  return displayPreferenceStorage.getItem("archimedes-research-panel-open") === "true";
 }
 
 function readPinnedPathThreadId() {
   if (typeof window === "undefined") return null;
-  const stored = window.localStorage.getItem("archimedes-research-path-pin");
+  const stored = displayPreferenceStorage.getItem("archimedes-research-path-pin");
   return stored && stored.trim() ? stored : null;
 }
 
@@ -1369,23 +1369,23 @@ function systemTheme(): AppTheme {
 
 function readReasoningEffort(): ReasoningEffort {
   if (typeof window === "undefined") return "medium";
-  const stored = window.localStorage.getItem("archimedes-reasoning-effort");
+  const stored = displayPreferenceStorage.getItem("archimedes-reasoning-effort");
   return stored === "low" || stored === "medium" || stored === "high" ? stored : "medium";
 }
 
 function readContextLength(): ContextLength {
   if (typeof window === "undefined") return "standard";
-  return window.localStorage.getItem("archimedes-context-length") === "extra-long" ? "extra-long" : "standard";
+  return displayPreferenceStorage.getItem("archimedes-context-length") === "extra-long" ? "extra-long" : "standard";
 }
 
 function App() {
   const confirm = useConfirm();
   const { t } = useUISettings();
-  const [appearance, setAppearance] = useState<AppearanceSettings>(readAppearance);
+  const [appearance, setAppearance] = useState<AppearanceSettings>(() => readAppearance(displayPreferenceStorage));
   const [systemAppearance, setSystemAppearance] = useState<AppTheme>(systemTheme);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsSection, setSettingsSection] = useState<SettingsSection>("general");
-  const [sessionTools, setSessionTools] = useState<SessionToolPreferences>(readSessionToolPreferences);
+  const [sessionTools, setSessionTools] = useState<SessionToolPreferences>(() => readSessionToolPreferences(displayPreferenceStorage));
   const [localIdentity, setLocalIdentity] = useState<LocalIdentity | null>(null);
   const [authState, setAuthState] = useState<AuthState | null>(null);
   const [availableAppUpdate, setAvailableAppUpdate] = useState<{ version: string; url?: string } | null>(null);
@@ -1476,7 +1476,7 @@ function App() {
   const [terminalSettingsOpen, setTerminalSettingsOpen] = useState(false);
   const [terminalSettingsMode, setTerminalSettingsMode] = useState<"settings" | "onboarding">("settings");
   const [workbenchWidth, setWorkbenchWidth] = useState(() => {
-    const saved = Number(localStorage.getItem("archimedes-workbench-width"));
+    const saved = Number(displayPreferenceStorage.getItem("archimedes-workbench-width"));
     return Number.isFinite(saved) && saved > 0 ? clampWorkbenchWidth(saved) : defaultWorkbenchWidth();
   });
   const workbenchFilesPaneWidth = useMemo(() => {
@@ -1712,11 +1712,11 @@ function App() {
   }, []);
 
   useEffect(() => {
-    writeAppearance(appearance);
+    writeAppearance(appearance, displayPreferenceStorage);
   }, [appearance]);
 
   useEffect(() => {
-    writeSessionToolPreferences(sessionTools);
+    writeSessionToolPreferences(sessionTools, displayPreferenceStorage);
   }, [sessionTools]);
 
   useEffect(() => {
@@ -1735,11 +1735,11 @@ function App() {
   }, []);
 
   useEffect(() => {
-    window.localStorage.setItem("archimedes-reasoning-effort", reasoningEffort);
+    displayPreferenceStorage.setItem("archimedes-reasoning-effort", reasoningEffort);
   }, [reasoningEffort]);
 
   useEffect(() => {
-    window.localStorage.setItem("archimedes-context-length", contextLength);
+    displayPreferenceStorage.setItem("archimedes-context-length", contextLength);
   }, [contextLength]);
 
   useEffect(() => {
@@ -1769,24 +1769,24 @@ function App() {
   }, []);
 
   useEffect(() => {
-    window.localStorage.setItem("archimedes-sidebar-width", String(sidebarWidth));
+    displayPreferenceStorage.setItem("archimedes-sidebar-width", String(sidebarWidth));
   }, [sidebarWidth]);
 
   useEffect(() => {
-    window.localStorage.setItem("archimedes-sidebar-hidden", String(sidebarHidden));
+    displayPreferenceStorage.setItem("archimedes-sidebar-hidden", String(sidebarHidden));
   }, [sidebarHidden]);
 
   useEffect(() => {
-    window.localStorage.setItem("archimedes-workbench-width", String(workbenchWidth));
+    displayPreferenceStorage.setItem("archimedes-workbench-width", String(workbenchWidth));
   }, [workbenchWidth]);
 
   useEffect(() => {
-    window.localStorage.setItem("archimedes-research-panel-open", String(researchPanelOpen));
+    displayPreferenceStorage.setItem("archimedes-research-panel-open", String(researchPanelOpen));
   }, [researchPanelOpen]);
 
   useEffect(() => {
-    if (pinnedPathThreadId) window.localStorage.setItem("archimedes-research-path-pin", pinnedPathThreadId);
-    else window.localStorage.removeItem("archimedes-research-path-pin");
+    if (pinnedPathThreadId) displayPreferenceStorage.setItem("archimedes-research-path-pin", pinnedPathThreadId);
+    else displayPreferenceStorage.removeItem("archimedes-research-path-pin");
   }, [pinnedPathThreadId]);
 
   useEffect(() => {
@@ -3624,7 +3624,7 @@ function App() {
       await submitPrompt(prompt, "free-chat", reasoningEffort, contextLength, [], "paper-to-slides", backend, true, mineruToken || undefined);
     }} />,
 
-    writing: <PaperWritingView bridge={desktopBridge} workspace={executionWorkspace} projectId={activeProjectId} openRequest={paperOpenRequest} onRefresh={refreshWorkspaceFiles} onAskAI={askAIAboutPaper} active={mainSection === "writing"} />,
+    writing: <PaperWritingView bridge={desktopBridge} workspace={executionWorkspace} projectId={activeProjectId} threadId={activeThreadId} openRequest={paperOpenRequest} onRefresh={refreshWorkspaceFiles} onAskAI={askAIAboutPaper} active={mainSection === "writing"} />,
   };
   for (const entry of pluginEntries) {
     sidebarModuleContent[entry.id] = <PluginModuleView key={entry.id} entry={entry} />;
@@ -5533,7 +5533,7 @@ function clampFilesPaneWidth(width: number, compactWidth: number) {
 }
 
 function readFilesPaneWidth() {
-  const saved = Number(window.localStorage.getItem("archimedes-files-pane-width"));
+  const saved = Number(displayPreferenceStorage.getItem("archimedes-files-pane-width"));
   return Number.isFinite(saved) && saved >= FILES_PANE_MIN_WIDTH ? saved : FILES_PANE_DEFAULT_WIDTH;
 }
 
@@ -5687,7 +5687,7 @@ function FilesView({ workspace, tree, openFiles, selectedPath, directoryRequest,
   });
 
   useEffect(() => {
-    window.localStorage.setItem("archimedes-files-pane-width", String(filesPaneWidth));
+    displayPreferenceStorage.setItem("archimedes-files-pane-width", String(filesPaneWidth));
   }, [filesPaneWidth]);
 
   useEffect(() => {

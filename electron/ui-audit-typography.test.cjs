@@ -147,8 +147,8 @@ test("Geist Sans and Geist Mono are bundled locally", () => {
   assert.match(typography, /GeistMono-Variable\.woff2/);
   assert.match(tokens, /html\[data-interface-font="geist"\] \{[\s\S]*?--font-ui: "Geist"/);
   assert.match(tokens, /html\[data-mono-font="geist-mono"\] \{[\s\S]*?--font-mono: "Geist Mono"/);
-  assert.match(i18nSource, /return window\.localStorage\.getItem\(INTERFACE_FONT_STORAGE_KEY\) === "system" \? "system" : "geist"/);
-  assert.match(i18nSource, /return window\.localStorage\.getItem\(MONO_FONT_STORAGE_KEY\) === "system" \? "system" : "geist-mono"/);
+  assert.match(i18nSource, /return displayPreferenceStorage\.getItem\(INTERFACE_FONT_STORAGE_KEY\) === "system" \? "system" : "geist"/);
+  assert.match(i18nSource, /return displayPreferenceStorage\.getItem\(MONO_FONT_STORAGE_KEY\) === "system" \? "system" : "geist-mono"/);
   assert.match(i18nSource, /document\.documentElement\.dataset\.interfaceFont = interfaceFont/);
   assert.match(settings, /t\("Interface font"\)/);
   assert.match(settings, /t\("Code font"\)/);
