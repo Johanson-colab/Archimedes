@@ -1,0 +1,33 @@
+✔ Paper to Slides transfers the new-task composer slot through the first owned agent event (74.76175ms)
+✔ Paper to Slides restores detached attachments when the request cannot start (1.130709ms)
+✖ composer acceptance migrates a hidden draft and keeps queued attachments (1.153584ms)
+✔ /init hands startup attachments to the created thread without losing newer context (0.839791ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 3
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 186.477041
+
+✖ failing tests:
+
+test at electron/paper-to-slides-composer-send.test.cjs:171:1
+✖ composer acceptance migrates a hidden draft and keeps queued attachments (1.153584ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + undefined
+  - 'Newer hidden draft'
+  
+      at TestContext.<anonymous> (/Users/fei/Desktop/Archimedes/electron/paper-to-slides-composer-send.test.cjs:191:10)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: 'Newer hidden draft',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

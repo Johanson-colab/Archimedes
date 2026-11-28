@@ -21,10 +21,18 @@ function extractSlidesHandler(source) {
   return `const onStart = ${source.slice(start + "onStart={".length, end)}\n    };`;
 }
 
-async function evaluate(source, bindings) {
+function extractInitHandler(source) {
+  const start = source.indexOf('    if (command === "init") {');
+  const end = source.indexOf('    if (command === "new")', start);
+  assert.ok(start >= 0 && end > start, "extract /init handler");
+  return `const runInit = async command => {\n${source.slice(start, end)}\n    };`;
+}
+
+async function evaluate(source, bindings, resultExpression) {
   const { transformWithOxc } = await import("vite");
   const { code } = await transformWithOxc(source, "composer-fixture.tsx", { jsx: { runtime: "classic" } });
-  return new Function(...Object.keys(bindings), `${code}\nreturn typeof onStart === "function" ? onStart : ${source.includes("function startNewTask") ? "startNewTask" : "acceptComposerSend"};`)(...Object.values(bindings));
+  const expression = resultExpression ?? (source.includes("const onStart =") ? "onStart" : source.includes("function startNewTask") ? "startNewTask" : "acceptComposerSend");
+  return new Function(...Object.keys(bindings), `${code}\nreturn ${expression};`)(...Object.values(bindings));
 }
 
 function ownerKey(dataRoot, threadId, draftKey) {
@@ -107,9 +115,11 @@ async function composerHarness() {
     composerSlots,
     pendingComposerSend,
     currentComposerSlot,
+    drafts,
     submissions,
     acceptComposerSend,
     onStart,
+    updateComposer,
     finish: success => resolveSubmission?.(success),
   };
 }
@@ -156,4 +166,65 @@ test("Paper to Slides restores detached attachments when the request cannot star
   await starting;
   assert.equal(harness.pendingComposerSend.current, null);
   assert.deepEqual(send.slot.session.context.map(item => item.id), ["submitted-attachment", "attachment-during-start"]);
+});
+
+test("composer acceptance migrates a hidden draft and keeps queued attachments", async () => {
+  const harness = await composerHarness();
+  const send = {
+    slot: harness.previousSlot,
+    owner: harness.previousOwner,
+    dataRoot: harness.workspace,
+    draftKey: "new-draft",
+    clientRunId: "work-composer:hidden-draft",
+    accepted: false,
+  };
+  const queued = { id: "queued", draft: "Follow up", mode: "research", reasoningEffort: "high", contextLength: "standard", contextItems: [{ id: "queued-image", type: "image" }] };
+  send.slot.session.queued.push(queued);
+  harness.drafts.set(send.draftKey, { text: "Newer hidden draft", selectionStart: 18, selectionEnd: 18, newChatMode: "standard" });
+  harness.currentComposerSlot.current = send.slot;
+
+  harness.acceptComposerSend(send, "created-thread");
+
+  const threadOwner = ownerKey(harness.workspace, "created-thread");
+  assert.equal(harness.composerSlots.current.get(threadOwner), send.slot);
+  assert.deepEqual(harness.composerSlots.current.get(threadOwner).session.queued, [queued]);
+  assert.equal(harness.drafts.get("created-thread")?.text, "Newer hidden draft");
+});
+
+test("/init hands startup attachments to the created thread without losing newer context", async () => {
+  const harness = await composerHarness();
+  const submitted = { id: "init-attachment", type: "file" };
+  const newer = { id: "init-newer-attachment", type: "file" };
+  harness.previousSlot.session.context = [submitted];
+  const submissions = [];
+  const runInit = await evaluate(extractInitHandler(appSource), {
+    command: "init",
+    executionWorkspace: harness.workspace,
+    composerSlot: harness.previousSlot,
+    composerOwner: harness.previousOwner,
+    composerDraftKey: "previous-thread",
+    workspace: harness.workspace,
+    pendingComposerSend: harness.pendingComposerSend,
+    reasoningEffort: "high",
+    contextLength: "standard",
+    contextItems: [submitted],
+    INIT_PROMPT: "Initialize project",
+    t: value => value,
+    submitPrompt: async (...args) => {
+      submissions.push(args);
+      const send = args[9];
+      send.slot.session.context.push(newer);
+      harness.acceptComposerSend(send, "init-thread");
+      return true;
+    },
+    setContextItems: update => harness.updateComposer(harness.previousSlot, session => ({ ...session, context: update(session.context) })),
+    updateComposer: harness.updateComposer,
+  }, "runInit");
+
+  await runInit("init");
+
+  assert.equal(submissions.length, 1);
+  assert.equal(harness.pendingComposerSend.current, null);
+  const threadOwner = ownerKey(harness.workspace, "init-thread");
+  assert.deepEqual(harness.composerSlots.current.get(threadOwner).session.context.map(item => item.id), [newer.id]);
 });

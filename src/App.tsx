@@ -1657,7 +1657,7 @@ function App() {
     send.accepted = true;
     const owner = composerOwnerKey(send.dataRoot, threadId);
     if (owner !== send.owner) {
-      if (currentComposerSlot.current !== send.slot && !readComposerDraft(threadId)) {
+      if (!readComposerDraft(threadId)) {
         const draft = readComposerDraft(send.draftKey);
         if (draft) writeComposerDraft(threadId, draft);
       }
