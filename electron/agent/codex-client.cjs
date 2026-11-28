@@ -18,14 +18,17 @@ function executableCandidates(binary = "codex") {
 }
 
 class CodexClient extends EventEmitter {
-  constructor({ binary = "codex", spawnImpl = spawn, requestTimeout = 20_000, env = {}, appServerArgs = [] } = {}) {
+  constructor({ binary = "codex", spawnImpl = spawn, requestTimeout = 20_000, env = {}, appServerArgs = [], stdioDrainTimeout = 1_000 } = {}) {
     super();
     if (!Array.isArray(appServerArgs) || appServerArgs.some((arg) => typeof arg !== "string")) throw new Error("Invalid Codex app-server arguments.");
+    if (!Number.isFinite(stdioDrainTimeout) || stdioDrainTimeout < 0) throw new Error("Invalid Codex stdio drain timeout.");
     this.binary = binary;
     this.env = env;
     this.spawnImpl = spawnImpl;
     this.requestTimeout = requestTimeout;
     this.appServerArgs = appServerArgs;
+    this.stdioDrainTimeout = stdioDrainTimeout;
+    this.exitTimer = null;
     this.pending = new Map();
     this.nextId = 0;
     this.closed = false;
@@ -47,7 +50,20 @@ class CodexClient extends EventEmitter {
     // Do not surface stderr: inherited configuration can contain secrets.
     this.child.stderr?.on("data", () => {});
     this.child.on("error", () => this.fail(new Error("Codex could not start. Check the executable and installation.")));
-    this.child.on("exit", () => this.fail(new Error("Codex app-server exited. The turn was not replayed; inspect any changes before retrying.")));
+    // `close` follows stdio drain; `exit` can precede final protocol frames.
+    this.child.on("exit", () => {
+      if (this.closed) return;
+      this.exitTimer = setTimeout(() => {
+        this.exitTimer = null;
+        this.fail(new Error("Codex app-server exited. The turn was not replayed; inspect any changes before retrying."));
+      }, this.stdioDrainTimeout);
+      this.exitTimer.unref();
+    });
+    this.child.on("close", () => {
+      clearTimeout(this.exitTimer);
+      this.exitTimer = null;
+      this.fail(new Error("Codex app-server exited. The turn was not replayed; inspect any changes before retrying."));
+    });
     this.child.stdin.on("error", () => this.fail(new Error("Codex input connection closed.")));
     try {
       await this.request("initialize", { clientInfo: { name: "archimedes", title: "Archimedes", version: "0.1.0" }, capabilities: { experimentalApi: true, optOutNotificationMethods: ["item/reasoning/textDelta", "item/reasoning/summaryTextDelta", "item/reasoning/summaryPartAdded"] } });
@@ -120,6 +136,8 @@ class CodexClient extends EventEmitter {
 
   fail(error) {
     if (this.closed) return;
+    clearTimeout(this.exitTimer);
+    this.exitTimer = null;
     this.closed = true;
     clients.delete(this);
     for (const pending of this.pending.values()) { clearTimeout(pending.timer); pending.reject(error); }

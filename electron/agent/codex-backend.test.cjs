@@ -13,7 +13,7 @@ function fixture(handler) {
   child.stdout = new PassThrough();
   child.stderr = new PassThrough();
   child.exitCode = null;
-  child.kill = () => { child.exitCode = 0; child.emit("exit", 0); };
+  child.kill = () => { child.exitCode = 0; child.emit("exit", 0); child.emit("close", 0); };
   child.stdin = new Writable({ write(chunk, _encoding, callback) {
     handler(JSON.parse(chunk.toString()), (value) => child.stdout.write(`${JSON.stringify(value)}\n`), child);
     callback();
@@ -59,6 +59,42 @@ test("RPC timeouts do not replay and process exit rejects pending requests", asy
   const pending = client.request("thread/resume");
   child.kill();
   await assert.rejects(pending, /not replayed/);
+});
+
+test("Codex drains final stdout frames delivered after exit but before close", async () => {
+  let child;
+  const client = new CodexClient({ spawnImpl: () => child = fixture((message, send) => {
+    if (message.method === "initialize") send({ id: message.id, result: {} });
+  }) });
+  const messages = [];
+  client.on("message", message => messages.push(message));
+  await client.start();
+  const pending = client.request("thread/resume");
+  const requestId = client.nextId;
+  child.exitCode = 0;
+  child.emit("exit", 0);
+  child.stdout.write(`${JSON.stringify({ id: requestId, result: { thread: { id: "drained-thread" } } })}\n`);
+  child.stdout.write(`${JSON.stringify({ method: "turn/completed", params: { turn: { id: "drained-turn", status: "completed" } } })}\n`);
+  assert.deepEqual(await pending, { thread: { id: "drained-thread" } });
+  assert.equal(messages.at(-1).method, "turn/completed");
+  assert.equal(client.closed, false, "exit alone does not close the transport before stdio drains");
+  const closed = new Promise(resolve => client.once("closed", resolve));
+  child.emit("close", 0);
+  assert.match((await closed).message, /app-server exited/);
+});
+
+test("Codex bounds stdout draining when a descendant keeps the pipes open", async () => {
+  let child;
+  const client = new CodexClient({ requestTimeout: 50, stdioDrainTimeout: 5, spawnImpl: () => child = fixture((message, send) => {
+    if (message.method === "initialize") send({ id: message.id, result: {} });
+  }) });
+  await client.start();
+  const pending = client.request("thread/resume");
+  child.exitCode = 0;
+  child.emit("exit", 0);
+  await assert.rejects(pending, /app-server exited/);
+  assert.equal(client.closed, true);
+  child.emit("close", 0);
 });
 
 test("invalid and oversized protocol input fails closed", async () => {

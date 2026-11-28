@@ -1,0 +1,38 @@
+✔ stdio protocol correlates replies and refuses unknown requests without shell (4.76725ms)
+✔ explicit app-server arguments are placed before the app-server subcommand (0.486375ms)
+✔ RPC timeouts do not replay and process exit rejects pending requests (21.76625ms)
+✖ Codex drains final stdout frames delivered after exit but before close (1.065792ms)
+✔ invalid and oversized protocol input fails closed (2.882625ms)
+✔ inbound limits apply to each UTF-8 frame, not a batch of valid messages (12.268166ms)
+✔ only identical successful local history can resume; forks, undo and dirty delivery cannot (0.256875ms)
+✔ streaming uses restricted policy, rejects foreign events and persists only completed continuity (7.296625ms)
+✔ Codex Create receives the capability CLI in its actual native turn (5.217583ms)
+✔ native approval is returned once and denied unless explicitly approved (1.864583ms)
+✔ unsupported server requests are denied; failed/uncertain turns preserve partial text without continuity (0.984208ms)
+✔ abort stops the native turn and closes the child (0.540291ms)
+✔ configuration never stores arbitrary secrets and account checks always close (4.113125ms)
+✔ native client negotiates experimental questions while suppressing private reasoning deltas (0.65525ms)
+✔ outbound native protocol rejects oversized UTF-8 and escaped payloads before serialization or writes (23.019875ms)
+✔ unsupported initialize capabilities fail explicitly without fallback and close the child (0.583584ms)
+✔ outbound JSON preflight rejects serialization hooks without invoking them (0.210291ms)
+✔ outbound JSON byte counts match actual escaping, surrogate and nested representations (0.521167ms)
+✔ Codex exposes live experiment tools and dispatches requests during the turn (32.863125ms)
+ℹ tests 19
+ℹ suites 0
+ℹ pass 18
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 275.532833
+
+✖ failing tests:
+
+test at electron/agent/codex-backend.test.cjs:64:1
+✖ Codex drains final stdout frames delivered after exit but before close (1.065792ms)
+  Error: Codex app-server exited. The turn was not replayed; inspect any changes before retrying.
+      at EventEmitter.<anonymous> (/Users/fei/Desktop/Archimedes/electron/agent/codex-client.cjs:50:43)
+      at EventEmitter.emit (node:events:514:20)
+      at TestContext.<anonymous> (/Users/fei/Desktop/Archimedes/electron/agent/codex-backend.test.cjs:75:9)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
