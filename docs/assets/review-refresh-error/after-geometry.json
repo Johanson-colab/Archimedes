@@ -1,0 +1,10 @@
+{
+  "stage": "after",
+  "viewport": [
+    900,
+    220
+  ],
+  "unhandled": false,
+  "error": "The manuscript changed on disk. Compile again before reviewing.",
+  "rendered": "The manuscript changed on disk. Compile again before reviewing."
+}

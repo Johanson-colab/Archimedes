@@ -48,6 +48,11 @@ function getSettings() {
   };
 }
 
+function reviewDestination() {
+  const { provider, baseUrl, model: modelId } = model.resolveReviewModel(settingsStore.getPrivateSettings());
+  return { provider, baseUrl, model: modelId };
+}
+
 function saveSettings(patch = {}) {
   return {
     ...settingsStore.saveSettings(patch),
@@ -150,17 +155,17 @@ async function prepareArxivDocument({ value, signal, emit = () => {} }) {
   });
 }
 
-async function preparePdfDocument({ filePath, signal, emit = () => {} }) {
+async function preparePdfDocument({ filePath, signal, emit = () => {} }, manuscript) {
   if (typeof filePath !== "string" || !filePath) throw new Error("Choose a PDF file.");
-  const data = fs.readFileSync(filePath);
+  const data = manuscript ? manuscript.bytes : fs.readFileSync(filePath);
   verifyPdf(data);
   const cached = cachePdf(data);
   emit({ type: "prepare", detail: "Extracting page text from the PDF." });
   const index = await extractPdfPagesData(data, path.basename(filePath), { signal });
   return parsedDocument({
-    id: `pdf:${cached.sha256}`,
-    sourceKind: "pdf",
-    sourceRef: path.basename(filePath),
+    id: manuscript ? `manuscript:${manuscript.origin.buildId}:${cached.sha256}` : `pdf:${cached.sha256}`,
+    sourceKind: manuscript ? "manuscript" : "pdf",
+    sourceRef: manuscript ? JSON.stringify(manuscript.origin) : path.basename(filePath),
     title: guessTitle(index.pages, path.basename(filePath, path.extname(filePath)) || "Untitled paper"),
     index,
   });
@@ -184,7 +189,7 @@ function publicDocument(document) {
     id: document.id,
     title: document.title,
     sourceKind: document.sourceKind,
-    sourceRef: document.sourceRef,
+    sourceRef: document.sourceKind === "manuscript" ? "" : document.sourceRef,
     pageCount: document.pageCount,
     textChars: document.textChars,
   };
@@ -226,13 +231,16 @@ function initialRunTitle(input = {}) {
   return "";
 }
 
-async function createRun(input = {}, { emit = () => {}, workspace = "" } = {}) {
+async function createRun(input = {}, { emit = () => {}, workspace = "", manuscript } = {}) {
   const settings = settingsStore.getPrivateSettings();
   const venue = venues.getVenue(input.venueId || settings.defaultVenueId);
   if (!venue) throw new Error("Choose a valid venue pack.");
   // Resolve the model before creating the run so misconfiguration fails
   // immediately instead of after a long ingest.
   const reviewModel = model.resolveReviewModel(settings);
+  if (manuscript && (["provider", "baseUrl", "model"].some(field => manuscript.destination?.[field] !== reviewModel[field]))) {
+    throw new Error("The review destination changed. Confirm the manuscript review again.");
+  }
 
   const startedAt = Date.now();
   // The run row exists before ingestion so the History panel can show it and
@@ -241,7 +249,7 @@ async function createRun(input = {}, { emit = () => {}, workspace = "" } = {}) {
     documentId: "",
     projectId: input.projectId || "",
     sourceKind: input.source?.kind || "library",
-    sourceRef: "",
+    sourceRef: manuscript ? JSON.stringify(manuscript.origin) : "",
     paperTitle: initialRunTitle(input) || "Untitled paper",
     venueId: venue.id,
     venueVersion: venue.version,
@@ -272,12 +280,10 @@ async function createRun(input = {}, { emit = () => {}, workspace = "" } = {}) {
   void (async () => {
     let document = null;
     try {
-      document = await prepareDocument(input.source || {}, {
-        workspace,
-        projectId: input.projectId,
-        signal: controller.signal,
-        emit: progress,
-      });
+      const context = { workspace, projectId: input.projectId, signal: controller.signal, emit: progress };
+      document = manuscript
+        ? await preparePdfDocument({ ...context, filePath: manuscript.origin.pdfPath }, manuscript)
+        : await prepareDocument(input.source || {}, context);
       store.attachDocument(runId, {
         documentId: document.id,
         sourceKind: document.sourceKind,
@@ -506,6 +512,7 @@ function isInitialized() {
 module.exports = {
   initialize,
   getSettings,
+  reviewDestination,
   saveSettings,
   listVenues,
   listPapers,

@@ -1,0 +1,52 @@
+$ node --test --test-name-pattern="handoff refresh failure" electron/ui-audit-paper-review.test.cjs  # PR #414 head
+✖ a manuscript handoff refresh failure is shown before review consent (1.178958ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 115.945375
+
+✖ failing tests:
+
+test at electron/ui-audit-paper-review.test.cjs:92:1
+✖ a manuscript handoff refresh failure is shown before review consent (1.178958ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /try\s*\{/. Input:
+  
+  '  async function startReview() {\n' +
+    '    if (running) return;\n' +
+    '    setError("");\n' +
+    '    setNotice("");\n' +
+    '    setProgress(null);\n' +
+    '    if (!manuscript && sourceKind === "library" && !paperId) {\n' +
+    '      setError(t("Choose a Library paper first."));\n' +
+    '      return;\n' +
+    '    }\n' +
+    '    if (!manuscript && sourceKind === "arxiv" && !arxivInput.trim()) {\n' +
+    '      setError(t("Enter an arXiv ID or URL."));\n' +
+    '      return;\n' +
+    '    }\n' +
+    '    if (!manuscript && sourceKind === "pdf" && !pdfPath) {\n' +
+    '      setError(t("Choose a PDF first."));\n' +
+    '      return;\n' +
+    '    }\n' +
+    '    let handoff = manuscript;\n' +
+    '    if (manuscript && bridge.prepareManuscriptReview) {\n' +
+    '      // Re-resolve the destination after any in-page settings change so the\n' +
+    '      // consent prompt and the submitted run describe the same provider.\n' +
+    '      '
+  
+      at TestContext.<anonymous> (/Users/fei/Desktop/Archimedes/electron/ui-audit-paper-review.test.cjs:100:10)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.start (node:internal/test_runner/test:1262:17)
+      at startSubtestAfterBootstrap (node:internal/test_runner/harness:387:17) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '  async function startReview() {\n    if (running) return;\n    setError("");\n    setNotice("");\n    setProgress(null);\n    if (!manuscript && sourceKind === "library" && !paperId) {\n      setError(t("Choose a Library paper first."));\n      return;\n    }\n    if (!manuscript && sourceKind === "arxiv" && !arxivInput.trim()) {\n      setError(t("Enter an arXiv ID or URL."));\n      return;\n    }\n    if (!manuscript && sourceKind === "pdf" && !pdfPath) {\n      setError(t("Choose a PDF first."));\n      return;\n    }\n    let handoff = manuscript;\n    if (manuscript && bridge.prepareManuscriptReview) {\n      // Re-resolve the destination after any in-page settings change so the\n      // consent prompt and the submitted run describe the same provider.\n      ',
+    expected: /try\s*\{/,
+    operator: 'match',
+    diff: 'simple'
+  }

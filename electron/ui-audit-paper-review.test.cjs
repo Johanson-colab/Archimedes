@@ -29,7 +29,7 @@ test("Paper review remains available as a Writing & delivery app, hidden by defa
 
 test("Paper review is registry-hosted with a real bridge and in-page controls", () => {
   assert.match(app, /lazy\(\(\) => import\("\.\/PaperReviewView"\)\)/);
-  assert.match(app, /"paper-review": <PaperReviewView bridge=\{desktopBridge\} workspace=\{executionWorkspace\} projectId=\{activeProjectId\} active=\{mainSection === "paper-review"\} \/>/);
+  assert.match(app, /"paper-review": <PaperReviewView\b[^>]*\bbridge=\{desktopBridge\} workspace=\{executionWorkspace\} projectId=\{activeProjectId\} active=\{mainSection === "paper-review"\}/);
   assert.doesNotMatch(view, /ToolbarActions|ToolbarPortal|module-toolbar-actions/);
   assert.match(view, /pra-header/);
   assert.match(view, /Run simulated review/);
@@ -87,4 +87,17 @@ test("Paper review strings are translated", () => {
   assert.match(i18n, /"Interactive paper": "交互论文"/);
   assert.match(i18n, /"Score-conditioned reviewers": "分数条件审稿人"/);
   assert.match(i18n, /"Evaluate": "评估"/);
+});
+
+test("a manuscript handoff refresh failure is shown before review consent", () => {
+  const start = view.indexOf("  async function startReview()");
+  const end = view.indexOf("  async function cancelReview()", start);
+  const body = view.slice(start, end);
+  const refresh = body.indexOf("handoff = await bridge.prepareManuscriptReview");
+  assert.ok(start >= 0 && refresh >= 0, "the manuscript handoff refresh should remain in startReview");
+  const beforeRefresh = body.slice(0, refresh);
+  const throughConsent = body.slice(refresh, body.indexOf("if (handoff && !await confirm"));
+  assert.match(beforeRefresh, /try\s*\{/);
+  assert.match(throughConsent, /catch\s*\(cause\)\s*\{[\s\S]*setError\(cause instanceof Error \? cause\.message : String\(cause\)\)/);
+  assert.match(throughConsent, /return;/);
 });
