@@ -32,7 +32,7 @@ function riskTone(risk: string) {
 
 function reviewError(message: string, t: (key: string, values?: Record<string, string | number>) => string) {
   const match = String(message || "").match(/^Could not download (arXiv:\S+)\. ([\s\S]+)$/);
-  return match ? t("Could not download {identifier}. {reason}", { identifier: match[1], reason: match[2] }) : message;
+  return match ? t("Could not download {identifier}. {reason}", { identifier: match[1], reason: match[2] }) : t(message);
 }
 
 function decisionLabel(t: (key: string) => string, value: string) {
@@ -72,7 +72,7 @@ function ReviewerCard({ reviewer, tags, venue }: {
 }) {
   const { t } = useUISettings();
   if (reviewer.status !== "complete") return <article className="pra-reviewer failed">
-    <header><b>{t("Score")} {reviewer.targetScore}</b><span>{reviewer.error}</span></header>
+    <header><b>{t("Score")} {reviewer.targetScore}</b><span>{t(reviewer.error)}</span></header>
   </article>;
   return <details className="pra-reviewer">
     <summary>
@@ -399,7 +399,7 @@ export default function PaperReviewView({ bridge, workspace, projectId, active }
       </div> : null}
     </section>
 
-    {error ? <div className="pra-notice error">{error}</div> : null}
+    {error ? <div className="pra-notice error">{t(error)}</div> : null}
     {notice ? <div className="pra-notice">{notice}</div> : null}
 
     {!selectedRun ? <StateView

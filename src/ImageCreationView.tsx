@@ -623,7 +623,7 @@ export default function ImageCreationView({ active, onBrowseProceedings }: { act
         </button>)}
       </nav>
 
-      {forgeError && <p role="alert" className="forge-alert">{forgeError}</p>}
+      {forgeError && <p role="alert" className="forge-alert">{t(forgeError)}</p>}
 
       <div className="figure-forge-body">
         <section className="forge-step" id="forge-step-1" aria-labelledby="forge-step-1-title">

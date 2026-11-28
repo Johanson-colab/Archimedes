@@ -1854,17 +1854,26 @@ interface ResearchThread {
   archived_at: string | null;
 }
 
-type ModelProviderId = "openai" | "anthropic" | "gemini" | "glm" | "minimax" | "deepseek" | "qwen" | "moonshot" | "openrouter" | "custom";
+type ModelProviderId = "openai" | "anthropic" | "gemini" | "glm" | "minimax" | "deepseek" | "qwen" | "moonshot" | "openrouter" | "opencode-go" | "custom";
 type WebSearchProviderId = "brave" | "tavily" | "exa" | "firecrawl";
 interface PublicWebSearchConfig { provider: WebSearchProviderId; hasApiKey: boolean; configuredProviders: WebSearchProviderId[] }
 
 type ModelRole = "agent" | "proactive";
+
+interface ModelSessionHeaderConfig {
+  name: string;
+  strategy: "thread" | "fixed" | "disabled";
+  value?: string;
+}
 
 interface ModelConfigInput {
   provider: ModelProviderId;
   baseUrl: string;
   model: string;
   apiKey?: string;
+  headers?: Record<string, string>;
+  sessionHeader?: ModelSessionHeaderConfig | null;
+  userAgent?: string;
   /** Proactive only: drop the dedicated model and inherit the main Agent's. */
   useAgent?: boolean;
 }
@@ -1873,6 +1882,9 @@ interface ModelCatalogInput {
   provider: ModelProviderId;
   baseUrl: string;
   apiKey?: string;
+  headers?: Record<string, string>;
+  sessionHeader?: ModelSessionHeaderConfig | null;
+  userAgent?: string;
 }
 
 interface ModelCatalogResponse {
@@ -1885,6 +1897,9 @@ interface PublicModelConfig {
   baseUrl: string;
   model: string;
   hasApiKey: boolean;
+  hasCustomHeaders?: boolean;
+  sessionHeader?: Omit<ModelSessionHeaderConfig, "value"> & { hasValue: boolean } | null;
+  userAgent?: string;
   source: "saved" | "environment" | "agent";
   role?: ModelRole;
   inheritedFromAgent?: boolean;
@@ -1988,7 +2003,7 @@ interface AgentRunResult {
   taskId: string;
   response: string;
   status: string;
-  error?: ModelIncompleteFailure;
+  error?: ModelTurnFailure;
   actions: AgentAction[];
   thread: ResearchThreadDetail;
 }
@@ -2007,6 +2022,8 @@ interface WorkspaceSnapshotCoverage {
 }
 
 interface ModelIncompleteFailure { code: "MODEL_RESPONSE_INCOMPLETE"; reason: string; provider: string; finishReason?: string | null }
+interface ModelSessionHeaderFailure { code: "MODEL_SESSION_HEADER_REQUIRED" }
+type ModelTurnFailure = ModelIncompleteFailure | ModelSessionHeaderFailure;
 
 interface AgentEvent {
   type: "status" | "tool" | "artifact" | "approval" | "assistant_delta" | "complete" | "failed" | "incomplete" | "configuration" | "interrupted" | "workspace_change" | "native_activity" | "native_usage" | "native_plan" | "native_diff" | "native_question" | "native_question_resolved" | "native_approval_resolved" | "native_steer" | "graph_update" | "graph_update_pending" | "experiment_run";
@@ -2016,7 +2033,7 @@ interface AgentEvent {
   turnId?: string;
   delta?: string;
   clientRunId?: string;
-  error?: ModelIncompleteFailure;
+  error?: ModelTurnFailure;
   action?: AgentAction;
   changeSet?: WorkspaceChangeSet;
   snapshotCoverage?: WorkspaceSnapshotCoverage;

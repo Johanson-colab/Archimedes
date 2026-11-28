@@ -6,6 +6,14 @@ const speech = require("./speech.cjs");
 const config = { apiKey: "test-key", baseUrl: "https://api.openai.com/v1", provider: "openai" };
 
 test("transcribes audio through the configured OpenAI-compatible endpoint", async () => {
+  const connection = {
+    ...config,
+    provider: "custom",
+    baseUrl: "https://audio.fixture.example/v1",
+    headers: { "X-Tenant": "fixture", "content-type": "application/json" },
+    sessionHeader: { name: "x-session", strategy: "thread" },
+    userAgent: "Archimedes/fixture",
+  };
   let request;
   const fetchImpl = async (url, init) => {
     request = { url, init };
@@ -13,12 +21,19 @@ test("transcribes audio through the configured OpenAI-compatible endpoint", asyn
   };
   const result = await speech.transcribeSpeech(
     { audio: new Uint8Array([1, 2, 3, 4]), mimeType: "audio/webm;codecs=opus", language: "en-US" },
-    config,
+    connection,
     fetchImpl,
   );
   assert.equal(result.text, "hello from speech");
-  assert.equal(request.url, "https://api.openai.com/v1/audio/transcriptions");
+  assert.equal(request.url, "https://audio.fixture.example/v1/audio/transcriptions");
   assert.equal(request.init.headers.Authorization, "Bearer test-key");
+  assert.equal(request.init.redirect, "error");
+  const { headers } = new Request(request.url, request.init);
+  assert.equal(headers.get("accept"), "application/json");
+  assert.equal(headers.get("x-tenant"), "fixture");
+  assert.equal(headers.get("x-session"), "archimedes-transcription");
+  assert.equal(headers.get("user-agent"), "Archimedes/fixture");
+  assert.match(headers.get("content-type"), /^multipart\/form-data; boundary=/);
   assert.equal(request.init.body.get("model"), "whisper-1");
   assert.equal(request.init.body.get("language"), "en");
   assert.equal(request.init.body.get("file").name, "speech.webm");
@@ -45,5 +60,11 @@ test("surfaces provider transcription errors", async () => {
   await assert.rejects(
     () => speech.transcribeSpeech({ audio: new Uint8Array([1]) }, config, fetchImpl),
     /Voice transcription failed \(401\)\. Invalid API key/,
+  );
+  await assert.rejects(
+    () => speech.transcribeSpeech({ audio: new Uint8Array([1]) }, { ...config, headers: { "X-Tenant": "dummy-secret" } }, async () => ({
+      ok: false, status: 401, text: async () => "Invalid value dummy-secret",
+    })),
+    { message: "Voice transcription failed (401)." },
   );
 });

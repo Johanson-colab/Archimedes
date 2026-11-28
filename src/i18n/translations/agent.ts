@@ -113,6 +113,7 @@ export const agent: Record<string, string> = {
   "The panel stays closed until there is something worth sharing, then opens by itself.": "面板会保持关闭，直到有值得分享的内容时自动打开。",
   "Thinking…": "思考中…",
   "This model accepts images": "这个模型支持图片输入",
+  "This provider requires a stable session header. In Settings → Models, select OpenCode Go or set Session header to x-opencode-session and Strategy to Thread.": "此服务商需要稳定的会话请求标头。请在「设置 → 模型」选择 OpenCode Go，或将会话标头设为 x-opencode-session、策略设为「按会话」。",
   "This workspace": "当前工作区",
   "to": "至",
   "Turn the first diagnostic into a fix request with the file and line.": "把第一条诊断转成带文件和行号的修复请求。",

@@ -95,7 +95,7 @@ test("a transport error after text retains that text and does not retry the mode
       else controller.error(new Error("test connection lost"));
     } }, { highWaterMark: 0 }), { headers: { "content-type": "text/event-stream" } });
   });
-  await assert.rejects(agent.complete(config, [], {}), error => error.code === "MODEL_RESPONSE_INCOMPLETE" && error.reason === "stream_error" && error.partialResponse === "Before disconnect");
+  await assert.rejects(agent.complete(config, [], {}), error => error.code === "MODEL_RESPONSE_INCOMPLETE" && error.reason === "stream_error" && error.partialResponse === "Before disconnect" && error.message === "test connection lost");
   assert.equal(requests, 1);
 });
 
@@ -140,6 +140,46 @@ test("successful incomplete streams never make a second POST or execute a tool",
     assert.ok(result.response.startsWith(partial ? `${partial}\n\n` : "This model response is incomplete:"), label);
     assert.equal(executions, 0, label);
   }
+});
+
+test("provider stream errors preserve partial answers and keep header values out of saved failures", async t => {
+  const store = require("./store.cjs");
+  const model = require("./model-config.cjs");
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-stream-secret-"));
+  store.openWorkspace(root);
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  model.initializeModelConfig(path.join(root, "settings"));
+
+  const gatewayToken = "DUMMY_GATEWAY_TOKEN";
+  const sessionToken = "DUMMY_FIXED_SESSION";
+  const message = `Gateway rejected ${gatewayToken} and ${sessionToken}`;
+  let frameError, partial, terminal;
+  let requests = 0;
+  fakeFetch(t, async (_url, { headers }) => {
+    requests++;
+    assert.equal(headers["X-Gateway-Token"], gatewayToken);
+    assert.equal(headers["X-Session"], sessionToken);
+    return stream(terminal ? [partial, ...terminal] : [partial, frameError]);
+  });
+  for (const provider of ["custom", "anthropic"]) {
+    model.saveModelConfig({ ...config, provider, headers: { "X-Gateway-Token": gatewayToken }, sessionHeader: { name: "X-Session", strategy: "fixed", value: sessionToken } });
+    frameError = provider === "anthropic" ? { type: "error", error: { message } } : { error: { message } };
+    partial = provider === "anthropic" ? { type: "content_block_start", index: 0, content_block: { type: "text", text: "Useful partial answer" } } : delta("Useful partial answer");
+    const result = await agent.runAgent({ workspace: root, prompt: "Inspect the fixture" });
+    assert.equal(result.status, "incomplete");
+    assert.match(result.response, /Useful partial answer/);
+    assert.match(result.response, /incomplete \(stream_error\).*Continue in this chat to retry/);
+    assert.doesNotMatch(JSON.stringify(store.getResearchThread(result.threadId)), /DUMMY_GATEWAY_TOKEN|DUMMY_FIXED_SESSION/);
+
+    terminal = provider === "anthropic"
+      ? [{ type: "message_delta", delta: { stop_reason: gatewayToken } }, { type: "message_stop" }]
+      : [delta("", { finish_reason: gatewayToken })];
+    const unexpectedStop = await agent.runAgent({ workspace: root, prompt: "Inspect the fixture's completion metadata" });
+    assert.equal(unexpectedStop.error.reason, "unsupported_stop_reason");
+    assert.doesNotMatch(JSON.stringify(store.getResearchThread(unexpectedStop.threadId)), /DUMMY_GATEWAY_TOKEN/);
+    terminal = null;
+  }
+  assert.equal(requests, 4);
 });
 
 test("real agent persists incomplete text and executes none of a mixed complete/partial tool batch; a later valid turn can continue", async t => {

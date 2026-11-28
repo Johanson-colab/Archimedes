@@ -87,4 +87,7 @@ test("Paper review strings are translated", () => {
   assert.match(i18n, /"Interactive paper": "交互论文"/);
   assert.match(i18n, /"Score-conditioned reviewers": "分数条件审稿人"/);
   assert.match(i18n, /"Evaluate": "评估"/);
+  assert.match(i18n, /"The review failed": "评审失败"/);
+  assert.match(view, /className="pra-notice error">\{t\(error\)\}/);
+  assert.match(view, /<span>\{t\(reviewer\.error\)\}<\/span>/);
 });

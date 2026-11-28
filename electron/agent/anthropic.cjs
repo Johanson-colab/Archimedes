@@ -1,5 +1,7 @@
 const { fetchModelWithRetry } = require("./model-retry.cjs");
 const { ModelIncompleteError, assertModelCompletion } = require("./model-completion.cjs");
+const { buildModelRequestOptions, formatModelRequestError, modelProviderErrorDetail } = require("../model-request-headers.cjs");
+const { readModelResponseJson } = require("../model-response-json.cjs");
 
 function parseArguments(value) {
   try { return JSON.parse(value || "{}"); } catch { return {}; }
@@ -55,16 +57,16 @@ function normalizeBlocks(blocks) {
   };
 }
 
-async function completeAnthropic(config, messages, { signal, onTextDelta = () => {}, allowTools = true, availableTools = [], maxOutputTokens, allowLargeOutput = false, requireComplete = false }) {
+async function completeAnthropic(config, messages, { signal, onTextDelta = () => {}, allowTools = true, availableTools = [], maxOutputTokens, allowLargeOutput = false, requireComplete = false, sessionId = "archimedes-internal" }) {
   const response = await fetchModelWithRetry(`${config.baseUrl.replace(/\/+$/, "")}/messages`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", "x-api-key": config.apiKey, "anthropic-version": "2023-06-01" },
+    ...buildModelRequestOptions(config, sessionId, { anthropic: true, baseHeaders: { "Content-Type": "application/json" } }),
     body: JSON.stringify(toAnthropicRequest(config, messages, { allowTools, availableTools, maxOutputTokens, allowLargeOutput })),
     signal,
   });
-  if (!response.ok) throw new Error(`Model request failed (${response.status}): ${(await response.text()).slice(0, 500)}`);
+  if (!response.ok) throw new Error(formatModelRequestError(response.status, await response.text(), config));
   if (!(response.headers.get("content-type") || "").includes("text/event-stream") || !response.body) {
-    const body = await response.json();
+    const body = await readModelResponseJson(response);
     if (!Array.isArray(body?.content)) throw new Error("Anthropic response did not contain content blocks.");
     const normalized = normalizeBlocks(body.content);
     assertModelCompletion({ provider: "anthropic", finishReason: body.stop_reason, partialResponse: normalized.content, toolCalls: normalized.tool_calls });
@@ -93,7 +95,7 @@ async function completeAnthropic(config, messages, { signal, onTextDelta = () =>
         catch { throw new ModelIncompleteError({ provider: "anthropic", reason: "malformed_frame" }); }
         if (event.type === "message_delta" && event.delta?.stop_reason) finishReason = event.delta.stop_reason;
         if (event.type === "message_stop") terminalSeen = true;
-        if (event.type === "error") throw new Error(`Anthropic stream error: ${event.error?.message || "Unknown error"}`);
+        if (event.type === "error" || event.error) throw new Error(`Anthropic stream error: ${event.error?.message || event.message || "Unknown error"}`);
         if (event.type === "content_block_start") {
           blocks[event.index] = { ...event.content_block, text: event.content_block?.text || "", partialInput: "" };
           openBlocks.add(event.index);
@@ -113,9 +115,9 @@ async function completeAnthropic(config, messages, { signal, onTextDelta = () =>
   } catch (error) {
     const partialResponse = normalizeBlocks(blocks.filter(Boolean)).content;
     try { await reader.cancel(); } catch { /* Preserve the actual stream error. */ }
-    if (signal?.aborted || error?.name === "AbortError") { error.partialResponse = partialResponse; throw error; }
+    if (signal?.aborted || error?.name === "AbortError") throw Object.assign(new Error("Model request interrupted."), { name: "AbortError", partialResponse });
     if (error.code === "MODEL_RESPONSE_INCOMPLETE") { error.partialResponse = partialResponse; throw error; }
-    throw new ModelIncompleteError({ provider: "anthropic", reason: "stream_error", partialResponse, detail: error.message });
+    throw new ModelIncompleteError({ provider: "anthropic", reason: "stream_error", partialResponse, detail: modelProviderErrorDetail(error?.message, config) });
   } finally { reader.releaseLock(); }
   const normalized = normalizeBlocks(blocks.filter(Boolean));
   assertModelCompletion({ provider: "anthropic", finishReason, terminalSeen, partialResponse: normalized.content, toolCalls: normalized.tool_calls });

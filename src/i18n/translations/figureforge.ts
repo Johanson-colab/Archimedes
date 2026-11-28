@@ -53,6 +53,7 @@ export const figureforge: Record<string, string> = {
   "FigureForge steps": "FigureForge 步骤",
   "file": "个文件",
   "Framework": "框架图",
+  "Gemini returned no image (NO_IMAGE).": "Gemini 未返回图片（NO_IMAGE）。",
   "Generate": "生成",
   "Generate a bitmap draft first, or upload one.": "请先生成位图初稿，或上传一张。",
   "Generate draft": "生成初稿",

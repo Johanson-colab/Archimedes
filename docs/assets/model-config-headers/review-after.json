@@ -1,0 +1,60 @@
+{
+  "observed": {
+    "provider-charcoal": {
+      "width": 1180,
+      "height": 900,
+      "theme": "charcoal",
+      "language": "en",
+      "modalWidth": 940,
+      "provider": "OpenCode Go",
+      "goInList": true,
+      "presetButton": false,
+      "feedback": ""
+    },
+    "connection-paper-zh": {
+      "width": 1180,
+      "height": 900,
+      "theme": "paper",
+      "language": "zh-CN",
+      "modalWidth": 940,
+      "provider": "Custom",
+      "goInList": true,
+      "presetButton": false,
+      "feedback": "连接失败（400）。请在「设置 → 模型」中选择 OpenCode Go，或将「会话请求头」设为 x-opencode-session，并将「策略」设为「按会话」。"
+    },
+    "connection-paper-go": {
+      "width": 1180,
+      "height": 900,
+      "theme": "paper",
+      "language": "zh-CN",
+      "modalWidth": 940,
+      "provider": "OpenCode Go",
+      "goInList": true,
+      "presetButton": false,
+      "feedback": "Connected in 3 ms · hy4-flash-free"
+    }
+  },
+  "requests": [
+    {
+      "path": "/v1/chat/completions",
+      "model": "hy4-flash-free",
+      "session": "",
+      "userAgent": "node",
+      "authenticated": true
+    },
+    {
+      "path": "/v1/chat/completions",
+      "model": "hy4-flash-free",
+      "session": "archimedes-connection-test",
+      "userAgent": "Archimedes/0.1.0",
+      "authenticated": true
+    },
+    {
+      "path": "/v1/chat/completions",
+      "model": "hy4-flash-free",
+      "session": "archimedes-connection-test",
+      "userAgent": "Archimedes/0.1.0",
+      "authenticated": true
+    }
+  ]
+}
