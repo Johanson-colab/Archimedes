@@ -1,0 +1,19 @@
+$ node --test electron/ui-audit-recovery-translations.test.cjs electron/i18n-translations.test.cjs electron/reproduction-recovery.test.cjs
+✔ translation shards cover every string exactly once (4.574625ms)
+✔ keys stay sorted inside each shard so concurrent additions do not collide (2.720042ms)
+✔ the shell merges every shard and keeps the surfaces translated (1.996208ms)
+✔ a run left running by a killed app is reconciled on the next open (197.113584ms)
+✔ a verified reproduction is left alone (25.380334ms)
+✔ reopening reports a remote run that may still be active and leaves an unowned PID alone (148.116417ms)
+✔ a fresh process recovers interrupted turns, pending approvals and commands without rewriting completed output (182.864292ms)
+✔ switching data folders preserves a live turn and its pending approval (67.567083ms)
+✔ conversation surfaces translate only marked recovery notices (170.8445ms)
+✔ recovery warnings are translated at the render boundary (1.385708ms)
+ℹ tests 10
+ℹ suites 0
+ℹ pass 10
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 928.507042

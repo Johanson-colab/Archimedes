@@ -1,0 +1,29 @@
+$ node --test electron/ui-audit-recovery-translations.test.cjs  # PR #356 head
+✖ recovery warnings are translated at the render boundary (1.524084ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 127.555709
+
+✖ failing tests:
+
+test at electron/ui-audit-recovery-translations.test.cjs:19:1
+✖ recovery warnings are translated at the render boundary (1.524084ms)
+  AssertionError [ERR_ASSERTION]: missing translation: Remote process status is unconfirmed after the app closed. Check the SSH host before running again.
+      at translated (/Users/fei/Desktop/Archimedes/electron/ui-audit-recovery-translations.test.cjs:14:10)
+      at TestContext.<anonymous> (/Users/fei/Desktop/Archimedes/electron/ui-audit-recovery-translations.test.cjs:20:3)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.start (node:internal/test_runner/test:1262:17)
+      at startSubtestAfterBootstrap (node:internal/test_runner/harness:387:17) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: null,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }

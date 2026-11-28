@@ -1,0 +1,8 @@
+{
+  "stage": "before",
+  "viewport": [
+    900,
+    460
+  ],
+  "text": "Reproduce\nRemote process status is unconfirmed after the app closed. Check the SSH host before running again.\nThe app stopped while this was running. Start it again.\nResearch Graph\nRun error\n\nA process with the saved PID is still present. Verify its identity before stopping or rerunning it.\n\nRun error\n\nThe run process is no longer available."
+}

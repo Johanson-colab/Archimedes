@@ -487,7 +487,7 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
         <FlaskConical size={26} />
         <strong>No plan yet</strong>
         <span>The planner reads the paper and its code to work out which numbers can be checked independently. It never touches a machine.</span>
-        {detail.error && <div className="reproduce-note bad">{detail.error}</div>}
+        {detail.error && <div className="reproduce-note bad">{t(detail.error)}</div>}
         <button className="primary-button" disabled={busy !== ""} onClick={() => void plan()}>
           {busy === "plan" ? <LoaderCircle className="spin" size={14} /> : <FlaskConical size={14} />}
           {busy === "plan" ? "Planning…" : "Generate plan"}

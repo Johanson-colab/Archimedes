@@ -12,6 +12,7 @@ export const reproduce: Record<string, string> = {
   "just now": "刚刚",
   "No safe change to try. This needs a person.": "没有可以安全尝试的改动，需要人来处理。",
   "Queued": "排队中",
+  "Remote process status is unconfirmed after the app closed. Check the SSH host before running again.": "应用关闭后无法确认远程进程状态。再次运行前请检查 SSH 主机。",
   "Remote stop unconfirmed": "远程停止待确认",
   "Run on": "在",
   "Running": "运行中",
@@ -20,6 +21,7 @@ export const reproduce: Record<string, string> = {
   "Stop here": "到此为止",
   "Stop requested. Check the SSH host to confirm the remote process has exited.": "已请求停止。请检查 SSH 主机，确认远程进程是否已退出。",
   "Suggested change to step {step}:": "建议把步骤 {step} 改成：",
+  "The app stopped while this was running. Start it again.": "应用停止时此任务仍在运行，请重新启动。",
   "This Mac (Docker)": "本机（Docker）",
   "Where to run": "在哪里运行",
 };

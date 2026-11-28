@@ -1,0 +1,8 @@
+{
+  "stage": "after",
+  "viewport": [
+    900,
+    460
+  ],
+  "text": "Reproduce\n应用关闭后无法确认远程进程状态。再次运行前请检查 SSH 主机。\n应用停止时此任务仍在运行，请重新启动。\nResearch Graph\nRun error\n\n保存的 PID 对应进程仍存在。停止或重新运行前请确认其身份。\n\nRun error\n\n运行进程已不可用。"
+}
