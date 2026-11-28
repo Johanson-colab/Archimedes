@@ -252,6 +252,14 @@ const COMPOSER_HISTORY_LIMIT = 30;
 
 type ComposerDraft = { text: string; selectionStart: number; selectionEnd: number; newChatMode?: NewChatMode };
 type QueuedPrompt = { id: string; draft: string; mode: ResearchMode; reasoningEffort: ReasoningEffort; contextLength: ContextLength; contextItems: ContextAttachment[]; researchSkill?: "idea-spark" };
+type ComposerSession = { context: ContextAttachment[]; queued: QueuedPrompt[]; paused: boolean };
+type ComposerSlot = { id: string; session: ComposerSession };
+type ComposerSend = { slot: ComposerSlot; owner: string; dataRoot: string; draftKey: string; clientRunId: string; accepted: boolean };
+
+function composerOwnerKey(dataRoot: string, threadId: string | null, draftKey?: string) {
+  return threadId ? JSON.stringify([dataRoot, "thread", threadId]) : JSON.stringify([dataRoot, "draft", draftKey]);
+}
+
 type ComposerSlashCommand = {
   id: string;
   aliases?: string[];
@@ -1525,7 +1533,9 @@ function App() {
     void desktopBridge.getAgentBackendConfig().then((config) => { if (active) setNativeBackend(config); }).catch(() => { if (active) setNativeBackend(null); });
     return () => { active = false; };
   }, [settingsOpen]);
-  const [contextItems, setContextItems] = useState<ContextAttachment[]>([]);
+  const composerSlots = useRef(new Map<string, ComposerSlot>());
+  const [, refreshComposer] = useState(0);
+  const pendingComposerSend = useRef<ComposerSend | null>(null);
   const [fileTree, setFileTree] = useState<WorkspaceFileTree>({ entries: [], count: 0, truncated: false });
   const [loadingDirectories, setLoadingDirectories] = useState<Set<string>>(new Set());
   const [openFiles, setOpenFiles] = useState<WorkspaceFilePreview[]>([]);
@@ -1625,6 +1635,37 @@ function App() {
   // and paper writing operate inside the session folder: session snapshot →
   // project folder → primary workspace.
   const executionWorkspace = activeThread?.workspace_path || activeWorkspace?.root || activeProject?.workspace_path || workspace;
+  const composerDraftKey = activeThreadId ?? `new:${activeProjectId ?? "none"}:${executionWorkspace}`;
+  const composerOwner = composerOwnerKey(workspace, activeThreadId, composerDraftKey);
+  const composerSlot = composerSlots.current.get(composerOwner) ?? { id: crypto.randomUUID(), session: { context: [], queued: [], paused: false } };
+  composerSlots.current.set(composerOwner, composerSlot);
+  const currentComposerSlot = useRef(composerSlot);
+  currentComposerSlot.current = composerSlot;
+  const contextItems = composerSlot.session.context;
+
+  function updateComposer(slot: ComposerSlot, update: (current: ComposerSession) => ComposerSession) {
+    slot.session = update(slot.session);
+    if (currentComposerSlot.current === slot) refreshComposer((version) => version + 1);
+  }
+
+  function setContextItems(update: (current: ContextAttachment[]) => ContextAttachment[]) {
+    updateComposer(composerSlot, (session) => ({ ...session, context: update(session.context) }));
+  }
+
+  function acceptComposerSend(send: ComposerSend, threadId: string) {
+    if (send.accepted) return;
+    send.accepted = true;
+    const owner = composerOwnerKey(send.dataRoot, threadId);
+    if (owner !== send.owner) {
+      if (!readComposerDraft(threadId)) {
+        const draft = readComposerDraft(send.draftKey);
+        if (draft) writeComposerDraft(threadId, draft);
+      }
+      composerSlots.current.delete(send.owner);
+      composerSlots.current.set(owner, send.slot);
+    }
+  }
+
   const executionWorkspaceRef = useRef(executionWorkspace);
   const fileWorkspaceVersionRef = useRef(0);
   if (executionWorkspaceRef.current !== executionWorkspace) fileWorkspaceVersionRef.current += 1;
@@ -2325,8 +2366,11 @@ function App() {
         });
       }
       if (event.threadId && !isGraphEvent) {
+        const send = pendingComposerSend.current;
+        const ownEvent = send && event.clientRunId === send.clientRunId;
+        if (ownEvent && event.turnId) acceptComposerSend(send, event.threadId);
         setRunningThreadId(event.threadId);
-        if (!activeThreadIdRef.current) {
+        if (!activeThreadIdRef.current && (!ownEvent || currentComposerSlot.current === send.slot)) {
           activeThreadIdRef.current = event.threadId;
           setActiveThreadId(event.threadId);
         }
@@ -2510,10 +2554,7 @@ function App() {
       setThreads(snapshot.threads);
       setArchivedThreads(snapshot.archivedThreads ?? []);
       setWorkspaces(snapshot.workspaces ?? []);
-      if (snapshot.workspace !== workspace) {
-        setContextItems([]);
-        setComposerRequest(null);
-      }
+      if (snapshot.workspace !== workspace) setComposerRequest(null);
       setFileTree(nextTree);
       setLoadingDirectories(new Set());
       openFilesRef.current = [];
@@ -2650,15 +2691,23 @@ function App() {
 
   function startNewTask(projectId = activeProjectId, workspaceId = activeWorkspaceId) {
     if (agentBusy || workspaceOpeningRef.current) return;
+    const targetWorkspace = workspaces.find((entry) => entry.id === workspaceId && entry.project_id === projectId)
+      ?? workspaces.find((entry) => entry.project_id === projectId && entry.is_default)
+      ?? workspaces.find((entry) => entry.project_id === projectId);
+    const targetProjectId = projectId ?? activeProjectId;
+    const targetRoot = targetWorkspace?.root || projects.find((project) => project.id === targetProjectId)?.workspace_path || workspace;
+    const draftKey = `new:${targetProjectId ?? "none"}:${targetRoot}`;
+    const targetOwner = composerOwnerKey(workspace, null, draftKey);
+    const resumingQueue = targetOwner !== composerOwner && composerSlots.current.get(targetOwner)?.session.queued.length;
+    if (!resumingQueue) {
+      composerSlots.current.delete(targetOwner);
+      writeComposerDraft(draftKey, null);
+    }
     setRemoteServerId("");
-    writeComposerDraft(`new:${projectId ?? "none"}:${executionWorkspace}`, null);
     setMainSection("chat");
     clearPendingAssistantDeltas();
     setChatViewNonce((current) => current + 1);
     if (projectId) setActiveProjectId(projectId);
-    const targetWorkspace = workspaces.find((entry) => entry.id === workspaceId && entry.project_id === projectId)
-      ?? workspaces.find((entry) => entry.project_id === projectId && entry.is_default)
-      ?? workspaces.find((entry) => entry.project_id === projectId);
     setActiveWorkspaceId(targetWorkspace?.id ?? null);
     threadOpenRequestRef.current += 1;
     activeThreadIdRef.current = null;
@@ -2668,8 +2717,8 @@ function App() {
     setMessages(initialMessages);
     setTrajectoryEvents([]);
     setPendingAction(null);
-    setContextItems([]);
     setChangeSets([]);
+    return { owner: targetOwner, draftKey };
   }
 
   async function runConversationCommand(command: ConversationCommand): Promise<ConversationCommandResult> {
@@ -2682,7 +2731,14 @@ function App() {
     if (agentBusy) throw new Error(t("Stop the running turn before using this command."));
     if (command === "init") {
       if (!executionWorkspace) throw new Error(t("Select a workspace first."));
-      if (!(await submitPrompt(INIT_PROMPT, "free-chat"))) throw new Error(t("Project initialization could not start."));
+      const send: ComposerSend = { slot: composerSlot, owner: composerOwner, dataRoot: workspace, draftKey: composerDraftKey, clientRunId: `work-composer:init:${Date.now()}`, accepted: false };
+      pendingComposerSend.current = send;
+      try {
+        if (!(await submitPrompt(INIT_PROMPT, "free-chat", reasoningEffort, contextLength, undefined, undefined, undefined, false, undefined, send))) throw new Error(t("Project initialization could not start."));
+      } finally {
+        pendingComposerSend.current = null;
+      }
+      setContextItems((current) => current.filter((item) => !contextItems.some((submitted) => submitted.id === item.id)));
       return;
     }
     if (command === "new") { startNewTask(); return; }
@@ -3043,7 +3099,18 @@ function App() {
     }
   }
 
-  async function submitPrompt(draft: string, requestedMode: ResearchMode = researchMode, requestedReasoningEffort: ReasoningEffort = reasoningEffort, requestedContextLength: ContextLength = contextLength, submittedContextOverride?: ContextAttachment[], researchSkill?: "idea-spark" | "paper-to-slides", backendOverride?: "codex" | "claude", forceNew = false, mineruToken?: string): Promise<boolean> {
+  async function submitComposerPrompt(message: QueuedPrompt) {
+    if (pendingComposerSend.current) return false;
+    const send: ComposerSend = { slot: composerSlot, owner: composerOwner, dataRoot: workspace, draftKey: composerDraftKey, clientRunId: `work-composer:${message.id}`, accepted: false };
+    pendingComposerSend.current = send;
+    try {
+      return await submitPrompt(message.draft, message.mode, message.reasoningEffort, message.contextLength, message.contextItems, message.researchSkill, undefined, false, undefined, send);
+    } finally {
+      pendingComposerSend.current = null;
+    }
+  }
+
+  async function submitPrompt(draft: string, requestedMode: ResearchMode = researchMode, requestedReasoningEffort: ReasoningEffort = reasoningEffort, requestedContextLength: ContextLength = contextLength, submittedContextOverride?: ContextAttachment[], researchSkill?: "idea-spark" | "paper-to-slides", backendOverride?: "codex" | "claude", forceNew = false, mineruToken?: string, composerSend?: ComposerSend): Promise<boolean> {
     const question = draft.trim();
     const submittedContext = submittedContextOverride ?? contextItems;
     const hasPastedImage = submittedContext.some((item) => item.type === "image");
@@ -3056,7 +3123,8 @@ function App() {
     clearPendingAssistantDeltas();
     setAgentBusy(true);
     setInterrupting(false);
-    setMessages((current) => [...current, { id: crypto.randomUUID(), role: "user", text: requestPrompt, attachments: submittedContext.map((item, position) => ({ type: item.type, name: item.name, path: item.path, detail: item.detail, size: item.image?.sizeBytes ?? item.size, position, imageData: item.image?.dataUrl })), created_at: new Date().toISOString() }]);
+    const optimisticMessageId = crypto.randomUUID();
+    setMessages((current) => [...current, { id: optimisticMessageId, role: "user", text: requestPrompt, attachments: submittedContext.map((item, position) => ({ type: item.type, name: item.name, path: item.path, detail: item.detail, size: item.image?.sizeBytes ?? item.size, position, imageData: item.image?.dataUrl })), created_at: new Date().toISOString() }]);
     // A new turn must not reuse the previous turn's native activity while the
     // backend is starting (including when switching from Codex back to API).
     setNativeStream({ threadId: activeThreadId || "", events: [{ id: "pending-turn", turn_id: "pending-turn", sequence: 0, type: "user_message", payload: {}, created_at: new Date().toISOString() }] });
@@ -3064,13 +3132,14 @@ function App() {
     setEvents(selectedNativeBackend ? [] : [{ title: "Evidence synthesis", detail: "Reading workspace and knowledge context", state: "active" }]);
 
     try {
-      const result = await desktopBridge.runAgent({ prompt: requestPrompt, workspace: executionWorkspace, threadId: forceNew ? undefined : activeThreadId || undefined, projectId: activeProjectId || undefined, workspaceId: activeWorkspace?.id, visibility: threadVisibility, mode: requestedMode, researchSkill, mineruToken, reasoningEffort: requestedReasoningEffort, contextLength: requestedContextLength, contextItems: submittedContext, capabilities: { write: "ask", command: "ask" }, origin: "research", backend: backendOverride || selectedHarness, ...(remoteServerId && !researchSkill && (backendOverride || selectedHarness) === "codex" && ["research", "experiment-setup"].includes(requestedMode) ? { remoteServerId } : {}) });
+      const result = await desktopBridge.runAgent({ prompt: requestPrompt, workspace: executionWorkspace, clientRunId: composerSend?.clientRunId, threadId: forceNew ? undefined : activeThreadId || undefined, projectId: activeProjectId || undefined, workspaceId: activeWorkspace?.id, visibility: threadVisibility, mode: requestedMode, researchSkill, mineruToken, reasoningEffort: requestedReasoningEffort, contextLength: requestedContextLength, contextItems: submittedContext, capabilities: { write: "ask", command: "ask" }, origin: "research", backend: backendOverride || selectedHarness, ...(remoteServerId && !researchSkill && (backendOverride || selectedHarness) === "codex" && ["research", "experiment-setup"].includes(requestedMode) ? { remoteServerId } : {}) });
+      if (composerSend) acceptComposerSend(composerSend, result.threadId);
       setThreads((current) => [result.thread, ...current.filter((thread) => thread.id !== result.threadId)]);
       setNativeStream((current) => current.threadId === result.threadId ? { threadId: "", events: [] } : current);
       setNativeQuestions((current) => current.filter((item) => item.threadId !== result.threadId));
       if (submittedThreadId === null) await moveDraftWorkbenchNote(draftNoteKey, result.threadId);
       const stillViewingSubmittedThread = activeThreadIdRef.current === result.threadId
-        || (submittedThreadId === null && activeThreadIdRef.current === null);
+        || (submittedThreadId === null && activeThreadIdRef.current === null && (!composerSend || currentComposerSlot.current === composerSend.slot));
       if (stillViewingSubmittedThread) {
         clearPendingAssistantDeltas();
         activeThreadIdRef.current = result.threadId;
@@ -3086,11 +3155,16 @@ function App() {
         const proposedAction = result.actions.find((action) => action.status === "pending");
         if (proposedAction) setPendingAction({ ...proposedAction, source: "agent", ownerThreadId: result.threadId });
       }
-      setContextItems((current) => current.filter((item) => !submittedContext.some((submitted) => submitted.id === item.id)));
       return true;
     } catch (error) {
-      setMessages((current) => [...current, { id: crypto.randomUUID(), role: "assistant", text: `Archimedes could not start this task: ${String(error)}` }]);
-      return false;
+      if (composerSend && !composerSend.accepted) updateComposer(composerSend.slot, (session) => ({ ...session, paused: true }));
+      if (!composerSend || currentComposerSlot.current === composerSend.slot) {
+        setMessages((current) => [
+          ...current.filter((message) => !composerSend || composerSend.accepted || message.id !== optimisticMessageId),
+          { id: crypto.randomUUID(), role: "assistant", text: `Archimedes could not start this task: ${String(error)}` },
+        ]);
+      }
+      return composerSend?.accepted ?? false;
     } finally {
       setAgentBusy(false);
       setRunningThreadId(null);
@@ -3513,7 +3587,6 @@ function App() {
 
   const dirtyFilePaths = useMemo(() => new Set(Object.values(fileDrafts).filter(isDraftDirty).map((draft) => draft.path)), [fileDrafts]);
   const changesBadge = useMemo(() => changeSets.reduce((total, changeSet) => seenChangeSetIds.has(changeSet.id) ? total : total + changeSet.changes.length, 0), [changeSets, seenChangeSetIds]);
-  const composerDraftKey = activeThreadId ?? `new:${activeProjectId ?? "none"}:${executionWorkspace}`;
   const conversationScrollKey = activeThreadId ?? `new:${activeProjectId ?? "none"}:${activeWorkspace?.id ?? executionWorkspace}`;
   const sessionCommentsScope = useMemo<SessionCommentsScope | null>(() => activeThreadId && activeProjectId ? {
     bridge: desktopBridge, workspace, projectId: activeProjectId, sessionId: activeThreadId, shared: Boolean(activeProject?.cloud_project_id),
@@ -3619,9 +3692,22 @@ function App() {
     "data-analysis": <DataAnalysisView onAskAI={(text) => sendNoteToChat(text, "replace")} />,
     "paper-to-slides": <PaperToSlidesView bridge={desktopBridge} workspace={executionWorkspace} busy={agentBusy} onStart={async ({ pdfPath, backend, language, length, instructions, mineruToken }) => {
       const staged = await desktopBridge.stagePaperToSlidesPdf(executionWorkspace, pdfPath);
-      startNewTask();
+      const submittedContext = [...composerSlot.session.context];
+      const target = startNewTask();
+      if (!target) return;
+      setContextItems(() => []);
+      const slot = composerSlots.current.get(target.owner) ?? { id: crypto.randomUUID(), session: { context: [], queued: [], paused: false } };
+      composerSlots.current.set(target.owner, slot);
+      currentComposerSlot.current = slot;
+      const send: ComposerSend = { slot, owner: target.owner, dataRoot: workspace, draftKey: target.draftKey, clientRunId: `work-composer:paper-to-slides:${Date.now()}`, accepted: false };
+      pendingComposerSend.current = send;
       const prompt = [`Create a paper presentation using the bundled paper2slides skill.`, `Input PDF: ${JSON.stringify(staged)}`, `Slide and speaker-note language: ${language}.`, `Length: ${length}.`, `Use relevant original figures and tables; check visual quality and factual accuracy. Save an editable PPTX and report the output path.`, instructions ? `Additional user instructions: ${instructions}` : ""].filter(Boolean).join("\n");
-      await submitPrompt(prompt, "free-chat", reasoningEffort, contextLength, [], "paper-to-slides", backend, true, mineruToken || undefined);
+      try {
+        const started = await submitPrompt(prompt, "free-chat", reasoningEffort, contextLength, submittedContext, "paper-to-slides", backend, true, mineruToken || undefined, send);
+        if (!started && !send.accepted) updateComposer(send.slot, (session) => ({ ...session, context: [...submittedContext, ...session.context.filter((item) => !submittedContext.some((submitted) => submitted.id === item.id))] }));
+      } finally {
+        if (pendingComposerSend.current === send) pendingComposerSend.current = null;
+      }
     }} />,
 
     writing: <PaperWritingView bridge={desktopBridge} workspace={executionWorkspace} projectId={activeProjectId} openRequest={paperOpenRequest} onRefresh={refreshWorkspaceFiles} onAskAI={askAIAboutPaper} active={mainSection === "writing"} />,
@@ -3773,7 +3859,7 @@ function App() {
           />}
           {mainSection === "chat" && (
             <ConversationView
-              key={activeThreadId ?? `new:${chatViewNonce}`}
+              key={composerSlot.id}
               commentScope={sessionCommentsScope}
               addingComment={commentsOpen}
               commentsShowResolved={sessionTools.commentsShowResolved}
@@ -3810,7 +3896,9 @@ function App() {
               interrupting={interrupting}
               pendingAction={pendingAction}
               changeSets={changeSets}
-              onSubmit={submitPrompt}
+              onSubmit={submitComposerPrompt}
+              composerSession={composerSlot.session}
+              onComposerSessionChange={(update) => updateComposer(composerSlot, update)}
               onInterrupt={() => void interruptResearchTurn()}
               canInterrupt={Boolean(runningThreadId) && !interrupting}
               researchMode={researchMode}
@@ -4349,7 +4437,7 @@ const ConversationHistory = memo(function ConversationHistory({ messages, events
   </div>;
 });
 
-function ConversationView({ onOpenCreatedApps, messages, events, trajectoryEvents, remoteServers, remoteServerId, onRemoteServerChange, onRefreshRemoteServers, onOpenSshSettings, nativeBackend, harnessBound, onHarnessChange, nativeQuestions, onNativeAnswer, onNativeSteer, workspace, projectId, agentBusy, interrupting, canInterrupt, pendingAction, changeSets, researchMode, researchGraphOpen, onToggleResearchGraph, onResearchGraphAvailability, reasoningEffort, contextLength, modelCapabilities, contextItems, onOpenWorkspaceSettings, onCommand, contextSummary, compactedThroughTurnId, onSubmit, onInterrupt, onResearchMode, onAddContext, onRemoveContext, onApprove, onReject, onOpenFile, showWelcome, onWelcomeAction, composerRequest, draftKey, currentFile, currentSelection, onComposerRequestApplied, initialScrollTop, onScrollTop, commentScope, addingComment, commentsShowResolved, onExitComments }: {
+function ConversationView({ onOpenCreatedApps, messages, events, trajectoryEvents, remoteServers, remoteServerId, onRemoteServerChange, onRefreshRemoteServers, onOpenSshSettings, nativeBackend, harnessBound, onHarnessChange, nativeQuestions, onNativeAnswer, onNativeSteer, workspace, projectId, agentBusy, interrupting, canInterrupt, pendingAction, changeSets, researchMode, researchGraphOpen, onToggleResearchGraph, onResearchGraphAvailability, reasoningEffort, contextLength, modelCapabilities, contextItems, onOpenWorkspaceSettings, onCommand, contextSummary, compactedThroughTurnId, onSubmit, composerSession, onComposerSessionChange, onInterrupt, onResearchMode, onAddContext, onRemoveContext, onApprove, onReject, onOpenFile, showWelcome, onWelcomeAction, composerRequest, draftKey, currentFile, currentSelection, onComposerRequestApplied, initialScrollTop, onScrollTop, commentScope, addingComment, commentsShowResolved, onExitComments }: {
   onOpenCreatedApps: () => void;
   commentScope: SessionCommentsScope | null;
   addingComment: boolean;
@@ -4388,7 +4476,9 @@ function ConversationView({ onOpenCreatedApps, messages, events, trajectoryEvent
   onCommand: (command: ConversationCommand) => Promise<ConversationCommandResult>;
   contextSummary?: string;
   compactedThroughTurnId?: string | null;
-  onSubmit: (draft: string, mode: ResearchMode, reasoningEffort: ReasoningEffort, contextLength: ContextLength, contextItems?: ContextAttachment[], researchSkill?: "idea-spark") => Promise<boolean>;
+  onSubmit: (message: QueuedPrompt) => Promise<boolean>;
+  composerSession: ComposerSession;
+  onComposerSessionChange: (update: (current: ComposerSession) => ComposerSession) => void;
   onInterrupt: () => void;
   onResearchMode: (mode: ResearchMode) => void;
   onAddContext: (items: ContextAttachment[]) => void;
@@ -4419,16 +4509,19 @@ function ConversationView({ onOpenCreatedApps, messages, events, trajectoryEvent
   const [steering, setSteering] = useState(false);
   const reportedNativeUsage = useMemo(() => nativeUsage(trajectoryEvents), [trajectoryEvents]);
   const slashRunningRef = useRef(false);
+  const originalDraftKey = useRef(draftKey);
   const storedDraftRef = useRef<ComposerDraft | null>(readComposerDraft(draftKey));
   const [prompt, setPrompt] = useState(storedDraftRef.current?.text ?? "");
   const [promptHistory, setPromptHistory] = useState<string[]>(readComposerHistory);
   const [historyIndex, setHistoryIndex] = useState(-1);
-  const [queuedPrompts, setQueuedPrompts] = useState<QueuedPrompt[]>([]);
+  const { queued: queuedPrompts, paused: queuePaused } = composerSession;
   const [slashQuery, setSlashQuery] = useState<string | null>(null);
   const [slashIndex, setSlashIndex] = useState(0);
   const [pendingResearchSkill, setPendingResearchSkill] = useState<"idea-spark" | null>(null);
   const [contextPickerRequest, setContextPickerRequest] = useState(0);
   const previousBusyRef = useRef(agentBusy);
+  const currentDraftRef = useRef({ draftKey, prompt, contextItems });
+  currentDraftRef.current = { draftKey, prompt, contextItems };
   const contextUsageTriggerRef = useRef<HTMLButtonElement>(null);
   const sshWorkspaceTriggerRef = useRef<HTMLButtonElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
@@ -4458,6 +4551,8 @@ function ConversationView({ onOpenCreatedApps, messages, events, trajectoryEvent
     // "Ask AI" from another module switches sections and sets both in the same
     // commit, so restoring the empty draft here would erase the prompt.
     if (composerRequest && appliedComposerRequestRef.current === composerRequest.id) return;
+    // The same composer instance follows an accepted draft into its thread.
+    if (draftKey !== originalDraftKey.current) return;
     const stored = readComposerDraft(draftKey);
     storedDraftRef.current = stored;
     setNewChatMode(stored?.newChatMode ?? "standard");
@@ -4774,27 +4869,53 @@ function ConversationView({ onOpenCreatedApps, messages, events, trajectoryEvent
     return true;
   }
 
-  function queueCurrentPrompt() {
-    const draft = prompt;
-    if (!draft.trim() && !contextItems.some((item) => item.type === "image")) return;
-    if (queuedPrompts.length >= 5) {
-      setComposerError("Up to five follow-ups can be queued at a time.");
-      return;
-    }
-    setQueuedPrompts((current) => [...current, {
+  function takeCurrentPrompt(mode: ResearchMode): QueuedPrompt {
+    const message: QueuedPrompt = {
       id: crypto.randomUUID(),
-      draft,
-      mode: predictedMode,
+      draft: prompt,
+      mode,
       reasoningEffort,
       contextLength,
       contextItems,
       researchSkill: pendingResearchSkill ?? undefined,
-    }]);
-    rememberPrompt(draft);
+    };
+    currentDraftRef.current = { draftKey, prompt: "", contextItems: [] };
+    rememberPrompt(prompt);
     setPrompt("");
+    for (const item of contextItems) onRemoveContext(item.id);
     setPendingResearchSkill(null);
-    setHistoryIndex(-1);
     setComposerError("");
+    return message;
+  }
+
+  function queueCurrentPrompt() {
+    if (queuedPrompts.length >= 5) {
+      setComposerError("Up to five follow-ups can be queued at a time.");
+      return;
+    }
+    const message = takeCurrentPrompt(predictedMode);
+    onComposerSessionChange((session) => ({ ...session, queued: [...session.queued, message] }));
+  }
+
+  async function sendPrompt(message: QueuedPrompt) {
+    const sent = await onSubmit(message);
+    if (sent) return;
+    const currentDraft = currentDraftRef.current;
+    const showingOwner = Boolean(composerRef.current && currentDraft.draftKey === draftKey);
+    const hasFollowers = queuedPrompts.some(item => item.id !== message.id);
+    const restore = showingOwner && !hasFollowers && !currentDraft.prompt.trim() && !currentDraft.contextItems.length;
+    onComposerSessionChange((session) => ({
+      ...session, paused: true, queued: restore ? session.queued : [message, ...session.queued],
+    }));
+    if (!showingOwner) return;
+    if (restore) {
+      setPrompt(message.draft);
+      onAddContext(message.contextItems);
+      setPendingResearchSkill(message.researchSkill ?? null);
+      setComposerError(t("A message could not be sent. Your draft was restored."));
+    } else {
+      setComposerError(t("A message could not be sent. It remains in the queue."));
+    }
   }
 
   async function submitCurrentPrompt() {
@@ -4823,41 +4944,36 @@ function ConversationView({ onOpenCreatedApps, messages, events, trajectoryEvent
       queueCurrentPrompt();
       return;
     }
-    const draft = prompt;
-    const submittedContext = contextItems;
     const submittedMode: ResearchMode = pendingResearchSkill
       ? "research"
       : researchMode === "experiment-setup"
         ? "experiment-setup"
         : predictedMode;
-    rememberPrompt(draft);
-    setPrompt("");
-    setComposerError("");
+    onComposerSessionChange((session) => ({ ...session, paused: false }));
     onResearchMode(submittedMode);
-    const sent = await onSubmit(draft, submittedMode, reasoningEffort, contextLength, submittedContext, pendingResearchSkill ?? undefined);
-    if (sent) setPendingResearchSkill(null);
-    if (!sent) setPrompt((current) => current.trim() ? current : draft);
+    await sendPrompt(takeCurrentPrompt(submittedMode));
     requestAnimationFrame(() => {
       const textarea = composerRef.current;
-      if (!textarea) return;
+      if (!textarea || currentDraftRef.current.draftKey !== draftKey) return;
       textarea.focus();
       const end = textarea.value.length;
       textarea.setSelectionRange(end, end);
     });
   }
 
+  function sendNextQueuedPrompt() {
+    const next = queuedPrompts[0];
+    if (!next) return;
+    if (queuePaused) setComposerError("");
+    onComposerSessionChange((session) => ({ ...session, queued: session.queued.filter((message) => message.id !== next.id), paused: false }));
+    void sendPrompt(next);
+  }
+
   useEffect(() => {
     const wasBusy = previousBusyRef.current;
     previousBusyRef.current = agentBusy;
-    if (!wasBusy || agentBusy || !queuedPrompts.length) return;
-    const [next, ...rest] = queuedPrompts;
-    setQueuedPrompts(rest);
-    void onSubmit(next.draft, next.mode, next.reasoningEffort, next.contextLength, next.contextItems, next.researchSkill).then((sent) => {
-      if (sent) return;
-      setComposerError("A queued follow-up could not be sent. It was restored below.");
-      setPrompt((current) => current.trim() ? current : next.draft);
-    });
-  }, [agentBusy, queuedPrompts, onSubmit]);
+    if (wasBusy && !agentBusy && !queuePaused) sendNextQueuedPrompt();
+  }, [agentBusy, queuePaused, queuedPrompts, onSubmit]);
 
   const selectWelcomeWorkflow = useCallback((action: ResearchWelcomeAction) => {
     historyHandlersRef.current.onWelcomeAction(action);
@@ -4913,9 +5029,10 @@ function ConversationView({ onOpenCreatedApps, messages, events, trajectoryEvent
           {queuedPrompts.map((item, index) => <div className="composer-queue-item" key={item.id}>
             <span className="composer-queue-index">{index + 1}</span>
             <span>{item.draft || t("Image attachment")}</span>
-            <button type="button" onClick={() => setQueuedPrompts((current) => current.filter((queued) => queued.id !== item.id))} aria-label={`${t("Remove queued message")} ${index + 1}`}><X size={12} /></button>
+            <button type="button" onClick={() => onComposerSessionChange((session) => ({ ...session, queued: session.queued.filter((queued) => queued.id !== item.id) }))} aria-label={`${t("Remove queued message")} ${index + 1}`}><X size={12} /></button>
           </div>)}
-          {queuedPrompts.length > 1 && <button type="button" className="composer-queue-clear" onClick={() => setQueuedPrompts([])}>{t("Clear queue")}</button>}
+          {!agentBusy && <button type="button" className="composer-queue-clear" onClick={sendNextQueuedPrompt}>{t(queuePaused ? "Retry queued messages" : "Send queued messages")}</button>}
+          {queuedPrompts.length > 1 && <button type="button" className="composer-queue-clear" onClick={() => onComposerSessionChange((session) => ({ ...session, queued: [], paused: false }))}>{t("Clear queue")}</button>}
         </div>}
         {pendingResearchSkill === "idea-spark" && <div className="composer-skill">
           <Lightbulb size={13} strokeWidth={1.9} aria-hidden="true" />

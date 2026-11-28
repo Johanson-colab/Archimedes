@@ -1,0 +1,12 @@
+✔ Paper to Slides transfers the new-task composer slot through the first owned agent event (78.469167ms)
+✔ Paper to Slides restores detached attachments when the request cannot start (0.892208ms)
+✔ composer acceptance migrates a hidden draft and keeps queued attachments (0.552125ms)
+✔ /init hands startup attachments to the created thread without losing newer context (0.789041ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 191.602875

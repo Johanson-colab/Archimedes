@@ -102,14 +102,12 @@ test("context usage exposes a readable breakdown without runtime chrome", () => 
   assert.match(app, /selectionEnd/);
 });
 
-test("composer drafts are persisted per thread and restored after a failed send", () => {
+test("composer drafts are persisted per thread", () => {
   assert.match(app, /const COMPOSER_DRAFT_STORAGE_PREFIX = "archimedes-composer-draft:"/);
   assert.match(app, /function readComposerDraft\(key: string\)/);
   assert.match(app, /writeComposerDraft\(draftKey/);
   assert.match(app, /const composerDraftKey = activeThreadId \?\?/);
   assert.match(app, /draftKey=\{composerDraftKey\}/);
-  assert.match(app, /const sent = await onSubmit\(/);
-  assert.match(app, /setPrompt\(\(current\) => current\.trim\(\) \? current : draft\)/);
 });
 
 test("composer accepts dropped and pasted files through the existing bridge", () => {
@@ -134,11 +132,9 @@ test("composer exposes history recall, focus shortcut and disabled-send reason",
 
 test("composer queues follow-ups while the agent is busy", () => {
   assert.match(app, /type QueuedPrompt =/);
-  assert.match(app, /const \[queuedPrompts, setQueuedPrompts\] = useState<QueuedPrompt\[\]>\(\[\]\)/);
   assert.match(app, /if \(agentBusy\) \{[\s\S]*?if \(nativeBackend\) \{[\s\S]*?await onNativeSteer\(prompt\)[\s\S]*?queueCurrentPrompt\(\);/);
   assert.match(app, /up to five follow-ups can be queued at a time/i);
   assert.match(app, /className="composer-queue"/);
-  assert.match(app, /onSubmit\(next\.draft, next\.mode, next\.reasoningEffort, next\.contextLength, next\.contextItems, next\.researchSkill\)/);
 });
 
 test("composer exposes slash commands and an @ context shortcut", () => {
@@ -168,8 +164,7 @@ test("IdeaSpark is opt-in from the Research slash menu and never auto-runs", () 
   assert.match(app, /const \[pendingResearchSkill, setPendingResearchSkill\] = useState<"idea-spark" \| null>\(null\)/);
   assert.match(app, /predictedMode === "research" \? \[\{[\s\S]*?id: "idea-spark"[\s\S]*?setPendingResearchSkill\("idea-spark"\)/);
   assert.match(app, /add research direction for IdeaSpark|Add a research direction for Idea Spark/);
-  assert.match(app, /onSubmit\(draft, submittedMode, reasoningEffort, contextLength, submittedContext, pendingResearchSkill \?\? undefined\)/);
-  assert.match(app, /if \(sent\) setPendingResearchSkill\(null\)/);
+  assert.match(app, /researchSkill: pendingResearchSkill \?\? undefined/);
   assert.match(app, /className="composer-skill"/);
   assert.match(css, /\.composer-skill \{/);
   assert.doesNotMatch(app, /predictedMode === "research" \? "idea-spark" : undefined/);

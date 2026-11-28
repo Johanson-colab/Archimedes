@@ -1,0 +1,24 @@
+{
+  "stage": "after",
+  "viewport": [
+    900,
+    300
+  ],
+  "submittedAttachments": 1,
+  "retained": true,
+  "activeItems": [
+    {
+      "id": "attachment-during-start",
+      "type": "file",
+      "name": "method-notes.txt",
+      "detail": "/fixture/method-notes.txt",
+      "size": 2048
+    }
+  ],
+  "observed": {
+    "chips": [
+      "method-notes.txt2.0 KB"
+    ],
+    "result": "Attachment retained in the accepted thread"
+  }
+}
