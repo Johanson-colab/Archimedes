@@ -61,6 +61,110 @@ test("RPC timeouts do not replay and process exit rejects pending requests", asy
   await assert.rejects(pending, /not replayed/);
 });
 
+test("Codex terminates its POSIX process group even after the leader exits", async t => {
+  const signals = [];
+  t.mock.method(process, "kill", (pid, signal) => { signals.push([pid, signal]); return true; });
+  const childKills = [];
+  const client = new CodexClient({ platform: "linux", terminationTimeout: 5 });
+  client.child = { pid: 43210, exitCode: 0, kill: signal => childKills.push(signal) };
+  client.terminate();
+  client.terminate();
+  assert.deepEqual(signals, [[-43210, "SIGTERM"]]);
+  await new Promise(resolve => setTimeout(resolve, 20));
+  assert.deepEqual(signals, [[-43210, "SIGTERM"], [-43210, "SIGKILL"]]);
+  assert.deepEqual(childKills, []);
+});
+
+test("Codex keeps the SIGKILL escalation alive until the transport closes", async t => {
+  const signals = [];
+  t.mock.method(process, "kill", (pid, signal) => { signals.push([pid, signal]); return true; });
+  const child = new EventEmitter();
+  child.pid = 43210; child.exitCode = 0; child.kill = () => {};
+  const client = new CodexClient({ platform: "linux", terminationTimeout: 30 });
+  client.child = child;
+  client.terminate();
+  assert.ok(client.terminationTimer);
+  assert.equal(client.terminationTimer.hasRef(), true);
+  child.emit("close");
+  assert.equal(client.terminationTimer, null);
+  await new Promise(resolve => setTimeout(resolve, 50));
+  assert.deepEqual(signals, [[-43210, "SIGTERM"]]);
+});
+
+test("Codex falls back to the owned child when the POSIX group is unavailable", async t => {
+  t.mock.method(process, "kill", () => { throw new Error("group unavailable"); });
+  const childKills = [];
+  const client = new CodexClient({ platform: "linux", terminationTimeout: 5 });
+  client.child = { pid: 43210, exitCode: null, kill: signal => childKills.push(signal) };
+  client.terminate();
+  await new Promise(resolve => setTimeout(resolve, 20));
+  assert.deepEqual(childKills, ["SIGTERM", "SIGKILL"]);
+});
+
+test("Codex terminates the owned Windows process tree and contains taskkill failures", async () => {
+  const helpers = [];
+  const calls = [];
+  const childKills = [];
+  const client = new CodexClient({
+    platform: "win32",
+    terminationTimeout: 5,
+    treeKillImpl: (...args) => {
+      calls.push(args);
+      const helper = new EventEmitter();
+      helper.kill = () => {};
+      helpers.push(helper);
+      return helper;
+    },
+  });
+  client.child = { pid: 3210, exitCode: 0, kill: signal => childKills.push(signal) };
+  client.terminate();
+  client.terminate();
+  assert.equal(calls.length, 1);
+  assert.deepEqual(calls[0].slice(0, 2), ["taskkill.exe", ["/PID", "3210", "/T", "/F"]]);
+  assert.deepEqual(calls[0][2], { shell: false, windowsHide: true, stdio: "ignore" });
+  helpers[0].emit("error", new Error("taskkill unavailable"));
+  assert.deepEqual(childKills, ["SIGKILL"]);
+});
+
+test("Codex does not repeat Windows termination after taskkill succeeds", () => {
+  const calls = [];
+  const childKills = [];
+  const client = new CodexClient({
+    platform: "win32",
+    treeKillImpl: (...args) => {
+      calls.push(args);
+      const helper = new EventEmitter();
+      helper.kill = () => {};
+      process.nextTick(() => helper.emit("close", 0));
+      return helper;
+    },
+  });
+  client.child = { pid: 3210, exitCode: null, kill: signal => childKills.push(signal) };
+  client.terminate();
+  client.close();
+  assert.equal(calls.length, 1);
+  assert.deepEqual(childKills, []);
+});
+
+test("Codex contains a hung Windows taskkill helper", async () => {
+  const helperKills = [];
+  const childKills = [];
+  const client = new CodexClient({
+    platform: "win32",
+    terminationTimeout: 5,
+    treeKillImpl: () => {
+      const helper = new EventEmitter();
+      helper.kill = signal => helperKills.push(signal);
+      return helper;
+    },
+  });
+  client.child = { pid: 3210, exitCode: null, kill: signal => childKills.push(signal) };
+  client.terminate();
+  await new Promise(resolve => setTimeout(resolve, 20));
+  assert.deepEqual(helperKills, ["SIGKILL"]);
+  assert.deepEqual(childKills, ["SIGKILL"]);
+});
+
 test("invalid and oversized protocol input fails closed", async () => {
   const client = new CodexClient({ spawnImpl: () => fixture((message, send) => { if (message.method === "initialize") send({ id: message.id, result: {} }); }) });
   await client.start();
