@@ -77,16 +77,17 @@ async function downloadEngineArchive(asset, fetchImpl = fetch) {
   verifyEngineArchive(archive, asset);
   return archive;
 }
-async function compilerProxyEnvironment(bundle, resolveProxy, env = process.env) {
+async function compilerProxyEnvironment(bundle, resolveProxy, env = process.env, signal) {
+  signal?.throwIfAborted();
   if (!resolveProxy || ['HTTPS_PROXY', 'https_proxy', 'HTTP_PROXY', 'http_proxy', 'ALL_PROXY', 'all_proxy'].some((name) => env[name])) return {};
   const url = new URL(bundle);
   if (!['http:', 'https:'].includes(url.protocol) || ['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname)) return {};
   let timer, rules;
   try {
-    rules = await Promise.race([
+    rules = await abortable(Promise.race([
       resolveProxy(bundle),
       new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("System proxy resolution timed out. Check the proxy app and retry.")), 30_000); }),
-    ]);
+    ]), signal);
   } finally { clearTimeout(timer); }
   const http = /(?:^|;)\s*(PROXY|HTTPS)\s+([^;\s]+)/i.exec(rules);
   if (http) {
@@ -130,7 +131,7 @@ function createManagedCompiler(options) {
       const cache = path.join(options.runtimeRoot, 'tex-cache');
       fs.mkdirSync(cache, { recursive: true });
       const bundle = options.bundle || manifest.bundleUrl;
-      const proxyEnv = await compilerProxyEnvironment(bundle, options.resolveProxy);
+      const proxyEnv = await compilerProxyEnvironment(bundle, options.resolveProxy, process.env, signal);
       let stage = 'Compiling and preparing dependencies';
       progress(stage, `Managed Tectonic ${manifest.version}\n${Object.keys(proxyEnv).length ? 'Using system HTTP proxy.' : 'Using existing network/proxy configuration.'}\n`);
       const result = await require('./latex-workspace.cjs').compileLatexDocument(workspace, sourcePath, {

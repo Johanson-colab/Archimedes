@@ -71,6 +71,18 @@ test('native compiler inherits Electron HTTP proxy and preserves explicit proxy 
   assert.deepEqual(await compilerProxyEnvironment(url, async () => 'DIRECT', {}), {});
   await assert.rejects(compilerProxyEnvironment(url, async () => 'SOCKS5 127.0.0.1:7891', {}), /Enable an HTTP proxy/);
 });
+
+test('cancelling a build releases a pending system proxy lookup', { timeout: 5000 }, async () => {
+  const { compilerProxyEnvironment } = require('./managed-latex-engine.cjs');
+  const controller = new AbortController();
+  let release;
+  const pending = compilerProxyEnvironment('https://relay.fullyjustified.net/default_bundle_v33.tar',
+    () => new Promise(resolve => { release = resolve; }), {}, controller.signal);
+  controller.abort();
+  await assert.rejects(pending, /abort/i);
+  release('PROXY 127.0.0.1:7890; DIRECT');
+});
+
 test('compiler log stages distinguish downloading, initialization and typesetting', () => {
   const { outputStage } = require('./managed-latex-engine.cjs');
   assert.equal(outputStage('note: downloading phvb.tfm'), 'Downloading fonts and packages');

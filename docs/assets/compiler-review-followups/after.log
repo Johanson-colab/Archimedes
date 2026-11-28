@@ -1,0 +1,21 @@
+$ node --test --test-name-pattern="cancelling a build releases a pending system proxy lookup" electron/managed-latex-engine.test.cjs
+✔ cancelling a build releases a pending system proxy lookup (0.907625ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 136.004167
+
+$ node --test --test-name-pattern="returning to Writing drops a preview whose build inputs are no longer current" electron/paper-writing-workspace.test.cjs
+✔ returning to Writing drops a preview whose build inputs are no longer current (209.058833ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1062.075166

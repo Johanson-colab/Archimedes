@@ -82,6 +82,8 @@ async function fixture(t, overrides = {}) {
       compiles.push({ root, name, requestId });
       return overrides.compile ? overrides.compile(root, name, requestId) : { ok: true, diagnostics: [], log: "fake build", duration_ms: 1 };
     },
+    readManuscriptSnapshot: async (root, manifestPath) => overrides.readManuscriptSnapshot
+      ? overrides.readManuscriptSnapshot(root, manifestPath) : { current: true },
     onLatexCompileProgress: callback => { progress = callback; return () => { progress = undefined; }; },
   };
   let reactRoot = createRoot(document.getElementById("root"));
@@ -707,4 +709,23 @@ test("a delayed autosave does not start a compile after Writing is deactivated",
   gate.resolve();
   await React.act(async () => { await new Promise(resolve => setTimeout(resolve, 20)); });
   assert.equal(f.compiles.length, 0);
+});
+
+test("returning to Writing drops a preview whose build inputs are no longer current", { timeout: 10_000 }, async t => {
+  const manifestPath = ".archimedes/latex-build/a0/build/source-snapshot.json";
+  const f = await fixture(t, {
+    compile: () => ({ ok: true, engine: "fixture", source_path: "paper/main.tex", pdf_path: "paper/main.pdf", preview_url: "https://example.invalid/manuscript.pdf", duration_ms: 1, diagnostics: [], log: "", source_snapshot: { manifest_path: manifestPath } }),
+    readManuscriptSnapshot: async (root, manifest) => {
+      assert.equal(manifest, manifestPath);
+      return { current: false };
+    },
+  });
+  await f.render(f.a, 1); await autoCompileOff();
+  await click("Recompile");
+  assert.ok(document.querySelector("iframe"));
+  await f.render(f.a, null, undefined, false);
+  await f.render(f.a, null, undefined, true);
+  await settle();
+  assert.equal(document.querySelector("iframe"), null);
+  assert.doesNotMatch(document.querySelector(".paper-compile-state").textContent, /ms/);
 });

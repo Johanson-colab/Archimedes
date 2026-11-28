@@ -357,7 +357,19 @@ export default function PaperWritingView({ bridge, workspace, projectId = null, 
     // A fresh root listing lets the existing expanded nodes reload their children.
     if (owner.activeProject) void loadDirectory(owner.activeProject, true);
     if (owner.selectedPath && !owner.pendingActivation && !owner.pendingOpen) void openFile(owner.selectedPath, true);
-  }, [active, loadDirectory, openFile, owner, refreshProjects]);
+    const snapshot = owner.compileResult?.source_snapshot;
+    if (snapshot?.manifest_path && bridge.readManuscriptSnapshot) {
+      const invalidate = () => {
+        if (!mountedRef.current || owner.compileResult?.source_snapshot?.manifest_path !== snapshot.manifest_path) return;
+        ++owner.compileSequence; owner.compileTarget = "";
+        owner.compileResult = null; owner.compileLog = ""; owner.compileState = "idle";
+        refreshScope();
+      };
+      void bridge.readManuscriptSnapshot(owner.workspace, snapshot.manifest_path)
+        .then(verification => { if (!verification.current) invalidate(); })
+        .catch(invalidate);
+    }
+  }, [active, bridge, loadDirectory, openFile, owner, refreshProjects]);
   useEffect(() => {
     if (!activeProject || !mainPath || !file?.path) return;
     rememberWritingLocation(window.localStorage, owner.workspace, projectId, { projectPath: activeProject, mainPath, selectedPath: file.path });
