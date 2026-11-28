@@ -197,6 +197,81 @@ test("a title-only legacy cloud record joins a richer local import when its meta
   }
 });
 
+test("a legacy title match cannot overwrite a cloud record with a conflicting DOI", async () => {
+  const root = workspace();
+  try {
+    const project = store.createResearchProject({ name: "Conflicting cloud identifiers" });
+    store.linkResearchProjectToCloud(project.id, "cloud-project");
+    const library = store.listLibraries(project.id)[0];
+    const api = fakeApi();
+    const remote = api.seedRemoteLibrary(library.name, {
+      canonical_key: "title:shared:legacy", title: "Shared work", authors: ["Alex Morgan"], year: 2019, doi: "10.5555/cloud",
+    });
+    store.linkLibraryToCloud(library.id, remote.id);
+    const [cloudRow] = await api.listPapers(remote.id);
+    const local = store.addPaper(library.id, { title: "Shared work", authors: ["Alex Morgan"], year: 2019, doi: "10.5555/local" });
+
+    assert.deepEqual((await createLibrarySync({ store, api }).syncProjectLibraries(project.id)).warnings, []);
+    const cloud = await api.listPapers(remote.id);
+    assert.equal(cloud.length, 2);
+    assert.notEqual(store.getPaper(local.id).cloud_paper_id, cloudRow.id);
+    assert.equal(cloud.find(item => item.id === cloudRow.id).doi, "10.5555/cloud");
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a sparse cloud title match is claimed by only one local paper", async () => {
+  const root = workspace();
+  try {
+    const project = store.createResearchProject({ name: "Sparse cloud title" });
+    store.linkResearchProjectToCloud(project.id, "cloud-project");
+    const library = store.listLibraries(project.id)[0];
+    const api = fakeApi();
+    const remote = api.seedRemoteLibrary(library.name, { canonical_key: "title:editorial", title: "Editorial" });
+    store.linkLibraryToCloud(library.id, remote.id);
+    const [cloudRow] = await api.listPapers(remote.id);
+    const first = store.addPaper(library.id, { title: "Editorial", authors: ["Alex Morgan"], year: 2019 });
+    const second = store.addPaper(library.id, { title: "Editorial", authors: ["Jamie Lee"], year: 2023 });
+
+    assert.deepEqual((await createLibrarySync({ store, api }).syncProjectLibraries(project.id)).warnings, []);
+    const cloud = await api.listPapers(remote.id);
+    assert.equal(cloud.length, 2);
+    const firstCloudId = store.getPaper(first.id).cloud_paper_id;
+    const secondCloudId = store.getPaper(second.id).cloud_paper_id;
+    assert.notEqual(firstCloudId, secondCloudId);
+    assert.ok([firstCloudId, secondCloudId].includes(cloudRow.id));
+    const extraId = firstCloudId === cloudRow.id ? secondCloudId : firstCloudId;
+    const extraLocal = firstCloudId === cloudRow.id ? second : first;
+    assert.deepEqual(cloud.find(item => item.id === extraId).authors, extraLocal === second ? ["Jamie Lee"] : ["Alex Morgan"]);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a legacy cloud author in last-name-first order joins the fresh import", async () => {
+  const root = workspace();
+  try {
+    const project = store.createResearchProject({ name: "Author order" });
+    store.linkResearchProjectToCloud(project.id, "cloud-project");
+    const library = store.listLibraries(project.id)[0];
+    const api = fakeApi();
+    const remote = api.seedRemoteLibrary(library.name, {
+      canonical_key: "title:shared-work:legacy", title: "Shared work", authors: ["Doe, Jane"], year: 2024, doi: "10.5555/cloud",
+    });
+    store.linkLibraryToCloud(library.id, remote.id);
+    const [cloudRow] = await api.listPapers(remote.id);
+    const local = store.addPaper(library.id, { title: "Shared work", authors: ["Jane Doe"], year: 2024 });
+
+    assert.deepEqual((await createLibrarySync({ store, api }).syncProjectLibraries(project.id)).warnings, []);
+    const cloud = await api.listPapers(remote.id);
+    assert.equal(cloud.length, 1);
+    assert.equal(store.getPaper(local.id).cloud_paper_id, cloudRow.id);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("syncing an older cloud duplicate twice cannot overwrite a newer note on the original cloud paper", async () => {
   const root = workspace();
   try {

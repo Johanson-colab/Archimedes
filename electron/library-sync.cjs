@@ -6,11 +6,30 @@ function titleFingerprint(paper) {
   return fingerprint === canonicalTitleKey({ title: paper.title }) ? null : fingerprint;
 }
 
+function authorNames(authors) {
+  return (Array.isArray(authors) ? authors : []).map((author) => {
+    const raw = String(author).trim();
+    const split = /^(.+?),\s*(.+)$/.exec(raw);
+    return (split ? `${split[2]} ${split[1]}` : raw).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+  }).filter(Boolean).sort();
+}
+
 function metadataCompatible(left, right) {
   if (left.year && right.year && left.year !== right.year) return false;
-  const names = (authors) => (Array.isArray(authors) ? authors : []).map((author) => String(author).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim()).filter(Boolean).sort().join("|");
-  const saved = names(left.authors), imported = names(right.authors);
-  return !saved || !imported || saved === imported || saved.endsWith("others") || imported.endsWith("others");
+  const saved = authorNames(left.authors), imported = authorNames(right.authors);
+  if (!saved.length || !imported.length) return true;
+  if (saved.join("|") === imported.join("|")) return true;
+  const prefix = (names) => names.at(-1) === "others" ? names.slice(0, -1) : null;
+  const savedPrefix = prefix(saved), importedPrefix = prefix(imported);
+  return Boolean(savedPrefix && imported.join(" ").startsWith(savedPrefix.join(" ")))
+    || Boolean(importedPrefix && saved.join(" ").startsWith(importedPrefix.join(" ")));
+}
+
+function identifiersCompatible(left, right) {
+  return Object.entries(identifier).every(([field, normalize]) => {
+    const a = normalize(left[field]), b = normalize(right[field]);
+    return !a || !b || a === b;
+  });
 }
 
 function hasInitialPaperState(paper) {
@@ -30,6 +49,7 @@ function createLibrarySync({ store, api } = {}) {
     const remoteById = new Map(remoteLibraries.map((library) => [library.id, library]));
     let localLibraries = store.listLibraries(projectId);
     let visiblePapers;
+    const claimedCloudIds = new Set();
 
     async function matchingCloudTitlePaper(paper) {
       const fingerprint = titleFingerprint(paper);
@@ -51,12 +71,13 @@ function createLibrarySync({ store, api } = {}) {
       const { byKey, byFingerprint, byTitle } = await visiblePapers;
       if (byKey.has(paper.canonical_key)) return null;
       const fingerprintMatch = fingerprint ? byFingerprint.get(fingerprint) : null;
-      if (fingerprintMatch) return fingerprintMatch;
+      if (fingerprintMatch && !claimedCloudIds.has(fingerprintMatch.id)) return fingerprintMatch;
       // A legacy cloud row may have only a title, or may lack author/year
       // metadata that the fresh import now has. Fall back to an unambiguous
       // metadata-compatible title match instead of uploading a duplicate.
       const titleKey = titleIdentity(paper.title);
-      const legacy = titleKey ? (byTitle.get(titleKey) || []).filter((item) => item.canonical_key !== paper.canonical_key && metadataCompatible(item, paper)) : [];
+      const legacy = titleKey ? (byTitle.get(titleKey) || []).filter((item) =>
+        !claimedCloudIds.has(item.id) && identifiersCompatible(item, paper) && metadataCompatible(item, paper)) : [];
       return legacy.length === 1 ? legacy[0] : null;
     }
 
@@ -106,6 +127,7 @@ function createLibrarySync({ store, api } = {}) {
             conference: paper.conference,
           });
           const linked = store.linkPaperToCloud(paper.id, cloudPaper.id);
+          claimedCloudIds.add(cloudPaper.id);
           if (match?.state_updated_at && match.id === cloudPaper.id && hasInitialPaperState(linked)) {
             // A fresh import has a timestamp even though nobody edited its defaults.
             store.applyCloudPaperState(linked.id, match);
