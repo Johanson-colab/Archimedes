@@ -1,0 +1,14 @@
+{
+  "stage": "before",
+  "viewport": [
+    900,
+    300
+  ],
+  "submittedAttachments": 0,
+  "retained": false,
+  "activeItems": [],
+  "observed": {
+    "chips": [],
+    "result": "Attachment missing from the accepted thread"
+  }
+}

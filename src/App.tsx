@@ -2718,6 +2718,7 @@ function App() {
     setTrajectoryEvents([]);
     setPendingAction(null);
     setChangeSets([]);
+    return { owner: targetOwner, draftKey };
   }
 
   async function runConversationCommand(command: ConversationCommand): Promise<ConversationCommandResult> {
@@ -3691,9 +3692,22 @@ function App() {
     "data-analysis": <DataAnalysisView onAskAI={(text) => sendNoteToChat(text, "replace")} />,
     "paper-to-slides": <PaperToSlidesView bridge={desktopBridge} workspace={executionWorkspace} busy={agentBusy} onStart={async ({ pdfPath, backend, language, length, instructions, mineruToken }) => {
       const staged = await desktopBridge.stagePaperToSlidesPdf(executionWorkspace, pdfPath);
-      startNewTask();
+      const submittedContext = [...composerSlot.session.context];
+      const target = startNewTask();
+      if (!target) return;
+      setContextItems(() => []);
+      const slot = composerSlots.current.get(target.owner) ?? { id: crypto.randomUUID(), session: { context: [], queued: [], paused: false } };
+      composerSlots.current.set(target.owner, slot);
+      currentComposerSlot.current = slot;
+      const send: ComposerSend = { slot, owner: target.owner, dataRoot: workspace, draftKey: target.draftKey, clientRunId: `work-composer:paper-to-slides:${Date.now()}`, accepted: false };
+      pendingComposerSend.current = send;
       const prompt = [`Create a paper presentation using the bundled paper2slides skill.`, `Input PDF: ${JSON.stringify(staged)}`, `Slide and speaker-note language: ${language}.`, `Length: ${length}.`, `Use relevant original figures and tables; check visual quality and factual accuracy. Save an editable PPTX and report the output path.`, instructions ? `Additional user instructions: ${instructions}` : ""].filter(Boolean).join("\n");
-      await submitPrompt(prompt, "free-chat", reasoningEffort, contextLength, [], "paper-to-slides", backend, true, mineruToken || undefined);
+      try {
+        const started = await submitPrompt(prompt, "free-chat", reasoningEffort, contextLength, submittedContext, "paper-to-slides", backend, true, mineruToken || undefined, send);
+        if (!started && !send.accepted) updateComposer(send.slot, (session) => ({ ...session, context: [...submittedContext, ...session.context.filter((item) => !submittedContext.some((submitted) => submitted.id === item.id))] }));
+      } finally {
+        if (pendingComposerSend.current === send) pendingComposerSend.current = null;
+      }
     }} />,
 
     writing: <PaperWritingView bridge={desktopBridge} workspace={executionWorkspace} projectId={activeProjectId} openRequest={paperOpenRequest} onRefresh={refreshWorkspaceFiles} onAskAI={askAIAboutPaper} active={mainSection === "writing"} />,

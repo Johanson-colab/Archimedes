@@ -1,0 +1,32 @@
+✖ Paper to Slides transfers the new-task composer slot through the first owned agent event (73.019167ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 178.54875
+
+✖ failing tests:
+
+test at electron/paper-to-slides-composer-send.test.cjs:117:1
+✖ Paper to Slides transfers the new-task composer slot through the first owned agent event (73.019167ms)
+  AssertionError [ERR_ASSERTION]: the current composer attachments are submitted with the deck request
+  + actual - expected
+
+  + []
+  - [
+  -   'submitted-attachment'
+  - ]
+
+      at TestContext.<anonymous> (/Users/fei/Desktop/Archimedes/electron/paper-to-slides-composer-send.test.cjs:124:12)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: [],
+    expected: [ 'submitted-attachment' ],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }

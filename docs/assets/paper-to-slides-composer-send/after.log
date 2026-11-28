@@ -1,0 +1,14 @@
+✔ Paper to Slides transfers the new-task composer slot through the first owned agent event (110.077084ms)
+✔ Paper to Slides restores detached attachments when the request cannot start (0.96525ms)
+✔ selected PDF is copied to an isolated workspace task without overwriting the source (4.470833ms)
+✔ Codex and Claude install distinct bundled skills, preserve user changes, and resume (27.834459ms)
+✔ page opens a PDF, switches example and sends the selected harness and settings (591.112ms)
+✔ Work composer keeps attachment snapshots separate and recovers failed queued messages (236.858792ms)
+ℹ tests 6
+ℹ suites 0
+ℹ pass 6
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 785.9745
