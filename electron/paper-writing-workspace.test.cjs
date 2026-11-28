@@ -16,6 +16,7 @@ before(async () => {
   const { transformWithOxc } = await import("vite");
   const helpers = await import("../src/paper-writing-state.ts");
   const search = await import("../src/paper-source-search.ts");
+  const sources = await import("../src/paper-writing-sources.ts");
   const source = fs.readFileSync(path.join(__dirname, "../src/PaperWritingView.tsx"), "utf8");
   const icons = require("lucide-react");
   const names = source.match(/\{([^}]+)\} from "lucide-react"/)[1].split(",").map(name => name.trim());
@@ -23,7 +24,7 @@ before(async () => {
   const preferences = settings.slice(settings.indexOf("export const displayPreferenceStorage"), settings.indexOf("function readLanguage()")).replace("export const", "const");
   const { code: preferenceCode } = await transformWithOxc(preferences, "preferences.ts");
   const displayPreferenceStorage = new Function(preferenceCode + "\nreturn displayPreferenceStorage;")();
-  const scope = { React, ...React, ...helpers, ...search, displayPreferenceStorage,
+  const scope = { React, ...React, ...helpers, ...search, ...sources, displayPreferenceStorage,
     ...Object.fromEntries(names.map(name => [name, icons[name]])),
     useUISettings: () => ({ t: value => value }),
     Dialog: props => props.open ? React.createElement(props.as || "div", { role: "dialog", onSubmit: props.onSubmit }, props.children) : null,
@@ -486,6 +487,21 @@ test('compiling one manuscript ignores an unsavable draft from another folder', 
   await click('Recompile'); await settle();
   assert.deepEqual(f.compiles.map(call => call.name), ['other/main.tex']);
   assert.match(document.querySelector('.latex-editor-textarea').value, /Independent manuscript/);
+});
+
+test('compiling a root-level manuscript ignores an independent root-level draft', async t => {
+  const f = await fixture(t, { write: async (_root, name) => {
+    if (name === 'a.tex') throw new Error('The other root manuscript is locked');
+  } });
+  fs.writeFileSync(path.join(f.a, 'a.tex'), source('Root manuscript A'));
+  fs.writeFileSync(path.join(f.a, 'b.tex'), source('Root manuscript B'));
+  await f.render(f.a, 1, 'a.tex'); await autoCompileOff();
+  await edit(source('Unsavable root draft'), 'a.tex');
+  await f.render(f.a, 2, 'b.tex'); await settle(); await autoCompileOff();
+  await click('Recompile'); await settle();
+  assert.deepEqual(f.compiles.map(call => call.name), ['b.tex']);
+  assert.match(document.querySelector('.latex-editor-textarea').value, /Root manuscript B/);
+  assert.equal(fs.readFileSync(path.join(f.a, 'a.tex'), 'utf8'), source('Root manuscript A'));
 });
 
 

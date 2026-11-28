@@ -1,0 +1,25 @@
+$ node --test --test-name-pattern="compiling a root-level manuscript ignores an independent root-level draft" electron/paper-writing-workspace.test.cjs
+✔ compiling a root-level manuscript ignores an independent root-level draft (195.533042ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 974.579875
+
+$ node --test electron/paper-writing-sources.test.cjs
+(node:66263) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ root-level manuscripts keep independent compile save sets (1.330375ms)
+✔ compile save sets follow transitive inputs outside the main folder (0.222416ms)
+✔ dependency parsing ignores comments, cycles and workspace escapes (0.134334ms)
+ℹ tests 3
+ℹ suites 0
+ℹ pass 3
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 131.419041

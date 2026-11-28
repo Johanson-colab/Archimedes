@@ -1,0 +1,33 @@
+$ node --test --test-name-pattern="compiling a root-level manuscript ignores an independent root-level draft" electron/paper-writing-workspace.test.cjs
+✖ compiling a root-level manuscript ignores an independent root-level draft (203.348292ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 885.605542
+
+✖ failing tests:
+
+test at electron/paper-writing-workspace.test.cjs:492:1
+✖ compiling a root-level manuscript ignores an independent root-level draft (203.348292ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+  + []
+  - [
+  -   'b.tex'
+  - ]
+  
+      at TestContext.<anonymous> (/private/tmp/claude-501/archimedes-compile-barrier-before.NwlGYK/electron/paper-writing-workspace.test.cjs:502:10)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: [],
+    expected: [ 'b.tex' ],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
