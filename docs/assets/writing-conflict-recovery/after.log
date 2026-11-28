@@ -1,0 +1,45 @@
+$ node --test --test-name-pattern="<finding>" electron/paper-writing-workspace.test.cjs
+
+## a rejected source conflict
+✔ a rejected source conflict can be resolved without losing the local draft (965.709209ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1401.543
+
+## cached previews are revalidated
+✔ cached previews are revalidated before a returning scope restores them (184.008208ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 606.970584
+
+## a new manuscript activation cancels
+✔ a new manuscript activation cancels an older clean source read (147.496708ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 565.451041
+
+## a conflicted source in another manuscript
+✔ a conflicted source in another manuscript does not block compiling the target (157.913833ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 571.37325

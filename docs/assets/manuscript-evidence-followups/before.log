@@ -1,0 +1,23 @@
+$ node --test electron/manuscript-evidence.test.cjs  (baseline 3b358265)
+✖ reopen linked manuscript values, flag changed or missing evidence, and enforce project ownership (60.654958ms)
+ℹ tests 1
+ℹ pass 0
+ℹ fail 1
+  AssertionError [ERR_ASSERTION]: The input did not match /^\.archimedes\/manuscript-evidence\/[a-f0-9]+\/builds\/[a-f0-9-]+\/source-snapshot\.json$/
+  actual: '.archimedes/latex-build/aa/5e6a2ec1-4116-458c-86bb-66b0779ffed3/source-snapshot.json'
+
+$ node --test electron/ui-audit-manuscript-evidence.test.cjs
+✖ evidence selections follow the textarea's LF offsets and keep tiny values (1.710625ms)
+ℹ tests 1
+ℹ pass 0
+ℹ fail 1
+  AssertionError [ERR_ASSERTION]: The input did not match /lineStart\(normalized, source\.line\)/
+
+$ node --test --test-name-pattern='a rejected source conflict|a conflicted source in another manuscript' electron/paper-writing-workspace.test.cjs
+✖ a rejected source conflict can be resolved without losing the local draft (966.631708ms)
+✖ a conflicted source in another manuscript does not block compiling the target (47.579458ms)
+ℹ tests 2
+ℹ pass 0
+ℹ fail 2
+  AssertionError [ERR_ASSERTION]: the conflict offers an explicit resolution
+  TypeError [Error]: Cannot read properties of undefined (reading 'name')

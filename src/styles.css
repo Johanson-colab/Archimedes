@@ -2173,6 +2173,7 @@ html body :is(.message-code-block, .code-preview, .codebase-source)::selection {
 .latex-diagnostics p { margin: 6px 0 0; color: #955049; font-size: 9px; line-height: 1.45; }
 .latex-diagnostics button { display: grid; width: 100%; grid-template-columns: 52px minmax(0, 1fr); gap: 7px; padding: 5px 4px; color: #745d36; background: transparent; border-radius: 3px; text-align: left; }
 .latex-diagnostics button:hover { background: #f7ead6; }
+.latex-diagnostics button.conflict-action { display: inline-flex; width: auto; margin-top: 8px; grid-template-columns: none; padding: 0 var(--button-pad-x); white-space: nowrap; }
 .latex-diagnostics button b { font-size: 8px; }.latex-diagnostics button span { overflow: hidden; font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
 .latex-diagnostics details { margin-top: 5px; color: #765e38; font-size: 8px; }.latex-diagnostics summary { cursor: pointer; font-weight: 700; }.latex-diagnostics pre { max-height: 110px; margin: 5px 0 0; padding: 7px; overflow: auto; color: #554c3d; background: rgba(255,255,255,.65); border: 1px solid #eadbc2; border-radius: 3px; font: 8px/1.45 "SFMono-Regular", Consolas, monospace; white-space: pre-wrap; }
 .paper-auto-compile { display: inline-flex; margin-left: auto; align-items: center; gap: 5px; color: #737a74; font-size: 8px; white-space: nowrap; }

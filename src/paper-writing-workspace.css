@@ -1,0 +1,10 @@
+.app-dialog.paper-project-dialog:has(.paper-existing-projects) { width: min(760px, calc(100vw - 32px)); }
+.app-dialog.paper-project-dialog .paper-project-body { display: flex; flex-direction: column; gap: 14px; }
+.app-dialog.paper-project-dialog .paper-existing-projects { display: grid; gap: 8px; margin: 0; padding: 0; border: 0; }
+.app-dialog.paper-project-dialog .paper-existing-projects h3 { color: var(--text-primary); font-size: 14px; letter-spacing: normal; text-transform: none; }
+.app-dialog.paper-project-dialog .paper-existing-projects p { margin: 0; color: var(--text-secondary); }
+.app-dialog.paper-project-dialog .paper-existing-projects > button { color: var(--text-primary); border: 1px solid var(--border-soft); }
+.app-dialog.paper-project-dialog .paper-existing-projects > button:hover { background: var(--surface-control-active); }
+.app-dialog.paper-project-dialog .paper-existing-projects button small { color: var(--text-secondary); }
+.paper-existing-project-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.app-dialog.paper-project-dialog .paper-existing-project-heading > button { display: inline-flex; width: auto; min-height: 30px; align-items: center; gap: 6px; padding: 5px 9px; }
