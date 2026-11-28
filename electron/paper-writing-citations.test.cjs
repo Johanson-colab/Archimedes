@@ -54,3 +54,15 @@ test("suggests only bibliography paths declared inside the manuscript folder", (
   const main = "% \\bibliography{unused}\n\\bibliography {references,../outside}\n\\addbibresource\n{more.bib}";
   assert.deepEqual(api.manuscriptBibliographyPaths(main, "paper/main.tex"), ["paper/references.bib", "paper/more.bib"]);
 });
+
+test("reuses a title match with BibTeX family-first author order", () => {
+  const candidate = { ...paper, doi: "", title: "Name Order", authors: ["Jane Doe"] };
+  const current = "@misc{local, title={Name Order}, author={Doe, Jane}, year={2025}}\n";
+  assert.deepEqual(api.prepareManuscriptCitation(current, candidate), { content: current, key: "local" });
+});
+
+test("reuses its generated entry when both year and strong identifiers are absent", () => {
+  const candidate = { ...paper, doi: "", arxiv_id: "", year: null, title: "Undated manuscript", authors: [] };
+  const first = api.prepareManuscriptCitation("", candidate);
+  assert.deepEqual(api.prepareManuscriptCitation(first.content, candidate), first);
+});

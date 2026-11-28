@@ -446,6 +446,20 @@ test('typing during the compile save barrier retains the new edit and does not c
   assert.equal(f.disk(f.a), source('Project A original'), 'the later main edit remains visibly unsaved instead of being represented as compiled');
 });
 
+test('compiling one manuscript ignores an unsavable draft from another folder', async t => {
+  const f = await fixture(t, { write: async (_root, name) => {
+    if (name === 'paper/main.tex') throw new Error('The other manuscript is locked');
+  } });
+  fs.mkdirSync(path.join(f.a, 'other'), { recursive: true });
+  fs.writeFileSync(path.join(f.a, 'other/main.tex'), source('Independent manuscript'));
+  await f.render(f.a); await autoCompileOff();
+  await edit(source('Unsavable draft in the other manuscript'));
+  await f.render(f.a, 2, 'other/main.tex'); await settle(); await autoCompileOff();
+  await click('Recompile'); await settle();
+  assert.deepEqual(f.compiles.map(call => call.name), ['other/main.tex']);
+  assert.match(document.querySelector('.latex-editor-textarea').value, /Independent manuscript/);
+});
+
 
 test("projects sharing one execution folder restore their own manuscript selection", async t => {
   const options = { projectId: "project-a" }, f = await fixture(t, options);

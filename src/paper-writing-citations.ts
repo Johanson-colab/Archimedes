@@ -14,11 +14,7 @@ export function manuscriptBibliographyPaths(content: string, mainPath: string) {
 }
 
 function sameReference(paper: AcademicSearchResult, existing: AcademicSearchResult) {
-  const candidates = [existing];
-  if (matchBibliographyPaper(paper, candidates, { strongOnly: true })) return true;
-  if (!paper.year || paper.year !== existing.year || !paper.authors.length) return false;
-  const names = (value: AcademicSearchResult) => value.authors.map(author => author.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim()).sort().join("|");
-  return names(paper) === names(existing) && Boolean(matchBibliographyPaper(paper, candidates));
+  return Boolean(matchBibliographyPaper(paper, [existing]));
 }
 
 export function prepareManuscriptCitation(content: string, paper: BibliographyPaper) {

@@ -362,7 +362,11 @@ export default function PaperWritingView({ bridge, workspace, projectId = null, 
     const sequence = ++owner.compileSequence;
     setCompileState("compiling"); setCompileResult(null); setError("");
     try {
-      const documents = [...owner.documents.values()];
+      const root = projectRoot(target);
+      const documents = [...owner.documents.entries()].filter(([path, document]) => {
+        const candidates = [path, document.file.path];
+        return candidates.some(candidate => candidate === target || !root || candidate.startsWith(`${root}/`));
+      }).map(([, document]) => document);
       await Promise.all(documents.map((document) => saveWritingDocument(document, bridge.writeWorkspaceFile, refreshScope)));
       if (sequence !== owner.compileSequence) return;
       if (documents.some((document) => document.draft !== document.savedDraft)) throw new Error(t("The sources changed while saving. Compile again to use the latest edits."));
