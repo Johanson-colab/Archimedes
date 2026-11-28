@@ -48,6 +48,7 @@ const workbenchSettings = require("./workbench-settings.cjs");
 const sidebarSettings = require("./sidebar-settings.cjs");
 const news = require("./news.cjs");
 const paperReview = require("./paper-review.cjs");
+const manuscriptHandoff = require("./manuscript-handoff.cjs");
 const workbenchNotes = require("./workbench-notes.cjs");
 const localIdentity = require("./local-identity.cjs");
 const { createClient } = require("@supabase/supabase-js");
@@ -135,6 +136,7 @@ const windowStartupWorkspaces = new Map();
 const windowApprovalClaims = new Map();
 const windowPreviewTokens = new Map();
 const previewTokenWorkspaces = new Map();
+const previewTokenRoots = new Map();
 const workspaceWatchers = new Map();
 const allowedContextPaths = new Set();
 const WORKSPACE_STATE_FILE = "last-workspace.json";
@@ -230,6 +232,19 @@ function createPreviewToken(senderId, workspace) {
     token = randomUUID();
     tokens.set(workspace, token);
     previewTokenWorkspaces.set(token, workspace);
+  }
+  return token;
+}
+
+function createRetainedPdfToken(senderId, retainedPath) {
+  const key = `paper-review-pdf:${path.basename(retainedPath)}`;
+  let tokens = windowPreviewTokens.get(senderId);
+  if (!tokens) { tokens = new Map(); windowPreviewTokens.set(senderId, tokens); }
+  let token = tokens.get(key);
+  if (!token) {
+    token = randomUUID();
+    tokens.set(key, token);
+    previewTokenRoots.set(token, path.dirname(retainedPath));
   }
   return token;
 }
@@ -380,7 +395,10 @@ function createWindow(workspace) {
     closeWindowTerminals(senderId);
     stopWorkspaceWatcher(senderId);
     void presence?.leave(String(senderId));
-    for (const token of windowPreviewTokens.get(senderId)?.values() ?? []) previewTokenWorkspaces.delete(token);
+    for (const token of windowPreviewTokens.get(senderId)?.values() ?? []) {
+      previewTokenWorkspaces.delete(token);
+      previewTokenRoots.delete(token);
+    }
     windowPreviewTokens.delete(senderId);
     windowStartupWorkspaces.delete(senderId);
     windowWorkspaces.delete(senderId);
@@ -783,10 +801,10 @@ app.whenReady().then(async () => {
   protocol.handle("archimedes-file", (request) => {
     try {
       const url = new URL(request.url);
-      const workspace = previewTokenWorkspaces.get(url.hostname);
-      if (!workspace) return new Response("Preview token expired.", { status: 403 });
+      const root = previewTokenRoots.get(url.hostname) || previewTokenWorkspaces.get(url.hostname);
+      if (!root) return new Response("Preview token expired.", { status: 403 });
       const relative = decodeURIComponent(url.pathname.slice(1));
-      const target = workspaceFiles.workspacePath(workspace, relative);
+      const target = workspaceFiles.workspacePath(root, relative);
       if (!fs.statSync(target).isFile()) return new Response("File not found.", { status: 404 });
       return net.fetch(pathToFileURL(target).toString());
     } catch {
@@ -1040,23 +1058,70 @@ app.whenReady().then(async () => {
     const result = browserWindow ? await dialog.showOpenDialog(browserWindow, options) : await dialog.showOpenDialog(options);
     return result.canceled ? "" : result.filePaths[0] || "";
   });
+  function scopedReviewRun(event, id, role = "viewer", requireWorkspace = false) {
+    const run = paperReview.getRun(id);
+    if (run?.sourceKind === "manuscript") {
+      if (!windowWorkspaces.has(event.sender.id)) throw new Error("Open the manuscript workspace first.");
+      if (requireWorkspace) manuscriptHandoff.authorizeManuscriptRun(store, run.manuscript, role);
+      else manuscriptHandoff.authorizeManuscriptRecord(store, run.manuscript, role);
+    }
+    return run;
+  }
+
+  ipcMain.handle("paper-review-app:prepare-manuscript", (event, input = {}) => {
+    if (!windowWorkspaces.has(event.sender.id)) throw new Error("Open the manuscript workspace first.");
+    const origin = manuscriptHandoff.prepareManuscriptReview(store, input);
+    return { origin, destination: paperReview.reviewDestination() };
+  });
+  ipcMain.handle("paper-review-app:manuscript-revision", (event, input = {}) =>
+    manuscriptHandoff.prepareRevision(store, scopedReviewRun(event, String(input.runId || ""), "editor", true), input));
+  ipcMain.handle("paper-review-app:manuscript-page", (event, input = {}) => {
+    const run = scopedReviewRun(event, String(input.runId || ""), "viewer", false);
+    if (!run?.manuscript) throw new Error("The manuscript review is unavailable.");
+    const finding = manuscriptHandoff.reviewedFinding(run, input);
+    const { workspace } = run.manuscript;
+    const retained = paperReview.retainedPdfPath(run.manuscript.pdfSha256);
+    const target = manuscriptHandoff.reviewedPdfPath(run.manuscript, retained);
+    const token = retained && target === retained ? createRetainedPdfToken(event.sender.id, retained) : createPreviewToken(event.sender.id, workspace);
+    const pdfPath = retained && target === retained ? path.basename(retained) : run.manuscript.pdfPath;
+    return `archimedes-file://${token}/${pdfPath.split("/").map(encodeURIComponent).join("/")}#page=${finding.page}`;
+  });
   ipcMain.handle("paper-review-app:create", async (event, input = {}) => {
     const resolvedWorkspace = (input.source?.kind || "library") === "library"
       ? store.currentStore().workspace
       : resolveWorkspace(input.workspace || windowWorkspaces.get(event.sender.id));
     const sender = event.sender;
+    let manuscript;
+    if (input.source?.kind === "manuscript") {
+      if (!windowWorkspaces.has(sender.id)) throw new Error("Open the manuscript workspace first.");
+      const origin = manuscriptHandoff.prepareManuscriptReview(store, { ...input.source, projectId: input.projectId });
+      if (input.source.buildId !== origin.buildId) throw new Error("The manuscript build changed. Confirm the manuscript review again.");
+      const retained = paperReview.retainedPdfPath(origin.pdfSha256);
+      manuscript = { origin, bytes: manuscriptHandoff.verifiedReviewedPdf(origin, retained), destination: input.source.destination };
+    }
     return paperReview.createRun(input, {
+      manuscript,
       workspace: resolvedWorkspace,
       emit: (payload) => {
         if (!sender.isDestroyed()) sender.send("paper-review-app:progress", payload);
       },
     });
   });
-  ipcMain.handle("paper-review-app:get-run", (_event, input = {}) => paperReview.getRun(String(input?.runId || "")));
-  ipcMain.handle("paper-review-app:list-runs", (_event, input = {}) => paperReview.listRuns({ projectId: String(input?.projectId || ""), limit: Number(input?.limit) || 50 }));
-  ipcMain.handle("paper-review-app:cancel-run", (_event, input = {}) => paperReview.cancelRun(String(input?.runId || "")));
-  ipcMain.handle("paper-review-app:delete-run", (_event, input = {}) => paperReview.deleteRun(String(input?.runId || "")));
+  ipcMain.handle("paper-review-app:get-run", (event, input = {}) => scopedReviewRun(event, String(input?.runId || "")));
+  ipcMain.handle("paper-review-app:list-runs", (event, input = {}) => paperReview.listRuns({ projectId: String(input?.projectId || ""), limit: Number(input?.limit) || 50 })
+    .filter(run => run.sourceKind !== "manuscript" || (
+      windowWorkspaces.get(event.sender.id) === run.manuscript?.dataWorkspace && store.canAccessProject(run.projectId, "viewer")
+    )));
+  ipcMain.handle("paper-review-app:cancel-run", (event, input = {}) => {
+    scopedReviewRun(event, String(input?.runId || ""), "editor");
+    return paperReview.cancelRun(String(input?.runId || ""));
+  });
+  ipcMain.handle("paper-review-app:delete-run", (event, input = {}) => {
+    scopedReviewRun(event, String(input?.runId || ""), "editor");
+    return paperReview.deleteRun(String(input?.runId || ""));
+  });
   ipcMain.handle("paper-review-app:export-run", async (event, input = {}) => {
+    scopedReviewRun(event, String(input?.runId || ""));
     const exported = paperReview.exportRun(String(input?.runId || ""));
     const browserWindow = BrowserWindow.fromWebContents(event.sender);
     const options = {
@@ -1109,6 +1174,10 @@ app.whenReady().then(async () => {
 
   ipcMain.handle("workspace:write-file", (event, input = {}) => {
     const workspace = resolveWorkspace(input.workspace);
+    if (input.expectedContent !== undefined &&
+      workspaceFiles.readWorkspaceFile(workspace, input.path).content !== input.expectedContent) {
+      throw new Error("The source changed on disk. Your draft is still open.");
+    }
     const file = workspaceFiles.writeWorkspaceTextFile(workspace, input.path, input.content);
     if (!event.sender.isDestroyed()) event.sender.send("workspace:files-changed", { path: file.path });
     return file;
@@ -1174,8 +1243,9 @@ app.whenReady().then(async () => {
 
   ipcMain.handle("paper:compile", async (event, input = {}) => {
     const workspace = resolveWorkspace(input.workspace);
+    const requestId = typeof input.requestId === "string" ? input.requestId.slice(0, 200) : undefined;
     const result = await managedPaperCompiler(workspace, input.path, (stage, log) => {
-      if (!event.sender.isDestroyed()) event.sender.send("paper:compile-progress", { path: input.path, stage, log });
+      if (!event.sender.isDestroyed()) event.sender.send("paper:compile-progress", { workspace, requestId, path: input.path, stage, log });
     });
     if (!result.ok || !result.pdf_path) return result;
     const token = createPreviewToken(event.sender.id, workspace);

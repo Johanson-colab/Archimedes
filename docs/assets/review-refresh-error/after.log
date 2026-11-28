@@ -1,0 +1,17 @@
+$ node --test electron/ui-audit-paper-review.test.cjs electron/manuscript-handoff.test.cjs
+✔ rechecks a compiled manuscript and drafts only one selected page in its private owner (9.672084ms)
+✔ Paper review remains available as a Writing & delivery app, hidden by default (1.170708ms)
+✔ Paper review is registry-hosted with a real bridge and in-page controls (0.398083ms)
+✔ Library Review tab is renamed Interactive paper and the old workbench reads as reading (0.26575ms)
+✔ Paper review exposes venue packs, model choice and a simulated-review disclaimer (1.406875ms)
+✔ Paper review API surface is wired through preload and main (0.204208ms)
+✔ Paper review strings are translated (0.119833ms)
+✔ a manuscript handoff refresh failure is shown before review consent (0.11675ms)
+ℹ tests 8
+ℹ suites 0
+ℹ pass 8
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 119.357833

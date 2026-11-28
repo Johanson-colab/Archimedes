@@ -1,0 +1,369 @@
+$ node --test electron/manuscript-handoff.test.cjs
+✔ rechecks a compiled manuscript and drafts only one selected page in its private owner (7.2645ms)
+✖ manuscript handoff uses the owning session execution folder after a project rebind (3.213166ms)
+✖ saved reviews remain readable after their execution workspace is deleted (2.603458ms)
+ℹ tests 3
+ℹ suites 0
+ℹ pass 1
+ℹ fail 2
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 121.543167
+
+✖ failing tests:
+
+test at electron/manuscript-handoff.test.cjs:51:1
+✖ manuscript handoff uses the owning session execution folder after a project rebind (3.213166ms)
+  Error: ENOENT: no such file or directory, lstat '/private/tmp/claude-501/archimedes-manuscript-rebind-rzfep3/rebound/.archimedes'
+      at Object.realpathSync (node:fs:3455:29)
+      at resolveWorkspaceTarget (/private/tmp/claude-501/archimedes-review-receipt-before.nrGKdz/electron/security/path-sandbox.cjs:17:23)
+      at workspacePath (/private/tmp/claude-501/archimedes-review-receipt-before.nrGKdz/electron/workspace-files.cjs:27:10)
+      at readManuscriptSnapshot (/private/tmp/claude-501/archimedes-review-receipt-before.nrGKdz/electron/manuscript-snapshot.cjs:198:47)
+      at prepareManuscriptReview (/private/tmp/claude-501/archimedes-review-receipt-before.nrGKdz/electron/manuscript-handoff.cjs:16:19)
+      at TestContext.<anonymous> (/private/tmp/claude-501/archimedes-review-receipt-before.nrGKdz/electron/manuscript-handoff.test.cjs:70:18)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19) {
+    errno: -2,
+    code: 'ENOENT',
+    syscall: 'lstat',
+    path: '/private/tmp/claude-501/archimedes-manuscript-rebind-rzfep3/rebound/.archimedes'
+  }
+
+test at electron/manuscript-handoff.test.cjs:78:1
+✖ saved reviews remain readable after their execution workspace is deleted (2.603458ms)
+  TypeError [Error]: authorizeManuscriptRecord is not a function
+      at TestContext.<anonymous> (/private/tmp/claude-501/archimedes-review-receipt-before.nrGKdz/electron/manuscript-handoff.test.cjs:98:16)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+
+$ node --test electron/manuscript-review-retention.test.cjs
+✖ saved manuscript review operations do not require a live execution workspace (0.760625ms)
+✖ reviewed page links use the retained PDF by content hash (0.59ms)
+ℹ tests 2
+ℹ suites 0
+ℹ pass 0
+ℹ fail 2
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 109.235667
+
+✖ failing tests:
+
+test at electron/manuscript-review-retention.test.cjs:22:1
+✖ saved manuscript review operations do not require a live execution workspace (0.760625ms)
+  Error: workspace must not be required
+      at Object.authorizeManuscriptRun (/private/tmp/claude-501/archimedes-review-receipt-before.nrGKdz/electron/manuscript-review-retention.test.cjs:33:72)
+      at scopedReviewRun (eval at scopedReviewHandlers (/private/tmp/claude-501/archimedes-review-receipt-before.nrGKdz/electron/manuscript-review-retention.test.cjs:18:3), <anonymous>:7:25)
+      at eval (eval at scopedReviewHandlers (/private/tmp/claude-501/archimedes-review-receipt-before.nrGKdz/electron/manuscript-review-retention.test.cjs:18:3), <anonymous>:48:69)
+      at TestContext.<anonymous> (/private/tmp/claude-501/archimedes-review-receipt-before.nrGKdz/electron/manuscript-review-retention.test.cjs:45:56)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.start (node:internal/test_runner/test:1262:17)
+      at startSubtestAfterBootstrap (node:internal/test_runner/harness:387:17)
+
+test at electron/manuscript-review-retention.test.cjs:50:1
+✖ reviewed page links use the retained PDF by content hash (0.59ms)
+  TypeError [Error]: manuscriptHandoff.verifiedReviewedPdf is not a function
+      at eval (eval at scopedReviewHandlers (/private/tmp/claude-501/archimedes-review-receipt-before.nrGKdz/electron/manuscript-review-retention.test.cjs:18:3), <anonymous>:24:23)
+      at TestContext.<anonymous> (/private/tmp/claude-501/archimedes-review-receipt-before.nrGKdz/electron/manuscript-review-retention.test.cjs:81:63)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3)
+
+$ node --test electron/ui-audit-paper-review.test.cjs
+✔ Paper review remains available as a Writing & delivery app, hidden by default (0.86675ms)
+✖ Paper review is registry-hosted with a real bridge and in-page controls (1.132791ms)
+✔ Library Review tab is renamed Interactive paper and the old workbench reads as reading (0.20875ms)
+✔ Paper review exposes venue packs, model choice and a simulated-review disclaimer (1.301416ms)
+✔ Paper review API surface is wired through preload and main (0.188417ms)
+✔ Paper review strings are translated (0.116125ms)
+✖ a manuscript handoff refresh failure is shown before review consent (0.145ms)
+ℹ tests 7
+ℹ suites 0
+ℹ pass 5
+ℹ fail 2
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 113.727459
+
+✖ failing tests:
+
+test at electron/ui-audit-paper-review.test.cjs:30:1
+✖ Paper review is registry-hosted with a real bridge and in-page controls (1.132791ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /"paper-review": <PaperReviewView\b[^>]*\bbridge=\{desktopBridge\} workspace=\{executionWorkspace\} projectId=\{activeProjectId\} threadId=\{activeThreadId\}[^>]*active=\{mainSection === "paper-review"\}/. Input:
+  
+  'import type { ManuscriptReviewFinding, ManuscriptReviewRequest } from "./manuscript-handoff";\n' +
+    'import { Fragment, lazy, memo, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent as ReactClipboardEvent, type ReactNode } from "react";\n' +
+    'import { flushSync } from "react-dom";\n' +
+    'import { startApprovalCountdown } from "./approval-countdown.mjs";\n' +
+    'import ReactMarkdown from "react-markdown";\n' +
+    'import { WorkspaceMarkdownLink, WorkspaceMarkdownProvider, workspaceMarkdownUrlTransform } from "./WorkspaceMarkdownLink";\n' +
+    'import remarkGfm from "remark-gfm";\n' +
+    'import remarkMath from "remark-math";\n' +
+    'import rehypeKatex from "rehype-katex";\n' +
+    'import "katex/dist/katex.min.css";\n' +
+    'import SyntaxHighlighter from "react-syntax-highlighter/dist/esm/prism-light";\n' +
+    'import bash from "react-syntax-highlighter/dist/esm/languages/prism/bash";\n' +
+    'import c from "react-syntax-highlighter/dist/esm/languages/prism/c";\n' +
+    'import cpp from "react-syntax-highlighter/dist/esm/languages/prism/cpp";\n' +
+    'import css from "react-syntax-highlighter/dist/esm/languages/prism/css";\n' +
+    'import go from "react-syntax-highlighter/dist/esm/languages/prism/go";\n' +
+    'import java from "react-syntax-highlighter/dist/esm/languages/prism/java";\n' +
+    'import javascript from "react-syntax-highlighter/dist/esm/languages/prism/javascript";\n' +
+    'import json from "react-syntax-highlighter/dist/esm/languages/prism/json";\n' +
+    'import jsx from "react-syntax-highlighter/dist/esm/languages/prism/jsx";\n' +
+    'import latex from "react-syntax-highlighter/dist/esm/languages/prism/latex";\n' +
+    'import markdown from "react-syntax-highlighter/dist/esm/languages/prism/markdown";\n' +
+    'import markup from "react-syntax-highlighter/dist/esm/languages/prism/markup";\n' +
+    'import python from "react-syntax-highlighter/dist/esm/languages/prism/python";\n' +
+    'import rust from "react-syntax-highlighter/dist/esm/languages/prism/rust";\n' +
+    'import sql from "react-syntax-highlighter/dist/esm/languages/prism/sql";\n' +
+    'import tsx from "react-syntax-highlighter/dist/esm/languages/prism/tsx";\n' +
+    'import typescript from "react-syntax-highlighter/dist/esm/languages/prism/typescript";\n' +
+    'import yaml from "react-syntax-highlighter/dist/esm/languages/prism/yaml";\n' +
+    'import { applyAppearance, readAppearance, resolveTheme, writeAppearance, type AppearanceSettings, type AppTheme, type ThemePreset } from "./appearance";\n' +
+    'import { chooseIconName } from "./file-icons/opencode/choose-icon-name";\n' +
+    'import { ensureOpenCodeSprite } from "./file-icons/opencode/sprite";\n' +
+    'import ResearchWelcome, { type ResearchWelcomeAction } from "./ResearchWelcome";\n' +
+    'import FirstRunGuide, { readFirstRunGuide, writeFirstRunGuide, type FirstRunGuideResult, type FirstRunGuideStep } from "./FirstRunGuide";\n' +
+    'import ContextPicker, { ContextChips } from "./ContextPicker";\n' +
+    'import ProjectSidebar, { NewProjectModal, ProjectRemoveModal } from "./ProjectSidebar";\n' +
+    'import SidebarSectionHeader from "./SidebarSectionHeader";\n' +
+    'import { type ExtensionsTab } from "./ExtensionsView";\n' +
+    'import { useConfirm } from "./ConfirmDialog";\n' +
+    'import { Dialog } from "./Dialog";\n' +
+    'import CommandPalette, { type PaletteCommand } from "./CommandPalette";\n' +
+    'import { defaultDisabledResearchApps, researchAppMetadata } from "./research-apps";\n' +
+    'import { registerGeneratedAppEntries, sidebarEntries, sidebarModule, type MainSection, type SidebarEntry, type SidebarModuleId } from "./sidebar-registry";\n' +
+    'import { loadSidebarPlugins, PluginModuleView } from "./plugin-runtime";\n' +
+    'import RightWorkbench, { clampWorkbenchWidth, defaultWorkbenchWidth } from "./RightWorkbench";\n' +
+    'import SessionSwitcher from "./SessionSwitcher";\n' +
+    'import WorkspaceDialog from "./WorkspaceDialog";\n' +
+    'import ChangesView from "./ChangesView";\n' +
+    'import NotesView, { type NoteSaveState } from "./NotesView";\n' +
+    'import VoiceInputButton from "./VoiceInputButton";\n' +
+    'import SideConversation from "./SideConversation";\n' +
+    'import { INIT_PROMPT, type ConversationCommand, type ConversationCommandResult } from "./conversation-commands";\n' +
+    'import workspaceNameLibrary from "../shared/workspace-names.json";\n' +
+    'import { workspacePathName } from "./workspace-path";\n' +
+    'import { readSessionToolPreferences, writeSessionToolPreferences, type SessionToolPreferences } from "./session-tools";\n' +
+    'import { shouldSubmitPaperChatKey } from "./paperChatKeyboard";\n' +
+    'import BrowserView from "./BrowserView";\n' +
+    'import { DEFAULT_WORKBENCH_PREFERENCES, activeWorkbenchPaneTabs, normalizeWorkbenchPreferences, selectWorkbenchTab, type WorkbenchTabId, type WorkbenchTabPreferences } from "./workbench-tabs";\n' +
+    'import ArtifactsPanel from "./ArtifactsPanel";\n' +
+    'import ChatActivityTimeline from "./ChatActivityTimeline";\n' +
+    'import NativeAgentPanel, { NativeContextUsage, NativeQuestionCard, NativeSessionBusyNotice } from "./NativeAgentPanel";\n' +
+    'import { mergeNativeEvent, nativeTurnEvents, nativeUsage, updateNativeQuestions, type NativeSessionBackend } from "./native-agent-state";\n' +
+    'import HarnessPicker from "./HarnessPicker";\n' +
+    'import ResearchAppsView from "./ResearchAppsView";\n' +
+    'import NewChatModePicker, { draftForNewChatMode, RESEARCH_EXAMPLE, type NewChatMode } from "./NewChatModePicker";\n' +
+    'import JourneyView from "./JourneyView";\n' +
+    'import { defaultJourneySettings, normalizeJourneySettings } from "./journeySettings";\n' +
+    'import TrajectoryView from "./TrajectoryView";\n' +
+    'import TurnRail from "./TurnRail";\n' +
+    'import TerminalPanel from "./TerminalPanel";\n' +
+    'import TerminalSettingsModal from "./TerminalSettingsModal";\n' +
+    'import SettingsModal, { type SettingsSection } from "./SettingsModal";\n' +
+    'import ThreadShareModal from "./ThreadShareModal";\n' +
+    'import SnapshotRangeDialog from "./SnapshotRangeDialog";\n' +
+    'import SessionComments, { type SessionCommentsScope } from "./SessionComments";\n' +
+    'import AccountChip from "./AccountChip";\n' +
+    'import packageMetadata from "../package.json";\n' +
+    'import AuthModal from "./AuthModal";\n' +
+    'import { useUISettings } from "./i18n";\n' +
+    'import { moveSidebarOrder, orderSidebarIds, readSidebarOrder, reconcileSidebarOrder, writeSidebarOrder, type SidebarOrderGroup } from "./sidebar-order";\n' +
+    'import { readSidebarSectionCollapse, writeSidebarSectionCollapse, type SidebarSectionId } from "./sidebar-section-collapse";\n' +
+    'import { type PaperOpenRequest } from "./PaperWritingView";\n' +
+    'import { createFileDraft, finishFileEditorSave, formatFileComment, getFileEditorScope, hasDirtyFileEditorScopes, isDraftDirty, isEditableFile, mergeRefreshedFiles, prepareFileContent, toEditorText, updateFileEditorScope, type FileComment, type FileDraft, type FileEditorScope, type FileEditorScopes, type FileSelection } from "./file-editor";\n' +
+    'import { shortcutMatches } from "./file-text-size";\n' +
+    'import { previewLibraryBridge } from "./library-preview";\n' +
+    'import AgentLayer from "./AgentLayer";\n' +
+    'import ResearchPathPanel from "./ResearchPathPanel";\n' +
+    'import ResearchGraphPanel from "./research-graph/ResearchGraphPanel";\n' +
+    'import ProactiveAgentPanel from "./ProactiveAgentPanel";\n' +
+    'import ProactiveSettingsPanel from "./ProactiveSettingsPanel";\n' +
+    'import { researchStages, stageForMode, type ResearchStage, type ResearchStageId } from "./research-path";\n' +
+    'import { useProactiveAgent } from "./useProactiveAgent";\n' +
+    'import type { ProactiveSuggestion } from "./proactive-types";\n' +
+    'import CopyButton from "./CopyButton";\n' +
+    'import { MenuDivider, MenuItem, MenuLabel, MenuSurface } from "./Menu";\n' +
+    'import ArchimedesMark from "./brand/ArchimedesMark";\n' +
+    'import ArchimedesWordmark from "./brand/ArchimedesWordmark";\n' +
+    'import {\n' +
+    '  AlertTriangle,\n' +
+    '  ArrowDown,\n' +
+    '  ArrowLeft,\n' +
+    '  ArrowRight,\n' +
+    '  ArrowUp,\n' +
+    '  BookOpen,\n' +
+    '  BookOpenCheck,\n' +
+    '  Calendar,\n' +
+    '  Check,\n' +
+    '  ChevronDown,\n' +
+    '  ChevronLeft,\n' +
+    '  ChevronRight,\n' +
+    '  CircleDot,\n' +
+    '  CircleHelp,\n' +
+    '  Clipboard,\n' +
+    '  Copy,\n' +
+    '  Cpu,\n' +
+    '  Download,\n' +
+    '  File,\n' +
+    '  FileAudio,\n' +
+    '  FileBraces,\n' +
+    '  FileCode,\n' +
+    '  FileCode2,\n' +
+    '  FileCog,\n' +
+    '  FileImage,\n' +
+    '  FileJson,\n' +
+    '  FileLock,\n' +
+    '  FilePen,\n' +
+    '  FileSpreadsheet,\n' +
+    '  FileTerminal,\n' +
+    '  FileText,\n' +
+    '  FileType,\n' +
+    '  FileVideo,\n' +
+    '  Flag,\n' +
+    '  FlaskConical,\n' +
+    '  Folder,\n' +
+    '  FolderOpen,\n' +
+    '  GitCompareArrows,\n' +
+    '  GitFork,\n' +
+    '  ImagePlus,\n' +
+    '  Laptop,\n' +
+    '  Lightbulb,\n' +
+    '  LoaderCircle,\n' +
+    '  Maximize2,\n' +
+    '  MessageCircle,\n' +
+    '  MessageCircleReply,\n' +
+    '  Minimize2,\n' +
+    '  NotebookPen,\n' +
+    '  Package,\n' +
+    '  PanelRight,\n' +
+    '  Play,\n' +
+    '  Plus,\n' +
+    '  Puzzle,\n' +
+    '  Radar,\n' +
+    '  RefreshCw,\n' +
+    '  Route,\n' +
+    '  Save,\n' +
+    '  Scissors,\n' +
+    '  Search,\n' +
+    '  Server,\n' +
+    '  Settings,\n' +
+    '  Share2,\n' +
+    '  Shield,\n' +
+    '  Sparkle,\n' +
+    '  Square,\n' +
+    '  SquareTerminal,\n' +
+    '  Undo2,\n' +
+    '  X,\n' +
+    '} from "lucide-react";\n' +
+    '\n' +
+    'const syntaxLanguages: Array<[string, unknown]> = [\n' +
+    '  ["markup", markup], ["css", css], ["c", c], ["cpp", cpp], ["javascript", javascript],\n' +
+    '  ["jsx", jsx], ["typescript", typescript], ["tsx", tsx], ["bash", bash], ["go", go],\n' +
+    '  ["java", java], ["json", json], ["latex", latex], ["markdown", markdown], ["python", python],\n' +
+    '  ["rust", rust], ["sql", sql], ["yaml", yaml],\n' +
+    '];\n' +
+    'for (const [name, grammar] of syntaxLanguages) {\n' +
+    '  SyntaxHighlighter.registerLanguage(name, grammar);\n' +
+    '}\n' +
+    '\n' +
+    'type Message = {\n' +
+    '  id: string;\n' +
+    '  turn_id?: string;\n' +
+    '  role: "user" | "assistant";\n' +
+    '  text: string;\n' +
+    '  sources?: ResearchSource[];\n' +
+    '  attachments?: MessageAttachment[];\n' +
+    '  created_at?: string;\n' +
+    '};\n' +
+    '\n' +
+    'type TimelineEvent = {\n' +
+    '  title: string;\n' +
+    '  detail: string;\n' +
+    '  snapshotCoverage?: WorkspaceSnapshotCoverage;\n' +
+    '  state: "done" | "active" | "waiting";\n' +
+    '};\n' +
+    '\n' +
+    'type PendingAction = AgentAction & { source: "agent" | "manual"; ownerThreadId?: string | null };\n' +
+    'type Modal = "file" | null;\n' +
+    'type WorkbenchNoteEdit = { content: string; timer: number | null; state: Exclude<NoteSaveState, "idle"> };\n' +
+    'type ResearchMode = NewChatMode | "free-chat" | "idea-spark" | "experiment-setup" | "paper-generation" | "paper-review" | "deep-research";\n' +
+    'type ReasoningEffort = "low" | "medium" | "high";\n' +
+    'type ContextLength = "standard" | "extra-long";\n' +
+    '\n' +
+    'const researchModes: Array<{ id: ResearchMode; label: string; description: string; icon: React.ReactNode; placeholder: string }> = [\n' +
+    '  { id: "standard", label: "Standard", description: "Ask questions and work with your research context", icon: <MessageCircle size={15} />, placeholder: "Ask anything or start a conversation..." },\n' +
+    '  { id: "research", label: "Research", description: "Explore a research question", icon: <Lightbulb size={15} />, placeholder: "Describe a topic, observation, or open question..." },\n' +
+    '  { id: "create", label: "Create", descrip'... 338556 more characters
+  
+      at TestContext.<anonymous> (/private/tmp/claude-501/archimedes-review-receipt-before.nrGKdz/electron/ui-audit-paper-review.test.cjs:32:10)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'import type { ManuscriptReviewFinding, ManuscriptReviewRequest } from "./manuscript-handoff";\nimport { Fragment, lazy, memo, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent as ReactClipboardEvent, type ReactNode } from "react";\nimport { flushSync } from "react-dom";\nimport { startApprovalCountdown } from "./approval-countdown.mjs";\nimport ReactMarkdown from "react-markdown";\nimport { WorkspaceMarkdownLink, WorkspaceMarkdownProvider, workspaceMarkdownUrlTransform } from "./WorkspaceMarkdownLink";\nimport remarkGfm from "remark-gfm";\nimport remarkMath from "remark-math";\nimport rehypeKatex from "rehype-katex";\nimport "katex/dist/katex.min.css";\nimport SyntaxHighlighter from "react-syntax-highlighter/dist/esm/prism-light";\nimport bash from "react-syntax-highlighter/dist/esm/languages/prism/bash";\nimport c from "react-syntax-highlighter/dist/esm/languages/prism/c";\nimport cpp from "react-syntax-highlighter/dist/esm/languages/prism/cpp";\nimport css from "react-syntax-highlighter/dist/esm/languages/prism/css";\nimport go from "react-syntax-highlighter/dist/esm/languages/prism/go";\nimport java from "react-syntax-highlighter/dist/esm/languages/prism/java";\nimport javascript from "react-syntax-highlighter/dist/esm/languages/prism/javascript";\nimport json from "react-syntax-highlighter/dist/esm/languages/prism/json";\nimport jsx from "react-syntax-highlighter/dist/esm/languages/prism/jsx";\nimport latex from "react-syntax-highlighter/dist/esm/languages/prism/latex";\nimport markdown from "react-syntax-highlighter/dist/esm/languages/prism/markdown";\nimport markup from "react-syntax-highlighter/dist/esm/languages/prism/markup";\nimport python from "react-syntax-highlighter/dist/esm/languages/prism/python";\nimport rust from "react-syntax-highlighter/dist/esm/languages/prism/rust";\nimport sql from "react-syntax-highlighter/dist/esm/languages/prism/sql";\nimport tsx from "react-syntax-highlighter/dist/esm/languages/prism/tsx";\nimport typescript from "react-syntax-highlighter/dist/esm/languages/prism/typescript";\nimport yaml from "react-syntax-highlighter/dist/esm/languages/prism/yaml";\nimport { applyAppearance, readAppearance, resolveTheme, writeAppearance, type AppearanceSettings, type AppTheme, type ThemePreset } from "./appearance";\nimport { chooseIconName } from "./file-icons/opencode/choose-icon-name";\nimport { ensureOpenCodeSprite } from "./file-icons/opencode/sprite";\nimport ResearchWelcome, { type ResearchWelcomeAction } from "./ResearchWelcome";\nimport FirstRunGuide, { readFirstRunGuide, writeFirstRunGuide, type FirstRunGuideResult, type FirstRunGuideStep } from "./FirstRunGuide";\nimport ContextPicker, { ContextChips } from "./ContextPicker";\nimport ProjectSidebar, { NewProjectModal, ProjectRemoveModal } from "./ProjectSidebar";\nimport SidebarSectionHeader from "./SidebarSectionHeader";\nimport { type ExtensionsTab } from "./ExtensionsView";\nimport { useConfirm } from "./ConfirmDialog";\nimport { Dialog } from "./Dialog";\nimport CommandPalette, { type PaletteCommand } from "./CommandPalette";\nimport { defaultDisabledResearchApps, researchAppMetadata } from "./research-apps";\nimport { registerGeneratedAppEntries, sidebarEntries, sidebarModule, type MainSection, type SidebarEntry, type SidebarModuleId } from "./sidebar-registry";\nimport { loadSidebarPlugins, PluginModuleView } from "./plugin-runtime";\nimport RightWorkbench, { clampWorkbenchWidth, defaultWorkbenchWidth } from "./RightWorkbench";\nimport SessionSwitcher from "./SessionSwitcher";\nimport WorkspaceDialog from "./WorkspaceDialog";\nimport ChangesView from "./ChangesView";\nimport NotesView, { type NoteSaveState } from "./NotesView";\nimport VoiceInputButton from "./VoiceInputButton";\nimport SideConversation from "./SideConversation";\nimport { INIT_PROMPT, type ConversationCommand, type ConversationCommandResult } from "./conversation-commands";\nimport workspaceNameLibrary from "../shared/workspace-names.json";\nimport { workspacePathName } from "./workspace-path";\nimport { readSessionToolPreferences, writeSessionToolPreferences, type SessionToolPreferences } from "./session-tools";\nimport { shouldSubmitPaperChatKey } from "./paperChatKeyboard";\nimport BrowserView from "./BrowserView";\nimport { DEFAULT_WORKBENCH_PREFERENCES, activeWorkbenchPaneTabs, normalizeWorkbenchPreferences, selectWorkbenchTab, type WorkbenchTabId, type WorkbenchTabPreferences } from "./workbench-tabs";\nimport ArtifactsPanel from "./ArtifactsPanel";\nimport ChatActivityTimeline from "./ChatActivityTimeline";\nimport NativeAgentPanel, { NativeContextUsage, NativeQuestionCard, NativeSessionBusyNotice } from "./NativeAgentPanel";\nimport { mergeNativeEvent, nativeTurnEvents, nativeUsage, updateNativeQuestions, type NativeSessionBackend } from "./native-agent-state";\nimport HarnessPicker from "./HarnessPicker";\nimport ResearchAppsView from "./ResearchAppsView";\nimport NewChatModePicker, { draftForNewChatMode, RESEARCH_EXAMPLE, type NewChatMode } from "./NewChatModePicker";\nimport JourneyView from "./JourneyView";\nimport { defaultJourneySettings, normalizeJourneySettings } from "./journeySettings";\nimport TrajectoryView from "./TrajectoryView";\nimport TurnRail from "./TurnRail";\nimport TerminalPanel from "./TerminalPanel";\nimport TerminalSettingsModal from "./TerminalSettingsModal";\nimport SettingsModal, { type SettingsSection } from "./SettingsModal";\nimport ThreadShareModal from "./ThreadShareModal";\nimport SnapshotRangeDialog from "./SnapshotRangeDialog";\nimport SessionComments, { type SessionCommentsScope } from "./SessionComments";\nimport AccountChip from "./AccountChip";\nimport packageMetadata from "../package.json";\nimport AuthModal from "./AuthModal";\nimport { useUISettings } from "./i18n";\nimport { moveSidebarOrder, orderSidebarIds, readSidebarOrder, reconcileSidebarOrder, writeSidebarOrder, type SidebarOrderGroup } from "./sidebar-order";\nimport { readSidebarSectionCollapse, writeSidebarSectionCollapse, type SidebarSectionId } from "./sidebar-section-collapse";\nimport { type PaperOpenRequest } from "./PaperWritingView";\nimport { createFileDraft, finishFileEditorSave, formatFileComment, getFileEditorScope, hasDirtyFileEditorScopes, isDraftDirty, isEditableFile, mergeRefreshedFiles, prepareFileContent, toEditorText, updateFileEditorScope, type FileComment, type FileDraft, type FileEditorScope, type FileEditorScopes, type FileSelection } from "./file-editor";\nimport { shortcutMatches } from "./file-text-size";\nimport { previewLibraryBridge } from "./library-preview";\nimport AgentLayer from "./AgentLayer";\nimport ResearchPathPanel from "./ResearchPathPanel";\nimport ResearchGraphPanel from "./research-graph/ResearchGraphPanel";\nimport ProactiveAgentPanel from "./ProactiveAgentPanel";\nimport ProactiveSettingsPanel from "./ProactiveSettingsPanel";\nimport { researchStages, stageForMode, type ResearchStage, type ResearchStageId } from "./research-path";\nimport { useProactiveAgent } from "./useProactiveAgent";\nimport type { ProactiveSuggestion } from "./proactive-types";\nimport CopyButton from "./CopyButton";\nimport { MenuDivider, MenuItem, MenuLabel, MenuSurface } from "./Menu";\nimport ArchimedesMark from "./brand/ArchimedesMark";\nimport ArchimedesWordmark from "./brand/ArchimedesWordmark";\nimport {\n  AlertTriangle,\n  ArrowDown,\n  ArrowLeft,\n  ArrowRight,\n  ArrowUp,\n  BookOpen,\n  BookOpenCheck,\n  Calendar,\n  Check,\n  ChevronDown,\n  ChevronLeft,\n  ChevronRight,\n  CircleDot,\n  CircleHelp,\n  Clipboard,\n  Copy,\n  Cpu,\n  Download,\n  File,\n  FileAudio,\n  FileBraces,\n  FileCode,\n  FileCode2,\n  FileCog,\n  FileImage,\n  FileJson,\n  FileLock,\n  FilePen,\n  FileSpreadsheet,\n  FileTerminal,\n  FileText,\n  FileType,\n  FileVideo,\n  Flag,\n  FlaskConical,\n  Folder,\n  FolderOpen,\n  GitCompareArrows,\n  GitFork,\n  ImagePlus,\n  Laptop,\n  Lightbulb,\n  LoaderCircle,\n  Maximize2,\n  MessageCircle,\n  MessageCircleReply,\n  Minimize2,\n  NotebookPen,\n  Package,\n  PanelRight,\n  Play,\n  Plus,\n  Puzzle,\n  Radar,\n  RefreshCw,\n  Route,\n  Save,\n  Scissors,\n  Search,\n  Server,\n  Settings,\n  Share2,\n  Shield,\n  Sparkle,\n  Square,\n  SquareTerminal,\n  Undo2,\n  X,\n} from "lucide-react";\n\nconst syntaxLanguages: Array<[string, unknown]> = [\n  ["markup", markup], ["css", css], ["c", c], ["cpp", cpp], ["javascript", javascript],\n  ["jsx", jsx], ["typescript", typescript], ["tsx", tsx], ["bash", bash], ["go", go],\n  ["java", java], ["json", json], ["latex", latex], ["markdown", markdown], ["python", python],\n  ["rust", rust], ["sql", sql], ["yaml", yaml],\n];\nfor (const [name, grammar] of syntaxLanguages) {\n  SyntaxHighlighter.registerLanguage(name, grammar);\n}\n\ntype Message = {\n  id: string;\n  turn_id?: string;\n  role: "user" | "assistant";\n  text: string;\n  sources?: ResearchSource[];\n  attachments?: MessageAttachment[];\n  created_at?: string;\n};\n\ntype TimelineEvent = {\n  title: string;\n  detail: string;\n  snapshotCoverage?: WorkspaceSnapshotCoverage;\n  state: "done" | "active" | "waiting";\n};\n\ntype PendingAction = AgentAction & { source: "agent" | "manual"; ownerThreadId?: string | null };\ntype Modal = "file" | null;\ntype WorkbenchNoteEdit = { content: string; timer: number | null; state: Exclude<NoteSaveState, "idle"> };\ntype ResearchMode = NewChatMode | "free-chat" | "idea-spark" | "experiment-setup" | "paper-generation" | "paper-review" | "deep-research";\ntype ReasoningEffort = "low" | "medium" | "high";\ntype ContextLength = "standard" | "extra-long";\n\nconst researchModes: Array<{ id: ResearchMode; label: string; description: string; icon: React.ReactNode; placeholder: string }> = [\n  { id: "standard", label: "Standard", description: "Ask questions and work with your research context", icon: <MessageCircle size={15} />, placeholder: "Ask anything or start a conversation..." },\n  { id: "research", label: "Research", description: "Explore a research question", icon: <Lightbulb size={15} />, placeholder: "Describe a topic, observation, or open question..." },\n  { id: "create", label: "Create", descrip'... 338556 more characters,
+    expected: /"paper-review": <PaperReviewView\b[^>]*\bbridge=\{desktopBridge\} workspace=\{executionWorkspace\} projectId=\{activeProjectId\} threadId=\{activeThreadId\}[^>]*active=\{mainSection === "paper-review"\}/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at electron/ui-audit-paper-review.test.cjs:92:1
+✖ a manuscript handoff refresh failure is shown before review consent (0.145ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /try\s*\{/. Input:
+  
+  '  async function startReview() {\n' +
+    '    if (running) return;\n' +
+    '    setError("");\n' +
+    '    setNotice("");\n' +
+    '    setProgress(null);\n' +
+    '    if (!manuscript && sourceKind === "library" && !paperId) {\n' +
+    '      setError(t("Choose a Library paper first."));\n' +
+    '      return;\n' +
+    '    }\n' +
+    '    if (!manuscript && sourceKind === "arxiv" && !arxivInput.trim()) {\n' +
+    '      setError(t("Enter an arXiv ID or URL."));\n' +
+    '      return;\n' +
+    '    }\n' +
+    '    if (!manuscript && sourceKind === "pdf" && !pdfPath) {\n' +
+    '      setError(t("Choose a PDF first."));\n' +
+    '      return;\n' +
+    '    }\n' +
+    '    let handoff = manuscript;\n' +
+    '    if (manuscript && bridge.prepareManuscriptReview) {\n' +
+    '      // Re-resolve the destination after any in-page settings change so the\n' +
+    '      // consent prompt and the submitted run describe the same provider.\n' +
+    '      '
+  
+      at TestContext.<anonymous> (/private/tmp/claude-501/archimedes-review-receipt-before.nrGKdz/electron/ui-audit-paper-review.test.cjs:100:10)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '  async function startReview() {\n    if (running) return;\n    setError("");\n    setNotice("");\n    setProgress(null);\n    if (!manuscript && sourceKind === "library" && !paperId) {\n      setError(t("Choose a Library paper first."));\n      return;\n    }\n    if (!manuscript && sourceKind === "arxiv" && !arxivInput.trim()) {\n      setError(t("Enter an arXiv ID or URL."));\n      return;\n    }\n    if (!manuscript && sourceKind === "pdf" && !pdfPath) {\n      setError(t("Choose a PDF first."));\n      return;\n    }\n    let handoff = manuscript;\n    if (manuscript && bridge.prepareManuscriptReview) {\n      // Re-resolve the destination after any in-page settings change so the\n      // consent prompt and the submitted run describe the same provider.\n      ',
+    expected: /try\s*\{/,
+    operator: 'match',
+    diff: 'simple'
+  }

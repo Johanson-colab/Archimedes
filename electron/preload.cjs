@@ -74,7 +74,7 @@ contextBridge.exposeInMainWorld("researchDesk", {
   listWorkspaceFiles: (workspace, directory = "") => ipcRenderer.invoke("workspace:list-files", { workspace, directory }),
   inspectWorkspacePath: (workspace, filePath) => ipcRenderer.invoke("workspace:inspect-path", { workspace, path: filePath }),
   readWorkspaceFile: (workspace, filePath) => ipcRenderer.invoke("workspace:read-file", { workspace, path: filePath }),
-  writeWorkspaceFile: (workspace, filePath, content) => ipcRenderer.invoke("workspace:write-file", { workspace, path: filePath, content }),
+  writeWorkspaceFile: (workspace, filePath, content, expectedContent) => ipcRenderer.invoke("workspace:write-file", { workspace, path: filePath, content, expectedContent }),
   listArtifacts: (threadId) => ipcRenderer.invoke("artifacts:list", { threadId }),
   markArtifactsSeen: (threadId) => ipcRenderer.invoke("artifacts:mark-seen", { threadId }),
   countUnseenArtifacts: (threadId) => ipcRenderer.invoke("artifacts:unseen-count", { threadId }),
@@ -84,7 +84,7 @@ contextBridge.exposeInMainWorld("researchDesk", {
   createLatexFile: (workspace, path) => ipcRenderer.invoke("paper:create-file", { workspace, path }),
   createLatexDirectory: (workspace, path) => ipcRenderer.invoke("paper:create-directory", { workspace, path }),
   importLatexFolder: (workspace) => ipcRenderer.invoke("paper:import-folder", { workspace }),
-  compileLatexDocument: (workspace, path) => ipcRenderer.invoke("paper:compile", { workspace, path }),
+  compileLatexDocument: (workspace, path, requestId) => ipcRenderer.invoke("paper:compile", { workspace, path, requestId }),
   readManuscriptSnapshot: (workspace, manifestPath) => ipcRenderer.invoke("paper:build-snapshot", { workspace, manifestPath }),
   onLatexCompileProgress: (callback) => {
     const listener = (_event, payload) => callback(payload);
@@ -303,6 +303,9 @@ contextBridge.exposeInMainWorld("researchDesk", {
   listPaperReviewPapers: (input) => ipcRenderer.invoke("paper-review-app:list-papers", input),
   stagePaperToSlidesPdf: (workspace, path) => ipcRenderer.invoke("paper-to-slides:stage", { workspace, path }),
   choosePaperReviewPdf: () => ipcRenderer.invoke("paper-review-app:choose-pdf"),
+  prepareManuscriptReview: (input) => ipcRenderer.invoke("paper-review-app:prepare-manuscript", input),
+  createManuscriptRevision: (input) => ipcRenderer.invoke("paper-review-app:manuscript-revision", input),
+  openManuscriptReviewPage: (input) => ipcRenderer.invoke("paper-review-app:manuscript-page", input),
   createPaperReviewRun: (input) => ipcRenderer.invoke("paper-review-app:create", input),
   getPaperReviewRun: (runId) => ipcRenderer.invoke("paper-review-app:get-run", { runId }),
   listPaperReviewRuns: (input) => ipcRenderer.invoke("paper-review-app:list-runs", input),

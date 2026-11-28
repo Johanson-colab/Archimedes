@@ -117,15 +117,15 @@ interface ResearchDeskBridge {
     markArtifactsSeen: (threadId: string) => Promise<{ marked: number }>;
     countUnseenArtifacts: (threadId: string) => Promise<number>;
     deleteArtifact: (id: string) => Promise<{ deleted: boolean }>;
-    writeWorkspaceFile: (workspace: string, filePath: string, content: string) => Promise<WorkspaceFilePreview>;
+    writeWorkspaceFile: (workspace: string, filePath: string, content: string, expectedContent?: string) => Promise<WorkspaceFilePreview>;
     listLatexProjects: (workspace: string) => Promise<LatexProjectSummary[]>;
     createLatexProject: (workspace: string, directory?: string, template?: string) => Promise<WorkspaceFilePreview>;
     createLatexFile: (workspace: string, path: string) => Promise<WorkspaceFilePreview>;
     createLatexDirectory: (workspace: string, path: string) => Promise<LatexDirectoryResult>;
     importLatexFolder: (workspace: string) => Promise<LatexImportResult>;
-    compileLatexDocument: (workspace: string, path: string) => Promise<LatexCompileResult>;
+    compileLatexDocument: (workspace: string, path: string, requestId?: string) => Promise<LatexCompileResult>;
     readManuscriptSnapshot?: (workspace: string, manifestPath: string) => Promise<import("./manuscript-snapshot").ManuscriptBuildVerification>;
-    onLatexCompileProgress?: (callback: (input: { path: string; stage: string; log?: string }) => void) => () => void;
+    onLatexCompileProgress?: (callback: (input: { workspace?: string; requestId?: string; path: string; stage: string; log?: string }) => void) => () => void;
     getResearchTurnImage: (threadId: string, turnId: string, position: number, workspace?: string) => Promise<string | null>;
     getResearchThread: (threadId: string, workspace?: string) => Promise<ResearchThreadDetail>;
     createResearchThread: (input: { projectId?: string; workspacePath?: string; workspaceId?: string; mode?: ResearchMode; visibility?: "project" | "private"; title?: string }) => Promise<ResearchThreadDetail>;
@@ -340,6 +340,9 @@ interface ResearchDeskBridge {
     listPaperReviewPapers: (input?: { workspace?: string; projectId?: string }) => Promise<PaperReviewPaperSummary[]>;
     choosePaperReviewPdf: () => Promise<string>;
     stagePaperToSlidesPdf: (workspace: string, path: string) => Promise<string>;
+    prepareManuscriptReview?: (input: { projectId: string; workspaceId: string; manifestPath: string; workspace?: string; threadId?: string }) => Promise<import("./manuscript-handoff").ManuscriptReviewRequest>;
+    createManuscriptRevision?: (input: import("./manuscript-handoff").ManuscriptReviewFinding) => Promise<{ thread: ResearchThreadDetail; draft: string }>;
+    openManuscriptReviewPage?: (input: import("./manuscript-handoff").ManuscriptReviewFinding) => Promise<string>;
     createPaperReviewRun: (input: PaperReviewCreateInput) => Promise<{ runId: string; document: PaperReviewDocumentSummary | null; venue: { id: string; displayName: string; version: string }; model: string }>;
     getPaperReviewRun: (runId: string) => Promise<PaperReviewRunSummary | null>;
     listPaperReviewRuns: (input?: { projectId?: string; limit?: number }) => Promise<PaperReviewRunSummary[]>;
@@ -626,6 +629,7 @@ interface PaperReviewDocumentSummary {
 }
 
 type PaperReviewSource =
+  | ({ kind: "manuscript"; manifestPath: string; workspaceId: string; workspace?: string; threadId?: string; buildId: string } & Pick<import("./manuscript-handoff").ManuscriptReviewRequest, "destination">)
   | { kind: "library"; paperId: string }
   | { kind: "arxiv"; value: string }
   | { kind: "pdf"; filePath: string };
@@ -761,6 +765,7 @@ interface PaperReviewResult {
 }
 
 interface PaperReviewRunSummary {
+  manuscript?: import("./manuscript-handoff").ManuscriptReviewOrigin;
   id: string;
   documentId: string;
   projectId: string;

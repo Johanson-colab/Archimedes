@@ -7,6 +7,8 @@ import { Tab, Tabs } from "./Tabs";
 import { StateView } from "./StateView";
 import { useUISettings } from "./i18n";
 
+import type { ManuscriptReviewFinding, ManuscriptReviewRequest } from "./manuscript-handoff";
+
 type ReviewTab = "review" | "reviewers" | "evidence";
 type SourceKind = "library" | "arxiv" | "pdf";
 
@@ -117,11 +119,15 @@ function HistoryList({ runs, selectedId, onSelect, onDelete }: {
   </section>;
 }
 
-export default function PaperReviewView({ bridge, workspace, projectId, active }: {
+export default function PaperReviewView({ bridge, workspace, projectId, threadId, active, manuscript, onClearManuscript, onRevision }: {
   bridge: ResearchDeskBridge;
   workspace: string;
   projectId: string | null;
+  threadId?: string | null;
   active: boolean;
+  manuscript?: ManuscriptReviewRequest | null;
+  onClearManuscript?: () => void;
+  onRevision?: (selection: ManuscriptReviewFinding) => Promise<void>;
 }) {
   const { t, language } = useUISettings();
   const confirm = useConfirm();
@@ -130,6 +136,8 @@ export default function PaperReviewView({ bridge, workspace, projectId, active }
   const [papers, setPapers] = useState<PaperReviewPaperSummary[]>([]);
   const [runs, setRuns] = useState<PaperReviewRunSummary[]>([]);
   const [selectedRun, setSelectedRun] = useState<PaperReviewRunSummary | null>(null);
+  const [findingChoice, setFindingChoice] = useState("");
+  const [reviewedPage, setReviewedPage] = useState("");
   const [sourceKind, setSourceKind] = useState<SourceKind>("library");
   const [paperId, setPaperId] = useState("");
   const [arxivInput, setArxivInput] = useState("");
@@ -238,19 +246,39 @@ export default function PaperReviewView({ bridge, workspace, projectId, active }
     setError("");
     setNotice("");
     setProgress(null);
-    if (sourceKind === "library" && !paperId) {
+    if (!manuscript && sourceKind === "library" && !paperId) {
       setError(t("Choose a Library paper first."));
       return;
     }
-    if (sourceKind === "arxiv" && !arxivInput.trim()) {
+    if (!manuscript && sourceKind === "arxiv" && !arxivInput.trim()) {
       setError(t("Enter an arXiv ID or URL."));
       return;
     }
-    if (sourceKind === "pdf" && !pdfPath) {
+    if (!manuscript && sourceKind === "pdf" && !pdfPath) {
       setError(t("Choose a PDF first."));
       return;
     }
-    const source: PaperReviewSource = sourceKind === "library"
+    let handoff = manuscript;
+    if (manuscript && bridge.prepareManuscriptReview) {
+      // Re-resolve the destination after any in-page settings change so the
+      // consent prompt and the submitted run describe the same provider.
+      try {
+        handoff = await bridge.prepareManuscriptReview({ projectId: projectId ?? "", workspaceId: manuscript.origin.workspaceId, workspace: manuscript.origin.workspace, threadId: threadId || undefined, manifestPath: manuscript.origin.manifestPath }) ?? manuscript;
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : String(cause));
+        return;
+      }
+    }
+    if (handoff && !await confirm({
+      title: "Send manuscript text for simulated review?",
+      description: t("Send extracted text from this PDF to {provider} at {endpoint}, using {model}. The PDF file stays on this machine.", {
+        provider: handoff.destination.provider, endpoint: handoff.destination.baseUrl, model: handoff.destination.model,
+      }),
+      confirmLabel: "Send manuscript text",
+    })) return;
+    const source: PaperReviewSource = handoff
+      ? { kind: "manuscript", manifestPath: handoff.origin.manifestPath, workspaceId: handoff.origin.workspaceId, workspace: handoff.origin.workspace, threadId: handoff.origin.threadId || undefined, buildId: handoff.origin.buildId, destination: handoff.destination }
+      : sourceKind === "library"
       ? { kind: "library", paperId }
       : sourceKind === "arxiv"
         ? { kind: "arxiv", value: arxivInput.trim() }
@@ -345,10 +373,26 @@ export default function PaperReviewView({ bridge, workspace, projectId, active }
       ? `${settings.agentModel.provider}/${settings.agentModel.model}`
       : "—";
   const canRun = !running && Boolean(venueId) && (
+    Boolean(manuscript) ||
     (sourceKind === "library" && Boolean(paperId)) ||
     (sourceKind === "arxiv" && Boolean(arxivInput.trim())) ||
     (sourceKind === "pdf" && Boolean(pdfPath))
   );
+
+  useEffect(() => { setFindingChoice(""); setReviewedPage(""); }, [selectedRun?.id]);
+  const findings = selectedRun?.manuscript && review
+    ? (["weaknesses", "questions", "limitations", "strengths"] as const).flatMap(group =>
+      review[group].flatMap((finding, index) => finding.page
+        ? [{ key: `${group}:${index}`, finding, selection: { runId: selectedRun.id, group, index } }] : []))
+    : [];
+  const chosenFinding = findings.find(item => item.key === findingChoice);
+  async function useFinding(action: "revision" | "page") {
+    if (!chosenFinding) return;
+    try {
+      if (action === "revision") await onRevision?.(chosenFinding.selection);
+      else if (bridge.openManuscriptReviewPage) setReviewedPage(await bridge.openManuscriptReviewPage(chosenFinding.selection));
+    } catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); }
+  }
 
   if (loading && !settings) {
     return <main className="pra-page"><StateView tone="loading" title={t("Loading Paper review…")} /></main>;
@@ -366,6 +410,7 @@ export default function PaperReviewView({ bridge, workspace, projectId, active }
 
     <section className="pra-compose">
       <div className="pra-compose-row">
+        {!manuscript && <>
         <Tabs value={sourceKind} onChange={(value) => setSourceKind(value as SourceKind)} label={t("Paper source")} variant="segmented" className="pra-source-tabs">
           <Tab value="library">{t("Library")}</Tab>
           <Tab value="arxiv">arXiv</Tab>
@@ -380,6 +425,7 @@ export default function PaperReviewView({ bridge, workspace, projectId, active }
           <button type="button" className="secondary-button" onClick={() => void choosePdf()} disabled={running}>{t("Choose PDF")}</button>
           <span className="pra-muted">{pdfPath ? pdfPath.split(/[\\/]/).at(-1) : t("No PDF chosen")}</span>
         </div> : null}
+        </>}
         <select className="pra-venue-select" value={venueId} onChange={(event) => setVenueId(event.target.value)} disabled={running} aria-label={t("Venue")}>
           {venues.map((entry) => <option key={entry.id} value={entry.id}>{entry.displayName}</option>)}
         </select>
@@ -388,6 +434,11 @@ export default function PaperReviewView({ bridge, workspace, projectId, active }
           {running ? t("Reviewing…") : t("Run simulated review")}
         </button>
       </div>
+      {manuscript && <div className="pra-notice">
+        <strong>{t("Current compiled manuscript")}</strong> <code>{manuscript.origin.mainPath}</code>
+        <p>{t("Source version")} <code>{manuscript.origin.sourceVersion.slice(0, 12)}</code></p>
+        <button type="button" className="secondary-button" disabled={running} onClick={onClearManuscript}>{t("Choose another source")}</button>
+      </div>}
       <div className="pra-compose-foot">
         <span>{t("Model")}: <b>{activeModel}</b></span>
         <span className="pra-muted">{t("Text is sent only to the selected provider.")}</span>
@@ -426,6 +477,16 @@ export default function PaperReviewView({ bridge, workspace, projectId, active }
 
       {result && review ? <>
         <ScoreSummary review={review} venue={venue} />
+        {findings.length > 0 && <section className="pra-doc-section">
+          <h3>{t("Draft a private revision")}</h3>
+          <label>{t("Finding with source page")} <select value={findingChoice} onChange={event => { setFindingChoice(event.target.value); setReviewedPage(""); }}>
+            <option value="">{t("Choose a finding")}</option>
+            {findings.map(({ key, finding }) => <option key={key} value={key}>{`p. ${finding.page} · ${finding.text}`}</option>)}
+          </select></label>
+          <button type="button" className="secondary-button" disabled={!chosenFinding} onClick={() => void useFinding("page")}>{t("Open reviewed page")}</button>
+          <button type="button" className="primary-button" disabled={!chosenFinding} onClick={() => void useFinding("revision")}>{t("Open private revision draft")}</button>
+          {reviewedPage && <iframe title={t("Reviewed manuscript page")} src={reviewedPage} width="100%" height="420" />}
+        </section>}
         <div className="pra-dimensions">
           {review.subdimensions.map((dimension) => <div key={dimension.id} className="pra-dimension-row">
             <span className="pra-dimension-label">{dimension.label}</span>
