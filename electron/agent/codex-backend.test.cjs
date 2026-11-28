@@ -75,6 +75,22 @@ test("Codex terminates its POSIX process group even after the leader exits", asy
   assert.deepEqual(childKills, []);
 });
 
+test("Codex keeps the SIGKILL escalation alive until the transport closes", async t => {
+  const signals = [];
+  t.mock.method(process, "kill", (pid, signal) => { signals.push([pid, signal]); return true; });
+  const child = new EventEmitter();
+  child.pid = 43210; child.exitCode = 0; child.kill = () => {};
+  const client = new CodexClient({ platform: "linux", terminationTimeout: 30 });
+  client.child = child;
+  client.terminate();
+  assert.ok(client.terminationTimer);
+  assert.equal(client.terminationTimer.hasRef(), true);
+  child.emit("close");
+  assert.equal(client.terminationTimer, null);
+  await new Promise(resolve => setTimeout(resolve, 50));
+  assert.deepEqual(signals, [[-43210, "SIGTERM"]]);
+});
+
 test("Codex falls back to the owned child when the POSIX group is unavailable", async t => {
   t.mock.method(process, "kill", () => { throw new Error("group unavailable"); });
   const childKills = [];

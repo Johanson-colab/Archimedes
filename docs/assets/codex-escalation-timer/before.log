@@ -1,0 +1,18 @@
+$ node --test --test-name-pattern='SIGKILL escalation alive' electron/agent/codex-backend.test.cjs  (branch head 130ae064 before the fix)
+✖ Codex keeps the SIGKILL escalation alive until the transport closes (2.888333ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 108.579166
+
+✖ failing tests:
+
+test at electron/agent/codex-backend.test.cjs:78:1
+✖ Codex keeps the SIGKILL escalation alive until the transport closes (2.888333ms)
+  AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:
+
+    assert.ok(client.terminationTimer)

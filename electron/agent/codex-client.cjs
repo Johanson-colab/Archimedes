@@ -34,6 +34,7 @@ class CodexClient extends EventEmitter {
     this.nextId = 0;
     this.closed = false;
     this.terminated = false;
+    this.terminationTimer = null;
     this.buffer = "";
     this.bufferBytes = 0;
   }
@@ -147,8 +148,18 @@ class CodexClient extends EventEmitter {
       try { child.kill(signal); } catch { /* already exited */ }
     };
     kill("SIGTERM");
-    const timer = setTimeout(() => kill("SIGKILL"), this.terminationTimeout);
-    timer.unref();
+    const timer = setTimeout(() => {
+      this.terminationTimer = null;
+      kill("SIGKILL");
+    }, this.terminationTimeout);
+    this.terminationTimer = timer;
+    if (typeof child.once === "function") child.once("close", () => this.clearTerminationTimer(timer));
+  }
+
+  clearTerminationTimer(timer) {
+    if (this.terminationTimer !== timer) return;
+    clearTimeout(timer);
+    this.terminationTimer = null;
   }
 
   terminateWindowsTree(child) {
@@ -166,12 +177,13 @@ class CodexClient extends EventEmitter {
     } catch { return fallback(); }
     const timeout = Math.min(2_000, Math.max(1, this.terminationTimeout));
     const timer = setTimeout(() => {
+      this.terminationTimer = null;
       try { helper.kill("SIGKILL"); } catch { /* helper already exited */ }
       fallback();
     }, timeout);
-    timer.unref();
-    helper.once("error", () => { clearTimeout(timer); fallback(); });
-    helper.once("close", code => { clearTimeout(timer); if (code !== 0) fallback(); });
+    this.terminationTimer = timer;
+    helper.once("error", () => { this.clearTerminationTimer(timer); fallback(); });
+    helper.once("close", code => { this.clearTerminationTimer(timer); if (code !== 0) fallback(); });
   }
 
   close() { this.fail(new Error("Codex connection closed.")); }
