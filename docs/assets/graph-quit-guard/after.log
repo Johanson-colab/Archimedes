@@ -1,0 +1,10 @@
+$ node --test --test-name-pattern='graph auto-build is quit-guarded' electron/experiment-run-cancellation.test.cjs
+✔ graph auto-build is quit-guarded until its extraction settles (1.47825ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 126.608292

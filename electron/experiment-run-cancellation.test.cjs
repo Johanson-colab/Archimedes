@@ -50,6 +50,21 @@ test("run ownership distinguishes data directories, domains, and principals", ()
   } finally { release(); }
 });
 
+test("graph auto-build is quit-guarded until its extraction settles", () => {
+  const source = fs.readFileSync(path.join(__dirname, "agent.cjs"), "utf8");
+  const start = source.indexOf("const scheduleGraphAutoBuild =");
+  assert.ok(start >= 0);
+  const body = source.slice(start, source.indexOf("\n  try {", start));
+  assert.match(body, /registerActiveRun\(scope, \{ kind: "graph-auto-build"/);
+  assert.match(source, /releaseRun\(\); graphOwner\.release\(\)/);
+
+  const scope = { workspace: "/data", store: {}, ownerId: "owner", domain: "graph", id: "auto-build:thread:turn" };
+  const release = registerActiveRun(scope, { kind: "graph-auto-build" });
+  assert.equal(hasActiveRun(scope), true);
+  release();
+  assert.equal(hasActiveRun(scope), false);
+});
+
 test("native quit confirmation keeps work on cancel and exits once after confirmed cleanup", async () => {
   const app = new EventEmitter();
   let dialogs = 0, stopped = 0, quit = 0, work = true, windowCanClose = false, respond;

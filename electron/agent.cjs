@@ -26,6 +26,8 @@ const { ToolRegistry } = require("./agent/tool-registry.cjs");
 const { fetchModelWithRetry } = require("./agent/model-retry.cjs");
 const { boundActiveContext } = require("./agent/active-context.cjs");
 const { discoverSkills, readSkillResource } = require("./agent/api-skills.cjs");
+const { registerActiveRun } = require("./runtime/active-runs.cjs");
+const { localIdentity } = require("./local-identity.cjs");
 const creatorCapabilities = require("./agent/creator-capabilities.cjs");
 const { prepareResearchSkill } = require("./agent/research-skills.cjs");
 const graphAutoBuild = require("./research-graph/auto-build.cjs");
@@ -1520,6 +1522,15 @@ async function runAgentInStore({ prompt, workspace, threadId, projectId, workspa
   const scheduleGraphAutoBuild = (response) => {
     if (!autoBuildGraph || transient || origin !== "research" || !["research", "experiment-setup"].includes(mode) || !thread.project_id) return;
     const graphOwner = store.captureStore();
+    const scope = {
+      workspace: graphOwner.store.workspace, store: graphOwner.store,
+      ownerId: localIdentity().userId, domain: "graph",
+      id: `auto-build:${thread.id}:${turn.id}`,
+    };
+    let releaseRun = () => {};
+    try {
+      releaseRun = registerActiveRun(scope, { kind: "graph-auto-build", threadId: thread.id, turnId: turn.id, workspace });
+    } catch (error) { console.warn("[research-graph] auto-build was already registered:", error?.message || String(error)); }
     void graphAutoBuild.maybeAutoBuild({
       projectId: thread.project_id,
       threadId: thread.id,
@@ -1536,7 +1547,7 @@ async function runAgentInStore({ prompt, workspace, threadId, projectId, workspa
       recordEvent,
       complete,
       runNative,
-    }).catch((error) => console.warn("[research-graph] auto-build failed:", error?.message || String(error))).finally(graphOwner.release);
+    }).catch((error) => console.warn("[research-graph] auto-build failed:", error?.message || String(error))).finally(() => { releaseRun(); graphOwner.release(); });
   };
 
   try {

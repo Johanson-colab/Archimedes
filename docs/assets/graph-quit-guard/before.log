@@ -1,0 +1,7 @@
+$ git show HEAD:electron/agent.cjs > "$TMPDIR/archimedes-agent-before.cjs" && node -e '...assert.match(body, /registerActiveRun\(scope, \{ kind: "graph-auto-build"/)...' "$TMPDIR/archimedes-agent-before.cjs"  (before the fix)
+AssertionError [ERR_ASSERTION]: The input did not match the regular expression /registerActiveRun\(scope, \{ kind: "graph-auto-build"/. Input:
+
+'const scheduleGraphAutoBuild = (response) => {\n' +
+  '    if (!autoBuildGraph || transient || origin !== "research" || !["research", "experiment-setup"].includes(mode) || !thread.project_id) return;\n' +
+  '    const graphOwner = store.captureStore();\n' +
+  '    void graphAutoBuild.maybeAutoBuild({\n' +
