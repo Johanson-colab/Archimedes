@@ -10,10 +10,52 @@ const graph = require("./research-graph/service.cjs");
 const runner = require("./research-graph/experiment-runner.cjs");
 const directives = require("./agent/experiment-directives.cjs");
 const agent = require("./agent.cjs");
+const { createCodeSnapshot } = require("./research-graph/code-snapshot.cjs");
 
 function git(root, ...args) {
   return execFileSync("git", ["-C", root, ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
 }
+
+test("a code snapshot cannot authorize execution after the worktree changes", async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-experiment-snapshot-race-"));
+  try {
+    git(root, "init");
+    git(root, "config", "user.email", "test@example.com");
+    git(root, "config", "user.name", "Test");
+    fs.writeFileSync(path.join(root, "code.txt"), "committed\n");
+    git(root, "add", "code.txt");
+    git(root, "commit", "-m", "initial");
+    store.openWorkspace(root);
+    const project = store.createResearchProject({ name: "Snapshot race", workspacePath: root });
+    const thread = store.createResearchThread({ prompt: "Test", mode: "experiment-setup", projectId: project.id });
+    const question = graph.createNode({ projectId: project.id, threadId: thread.id, kind: "question", title: "Question", content: {} });
+    const idea = graph.createNode({ projectId: project.id, threadId: thread.id, kind: "idea", title: "Idea", content: {}, parents: [{ nodeId: question.id }] });
+    const experiment = graph.createNode({ projectId: project.id, threadId: thread.id, kind: "experiment", title: "Experiment", content: {}, parents: [{ nodeId: idea.id }] });
+    const isolated = (await store.createExperimentWorkspace(experiment.id)).workspace;
+    const directory = path.join(isolated.root, ".archimedes", "experiment-runs", "snapshot");
+    fs.mkdirSync(directory, { recursive: true });
+    const codeSnapshot = await createCodeSnapshot(isolated.root, directory);
+    fs.writeFileSync(path.join(isolated.root, "code.txt"), "changed after snapshot\n");
+    await assert.rejects(() => store.createExperimentRun({
+      projectId: project.id,
+      threadId: thread.id,
+      nodeId: experiment.id,
+      cwd: isolated.root,
+      command: "true",
+      commitSha: codeSnapshot.commit,
+      experimentWorkspaceId: isolated.id,
+      codeSnapshot,
+      logPath: path.join(directory, "run.log"),
+      expectedRevisionId: experiment.current_revision_id,
+    }), /uncommitted or untracked/);
+    assert.deepEqual(store.listExperimentRuns({ nodeId: experiment.id }), []);
+  } finally {
+    const idle = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-experiment-snapshot-idle-"));
+    store.openWorkspace(idle);
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(idle, { recursive: true, force: true });
+  }
+});
 
 test("experiment worktree keeps uncommitted files safe and ties runs to the isolated workspace", async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-experiment-worktree-"));
@@ -45,19 +87,19 @@ test("experiment worktree keeps uncommitted files safe and ties runs to the isol
     assert.equal(fs.readFileSync(path.join(root, "code.txt"), "utf8"), "uncommitted\n");
     assert.equal(fs.readFileSync(path.join(root, "untracked.txt"), "utf8"), "keep\n");
     assert.equal(fs.existsSync(path.join(isolated.root, "untracked.txt")), false);
-    assert.equal(store.createExperimentWorkspace(experiment.id).existing, true);
-    assert.throws(() => store.deleteProjectWorkspace(isolated.id), /linked to an experiment/);
+    assert.equal((await store.createExperimentWorkspace(experiment.id)).existing, true);
+    await assert.rejects(() => store.deleteProjectWorkspace(isolated.id), /linked to an experiment/);
     const runArgs = { projectId: project.id, threadId: thread.id, nodeId: experiment.id, workspace: isolated.root, cwd: isolated.root, experimentWorkspaceId: isolated.id, command: `${JSON.stringify(process.execPath)} -e "console.log('isolated')"` };
     fs.writeFileSync(path.join(isolated.root, "code.txt"), "not committed\n");
-    assert.throws(() => runner.startExperimentRun(runArgs), /uncommitted or untracked/);
+    await assert.rejects(() => runner.startExperimentRun(runArgs), /uncommitted or untracked/);
     git(isolated.root, "checkout", "--", "code.txt");
     fs.writeFileSync(path.join(isolated.root, "new.txt"), "not committed\n");
-    assert.throws(() => runner.startExperimentRun(runArgs), /uncommitted or untracked/);
+    await assert.rejects(() => runner.startExperimentRun(runArgs), /uncommitted or untracked/);
     git(isolated.root, "add", "new.txt");
-    assert.throws(() => runner.startExperimentRun(runArgs), /uncommitted or untracked/);
+    await assert.rejects(() => runner.startExperimentRun(runArgs), /uncommitted or untracked/);
     git(isolated.root, "reset", "HEAD", "--", "new.txt");
     fs.unlinkSync(path.join(isolated.root, "new.txt"));
-    const started = runner.startExperimentRun({ projectId: project.id, threadId: thread.id, nodeId: experiment.id, workspace: isolated.root, cwd: isolated.root, experimentWorkspaceId: isolated.id, command: `${JSON.stringify(process.execPath)} -e "console.log('isolated')"` });
+    const started = await runner.startExperimentRun({ projectId: project.id, threadId: thread.id, nodeId: experiment.id, workspace: isolated.root, cwd: isolated.root, experimentWorkspaceId: isolated.id, command: `${JSON.stringify(process.execPath)} -e "console.log('isolated')"` });
     const finished = await started.completion;
     assert.equal(finished.status, "succeeded");
     assert.equal(finished.commit_sha, base);
@@ -69,7 +111,7 @@ test("experiment worktree keeps uncommitted files safe and ties runs to the isol
     assert.equal(snapshot.sha256, createHash("sha256").update(fs.readFileSync(snapshot.path)).digest("hex"));
     assert.equal(execFileSync("tar", ["-xOf", snapshot.path, "code.txt"], { encoding: "utf8" }), "committed\n");
     assert.match(snapshot.limitations, /ignored files/);
-    assert.throws(() => store.createExperimentRun({ projectId: project.id, threadId: thread.id, nodeId: experiment.id, cwd: root, command: "true", experimentWorkspaceId: isolated.id }), /outside the experiment workspace/);
+    await assert.rejects(() => store.createExperimentRun({ projectId: project.id, threadId: thread.id, nodeId: experiment.id, cwd: root, command: "true", experimentWorkspaceId: isolated.id }), /outside the experiment workspace/);
     const directiveCommand = `${JSON.stringify(process.execPath)} -e "console.log('isolated')"`;
     const runNotes = await directives.executeExperimentDirectives({
       directives: [{ action: "run", experiment: experiment.id, command: directiveCommand, useExperimentWorkspace: true }],
@@ -127,18 +169,18 @@ test("experiment worktree keeps uncommitted files safe and ties runs to the isol
       assert.notEqual(result.workspace.branch_name, isolated.branch_name);
     } finally { agent.setApprovalSurface(thread.id, false); }
     const child = graph.createNode({ projectId: project.id, threadId: thread.id, kind: "experiment", title: "Child experiment", content: {}, parents: [{ nodeId: idea.id, kind: "tests" }, { nodeId: experiment.id, kind: "extends" }] });
-    assert.throws(() => store.createExperimentWorkspace(child.id), /Choose a recorded parent experiment run/);
-    assert.throws(() => store.createExperimentWorkspace(child.id, { parentRunId: "missing" }), /must belong to a parent experiment/);
+    await assert.rejects(() => store.createExperimentWorkspace(child.id), /Choose a recorded parent experiment run/);
+    await assert.rejects(() => store.createExperimentWorkspace(child.id, { parentRunId: "missing" }), /must belong to a parent experiment/);
     fs.writeFileSync(path.join(isolated.root, "code.txt"), "later parent change\n");
     git(isolated.root, "add", "code.txt");
     git(isolated.root, "commit", "-m", "later parent commit");
     assert.notEqual(git(isolated.root, "rev-parse", "HEAD"), base);
-    const inherited = store.createExperimentWorkspace(child.id, { parentRunId: finished.id }).workspace;
+    const inherited = (await store.createExperimentWorkspace(child.id, { parentRunId: finished.id })).workspace;
     assert.equal(inherited.base_commit, base);
     assert.equal(inherited.parent_run_id, finished.id);
     assert.equal(fs.readFileSync(path.join(inherited.root, "code.txt"), "utf8"), "committed\n");
     assert.notEqual(inherited.branch_name, isolated.branch_name);
-    const childRun = runner.startExperimentRun({ projectId: project.id, threadId: thread.id, nodeId: child.id, workspace: inherited.root, cwd: inherited.root, experimentWorkspaceId: inherited.id, command: `${JSON.stringify(process.execPath)} -e "console.log('child')"` });
+    const childRun = await runner.startExperimentRun({ projectId: project.id, threadId: thread.id, nodeId: child.id, workspace: inherited.root, cwd: inherited.root, experimentWorkspaceId: inherited.id, command: `${JSON.stringify(process.execPath)} -e "console.log('child')"` });
     const childFinished = await childRun.completion;
     assert.equal(childFinished.provenance.workspace.parentRunId, finished.id);
     assert.equal(childFinished.commit_sha, base);
@@ -179,7 +221,7 @@ test("experiment worktree keeps uncommitted files safe and ties runs to the isol
       assert.equal(JSON.parse((await pending).content).workspace.base_commit, base);
     } finally { agent.setApprovalSurface(thread.id, false); }
     git(isolated.root, "switch", "--detach");
-    assert.throws(() => store.createExperimentRun({ projectId: project.id, threadId: thread.id, nodeId: experiment.id, cwd: isolated.root, command: "true", experimentWorkspaceId: isolated.id }), /no longer on its recorded branch/);
+    await assert.rejects(() => store.createExperimentRun({ projectId: project.id, threadId: thread.id, nodeId: experiment.id, cwd: isolated.root, command: "true", experimentWorkspaceId: isolated.id }), /no longer on its recorded branch/);
   } finally {
     const idle = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-experiment-idle-"));
     store.openWorkspace(idle);

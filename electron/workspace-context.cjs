@@ -10,23 +10,36 @@ function isWorkspaceDataChannel(channel) {
 }
 
 /** Each invocation retains the sender's store even after the window switches. */
-function createWorkspaceIpc({ ipcMain, store, workspaceForEvent }) {
+function createWorkspaceIpc({ ipcMain, store, workspaceForEvent, prepareOpen }) {
   const displayedStores = new WeakMap();
+  const openingRequests = new WeakMap();
   return {
     handle(channel, handler) {
       ipcMain.handle(channel, (event, ...args) => {
+        const opening = channel === "workspace:open";
+        const request = opening && prepareOpen ? {} : null;
+        if (request) openingRequests.set(event.sender, request);
         const root = workspaceForEvent(event, channel, args);
         if (!root) return handler(event, ...args);
-        const opening = channel === "workspace:open";
         const selected = store.createWorkspaceStore(root, { allowReplacement: opening });
         const displayed = displayedStores.get(event.sender);
         if (!opening && displayed && displayed !== selected) {
           throw new Error("The workspace database was replaced. Reopen the folder to load the new data.");
         }
         const captured = selected.captureStore();
+        if (request) {
+          return selected.run(async () => {
+            await prepareOpen();
+            if (openingRequests.get(event.sender) !== request || event.sender.isDestroyed()) {
+              throw new Error("The workspace open request is no longer current.");
+            }
+            const result = handler(event, ...args);
+            displayedStores.set(event.sender, selected);
+            return result;
+          }).finally(captured.release);
+        }
         try {
           const result = selected.run(() => handler(event, ...args));
-          // workspace:open is synchronous: only a successfully produced snapshot rebinds this window.
           if (opening) displayedStores.set(event.sender, selected);
           if (result && typeof result.then === "function") return Promise.resolve(result).finally(captured.release);
           captured.release();
