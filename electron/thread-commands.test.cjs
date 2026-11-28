@@ -186,3 +186,18 @@ test("a rejected or stale model summary never replaces stored history", async (t
   assert.equal(store.getResearchThread(thread.id).context_summary, "");
   assert.equal(store.getResearchThread(thread.id).turns.length, 2);
 });
+
+test("native compaction clears profile effort for a different bound model", async (t) => {
+  const { root, thread } = fixture(t);
+  const turn = addTurn(thread.id, "Native question", "Native answer");
+  store.nativeAgentBindings(thread.id).save({ native_thread_id: "native-1", workspace: root, model: "bound-model", last_turn_id: turn.id, backend: "codex" });
+  const handlers = new Map();
+  let compactedConfig;
+  registerThreadCommands({ ipcMain: { handle: (name, handler) => handlers.set(name, handler) }, store,
+    agent: {}, modelConfig: {}, dataWorkspace: () => root,
+    nativeBackend: { getConfig: () => ({ backend: "codex", effort: "high", profiles: { codex: { model: "profile-model" } } }), compact: async ({ config }) => { compactedConfig = config; } },
+  });
+  await handlers.get("research-thread:compact")({}, { threadId: thread.id });
+  assert.equal(compactedConfig.model, "bound-model");
+  assert.equal(compactedConfig.effort, "");
+});

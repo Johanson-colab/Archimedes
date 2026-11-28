@@ -1313,6 +1313,15 @@ app.whenReady().then(async () => {
   });
 
   ipcMain.handle("model-config:get", (_event, role) => modelConfig.getPublicModelConfig(role));
+  ipcMain.handle("model-registry:list", () => modelConfig.listModelProfiles());
+  ipcMain.handle("model-registry:save", (_event, input = {}) => modelConfig.saveModelProfile(input));
+  ipcMain.handle("model-registry:delete", (_event, id) => modelConfig.deleteModelProfile(id));
+  ipcMain.handle("model-registry:role", (_event, role) => modelConfig.getPublicModelConfig(role));
+  ipcMain.handle("model-registry:set-role", (_event, role, id) => {
+    modelConfig.setRoleModel(role, id);
+    return modelConfig.getPublicModelConfig(role);
+  });
+  ipcMain.handle("model-registry:assignments", () => modelConfig.getRoleAssignments());
   ipcMain.handle("agent-backend:get", () => agentBackendConfig.get());
   ipcMain.handle("agent-backend:save", (_event, input) => agentBackendConfig.save(input));
   ipcMain.handle("agent-backend:check", (_event, input) => agentBackendConfig.check(input));
@@ -1615,7 +1624,7 @@ app.whenReady().then(async () => {
         env: reproductionEnvItems(record.id).map(({ name, required, reason, hasValue }) => ({ name, required, reason, hasValue })),
         backend: session.backend,
         target: session.backend.describe?.() || "",
-        complete: ({ system, prompt, signal }) => completeJson(reproductionModel(), {
+        complete: ({ system, prompt, signal }) => completeJson({ ...reproductionModel(), sessionId: run.id }, {
           system,
           prompt,
           signal,
@@ -2099,6 +2108,11 @@ app.whenReady().then(async () => {
     const selectedBackend = input.backend || configuredBackend.backend;
     if (!["api", "codex", "claude", "opencode", "antigravity"].includes(selectedBackend)) throw new Error("Unknown Agent backend.");
     const backend = selectedBackend === "api" ? configuredBackend : { ...configuredBackend, ...configuredBackend.profiles[selectedBackend], backend: selectedBackend };
+    if (input.nativeModel !== undefined) {
+      if (input.origin !== "research" || selectedBackend === "api" || typeof input.nativeModel !== "string" || input.nativeModel.length > 160 || /[\r\n\0]/.test(input.nativeModel)) throw new Error("Choose a model for the active native agent.");
+      backend.model = input.nativeModel.trim();
+      if (backend.model !== configuredBackend.profiles[selectedBackend]?.model) backend.effort = "";
+    }
     const externalBackend = input.origin === "research" && selectedBackend !== "api" ? backend : null;
     let remoteServer = null;
     if (input.remoteServerId) {
@@ -2112,7 +2126,8 @@ app.whenReady().then(async () => {
     if (input.researchSkill === "paper-to-slides" && !["codex", "claude"].includes(selectedBackend)) throw new Error("Paper to Slides requires Codex or Claude Code.");
     if (input.researchSkill && input.origin !== "research") throw new Error("Research skills are available only in Work conversations.");
     if (input.mineruToken != null && (input.researchSkill !== "paper-to-slides" || typeof input.mineruToken !== "string" || input.mineruToken.length > 8192 || /[\r\n]/.test(input.mineruToken))) throw new Error("Invalid MinerU token.");
-    const config = externalBackend ? null : modelConfig.getActiveModelConfig();
+    if (externalBackend && input.modelProfileId !== undefined) throw new Error("API model profiles are available only with Archimedes.");
+    const config = externalBackend ? null : input.modelProfileId === undefined ? modelConfig.getActiveModelConfig() : modelConfig.getAgentModelConfig(input.modelProfileId);
     const reasoningEffort = externalBackend ? undefined : normalizeReasoningEffort(config, input.reasoningEffort);
     const contextLength = externalBackend ? undefined : normalizeContextLength(config, input.contextLength);
     if (externalBackend && input.threadId && store.getResearchThread(input.threadId).kind === "paper") throw new Error("Paper chat uses the API harness in this version.");
@@ -2121,6 +2136,7 @@ app.whenReady().then(async () => {
     const result = await runWindowAgent({ sender: event.sender, native: Boolean(externalBackend), run: ({ externalSignal, emit }) => agent.runAgent({
       dataStore,
       externalBackend,
+      apiConfig: config,
       remoteServer,
       researchSkill: input.researchSkill,
       mineruToken: input.mineruToken || undefined,
@@ -2491,7 +2507,7 @@ app.whenReady().then(async () => {
     return store.deleteInternalPaperReviewThreads();
   });
 
-  ipcMain.handle("model-config:capabilities", (_event, role) => getModelCapabilities(modelConfig.getActiveModelConfig(role)));
+  ipcMain.handle("model-config:capabilities", (_event, role, profileId) => getModelCapabilities(profileId === undefined ? modelConfig.getActiveModelConfig(role) : modelConfig.getAgentModelConfig(profileId)));
 
   ipcMain.handle("agent:approve-action", (event, actionId) => {
     if (typeof actionId !== "string") throw new Error("An Agent action ID is required.");

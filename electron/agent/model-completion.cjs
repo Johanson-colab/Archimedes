@@ -11,10 +11,12 @@ class ModelIncompleteError extends Error {
 }
 
 function assertModelCompletion({ provider, finishReason, terminalSeen = true, partialResponse = "", toolCalls = [] }) {
-  const fail = (reason, detail) => { throw new ModelIncompleteError({ provider, reason, finishReason, partialResponse, detail }); };
-  if (["length", "max_tokens", "model_context_window_exceeded"].includes(finishReason)) fail("length", "Model output was truncated. The partial response was kept; no tool from this response was executed.");
-  if (!terminalSeen) fail("missing_terminal", "The model stream ended without a completion event. The partial response was kept.");
   const accepted = provider === "anthropic" ? ["end_turn", "stop_sequence", "tool_use", "refusal"] : ["stop", "tool_calls", "function_call"];
+  const truncated = ["length", "max_tokens", "model_context_window_exceeded"].includes(finishReason);
+  const knownFinish = truncated || accepted.includes(finishReason);
+  const fail = (reason, detail) => { throw new ModelIncompleteError({ provider, reason, finishReason: knownFinish ? finishReason : null, partialResponse, detail }); };
+  if (truncated) fail("length", "Model output was truncated. The partial response was kept; no tool from this response was executed.");
+  if (!terminalSeen) fail("missing_terminal", "The model stream ended without a completion event. The partial response was kept.");
   if (!accepted.includes(finishReason)) fail(finishReason ? "unsupported_stop_reason" : "missing_stop_reason");
   if (["tool_use", "tool_calls", "function_call"].includes(finishReason) && !toolCalls.length) fail("missing_tool_calls");
   for (const call of toolCalls) {

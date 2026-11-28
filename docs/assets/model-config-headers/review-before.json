@@ -1,0 +1,35 @@
+{
+  "observed": {
+    "provider-charcoal": {
+      "width": 1180,
+      "height": 900,
+      "theme": "charcoal",
+      "language": "en",
+      "modalWidth": 940,
+      "provider": "Custom",
+      "goInList": false,
+      "presetButton": true,
+      "feedback": "OpenCode Go preset loaded. Add your OpenCode Go key to connect."
+    },
+    "connection-paper-zh": {
+      "width": 1180,
+      "height": 900,
+      "theme": "paper",
+      "language": "zh-CN",
+      "modalWidth": 940,
+      "provider": "Custom",
+      "goInList": false,
+      "presetButton": true,
+      "feedback": "Error invoking remote method 'model-config:test': Error: Connection failed (400): This provider requires a stable session header. In Settings → Models, choose the OpenCode Go preset or set Session header to x-opencode-session with the Thread strategy."
+    }
+  },
+  "requests": [
+    {
+      "path": "/v1/chat/completions",
+      "model": "hy4-flash-free",
+      "session": "",
+      "userAgent": "node",
+      "authenticated": true
+    }
+  ]
+}

@@ -1,4 +1,4 @@
-const { THINKING_EFFORTS, isNativeThinkingModel, normalizeReasoningEffort: normalizeForModel } = require("./model-capabilities.cjs");
+const { THINKING_EFFORTS, getModelCapabilities, normalizeReasoningEffort: normalizeForModel } = require("./model-capabilities.cjs");
 
 const EFFORTS = new Set(THINKING_EFFORTS);
 
@@ -42,13 +42,11 @@ function reasoningPolicy(value, mode = "free-chat") {
 }
 
 function openAiReasoningOptions(config, value) {
-  if (!isNativeThinkingModel(config)) return {};
+  if (!getModelCapabilities(config).nativeThinking) return {};
   const effort = normalizeForModel(config, value);
   const provider = String(config?.provider || "").toLowerCase();
   if (provider === "openrouter") return { reasoning: { effort } };
-  if (provider === "openai" || provider === "gemini") return { reasoning_effort: effort };
-  if (provider === "custom") return { reasoning_effort: effort };
-  return {};
+  return { reasoning_effort: effort };
 }
 
 module.exports = { normalizeReasoningEffort, openAiReasoningOptions, reasoningPolicy };

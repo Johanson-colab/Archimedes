@@ -20,6 +20,7 @@ test("maps native reasoning controls for compatible endpoints", () => {
   assert.deepEqual(openAiReasoningOptions({ provider: "gemini", model: "gemini-3-flash" }, "high"), { reasoning_effort: "high" });
   assert.deepEqual(openAiReasoningOptions({ provider: "openrouter", model: "openai/gpt-5" }, "medium"), { reasoning: { effort: "medium" } });
   assert.deepEqual(openAiReasoningOptions({ provider: "custom", model: "gpt-5.6-luna" }, "high"), { reasoning_effort: "high" });
+  assert.deepEqual(openAiReasoningOptions({ provider: "opencode-go", model: "gpt-5.6-luna" }, "high"), { reasoning_effort: "high" });
 });
 
 test("leaves unsupported provider requests portable", () => {

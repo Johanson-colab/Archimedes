@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useState } from "react";
 import { Check, LoaderCircle, Network, Save, X } from "lucide-react";
 import { useUISettings } from "./i18n";
 import { SettingsChoiceGroup, SettingsRow, SettingsSection, SettingsSwitch } from "./SettingsPrimitives";
-import { providers } from "./ModelSettingsModal";
+import { modelProfilesEnabled, providers, useModelConnectionTest } from "./ModelSettingsModal";
 import type { ProactiveSettings } from "./proactive-types";
 
 const MODES: Array<{ id: ProactiveSettings["mode"]; label: string; description: string }> = [
@@ -17,6 +17,7 @@ export default function ProactiveSettingsPanel({
   onChange,
   onObserveOnce,
   onResetHistory,
+  onModelSaved,
   bridge,
   historyCount,
   canObserve,
@@ -25,6 +26,7 @@ export default function ProactiveSettingsPanel({
   onChange: (patch: Partial<ProactiveSettings>) => void;
   onObserveOnce: () => void;
   onResetHistory: () => void;
+  onModelSaved: () => void;
   bridge: ResearchDeskBridge;
   historyCount: number;
   canObserve: boolean;
@@ -41,9 +43,13 @@ export default function ProactiveSettingsPanel({
   const [apiKey, setApiKey] = useState("");
   const [modelLoading, setModelLoading] = useState(true);
   const [modelSaving, setModelSaving] = useState(false);
-  const [modelTesting, setModelTesting] = useState(false);
+  const { state: connectionResult, reset: resetConnectionTest, run: runConnectionTest } = useModelConnectionTest(t);
+  const modelTesting = connectionResult?.kind === "testing";
+  useLayoutEffect(resetConnectionTest, [resetConnectionTest, provider, baseUrl, modelName, apiKey]);
   const [modelFeedback, setModelFeedback] = useState<{ kind: "idle" | "success" | "error"; text: string }>({ kind: "idle", text: "" });
+  const editingSharedProfile = modelProfilesEnabled() && modelConfig?.sharedAcrossRoles;
   const selectedProvider = providers.find((item) => item.id === provider) ?? providers.at(-1)!;
+  const hasApiKey = modelConfig?.provider === provider && modelConfig.baseUrl === baseUrl.trim().replace(/\/+$/, "") && modelConfig.hasApiKey;
 
   useEffect(() => {
     let cancelled = false;
@@ -72,6 +78,11 @@ export default function ProactiveSettingsPanel({
   }
 
   function chooseProvider(nextId: ModelProviderId) {
+    if (modelConfig?.provider === nextId) {
+      applyModelConfig(modelConfig);
+      setModelFeedback({ kind: "idle", text: "" });
+      return;
+    }
     setProvider(nextId);
     setApiKey("");
     setModelFeedback({ kind: "idle", text: "" });
@@ -86,11 +97,16 @@ export default function ProactiveSettingsPanel({
   }
 
   async function saveModel() {
+    resetConnectionTest();
     setModelSaving(true);
     setModelFeedback({ kind: "idle", text: "" });
     try {
-      const config = await bridge.saveModelConfig({ provider, baseUrl, model: modelName, apiKey }, "proactive");
+      const config = await bridge.saveModelConfig({
+        provider, baseUrl, model: modelName, apiKey,
+        id: editingSharedProfile ? modelConfig.modelId : undefined,
+      }, "proactive");
       applyModelConfig(config);
+      onModelSaved();
       setModelFeedback({ kind: "success", text: `Saved ${config.model}. Proactive replies and live observation will use this model.` });
     } catch (error) {
       setModelFeedback({ kind: "error", text: String(error).replace(/^Error:\s*/, "") });
@@ -100,24 +116,18 @@ export default function ProactiveSettingsPanel({
   }
 
   async function testModel() {
-    setModelTesting(true);
     setModelFeedback({ kind: "idle", text: "" });
-    try {
-      const result = await bridge.testModelConfig({ provider, baseUrl, model: modelName, apiKey }, "proactive");
-      setModelFeedback({ kind: "success", text: `Connected in ${result.latencyMs} ms · ${result.resolvedModel}` });
-    } catch (error) {
-      setModelFeedback({ kind: "error", text: String(error).replace(/^Error:\s*/, "") });
-    } finally {
-      setModelTesting(false);
-    }
+    await runConnectionTest(() => bridge.testModelConfig({ provider, baseUrl, model: modelName, apiKey }, "proactive"));
   }
 
   async function useMainAgentModel() {
+    resetConnectionTest();
     setModelSaving(true);
     setModelFeedback({ kind: "idle", text: "" });
     try {
       const config = await bridge.saveModelConfig({ provider, baseUrl, model: modelName, apiKey, useAgent: true }, "proactive");
       applyModelConfig(config);
+      onModelSaved();
       setModelFeedback({ kind: "success", text: "Proactive agent will inherit the main Agent's model." });
     } catch (error) {
       setModelFeedback({ kind: "error", text: String(error).replace(/^Error:\s*/, "") });
@@ -126,6 +136,7 @@ export default function ProactiveSettingsPanel({
     }
   }
 
+  const displayedFeedback = connectionResult || modelFeedback;
   return <div className="settings-sections">
     <p className="settings-group-note">{t("A quiet research sidekick. It reads app context; screenshots are opt-in, app-only, and never written to disk.")}</p>
 
@@ -154,7 +165,9 @@ export default function ProactiveSettingsPanel({
           controlClassName="proactive-model-form"
           title={t("Proactive model")}
           description={t("Replies and live observation use this model. It can inherit the main Agent model or use a cheaper one.")}
-          hint={modelConfig?.inheritedFromAgent ? t("Currently inheriting the main Agent model.") : t("A dedicated Proactive model.")}
+          hint={modelConfig?.inheritedFromAgent
+            ? t("Currently inheriting the main Agent model.")
+            : editingSharedProfile ? t("Saving changes updates the shared Agent and Proactive profile.") : t("A dedicated Proactive model.")}
         >
             {modelLoading ? <div className="proactive-model-loading"><LoaderCircle className="spin" size={15} />{t("Loading configuration")}</div> : <>
               <label className="proactive-model-field">
@@ -183,7 +196,7 @@ export default function ProactiveSettingsPanel({
               </label>
               <label className="proactive-model-field wide">
                 <span>{t("API key")}</span>
-                <input className="settings-text-input" type="password" value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder={modelConfig?.hasApiKey ? t("Saved securely · enter a new key to replace") : t("Enter API key")} autoComplete="off" spellCheck={false} />
+                <input className="settings-text-input" type="password" value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder={hasApiKey ? t("Saved securely · enter a new key to replace") : t("Enter API key")} autoComplete="off" spellCheck={false} />
               </label>
               <label className="proactive-model-vision">
                 <input
@@ -199,13 +212,13 @@ export default function ProactiveSettingsPanel({
                   {modelSaving ? <LoaderCircle className="spin" size={14} /> : <Save size={14} />}{t("Save model")}
                 </button>
                 <button className="secondary-button" onClick={() => void testModel()} disabled={modelLoading || modelSaving || modelTesting || !baseUrl.trim() || !modelName.trim()}>
-                  {modelTesting ? <LoaderCircle className="spin" size={14} /> : <Network size={14} />}{t("Test connection")}
+                  {modelTesting ? <LoaderCircle className="spin" size={14} /> : <Network size={14} />}{t(modelTesting ? "Testing…" : "Test connection")}
                 </button>
                 <button className="secondary-button" onClick={() => void useMainAgentModel()} disabled={modelLoading || modelSaving || modelTesting || modelConfig?.inheritedFromAgent}>
                   {t("Use main Agent model")}
                 </button>
               </div>
-              {modelFeedback.text && <div className={`model-feedback ${modelFeedback.kind}`}>{modelFeedback.kind === "success" ? <Check size={14} /> : <X size={14} />}<span>{modelFeedback.text}</span></div>}
+              {displayedFeedback.text && <div className={`model-feedback ${displayedFeedback.kind}`} role={displayedFeedback.kind === "error" ? "alert" : "status"}>{displayedFeedback.kind === "success" ? <Check size={14} /> : displayedFeedback.kind === "error" ? <X size={14} /> : null}<span>{displayedFeedback.text}</span></div>}
             </>}
         </SettingsRow>
       </div>
