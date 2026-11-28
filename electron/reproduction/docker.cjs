@@ -58,6 +58,7 @@ function runProcess(command, args, { cwd, onData, signal, timeoutMs, stdin } = {
   return new Promise((resolve) => {
     let settled = false;
     let timedOut = false;
+    let abortListener = null;
     const collected = [];
     let timer = null;
 
@@ -65,8 +66,14 @@ function runProcess(command, args, { cwd, onData, signal, timeoutMs, stdin } = {
       if (settled) return;
       settled = true;
       if (timer) clearTimeout(timer);
+      if (abortListener) signal.removeEventListener("abort", abortListener);
       resolve({ ...result, output: collected.join("") });
     };
+
+    if (signal?.aborted) {
+      finish({ exitCode: null, error: "Aborted", timedOut: false });
+      return;
+    }
 
     let child;
     try {
@@ -96,7 +103,8 @@ function runProcess(command, args, { cwd, onData, signal, timeoutMs, stdin } = {
       if (signal.aborted) {
         child.kill("SIGKILL");
       } else {
-        signal.addEventListener("abort", () => child.kill("SIGKILL"), { once: true });
+        abortListener = () => child.kill("SIGKILL");
+        signal.addEventListener("abort", abortListener, { once: true });
       }
     }
 
@@ -109,8 +117,9 @@ function runProcess(command, args, { cwd, onData, signal, timeoutMs, stdin } = {
   });
 }
 
-async function dockerVersion() {
-  const result = await runProcess("docker", ["info", "--format", "{{.ServerVersion}}"], { timeoutMs: DOCKER_TIMEOUT_MS });
+async function dockerVersion(signal) {
+  const result = await runProcess("docker", ["info", "--format", "{{.ServerVersion}}"], { signal, timeoutMs: DOCKER_TIMEOUT_MS });
+  if (signal?.aborted) throw signal.reason || new Error("Docker preparation was cancelled.");
   if (result.exitCode !== 0) {
     const hint = String(result.output || "").trim().split("\n").slice(-1)[0] || "Docker did not answer.";
     throw new Error(`Docker is not available: ${hint}. Start Docker Desktop and run this again.`);
@@ -125,16 +134,17 @@ function createDockerBackend({ checkoutDir, environment = {}, name, secrets = {}
   const envPath = Object.keys(secrets || {}).length
     ? `/tmp/archimedes/${Math.random().toString(36).slice(2, 10)}/env`
     : "";
-  let prepared = false;
+  let containerMayExist = false;
 
   /** Keeps a command's full output from being lost. */
-  const writeFile = async (absolutePath, content) => {
+  const writeFile = async (absolutePath, content, { signal } = {}) => {
     if (!isOutputPath(absolutePath)) throw new Error("Refusing to write outside the output directory.");
     const dir = path.posix.dirname(absolutePath);
     const result = await runProcess("docker", [
       "exec", "-i", container, "sh", "-c",
       `umask 077; mkdir -p ${quotePath(dir)} && cat > ${quotePath(absolutePath)}`,
-    ], { stdin: String(content || ""), timeoutMs: 60_000 });
+    ], { signal, stdin: String(content || ""), timeoutMs: 60_000 });
+    if (signal?.aborted) throw signal.reason || new Error("Docker preparation was cancelled.");
     if (result.exitCode !== 0) {
       throw new Error(`Could not write ${absolutePath}: ${String(result.output || "").trim().slice(0, 200)}`);
     }
@@ -168,20 +178,25 @@ function createDockerBackend({ checkoutDir, environment = {}, name, secrets = {}
     container,
     describe: () => `Docker · ${image}`,
 
-    async prepare() {
-      await dockerVersion();
+    async prepare({ signal } = {}) {
+      if (signal?.aborted) throw signal.reason || new Error("Docker preparation was cancelled.");
+      await dockerVersion(signal);
+      // The daemon can create the container before the CLI reports the result.
+      // Cleanup must therefore try to remove it even when an abort kills the
+      // client between those two events.
+      containerMayExist = true;
       const created = await runProcess("docker", [
         "run", "-d", "--rm",
         "--name", container,
         "-v", `${checkoutDir}:${MOUNT}`,
         "-w", MOUNT,
         image, "sleep", "infinity",
-      ], { timeoutMs: 120_000 });
+      ], { signal, timeoutMs: 120_000 });
+      if (signal?.aborted) throw signal.reason || new Error("Docker preparation was cancelled.");
       if (created.exitCode !== 0) {
         throw new Error(`Could not start the ${image} container: ${String(created.output || "").trim().slice(0, 400)}`);
       }
-      prepared = true;
-      if (envPath) await writeFile(envPath, envFileContent(secrets));
+      if (envPath) await writeFile(envPath, envFileContent(secrets), { signal });
       return { image, container };
     },
 
@@ -195,8 +210,8 @@ function createDockerBackend({ checkoutDir, environment = {}, name, secrets = {}
     readFile: relativePath => structuredPaths.readRepoFile(checkoutDir, relativePath),
 
     async dispose() {
-      if (!prepared) return;
-      prepared = false;
+      if (!containerMayExist) return;
+      containerMayExist = false;
       await runProcess("docker", ["rm", "-f", container], { timeoutMs: 30_000 });
     },
   };

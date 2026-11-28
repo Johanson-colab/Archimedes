@@ -125,12 +125,12 @@ function createSshBackend({ server, workspace = "~/.archimedes", repoUrl = "", b
   let prepared = false;
 
   /** Keeps a command's full output where the agent can grep it later. */
-  const writeFile = async (absolutePath, content) => {
+  const writeFile = async (absolutePath, content, { signal } = {}) => {
     if (!isOutputPath(absolutePath)) throw new Error("Refusing to write outside the output directory.");
     const dir = absolutePath.replace(/\/[^/]+$/, "");
     const result = await run(
       `umask 077; mkdir -p ${quoteRemotePath(dir)} && cat > ${quoteRemotePath(absolutePath)}`,
-      { timeoutMs: 120_000, login: false, stdin: content },
+      { signal, timeoutMs: 120_000, login: false, stdin: content },
     );
     if (result.code !== 0) {
       throw new Error(`Could not write ${absolutePath}: ${String(result.output || "").trim().slice(0, 200)}`);
@@ -138,7 +138,11 @@ function createSshBackend({ server, workspace = "~/.archimedes", repoUrl = "", b
     return absolutePath;
   };
 
-  const run = (command, { timeoutMs = 15 * 60 * 1_000, onData = null, signal = null, login = true, stdin } = {}) => new Promise((resolve) => {
+  const run = (command, { timeoutMs = 15 * 60 * 1_000, onData = null, signal = null, login = true, stdin } = {}) => new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(signal.reason || new Error("SSH operation was cancelled."));
+      return;
+    }
     const args = connectionArgs(target, login ? loginCommand(command) : command, { allowPassword: Boolean(password) });
     const child = spawnImpl("ssh", args, { windowsHide: true, env: { ...process.env, ...env } });
     const out = [];
@@ -148,21 +152,38 @@ function createSshBackend({ server, workspace = "~/.archimedes", repoUrl = "", b
       child.stdin.end(String(stdin));
     }
     let settled = false;
-    const finish = (value) => { if (!settled) { settled = true; resolve(value); } };
+    let timer = null;
+    let abortListener = null;
+    const clear = () => {
+      if (timer) clearTimeout(timer);
+      if (abortListener) signal.removeEventListener("abort", abortListener);
+    };
+    const finish = (value) => { if (!settled) { settled = true; clear(); resolve(value); } };
+    const fail = (error) => { if (!settled) { settled = true; clear(); reject(error); } };
     child.stdout.on("data", (chunk) => { out.push(chunk); onData?.(chunk.toString()); });
     child.stderr.on("data", (chunk) => { out.push(chunk); onData?.(chunk.toString()); });
     child.once("error", (error) => finish({ code: null, output: out.join(""), error: error?.message || "ssh failed" }));
     child.once("close", (code) => finish({ code, output: out.join("") }));
-    const timer = setTimeout(() => { child.kill("SIGKILL"); finish({ code: null, output: out.join(""), timedOut: true }); }, Math.max(1_000, timeoutMs));
+    timer = setTimeout(() => {
+      child.kill("SIGKILL");
+      finish({ code: null, output: out.join(""), timedOut: true });
+    }, Math.max(1_000, timeoutMs));
     if (timer.unref) timer.unref();
     if (signal) {
-      if (signal.aborted) child.kill("SIGKILL");
-      else signal.addEventListener("abort", () => child.kill("SIGKILL"), { once: true });
+      abortListener = () => {
+        child.kill("SIGKILL");
+        fail(signal.reason || new Error("SSH operation was cancelled."));
+      };
+      signal.addEventListener("abort", abortListener, { once: true });
     }
   });
 
   /** Ships a checkout that already exists here instead of cloning it there. */
-  const copyLocalCheckout = (localDir) => new Promise((resolve, reject) => {
+  const copyLocalCheckout = (localDir, signal) => new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(signal.reason || new Error("SSH copy was cancelled."));
+      return;
+    }
     emit({ type: "preparing", detail: `Copying the checkout to ${target.host}…` });
     const remoteCommand = `mkdir -p ${quoteRemotePath(repo)} && tar -xzf - -C ${quoteRemotePath(repo)}`;
     const sshArgs = connectionArgs(target, remoteCommand, { allowPassword: Boolean(password) });
@@ -170,15 +191,32 @@ function createSshBackend({ server, workspace = "~/.archimedes", repoUrl = "", b
     const pipe = spawn("ssh", sshArgs, { windowsHide: true, env: { ...process.env, ...env } });
     let stderr = "";
     let sent = 0;
+    let settled = false;
+    let abortListener = null;
+    const finish = (callback, value) => {
+      if (settled) return;
+      settled = true;
+      if (abortListener) signal.removeEventListener("abort", abortListener);
+      callback(value);
+    };
     pack.stdout.on("data", (chunk) => { sent += chunk.length; });
     pack.stdout.pipe(pipe.stdin);
-    pack.once("error", reject);
+    pipe.stdin.on("error", () => {});
+    pack.once("error", error => finish(reject, error));
     pipe.stderr.on("data", (chunk) => { stderr += chunk.toString(); });
-    pipe.once("error", reject);
+    pipe.once("error", error => finish(reject, error));
     pipe.once("close", (code) => {
-      if (code === 0) resolve({ bytes: sent });
-      else reject(new Error(stderr.trim().slice(0, 300) || `tar exited with ${code}`));
+      if (code === 0) finish(resolve, { bytes: sent });
+      else finish(reject, new Error(stderr.trim().slice(0, 300) || `tar exited with ${code}`));
     });
+    if (signal) {
+      abortListener = () => {
+        pack.kill("SIGKILL");
+        pipe.kill("SIGKILL");
+        finish(reject, signal.reason || new Error("SSH copy was cancelled."));
+      };
+      signal.addEventListener("abort", abortListener, { once: true });
+    }
   });
 
   return {
@@ -190,24 +228,24 @@ function createSshBackend({ server, workspace = "~/.archimedes", repoUrl = "", b
     copyCheckout: copyLocalCheckout,
 
     /** What the machine can offer, before anything is cloned. */
-    async probe() {
-      const result = await run(probeCommand(), { timeoutMs: 60_000 });
+    async probe({ signal } = {}) {
+      const result = await run(probeCommand(), { signal, timeoutMs: 60_000 });
       return { ...parseProbe(result.output), ok: result.code === 0 };
     },
 
-    async prepare() {
+    async prepare({ signal } = {}) {
       emit({ type: "preparing", detail: `Creating ${root} on ${target.host}…` });
-      const mkdir = await run(`mkdir -p ${quoteRemotePath(root)} ${quoteRemotePath(`${root}/logs`)} && echo ok`, { timeoutMs: 60_000 });
+      const mkdir = await run(`mkdir -p ${quoteRemotePath(root)} ${quoteRemotePath(`${root}/logs`)} && echo ok`, { signal, timeoutMs: 60_000 });
       if (mkdir.code !== 0) throw new Error(`Could not create ${root}: ${mkdir.output.trim().slice(0, 300)}`);
 
-      const exists = await run(`test -d ${quoteRemotePath(`${repo}/.git`)} && echo yes || echo no`, { timeoutMs: 60_000 });
+      const exists = await run(`test -d ${quoteRemotePath(`${repo}/.git`)} && echo yes || echo no`, { signal, timeoutMs: 60_000 });
       if (!exists.output.includes("yes")) {
         emit({ type: "preparing", detail: `Cloning ${branch || "the default branch"} into ${repo}…` });
         // git prints no progress without a terminal unless told to; the bar uses
         // \r, which becomes a newline so the log shows one line per update.
         const clone = await run(
           `git clone --progress --depth 1${branch ? ` --branch ${shellQuote(branch)}` : ""} ${shellQuote(repoUrl)} ${quoteRemotePath(repo)}`,
-          { timeoutMs: 15 * 60 * 1_000, onData: (chunk) => emit({ type: "output", chunk: chunk.replace(/\r/g, "\n") }) },
+          { signal, timeoutMs: 15 * 60 * 1_000, onData: (chunk) => emit({ type: "output", chunk: chunk.replace(/\r/g, "\n") }) },
         );
         if (clone.code !== 0) {
           const host = clone.output.match(/Could not resolve host: (\S+)/)?.[1];
@@ -217,20 +255,20 @@ function createSshBackend({ server, workspace = "~/.archimedes", repoUrl = "", b
               : `Could not clone the repository: ${clone.output.trim().slice(0, 300)}`);
           }
           emit({ type: "preparing", detail: `Cannot reach GitHub from ${target.host}; copying the checkout instead…` });
-          await run(`rm -rf ${quoteRemotePath(repo)}`, { timeoutMs: 60_000 });
+          await run(`rm -rf ${quoteRemotePath(repo)}`, { signal, timeoutMs: 60_000 });
           try {
-            await copyLocalCheckout(copyFrom);
+            await copyLocalCheckout(copyFrom, signal);
           } catch (error) {
             throw new Error(`Could not copy the checkout: ${String(error?.message || error).slice(0, 300)}`);
           }
         }
       }
 
-      const rev = await run(`git -C ${quoteRemotePath(repo)} rev-parse HEAD`, { timeoutMs: 60_000 });
+      const rev = await run(`git -C ${quoteRemotePath(repo)} rev-parse HEAD`, { signal, timeoutMs: 60_000 });
       const commit = rev.output.trim().slice(0, 40);
-      await run(`printf '%s' ${shellQuote(JSON.stringify({ repoUrl, branch, commit, createdAt: new Date().toISOString() }))} > ${quoteRemotePath(`${root}/${MARKER_FILE}`)}`, { timeoutMs: 60_000 });
+      await run(`printf '%s' ${shellQuote(JSON.stringify({ repoUrl, branch, commit, createdAt: new Date().toISOString() }))} > ${quoteRemotePath(`${root}/${MARKER_FILE}`)}`, { signal, timeoutMs: 60_000 });
       prepared = true;
-      if (envPath) await writeFile(envPath, envFileContent(secrets));
+      if (envPath) await writeFile(envPath, envFileContent(secrets), { signal });
       emit({ type: "started", detail: `${target.user}@${target.host} · ${commit.slice(0, 7)}` });
       return { root, repo, commit, branch, host: target.host, user: target.user };
     },

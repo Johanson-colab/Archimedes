@@ -5,10 +5,15 @@ import { ArrowUp, Expand, Square, X } from "lucide-react";
 import { useUISettings } from "./i18n";
 import { shouldSubmitPaperChatKey } from "./paperChatKeyboard";
 
-const SideMessage = memo(function SideMessage({ message }: { message: { id: string; role: string; text: string } }) {
-  return <article className={`side-chat-message ${message.role}`}><ReactMarkdown remarkPlugins={[remarkGfm]}>{message.text}</ReactMarkdown></article>;
+type SideChatMessage = Pick<ResearchThreadMessage, "id" | "role" | "text" | "recoveryNotice">;
+
+const SideMessage = memo(function SideMessage({ message }: { message: SideChatMessage }) {
+  const { t } = useUISettings();
+  return <article className={`side-chat-message ${message.role}`}>{message.recoveryNotice
+    ? <p>{t(message.text)}</p>
+    : <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.text}</ReactMarkdown>}</article>;
 });
-const SideMessages = memo(function SideMessages({ messages }: { messages: Array<{ id: string; role: string; text: string }> }) {
+const SideMessages = memo(function SideMessages({ messages }: { messages: SideChatMessage[] }) {
   return <>{messages.map((message) => <SideMessage key={message.id} message={message} />)}</>;
 });
 
@@ -25,7 +30,7 @@ export default function SideConversation({ bridge, initialThread, dataWorkspace,
 }) {
   const { t } = useUISettings();
   const [thread, setThread] = useState(initialThread);
-  const [messages, setMessages] = useState<Array<{ id: string; role: string; text: string }>>(initialThread.messages);
+  const [messages, setMessages] = useState<SideChatMessage[]>(initialThread.messages);
   const draftKey = `archimedes-side-draft:${initialThread.id}`;
   const [draft, setDraft] = useState(() => { try { return localStorage.getItem(draftKey) || ""; } catch { return ""; } });
   const [busy, setBusy] = useState(false);

@@ -88,6 +88,7 @@ interface ResearchDeskBridge {
     updateLocalIdentity: (patch: { displayName: string }) => Promise<LocalIdentity>;
     setTitleBarTheme?: (theme: "charcoal" | "paper") => Promise<void>;
     setUiZoom?: (factor: number) => Promise<number>;
+    setUiLanguage?: (language: "en" | "zh") => void;
     chooseWorkspace: () => Promise<string | null>;
     watchWorkspace: (workspace: string) => Promise<string>;
     revealWorkspace: (workspace: string) => Promise<{ opened: boolean }>;
@@ -1919,6 +1920,7 @@ interface ResearchThreadMessage {
   turn_id: string;
   role: "user" | "assistant";
   text: string;
+  recoveryNotice?: boolean;
   sources?: ResearchSource[];
   created_at: string;
 }

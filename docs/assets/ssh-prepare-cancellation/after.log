@@ -1,0 +1,26 @@
+✔ one repository and branch maps to one directory on the server (1.205083ms)
+✔ a trailing slash or .git in the URL does not change the directory (0.127958ms)
+✔ a non-GitHub URL still produces a usable directory (0.085417ms)
+✔ commands survive quoting, including single quotes in a path (0.069541ms)
+✔ the probe output is parsed into facts (0.213041ms)
+✔ a machine without docker or a GPU says so instead of guessing (0.4785ms)
+✔ the probe command asks only for things it can report (0.121333ms)
+✔ a remote path lets the server expand the home directory (0.083791ms)
+✔ commands run through a login shell so the profile's proxy applies (0.079958ms)
+✔ the backend implements everything the runner calls (1.683833ms)
+✔ reproduction run passes its abort signal into SSH probe and preparation (0.369208ms)
+✔ SSH probe aborts its command and releases the abort listener (1.3185ms)
+✔ SSH preparation aborts a slow provisioning command and releases its listeners (3.613042ms)
+✔ reproduction run passes its abort signal into Docker preparation (0.649291ms)
+✔ cancelling Docker preparation kills docker run and still removes a possible container (1532.406583ms)
+✔ Docker structured files reject external directory/final symlinks and preserve ordinary nested edits (3.848875ms)
+✔ SSH production file scripts preserve stdin/quoting, refuse linked paths and never truncate a complete-read result silently (31.783291ms)
+✔ the real pilot never falls back to another file after a structured read-limit error (8.44575ms)
+ℹ tests 18
+ℹ suites 0
+ℹ pass 18
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1682.599042

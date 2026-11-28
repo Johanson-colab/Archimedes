@@ -1,7 +1,36 @@
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
+const { EventEmitter } = require("node:events");
+const { PassThrough } = require("node:stream");
 const test = require("node:test");
 
-const { parseProbe, probeCommand, remoteRoot, shellQuote } = require("./reproduction/remote.cjs");
+const { createSshBackend, parseProbe, probeCommand, remoteRoot, shellQuote } = require("./reproduction/remote.cjs");
+
+function sshChild(t, onStart) {
+  const child = new EventEmitter();
+  child.stdout = new PassThrough();
+  child.stderr = new PassThrough();
+  child.stdin = new PassThrough();
+  child.kill = () => {
+    setImmediate(() => child.emit("close", null, "SIGKILL"));
+    return true;
+  };
+  t.after(() => child.emit("close", null, "SIGKILL"));
+  if (onStart) onStart(child);
+  return child;
+}
+
+function countSignalListeners(signal) {
+  let added = 0, removed = 0;
+  const add = signal.addEventListener.bind(signal);
+  const remove = signal.removeEventListener.bind(signal);
+  signal.addEventListener = (...args) => { added++; return add(...args); };
+  signal.removeEventListener = (...args) => { removed++; return remove(...args); };
+  return () => ({ added, removed });
+}
+
+const sshServer = { user: "ubuntu", host: "10.150.16.11", port: 22, workspace: "~/.archimedes" };
 
 test("one repository and branch maps to one directory on the server", () => {
   const main = remoteRoot("~/.archimedes", "https://github.com/A-EVO-Lab/a-evolve", "");
@@ -84,4 +113,50 @@ test("the backend implements everything the runner calls", () => {
     assert.equal(typeof backend[name], "function", `${name} is part of the runner contract`);
   }
   assert.equal(backend.describe(), "SSH · ubuntu@10.150.16.11");
+});
+
+test("reproduction run passes its abort signal into SSH probe and preparation", () => {
+  const source = fs.readFileSync(path.join(__dirname, "main.cjs"), "utf8");
+  const start = source.indexOf("const backend = createSshBackend(");
+  assert.ok(start >= 0, "SSH reproduction wiring was not found");
+  const wiring = source.slice(start, start + 1_600);
+  assert.match(wiring, /backend\.probe\(\{\s*signal: controller\.signal\s*\}\)/);
+  assert.match(wiring, /backend\.prepare\(\{\s*signal: controller\.signal\s*\}\)/);
+});
+
+test("SSH probe aborts its command and releases the abort listener", { timeout: 8_000 }, async t => {
+  let start;
+  const ready = new Promise(resolve => { start = resolve; });
+  const backend = createSshBackend({ server: sshServer, spawnImpl: () => sshChild(t, start) });
+  const controller = new AbortController();
+  const counts = countSignalListeners(controller.signal);
+  const pending = backend.probe({ signal: controller.signal });
+  await ready;
+  const began = Date.now();
+  controller.abort();
+  await assert.rejects(pending);
+  assert.ok(Date.now() - began < 3_000, "the probe did not stop promptly");
+  assert.deepEqual(counts(), { added: 1, removed: 1 });
+});
+
+test("SSH preparation aborts a slow provisioning command and releases its listeners", { timeout: 8_000 }, async t => {
+  let start;
+  const ready = new Promise(resolve => { start = resolve; });
+  const spawnImpl = (_program, args) => {
+    const command = args.at(-1);
+    if (command.includes("mkdir -p")) return sshChild(t, child => setImmediate(() => { child.stdout.write("ok\n"); child.emit("close", 0); }));
+    if (command.includes("test -d")) return sshChild(t, child => setImmediate(() => { child.stdout.write("yes\n"); child.emit("close", 0); }));
+    if (command.includes("rev-parse HEAD")) return sshChild(t, start);
+    return sshChild(t, child => setImmediate(() => child.emit("close", 0)));
+  };
+  const backend = createSshBackend({ server: sshServer, repoUrl: "https://github.com/example/fixture", spawnImpl });
+  const controller = new AbortController();
+  const counts = countSignalListeners(controller.signal);
+  const pending = backend.prepare({ signal: controller.signal });
+  await ready;
+  const began = Date.now();
+  controller.abort();
+  await assert.rejects(pending);
+  assert.ok(Date.now() - began < 3_000, "preparation did not stop promptly");
+  assert.deepEqual(counts(), { added: 3, removed: 3 });
 });
