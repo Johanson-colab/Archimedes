@@ -53,8 +53,13 @@ test("the actual quit handler waits for agent shutdown and prevents duplicate cl
   const { installQuitGuard } = require("./runtime/active-runs.cjs");
   new Function("scope", `with(scope) { let stoppingResearch = false; ${source.slice(start)} }`)({
     app, installQuitGuard, listActiveRuns: () => [], dialog: { showMessageBox: async () => ({ response: 1 }) },
+    QUIT_DIALOG_COPY: { en: { message: "Research is still running", detail: "Stop active work and quit Archimedes?", buttons: ["Keep running", "Stop and quit"] } }, uiLanguage: "en",
+    BrowserWindow: { getAllWindows: () => [] }, createWindow: () => {}, startupWorkspace: () => null,
     store: { closeAllWorkspaces: () => calls.push("store") },
     agent: { hasActiveAgentRuns: () => true, shutdownAgentRuns: async () => { calls.push("agents"); await gate; } },
+    researchAppRuntime: { hasRunningApps: () => false, shutdown: () => calls.push("apps") },
+    researchAppDelivery: { hasActiveValidation: () => false, shutdown: () => calls.push("delivery") },
+    harnessSetup: { shutdown: () => calls.push("harness") },
     closeAllNativeClients: () => calls.push("native"), closeAllTerminals: () => calls.push("terminals"),
     experimentRunner: { shutdownExperimentRuns: () => calls.push("experiments") },
     collaborationServer: { close: () => calls.push("server") }, presence: { closeAll: () => calls.push("presence") },
@@ -63,8 +68,8 @@ test("the actual quit handler waits for agent shutdown and prevents duplicate cl
   app.emit("before-quit", event());
   await new Promise(setImmediate);
   app.emit("will-quit", event());
-  assert.deepEqual(calls, ["quit", "experiments", "agents"]);
+  assert.deepEqual(calls, ["quit", "experiments", "agents", "apps", "delivery"]);
   release();
   await new Promise(setImmediate);
-  assert.deepEqual(calls, ["quit", "experiments", "agents", "quit", "native", "terminals", "experiments", "server", "presence", "store"]);
+  assert.deepEqual(calls, ["quit", "experiments", "agents", "apps", "delivery", "quit", "harness", "apps", "delivery", "native", "terminals", "experiments", "server", "presence", "store"]);
 });
