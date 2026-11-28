@@ -369,6 +369,13 @@ export function indexBibliographyBatch(entries: BibliographyEntry[]) {
     if (group) group.add(representative);
     else byIdentity.set(key, new Set([representative]));
   };
+  const learnIdentifiers = (representative: AcademicSearchResult, paper: AcademicSearchResult) => {
+    for (const [field, normalize] of identifierFields) {
+      if (!paper[field] || representative[field]) continue;
+      representative[field] = paper[field];
+      addIdentity(field + ":" + normalize(paper[field]), representative);
+    }
+  };
   entries.forEach(({ paper }, index) => {
     const identities = identifierFields.flatMap(([field, normalize]) =>
       paper[field] ? [field + ":" + normalize(paper[field])] : []);
@@ -382,15 +389,13 @@ export function indexBibliographyBatch(entries: BibliographyEntry[]) {
     if (representative) {
       repeatedRows.add(index);
       if (titleKey) addIdentity(titleKey, representative);
-      for (const [field, normalize] of identifierFields) {
-        if (!paper[field] || representative[field]) continue;
-        representative[field] = paper[field];
-        addIdentity(field + ":" + normalize(paper[field]), representative);
-      }
+      learnIdentifiers(representative, paper);
       return;
     }
-    if (titleKey && matchBibliographyPaper(paper, [...(byIdentity.get(titleKey) || [])], { titleAlreadyMatched: true })) {
+    const titleMatch = titleKey && matchBibliographyPaper(paper, [...(byIdentity.get(titleKey) || [])], { titleAlreadyMatched: true });
+    if (titleMatch) {
       repeatedRows.add(index);
+      learnIdentifiers(titleMatch, paper);
       return;
     }
     representative = { ...paper };

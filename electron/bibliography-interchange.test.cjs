@@ -847,3 +847,15 @@ test("legacy author fallback accepts a title already repaired to decoded text", 
   const saved = { ...incoming, title: "García on scaling", authors: [String.raw`Jos\'e Garc\'ia`], year: 2024, citekey: "legacy" };
   assert.equal(scope.matchBibliographyPaper(incoming, [saved]), saved);
 });
+
+test("title-only duplicate rows enrich the retained representative", () => {
+  const entries = scope.parseBibliography([
+    "@article{title-only,title={Shared result}}",
+    "@article{identified,title={Shared result},doi={10.5555/shared-result},eprint={2401.01234}}",
+  ].join("\n")).entries;
+  const indexed = scope.indexBibliographyBatch(entries);
+  assert.deepEqual([...indexed.repeatedRows], [1]);
+  assert.deepEqual([...indexed.conflictingRows], []);
+  assert.equal(indexed.representatives.get(0).doi, "10.5555/shared-result");
+  assert.equal(indexed.representatives.get(0).arxiv_id, "2401.01234");
+});

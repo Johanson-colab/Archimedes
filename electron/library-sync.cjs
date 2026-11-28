@@ -29,16 +29,22 @@ function createLibrarySync({ store, api } = {}) {
       if (!fingerprint) return null;
       // Read existing cloud references before uploading a title-only identity.
       // Enrichment can leave the saved key behind the current bibliographic metadata.
-      visiblePapers ??= Promise.all(remoteLibraries.map(library => api.listPapers(library.id)))
-        .then(lists => {
-          const byKey = new Map(lists.flat().map(item => [item.canonical_key, item]));
-          const byFingerprint = new Map();
-          for (const item of byKey.values()) {
-            const identity = titleFingerprint(item);
-            if (identity) byFingerprint.set(identity, byFingerprint.has(identity) ? null : item);
-          }
-          return { byKey, byFingerprint };
-        });
+      visiblePapers ??= (async () => {
+        const otherProjects = typeof api.listProjects === "function" ? await api.listProjects() : [];
+        const otherLibraries = await Promise.all(otherProjects
+          .map(item => String(item.id || "").trim())
+          .filter(id => id && id !== project.cloud_project_id)
+          .map(id => api.listLibraries(id)));
+        const libraries = [...remoteLibraries, ...otherLibraries.flat()];
+        const lists = await Promise.all(libraries.map(library => api.listPapers(library.id)));
+        const byKey = new Map(lists.flat().map(item => [item.canonical_key, item]));
+        const byFingerprint = new Map();
+        for (const item of byKey.values()) {
+          const identity = titleFingerprint(item);
+          if (identity) byFingerprint.set(identity, byFingerprint.has(identity) ? null : item);
+        }
+        return { byKey, byFingerprint };
+      })();
       const { byKey, byFingerprint } = await visiblePapers;
       return byKey.has(paper.canonical_key) ? null : byFingerprint.get(fingerprint) ?? null;
     }

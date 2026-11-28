@@ -170,6 +170,43 @@ test("a new title-only reference joins its legacy cloud record without joining a
   }
 });
 
+test("title-only sync reuses a legacy cloud identity from another accessible project", async () => {
+  const root = workspace();
+  try {
+    const project = store.createResearchProject({ name: "Cross-project references" });
+    store.linkResearchProjectToCloud(project.id, "cloud-current");
+    const library = store.listLibraries(project.id)[0];
+    const api = fakeApi();
+    const legacyLibrary = api.seedRemoteLibrary("Other project references", {
+      canonical_key: "title:editorial", title: "Editorial", authors: ["Alex Morgan"], year: 2019,
+      notes: "Keep the original cloud note", reading_status: "read", starred: true,
+      tags: ["checked"], state_updated_at: "2025-01-01T00:00:00.000Z",
+    });
+    const [legacy] = await api.listPapers(legacyLibrary.id);
+    const allLibraries = api.listLibraries;
+    api.listProjects = async () => [{ id: "cloud-current" }, { id: "cloud-other" }];
+    api.listLibraries = async projectId => (await allLibraries()).filter(item =>
+      projectId === "cloud-other" ? item.id === legacyLibrary.id : item.id !== legacyLibrary.id);
+    const local = store.addPaper(library.id, { title: "Editorial", authors: ["Alex Morgan"], year: 2019 });
+
+    const result = await createLibrarySync({ store, api }).syncProjectLibraries(project.id);
+    assert.deepEqual(result.warnings, []);
+    const linked = store.getPaper(local.id);
+    assert.equal(linked.cloud_paper_id, legacy.id);
+    assert.equal(linked.notes, legacy.notes);
+    assert.equal(linked.reading_status, "read");
+    assert.equal(store.listLibraries(project.id).length, 1);
+    const syncedLibrary = store.listLibraries(project.id)[0];
+    assert.ok(syncedLibrary.cloud_library_id);
+    assert.notEqual(syncedLibrary.cloud_library_id, legacyLibrary.id);
+    assert.equal((await api.listPapers(syncedLibrary.cloud_library_id)).length, 1);
+    assert.equal(api.libraries.length, 2);
+    assert.equal((await api.listPapers(legacyLibrary.id)).length, 1);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("syncing an older cloud duplicate twice cannot overwrite a newer note on the original cloud paper", async () => {
   const root = workspace();
   try {
