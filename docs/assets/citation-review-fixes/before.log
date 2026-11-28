@@ -1,0 +1,105 @@
+✔ creates one new bibliography entry and one cite at the same cursor on a retry (68.378625ms)
+✔ reuses a matching reference byte for byte and refuses occupied keys (1.107792ms)
+✔ checks conflicts and matching references across every declared bibliography file (0.324125ms)
+✔ suggests only bibliography paths declared inside the manuscript folder (0.248083ms)
+✖ reuses a title match with BibTeX family-first author order (0.739042ms)
+✖ reuses its generated entry when both year and strong identifiers are absent (0.104333ms)
+✔ same-named papers keep their owner and autosave on departure without replaying an old open request (157.591291ms)
+✔ a delayed save preserves later keystrokes and drains the newest snapshot to its old root (854.982667ms)
+✔ late reads, compile progress and build results update only their owner scope (67.992792ms)
+✔ a late LaTeX failure stays in its source project instead of suggesting a fix in another project (32.869625ms)
+✔ failed departure autosaves keep the original draft and expose its save error on return (25.151625ms)
+✔ switching source files during an in-flight save retains and saves the final edit to the old file (829.137542ms)
+✔ the actual preload preserves compile ownership and rejects writing over newer source (4.768917ms)
+✔ Writing opens existing manuscripts before templates and restores the chosen document after remount (35.038833ms)
+✔ returning to Writing while the main document reopens restores the remembered source (37.696791ms)
+✔ a tree selection wins over the remembered source while the main document is reopening (25.711875ms)
+✔ returning to Writing reloads the manuscript root and expanded source directories (41.06825ms)
+✔ re-entering a scope does not replace its explicitly opening manuscript with a cached file (20.539ms)
+✔ a main document at the execution root opens in place and a removed recent document returns to the chooser (13.488291ms)
+✔ compiling main waits for a pending save of another source file in the same manuscript (15.457208ms)
+✔ typing during the compile save barrier retains the new edit and does not compile an older source set (20.635ms)
+✖ compiling one manuscript ignores an unsavable draft from another folder (17.765834ms)
+✔ projects sharing one execution folder restore their own manuscript selection (19.681333ms)
+✔ shared cached source keeps the latest read when the older read resolves first (38.136208ms)
+✔ shared uncached source keeps the latest read when the older read resolves first (21.179708ms)
+✔ shared cached source keeps the latest read when the newer read resolves first (39.247167ms)
+✔ shared uncached source keeps the latest read when the newer read resolves first (19.472125ms)
+✔ sharing a document keeps dirty text and retains the preview after an unchanged refresh (39.087417ms)
+✔ returning to a clean cached manuscript reloads external edits before the next save (18.2845ms)
+✔ a delayed clean tree selection commits the fresh source before allowing edits (19.243583ms)
+✔ a failed source read leaves the previous selection and a newer selection supersedes a slow read (19.700666ms)
+✔ opening supporting sources preserves or resolves the actual manuscript compile target (20.343125ms)
+✔ a root-level manuscript can create files and folders through the Writing dialog (22.00975ms)
+✔ preview addresses stay with the execution folder that produced the manuscript (1.14575ms)
+ℹ tests 34
+ℹ suites 0
+ℹ pass 31
+ℹ fail 3
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2894.104458
+
+✖ failing tests:
+
+test at electron/paper-writing-citations.test.cjs:58:1
+✖ reuses a title match with BibTeX family-first author order (0.739042ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+    {
+  +   content: '@misc{local, title={Name Order}, author={Doe, Jane}, year={2025}}\n' +
+  +     '\n' +
+  +     '@article{doe2025,\n' +
+  +     '  title = {Name Order},\n' +
+  +     '  author = {Jane Doe},\n' +
+  +     '  year = {2025},\n' +
+  +     '  journal = {Research Notes}\n' +
+  +     '}\n',
+  +   key: 'doe2025'
+  -   content: '@misc{local, title={Name Order}, author={Doe, Jane}, year={2025}}\n',
+  -   key: 'local'
+    }
+  
+      at TestContext.<anonymous> (/Users/fei/Desktop/Archimedes/electron/paper-writing-citations.test.cjs:61:10)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: { content: '@misc{local, title={Name Order}, author={Doe, Jane}, year={2025}}\n\n@article{doe2025,\n  title = {Name Order},\n  author = {Jane Doe},\n  year = {2025},\n  journal = {Research Notes}\n}\n', key: 'doe2025' },
+    expected: { content: '@misc{local, title={Name Order}, author={Doe, Jane}, year={2025}}\n', key: 'local' },
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at electron/paper-writing-citations.test.cjs:64:1
+✖ reuses its generated entry when both year and strong identifiers are absent (0.104333ms)
+  Error: The citation key belongs to a different bibliography entry.
+      at Object.prepareManuscriptCitation (eval at <anonymous> (/Users/fei/Desktop/Archimedes/electron/paper-writing-citations.test.cjs:13:9), <anonymous>:31:10)
+      at TestContext.<anonymous> (/Users/fei/Desktop/Archimedes/electron/paper-writing-citations.test.cjs:67:24)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+
+test at electron/paper-writing-workspace.test.cjs:449:1
+✖ compiling one manuscript ignores an unsavable draft from another folder (17.765834ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+  + []
+  - [
+  -   'other/main.tex'
+  - ]
+  
+      at TestContext.<anonymous> (/Users/fei/Desktop/Archimedes/electron/paper-writing-workspace.test.cjs:459:10)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: [],
+    expected: [ 'other/main.tex' ],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }

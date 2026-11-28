@@ -1,0 +1,42 @@
+✔ creates one new bibliography entry and one cite at the same cursor on a retry (68.791583ms)
+✔ reuses a matching reference byte for byte and refuses occupied keys (0.986584ms)
+✔ checks conflicts and matching references across every declared bibliography file (0.457541ms)
+✔ suggests only bibliography paths declared inside the manuscript folder (0.286708ms)
+✔ reuses a title match with BibTeX family-first author order (0.111458ms)
+✔ reuses its generated entry when both year and strong identifiers are absent (0.143917ms)
+✔ same-named papers keep their owner and autosave on departure without replaying an old open request (160.908583ms)
+✔ a delayed save preserves later keystrokes and drains the newest snapshot to its old root (859.936542ms)
+✔ late reads, compile progress and build results update only their owner scope (71.298208ms)
+✔ a late LaTeX failure stays in its source project instead of suggesting a fix in another project (35.713958ms)
+✔ failed departure autosaves keep the original draft and expose its save error on return (23.447917ms)
+✔ switching source files during an in-flight save retains and saves the final edit to the old file (848.88575ms)
+✔ the actual preload preserves compile ownership and rejects writing over newer source (4.862375ms)
+✔ Writing opens existing manuscripts before templates and restores the chosen document after remount (39.950041ms)
+✔ returning to Writing while the main document reopens restores the remembered source (36.406625ms)
+✔ a tree selection wins over the remembered source while the main document is reopening (26.248791ms)
+✔ returning to Writing reloads the manuscript root and expanded source directories (38.093666ms)
+✔ re-entering a scope does not replace its explicitly opening manuscript with a cached file (22.694459ms)
+✔ a main document at the execution root opens in place and a removed recent document returns to the chooser (12.8215ms)
+✔ compiling main waits for a pending save of another source file in the same manuscript (16.741709ms)
+✔ typing during the compile save barrier retains the new edit and does not compile an older source set (18.690375ms)
+✔ compiling one manuscript ignores an unsavable draft from another folder (17.89125ms)
+✔ projects sharing one execution folder restore their own manuscript selection (19.06975ms)
+✔ shared cached source keeps the latest read when the older read resolves first (40.169167ms)
+✔ shared uncached source keeps the latest read when the older read resolves first (19.917292ms)
+✔ shared cached source keeps the latest read when the newer read resolves first (40.420875ms)
+✔ shared uncached source keeps the latest read when the newer read resolves first (20.221084ms)
+✔ sharing a document keeps dirty text and retains the preview after an unchanged refresh (39.524834ms)
+✔ returning to a clean cached manuscript reloads external edits before the next save (19.303583ms)
+✔ a delayed clean tree selection commits the fresh source before allowing edits (18.390667ms)
+✔ a failed source read leaves the previous selection and a newer selection supersedes a slow read (20.371542ms)
+✔ opening supporting sources preserves or resolves the actual manuscript compile target (21.043333ms)
+✔ a root-level manuscript can create files and folders through the Writing dialog (21.365291ms)
+✔ preview addresses stay with the execution folder that produced the manuscript (0.786667ms)
+ℹ tests 34
+ℹ suites 0
+ℹ pass 34
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2936.806333

@@ -1,0 +1,54 @@
+$ node --test --test-name-pattern="checks conflicts and matching references across every declared bibliography file" electron/paper-writing-citations.test.cjs
+✔ checks conflicts and matching references across every declared bibliography file (75.401667ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 213.973458
+
+$ node --test --test-name-pattern="treats a missing declared bibliography as empty" electron/paper-writing-citations.test.cjs
+✔ treats a missing declared bibliography as empty but preserves other read failures (75.407042ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 213.146416
+
+$ node --test --test-name-pattern="compiling a root-level manuscript ignores an independent root-level draft" electron/paper-writing-workspace.test.cjs
+✔ compiling a root-level manuscript ignores an independent root-level draft (179.001ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 707.423416
+
+$ node --test --test-name-pattern="a root-level compile waits for a reachable input outside the main folder" electron/paper-writing-workspace.test.cjs
+✔ a root-level compile waits for a reachable input outside the main folder (159.516875ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 622.919
+
+$ node --test --test-name-pattern="the actual preload preserves compile ownership" electron/paper-writing-workspace.test.cjs
+✔ the actual preload preserves compile ownership and rejects writing over newer source (86.9455ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 539.63625

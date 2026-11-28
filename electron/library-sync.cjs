@@ -1,3 +1,42 @@
+const { canonicalTitleKey, identifier, titleIdentity } = require("./bibliography-records.cjs");
+
+function titleFingerprint(paper) {
+  if (!paper.canonical_key.startsWith("title:") || Object.entries(identifier).some(([key, normalize]) => normalize(paper[key]))) return null;
+  const fingerprint = canonicalTitleKey(paper);
+  return fingerprint === canonicalTitleKey({ title: paper.title }) ? null : fingerprint;
+}
+
+function authorNames(authors) {
+  return (Array.isArray(authors) ? authors : []).map((author) => {
+    const raw = String(author).trim();
+    const split = /^(.+?),\s*(.+)$/.exec(raw);
+    return (split ? `${split[2]} ${split[1]}` : raw).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+  }).filter(Boolean).sort();
+}
+
+function metadataCompatible(left, right) {
+  if (left.year && right.year && left.year !== right.year) return false;
+  const saved = authorNames(left.authors), imported = authorNames(right.authors);
+  if (!saved.length || !imported.length) return true;
+  if (saved.join("|") === imported.join("|")) return true;
+  const prefix = (names) => names.at(-1) === "others" ? names.slice(0, -1) : null;
+  const savedPrefix = prefix(saved), importedPrefix = prefix(imported);
+  return Boolean(savedPrefix && imported.join(" ").startsWith(savedPrefix.join(" ")))
+    || Boolean(importedPrefix && saved.join(" ").startsWith(importedPrefix.join(" ")));
+}
+
+function identifiersCompatible(left, right) {
+  return Object.entries(identifier).every(([field, normalize]) => {
+    const a = normalize(left[field]), b = normalize(right[field]);
+    return !a || !b || a === b;
+  });
+}
+
+function hasInitialPaperState(paper) {
+  return paper.state_updated_at === paper.created_at && paper.reading_status === "unread"
+    && !paper.starred && !paper.notes && !paper.tags.length;
+}
+
 function createLibrarySync({ store, api } = {}) {
   if (!store || !api) throw new Error("Store and collaboration API are required.");
 
@@ -9,6 +48,38 @@ function createLibrarySync({ store, api } = {}) {
     const remoteLibraries = await api.listLibraries(project.cloud_project_id);
     const remoteById = new Map(remoteLibraries.map((library) => [library.id, library]));
     let localLibraries = store.listLibraries(projectId);
+    let visiblePapers;
+    const claimedCloudIds = new Set();
+
+    async function matchingCloudTitlePaper(paper) {
+      const fingerprint = titleFingerprint(paper);
+      // Read existing cloud references before uploading a title-only identity.
+      // Enrichment can leave the saved key behind the current bibliographic metadata.
+      visiblePapers ??= Promise.all(remoteLibraries.map(library => api.listPapers(library.id)))
+        .then(lists => {
+          const byKey = new Map(lists.flat().map(item => [item.canonical_key, item]));
+          const byFingerprint = new Map();
+          const byTitle = new Map();
+          for (const item of byKey.values()) {
+            const identity = titleFingerprint(item);
+            if (identity) byFingerprint.set(identity, byFingerprint.has(identity) ? null : item);
+            const titleKey = titleIdentity(item.title);
+            if (titleKey) byTitle.set(titleKey, [...(byTitle.get(titleKey) || []), item]);
+          }
+          return { byKey, byFingerprint, byTitle };
+        });
+      const { byKey, byFingerprint, byTitle } = await visiblePapers;
+      if (byKey.has(paper.canonical_key)) return null;
+      const fingerprintMatch = fingerprint ? byFingerprint.get(fingerprint) : null;
+      if (fingerprintMatch && !claimedCloudIds.has(fingerprintMatch.id)) return fingerprintMatch;
+      // A legacy cloud row may have only a title, or may lack author/year
+      // metadata that the fresh import now has. Fall back to an unambiguous
+      // metadata-compatible title match instead of uploading a duplicate.
+      const titleKey = titleIdentity(paper.title);
+      const legacy = titleKey ? (byTitle.get(titleKey) || []).filter((item) =>
+        !claimedCloudIds.has(item.id) && identifiersCompatible(item, paper) && metadataCompatible(item, paper)) : [];
+      return legacy.length === 1 ? legacy[0] : null;
+    }
 
     // Local -> cloud: create missing cloud libraries and attach papers.
     for (const library of localLibraries) {
@@ -36,8 +107,9 @@ function createLibrarySync({ store, api } = {}) {
       for (const paper of store.listPapers(library.id)) {
         if (paper.cloud_paper_id) continue;
         try {
+          const match = await matchingCloudTitlePaper(paper);
           const cloudPaper = await api.addPaper(cloudLibraryId, {
-            canonical_key: paper.canonical_key,
+            canonical_key: match?.canonical_key ?? paper.canonical_key,
             title: paper.title,
             authors: paper.authors,
             year: paper.year,
@@ -54,7 +126,12 @@ function createLibrarySync({ store, api } = {}) {
             github_stars: paper.github_stars,
             conference: paper.conference,
           });
-          store.linkPaperToCloud(paper.id, cloudPaper.id);
+          const linked = store.linkPaperToCloud(paper.id, cloudPaper.id);
+          claimedCloudIds.add(cloudPaper.id);
+          if (match?.state_updated_at && match.id === cloudPaper.id && hasInitialPaperState(linked)) {
+            // A fresh import has a timestamp even though nobody edited its defaults.
+            store.applyCloudPaperState(linked.id, match);
+          }
         } catch (error) {
           warnings.push(`${paper.title}: ${error instanceof Error ? error.message : String(error)}`);
         }

@@ -36,9 +36,11 @@ function fakeApi() {
       return library;
     },
     async addPaper(libraryId, paper) {
-      const id = `cloud-paper-${nextPaper++}`;
-      const row = { ...paper, id, added_at: new Date().toISOString() };
-      papers.get(libraryId).push(row);
+      // The collaboration RPC keeps the first paper for each canonical key.
+      const existing = [...papers.values()].flat().find(item => item.canonical_key === paper.canonical_key);
+      const row = existing || { ...paper, id: `cloud-paper-${nextPaper++}`, added_at: new Date().toISOString() };
+      const items = papers.get(libraryId);
+      if (!items.some(item => item.id === row.id)) items.push(row);
       return row;
     },
     async listPapers(libraryId) {
@@ -129,6 +131,147 @@ test("a DOI or arXiv match without personal state initializes from the cloud", a
   }
 });
 
+test("a new title-only reference joins its legacy cloud record without joining a different publication", async () => {
+  const root = workspace();
+  try {
+    const project = store.createResearchProject({ name: "Shared title references" });
+    store.linkResearchProjectToCloud(project.id, "cloud-project");
+    const library = store.listLibraries(project.id)[0];
+    const api = fakeApi();
+    const remote = api.seedRemoteLibrary(library.name, {
+      canonical_key: "title:editorial", title: "Editorial", authors: ["Alex Morgan"], year: 2019,
+      notes: "Existing cloud note", reading_status: "read", starred: true,
+      tags: ["checked"], state_updated_at: "2025-01-01T00:00:00.000Z",
+    });
+    store.linkLibraryToCloud(library.id, remote.id);
+    const [legacy] = await api.listPapers(remote.id);
+    const matching = store.addPaper(library.id, { title: "Editorial", authors: ["Alex Morgan"], year: 2019 });
+    const distinct = store.addPaper(library.id, { title: "Editorial", authors: ["Jamie Lee"], year: 2023 });
+    assert.match(matching.canonical_key, /^title:editorial:[a-f0-9]{64}$/);
+    assert.notEqual(matching.canonical_key, distinct.canonical_key);
+
+    const result = await createLibrarySync({ store, api }).syncProjectLibraries(project.id);
+    assert.deepEqual(result.warnings, []);
+    const cloud = await api.listPapers(remote.id);
+    assert.equal(cloud.length, 2);
+    const linked = store.getPaper(matching.id);
+    assert.equal(linked.cloud_paper_id, legacy.id);
+    assert.equal(linked.canonical_key, matching.canonical_key);
+    assert.deepEqual(cloud.find(item => item.id === legacy.id), legacy);
+    assert.equal(linked.notes, legacy.notes);
+    assert.equal(linked.reading_status, "read");
+    assert.equal(linked.starred, true);
+    assert.deepEqual(linked.tags, ["checked"]);
+    const second = store.getPaper(distinct.id);
+    assert.notEqual(second.cloud_paper_id, legacy.id);
+    assert.equal(cloud.find(item => item.id === second.cloud_paper_id).canonical_key, distinct.canonical_key);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a title-only legacy cloud record joins a richer local import when its metadata is missing", async () => {
+  const root = workspace();
+  try {
+    const project = store.createResearchProject({ name: "Sparse legacy references" });
+    store.linkResearchProjectToCloud(project.id, "cloud-project");
+    const library = store.listLibraries(project.id)[0];
+    const api = fakeApi();
+    const remote = api.seedRemoteLibrary(library.name, {
+      canonical_key: "title:editorial", title: "Editorial",
+      notes: "Sparse cloud note", reading_status: "read", starred: true,
+      tags: ["checked"], state_updated_at: "2025-01-01T00:00:00.000Z",
+    });
+    store.linkLibraryToCloud(library.id, remote.id);
+    const [legacy] = await api.listPapers(remote.id);
+    const local = store.addPaper(library.id, { title: "Editorial", authors: ["Alex Morgan"], year: 2019 });
+    const result = await createLibrarySync({ store, api }).syncProjectLibraries(project.id);
+    assert.deepEqual(result.warnings, []);
+    assert.equal((await api.listPapers(remote.id)).length, 1);
+    const linked = store.getPaper(local.id);
+    assert.equal(linked.cloud_paper_id, legacy.id);
+    assert.equal(linked.notes, legacy.notes);
+    assert.equal(linked.reading_status, "read");
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a legacy title match cannot overwrite a cloud record with a conflicting DOI", async () => {
+  const root = workspace();
+  try {
+    const project = store.createResearchProject({ name: "Conflicting cloud identifiers" });
+    store.linkResearchProjectToCloud(project.id, "cloud-project");
+    const library = store.listLibraries(project.id)[0];
+    const api = fakeApi();
+    const remote = api.seedRemoteLibrary(library.name, {
+      canonical_key: "title:shared:legacy", title: "Shared work", authors: ["Alex Morgan"], year: 2019, doi: "10.5555/cloud",
+    });
+    store.linkLibraryToCloud(library.id, remote.id);
+    const [cloudRow] = await api.listPapers(remote.id);
+    const local = store.addPaper(library.id, { title: "Shared work", authors: ["Alex Morgan"], year: 2019, doi: "10.5555/local" });
+
+    assert.deepEqual((await createLibrarySync({ store, api }).syncProjectLibraries(project.id)).warnings, []);
+    const cloud = await api.listPapers(remote.id);
+    assert.equal(cloud.length, 2);
+    assert.notEqual(store.getPaper(local.id).cloud_paper_id, cloudRow.id);
+    assert.equal(cloud.find(item => item.id === cloudRow.id).doi, "10.5555/cloud");
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a sparse cloud title match is claimed by only one local paper", async () => {
+  const root = workspace();
+  try {
+    const project = store.createResearchProject({ name: "Sparse cloud title" });
+    store.linkResearchProjectToCloud(project.id, "cloud-project");
+    const library = store.listLibraries(project.id)[0];
+    const api = fakeApi();
+    const remote = api.seedRemoteLibrary(library.name, { canonical_key: "title:editorial", title: "Editorial" });
+    store.linkLibraryToCloud(library.id, remote.id);
+    const [cloudRow] = await api.listPapers(remote.id);
+    const first = store.addPaper(library.id, { title: "Editorial", authors: ["Alex Morgan"], year: 2019 });
+    const second = store.addPaper(library.id, { title: "Editorial", authors: ["Jamie Lee"], year: 2023 });
+
+    assert.deepEqual((await createLibrarySync({ store, api }).syncProjectLibraries(project.id)).warnings, []);
+    const cloud = await api.listPapers(remote.id);
+    assert.equal(cloud.length, 2);
+    const firstCloudId = store.getPaper(first.id).cloud_paper_id;
+    const secondCloudId = store.getPaper(second.id).cloud_paper_id;
+    assert.notEqual(firstCloudId, secondCloudId);
+    assert.ok([firstCloudId, secondCloudId].includes(cloudRow.id));
+    const extraId = firstCloudId === cloudRow.id ? secondCloudId : firstCloudId;
+    const extraLocal = firstCloudId === cloudRow.id ? second : first;
+    assert.deepEqual(cloud.find(item => item.id === extraId).authors, extraLocal === second ? ["Jamie Lee"] : ["Alex Morgan"]);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a legacy cloud author in last-name-first order joins the fresh import", async () => {
+  const root = workspace();
+  try {
+    const project = store.createResearchProject({ name: "Author order" });
+    store.linkResearchProjectToCloud(project.id, "cloud-project");
+    const library = store.listLibraries(project.id)[0];
+    const api = fakeApi();
+    const remote = api.seedRemoteLibrary(library.name, {
+      canonical_key: "title:shared-work:legacy", title: "Shared work", authors: ["Doe, Jane"], year: 2024, doi: "10.5555/cloud",
+    });
+    store.linkLibraryToCloud(library.id, remote.id);
+    const [cloudRow] = await api.listPapers(remote.id);
+    const local = store.addPaper(library.id, { title: "Shared work", authors: ["Jane Doe"], year: 2024 });
+
+    assert.deepEqual((await createLibrarySync({ store, api }).syncProjectLibraries(project.id)).warnings, []);
+    const cloud = await api.listPapers(remote.id);
+    assert.equal(cloud.length, 1);
+    assert.equal(store.getPaper(local.id).cloud_paper_id, cloudRow.id);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("syncing an older cloud duplicate twice cannot overwrite a newer note on the original cloud paper", async () => {
   const root = workspace();
   try {
@@ -179,6 +322,32 @@ test("syncing an older cloud duplicate twice cannot overwrite a newer note on th
   }
 });
 
+test("reusing a cloud title key preserves an explicit local note for reconciliation", async () => {
+  const root = workspace();
+  try {
+    const project = store.createResearchProject({ name: "Title reference with edited notes" });
+    store.linkResearchProjectToCloud(project.id, "cloud-project");
+    const library = store.listLibraries(project.id)[0];
+    const api = fakeApi();
+    const reference = { title: "Editorial", authors: ["Alex Morgan"], year: 2019 };
+    const remote = api.seedRemoteLibrary(library.name, {
+      canonical_key: "title:editorial", ...reference, notes: "Older cloud note", state_updated_at: "2025-01-01T00:00:00.000Z",
+    });
+    store.linkLibraryToCloud(library.id, remote.id);
+    const paper = store.addPaper(library.id, reference);
+    store.updatePaper(paper.id, { notes: "Edited locally before sync" });
+
+    const result = await createLibrarySync({ store, api }).syncProjectLibraries(project.id);
+    assert.deepEqual(result.warnings, []);
+    const cloud = await api.listPapers(remote.id);
+    assert.equal(cloud.length, 1);
+    assert.equal(cloud[0].notes, "Edited locally before sync");
+    assert.equal(store.getPaper(paper.id).notes, cloud[0].notes);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("annotation sync reads the cloud record attached to the destination collection", async () => {
   const root = workspace();
   try {
@@ -213,6 +382,55 @@ test("annotation sync reads the cloud record attached to the destination collect
     assert.equal(store.getPaper(local.id).cloud_paper_id, "paper-a");
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("cloud sync recognizes current metadata on an unchanged fingerprint from an earlier import", async () => {
+  const firstRoot = workspace();
+  let secondRoot;
+  try {
+    const api = fakeApi();
+    const sync = createLibrarySync({ store, api });
+    const originalProject = store.createResearchProject({ name: "Original workspace" });
+    store.linkResearchProjectToCloud(originalProject.id, "shared-project");
+    const originalLibrary = store.listLibraries(originalProject.id)[0];
+    const remote = api.seedRemoteLibrary(originalLibrary.name);
+    store.linkLibraryToCloud(originalLibrary.id, remote.id);
+
+    const reference = { title: "Editorial", authors: ["Alex Morgan"] };
+    const initial = store.addPaper(originalLibrary.id, reference);
+    const enriched = store.addPaper(originalLibrary.id, { ...reference, year: 2019 });
+    assert.equal(enriched.id, initial.id);
+    assert.equal(enriched.canonical_key, initial.canonical_key);
+    assert.equal(enriched.year, 2019);
+    assert.deepEqual((await sync.syncProjectLibraries(originalProject.id)).warnings, []);
+    const [original] = await api.listPapers(remote.id);
+    assert.equal(original.canonical_key, initial.canonical_key);
+    assert.equal(original.year, 2019);
+
+    secondRoot = workspace();
+    const project = store.createResearchProject({ name: "Fresh workspace" });
+    store.linkResearchProjectToCloud(project.id, "shared-project");
+    const library = store.listLibraries(project.id)[0];
+    store.linkLibraryToCloud(library.id, remote.id);
+    const matching = store.addPaper(library.id, { ...reference, year: 2019 });
+    const otherYear = store.addPaper(library.id, { ...reference, year: 2023 });
+    const otherAuthor = store.addPaper(library.id, { ...reference, authors: ["Jamie Lee"], year: 2019 });
+    assert.notEqual(matching.canonical_key, original.canonical_key);
+
+    assert.deepEqual((await sync.syncProjectLibraries(project.id)).warnings, []);
+    const cloud = await api.listPapers(remote.id);
+    assert.equal(cloud.length, 3);
+    assert.equal(store.getPaper(matching.id).cloud_paper_id, original.id);
+    assert.equal(store.getPaper(matching.id).canonical_key, matching.canonical_key);
+    const yearId = store.getPaper(otherYear.id).cloud_paper_id;
+    const authorId = store.getPaper(otherAuthor.id).cloud_paper_id;
+    assert.equal(new Set([original.id, yearId, authorId]).size, 3);
+    assert.equal(cloud.find(paper => paper.id === yearId).year, 2023);
+    assert.deepEqual(cloud.find(paper => paper.id === authorId).authors, ["Jamie Lee"]);
+  } finally {
+    fs.rmSync(firstRoot, { recursive: true, force: true });
+    if (secondRoot) fs.rmSync(secondRoot, { recursive: true, force: true });
   }
 });
 

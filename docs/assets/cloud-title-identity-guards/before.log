@@ -1,0 +1,28 @@
+$ node --test --test-name-pattern='legacy title match cannot overwrite|sparse cloud title match is claimed|last-name-first order' electron/library-sync.test.cjs  (before the fixes; assertion excerpts)
+✖ a legacy title match cannot overwrite a cloud record with a conflicting DOI (33.312291ms)
+✖ a sparse cloud title match is claimed by only one local paper (40.027875ms)
+✖ a legacy cloud author in last-name-first order joins the fresh import (27.284917ms)
+ℹ tests 3
+ℹ suites 0
+ℹ pass 0
+ℹ fail 3
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 221.540167
+
+✖ failing tests:
+
+test at electron/library-sync.test.cjs:200:1
+✖ a legacy title match cannot overwrite a cloud record with a conflicting DOI (33.312291ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal: 1 !== 2
+
+test at electron/library-sync.test.cjs:224:1
+✖ a sparse cloud title match is claimed by only one local paper (40.027875ms)
+  AssertionError [ERR_ASSERTION]: [
+    'Editorial: UNIQUE constraint failed: papers.cloud_paper_id'
+  ] did not deeply equal []
+
+test at electron/library-sync.test.cjs:250:1
+✖ a legacy cloud author in last-name-first order joins the fresh import (27.284917ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal: 2 !== 1

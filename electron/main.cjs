@@ -1109,6 +1109,16 @@ app.whenReady().then(async () => {
 
   ipcMain.handle("workspace:write-file", (event, input = {}) => {
     const workspace = resolveWorkspace(input.workspace);
+    if (input.expectedContent !== undefined) {
+      let current;
+      try { current = workspaceFiles.readWorkspaceFile(workspace, input.path); }
+      catch (error) {
+        if (input.expectedContent !== "" || error.code !== "ENOENT") throw error;
+      }
+      if (current && current.content !== input.expectedContent) {
+        throw new Error("The source changed on disk. Your draft is still open.");
+      }
+    }
     const file = workspaceFiles.writeWorkspaceTextFile(workspace, input.path, input.content);
     if (!event.sender.isDestroyed()) event.sender.send("workspace:files-changed", { path: file.path });
     return file;
@@ -1174,8 +1184,9 @@ app.whenReady().then(async () => {
 
   ipcMain.handle("paper:compile", async (event, input = {}) => {
     const workspace = resolveWorkspace(input.workspace);
+    const requestId = typeof input.requestId === "string" ? input.requestId.slice(0, 200) : undefined;
     const result = await managedPaperCompiler(workspace, input.path, (stage, log) => {
-      if (!event.sender.isDestroyed()) event.sender.send("paper:compile-progress", { path: input.path, stage, log });
+      if (!event.sender.isDestroyed()) event.sender.send("paper:compile-progress", { workspace, requestId, path: input.path, stage, log });
     });
     if (!result.ok || !result.pdf_path) return result;
     const token = createPreviewToken(event.sender.id, workspace);
