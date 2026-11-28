@@ -10,10 +10,52 @@ const graph = require("./research-graph/service.cjs");
 const runner = require("./research-graph/experiment-runner.cjs");
 const directives = require("./agent/experiment-directives.cjs");
 const agent = require("./agent.cjs");
+const { createCodeSnapshot } = require("./research-graph/code-snapshot.cjs");
 
 function git(root, ...args) {
   return execFileSync("git", ["-C", root, ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
 }
+
+test("a code snapshot cannot authorize execution after the worktree changes", async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-experiment-snapshot-race-"));
+  try {
+    git(root, "init");
+    git(root, "config", "user.email", "test@example.com");
+    git(root, "config", "user.name", "Test");
+    fs.writeFileSync(path.join(root, "code.txt"), "committed\n");
+    git(root, "add", "code.txt");
+    git(root, "commit", "-m", "initial");
+    store.openWorkspace(root);
+    const project = store.createResearchProject({ name: "Snapshot race", workspacePath: root });
+    const thread = store.createResearchThread({ prompt: "Test", mode: "experiment-setup", projectId: project.id });
+    const question = graph.createNode({ projectId: project.id, threadId: thread.id, kind: "question", title: "Question", content: {} });
+    const idea = graph.createNode({ projectId: project.id, threadId: thread.id, kind: "idea", title: "Idea", content: {}, parents: [{ nodeId: question.id }] });
+    const experiment = graph.createNode({ projectId: project.id, threadId: thread.id, kind: "experiment", title: "Experiment", content: {}, parents: [{ nodeId: idea.id }] });
+    const isolated = (await store.createExperimentWorkspace(experiment.id)).workspace;
+    const directory = path.join(isolated.root, ".archimedes", "experiment-runs", "snapshot");
+    fs.mkdirSync(directory, { recursive: true });
+    const codeSnapshot = await createCodeSnapshot(isolated.root, directory);
+    fs.writeFileSync(path.join(isolated.root, "code.txt"), "changed after snapshot\n");
+    await assert.rejects(() => store.createExperimentRun({
+      projectId: project.id,
+      threadId: thread.id,
+      nodeId: experiment.id,
+      cwd: isolated.root,
+      command: "true",
+      commitSha: codeSnapshot.commit,
+      experimentWorkspaceId: isolated.id,
+      codeSnapshot,
+      logPath: path.join(directory, "run.log"),
+      expectedRevisionId: experiment.current_revision_id,
+    }), /uncommitted or untracked/);
+    assert.deepEqual(store.listExperimentRuns({ nodeId: experiment.id }), []);
+  } finally {
+    const idle = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-experiment-snapshot-idle-"));
+    store.openWorkspace(idle);
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(idle, { recursive: true, force: true });
+  }
+});
 
 test("experiment worktree keeps uncommitted files safe and ties runs to the isolated workspace", async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-experiment-worktree-"));
