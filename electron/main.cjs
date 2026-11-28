@@ -1076,7 +1076,7 @@ app.whenReady().then(async () => {
   ipcMain.handle("paper-review-app:manuscript-revision", (event, input = {}) =>
     manuscriptHandoff.prepareRevision(store, scopedReviewRun(event, String(input.runId || ""), "editor", true), input));
   ipcMain.handle("paper-review-app:manuscript-page", (event, input = {}) => {
-    const run = scopedReviewRun(event, String(input.runId || ""), "viewer", true);
+    const run = scopedReviewRun(event, String(input.runId || ""), "viewer", false);
     if (!run?.manuscript) throw new Error("The manuscript review is unavailable.");
     const finding = manuscriptHandoff.reviewedFinding(run, input);
     const { workspace } = run.manuscript;

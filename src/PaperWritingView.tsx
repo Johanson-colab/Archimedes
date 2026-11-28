@@ -358,8 +358,13 @@ export default function PaperWritingView({ bridge, workspace, projectId = null, 
     const sequence = ++owner.compileSequence;
     setCompileState("compiling"); setCompileResult(null); setError("");
     try {
-      const scopeRoot = owner.activeProject || target.split("/").slice(0, -1).join("/");
-      const inScope = (path: string) => !scopeRoot || scopeRoot === "." || path === scopeRoot || path.startsWith(scopeRoot + "/");
+      const explicitRoot = owner.activeProject && owner.activeProject !== "." ? owner.activeProject : "";
+      const scopeRoot = explicitRoot || target.split("/").slice(0, -1).join("/");
+      const targetRoot = projectRoot(target);
+      const nestedRoots = owner.projects.map(item => projectRoot(item.path))
+        .filter(root => root && root !== targetRoot && !root.startsWith(targetRoot + "/"));
+      const inScope = (path: string) => (!scopeRoot || path === scopeRoot || path.startsWith(scopeRoot + "/"))
+        && !nestedRoots.some(root => path === root || path.startsWith(root + "/"));
       const documents = [...owner.documents.values()].filter((document) => inScope(document.file.path));
       await Promise.all(documents.map((document) => saveWritingDocument(document, bridge.writeWorkspaceFile, refreshScope)));
       if (sequence !== owner.compileSequence) return;

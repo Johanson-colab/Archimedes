@@ -669,6 +669,23 @@ test("a root-level manuscript can create files and folders through the Writing d
   }
 });
 
+test("a root-level compile does not drain a nested manuscript's conflicted buffer", async t => {
+  const f = await fixture(t, { write: async (_root, name) => {
+    if (name === "paper-b/section.tex") throw new Error("Section conflict");
+  } });
+  fs.writeFileSync(path.join(f.a, "root.tex"), source("Root manuscript"));
+  fs.mkdirSync(path.join(f.a, "paper-b"), { recursive: true });
+  fs.writeFileSync(path.join(f.a, "paper-b/main.tex"), source("Nested manuscript"));
+  fs.writeFileSync(path.join(f.a, "paper-b/section.tex"), "Original section\n");
+  await f.render(f.a, 1, "root.tex"); await autoCompileOff();
+  await f.render(f.a, 2, "paper-b/section.tex"); await settle();
+  await edit("Conflicted section\n", "paper-b/section.tex");
+  await f.render(f.a, 3, "root.tex"); await settle();
+  await click("Recompile"); await settle();
+  assert.equal(f.compiles.at(-1).name, "root.tex");
+  assert.doesNotMatch(document.body.textContent, /Section conflict/);
+});
+
 test("preview addresses stay with the execution folder that produced the manuscript", () => {
   const main = fs.readFileSync(path.join(__dirname, "main.cjs"), "utf8");
   const body = main.slice(main.indexOf("function setWindowWorkspace("), main.indexOf("function workspaceStatePath("));

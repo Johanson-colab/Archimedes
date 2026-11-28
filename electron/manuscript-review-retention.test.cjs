@@ -61,7 +61,8 @@ test("reviewed page links use the retained PDF by content hash", () => {
       retainedPdfPath: sha => sha === "abc" ? retained : "",
     },
     manuscriptHandoff: {
-      authorizeManuscriptRun: (store, value) => value,
+      authorizeManuscriptRun: () => { throw new Error("workspace must not be required"); },
+      authorizeManuscriptRecord: (store, value) => value,
       reviewedFinding,
       reviewedPdfPath: () => retained,
     },
@@ -71,6 +72,39 @@ test("reviewed page links use the retained PDF by content hash", () => {
       assert.equal(target, retained);
       return "retained-token";
     },
+    createPreviewToken: () => { throw new Error("the pruned build PDF must not be used"); },
+    path,
+    BrowserWindow: { fromWebContents: () => null },
+    dialog: {},
+    app: {},
+    fs,
+  });
+  const url = handlers.get("paper-review-app:manuscript-page")({ sender: { id: 7 } }, { runId: "review", group: "strengths", index: 0 });
+  assert.equal(url, `archimedes-file://retained-token/abc.pdf#page=2`);
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test("reviewed pages still open from retained storage after the workspace is deleted", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-review-page-"));
+  const retained = path.join(root, "pdfs", "abc.pdf");
+  fs.mkdirSync(path.dirname(retained), { recursive: true });
+  fs.writeFileSync(retained, "%PDF fixture");
+  const origin = { projectId: "project", workspace: root, pdfPath: ".archimedes/latex-build/a0/abc/build.pdf", pdfSha256: "abc" };
+  const run = { id: "review", sourceKind: "manuscript", manuscript: origin, result: { document: { pageCount: 2 }, review: { strengths: [{ text: "A finding", page: 2 }] } } };
+  const handlers = scopedReviewHandlers({
+    windowWorkspaces: new Map([[7, "/data"]]),
+    paperReview: {
+      getRun: () => run,
+      retainedPdfPath: sha => sha === "abc" ? retained : "",
+    },
+    manuscriptHandoff: {
+      authorizeManuscriptRun: () => { throw new Error("The execution workspace is no longer registered."); },
+      authorizeManuscriptRecord: (store, value) => value,
+      reviewedFinding,
+      reviewedPdfPath: () => retained,
+    },
+    store: {},
+    createRetainedPdfToken: () => "retained-token",
     createPreviewToken: () => { throw new Error("the pruned build PDF must not be used"); },
     path,
     BrowserWindow: { fromWebContents: () => null },

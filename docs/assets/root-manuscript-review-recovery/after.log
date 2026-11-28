@@ -1,0 +1,21 @@
+$ node --test --test-name-pattern='root-level compile does not drain' electron/paper-writing-workspace.test.cjs
+✔ a root-level compile does not drain a nested manuscript's conflicted buffer (197.634ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 856.099083
+
+$ node --test --test-name-pattern='retained storage after the workspace is deleted' electron/manuscript-review-retention.test.cjs
+✔ reviewed pages still open from retained storage after the workspace is deleted (2.418167ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 113.221916

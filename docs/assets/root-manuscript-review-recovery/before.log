@@ -1,0 +1,27 @@
+$ node --test --test-name-pattern='root-level compile does not drain' electron/paper-writing-workspace.test.cjs  (before the fix)
+✖ a root-level compile does not drain a nested manuscript's conflicted buffer (228.099583ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ duration_ms 988.028125
+
+✖ failing tests:
+
+test at electron/paper-writing-workspace.test.cjs:672:1
+✖ a root-level compile does not drain a nested manuscript's conflicted buffer (228.099583ms)
+  TypeError [Error]: Cannot read properties of undefined (reading 'name')
+
+$ node --test --test-name-pattern='retained storage after the workspace is deleted' electron/manuscript-review-retention.test.cjs  (before the fix)
+✖ reviewed pages still open from retained storage after the workspace is deleted (1.909625ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ duration_ms 120.070125
+
+✖ failing tests:
+
+test at electron/manuscript-review-retention.test.cjs:86:1
+✖ reviewed pages still open from retained storage after the workspace is deleted (1.909625ms)
+  Error: The execution workspace is no longer registered.
