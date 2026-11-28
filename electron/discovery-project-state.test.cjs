@@ -98,6 +98,36 @@ test("daily controls restore per project and switching during Save preserves the
   } finally { await React.act(async () => root.unmount()); }
 });
 
+test("an explicit conference open is consumed before another project mounts discovery", async () => {
+  const app = fs.readFileSync(path.join(__dirname, "../src/App.tsx"), "utf8");
+  assert.match(app, /key=\{`\$\{workspace\}:\$\{activeProjectId \|\| ""\}:\$\{dailyStartRequest\}`\}/);
+  assert.match(app, /setDailyStartRequest\(\(value\) => value \+ 1\)/);
+  assert.match(app, /if \(dailyStartMode !== "conference"\) return;\s*setDailyStartMode\("latest"\);/);
+
+  const root = createRoot(document.getElementById("root"));
+  const first = scope.discoveryStorageKey("/data/root", "explicit-open");
+  const second = scope.discoveryStorageKey("/data/root", "another-project");
+  const defaults = { mode: "latest", range: "7d", topic: "all", query: "", submittedQuery: "", targetLibraryId: "" };
+  const bridge = {
+    getCachedDailyPapers: async (options) => ({ ...fixture.feed(options), stale: false }),
+    discoverDailyPapers: async (options) => fixture.feed(options),
+    getCachedConferencePapers: async (options) => ({ ...fixture.feed(options), papers: [], catalog_total: 0, presentation_counts: { oral: 0, spotlight: 0, poster: 0, unknown: 0 }, sources: [], warnings: [], total: 0, status: "available", stale: false }),
+    searchConferencePapers: async (options) => fixture.feed(options),
+  };
+  const render = (storageKey, request, initialMode) => React.act(async () => root.render(React.createElement(scope.DailyDiscovery, {
+    key: `${storageKey}:${request}`, storageKey, bridge, libraries: [], loadingLibraries: true, initialMode, onImported: async () => {},
+  })));
+  try {
+    await render(first, 1, "conference");
+    assert.ok(document.querySelector('[aria-label="Conference year"]'));
+    await render(first, 1, "latest");
+    assert.ok(document.querySelector('[aria-label="Conference year"]'));
+    assert.equal(scope.readDiscoveryControls(first, defaults).mode, "conference");
+    await render(second, 1, "latest");
+    assert.ok(document.querySelector(".daily-search-input-row"));
+  } finally { await React.act(async () => root.unmount()); }
+});
+
 test("conference controls restore through the existing official catalog cache", async () => {
   const root = createRoot(document.getElementById("root"));
   const results = [];
