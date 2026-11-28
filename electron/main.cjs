@@ -1786,7 +1786,7 @@ app.whenReady().then(async () => {
         session.backend = backend;
         store.updateReproductionRun(run.id, { image: backend.image, backend: backend.describe() });
         session.send({ type: "preparing", detail: `Starting ${backend.image}…` });
-        await backend.prepare();
+        await backend.prepare({ signal: controller.signal });
         ensureActive();
         store.updateReproduction(record.id, { status: "running" });
         session.send({ type: "started", detail: backend.describe() });
