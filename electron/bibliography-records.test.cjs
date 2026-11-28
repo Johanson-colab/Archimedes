@@ -45,7 +45,9 @@ function fixture(t) {
 
 test("bibliography keys and explicit repairs persist through the actual preload and main handlers", async t => {
   const f = fixture(t), handlers = new Map(), main = fs.readFileSync(path.join(__dirname, "main.cjs"), "utf8"), start = main.indexOf('  ipcMain.handle("library:add-paper",'), end = main.indexOf('  ipcMain.handle("library:import-local-pdf",', start);
-  new Function("ipcMain", "store", main.slice(start, end))({ handle: (channel, callback) => handlers.set(channel, callback) }, store);
+  const ipc = { handle: (channel, callback) => handlers.set(channel, callback) };
+  require("./ipc/library.cjs").registerLibraryReads(ipc, store);
+  new Function("ipcMain", "store", main.slice(start, end))(ipc, store);
   let bridge;
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, "preload.cjs"), "utf8"), { process, require(name) { assert.equal(name, "electron"); return { contextBridge: { exposeInMainWorld: (_name, value) => { bridge = value; } }, ipcRenderer: { invoke: (channel, input) => Promise.resolve().then(() => handlers.get(channel)({}, input)) } }; } });
   const paper = await bridge.addLibraryPaper(f.libraryA.id, { title: "Bridge reference", doi: "10.1000/bridge-reference", authors: [] });

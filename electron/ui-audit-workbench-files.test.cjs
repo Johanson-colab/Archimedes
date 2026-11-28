@@ -141,8 +141,8 @@ test("file and terminal tab rows share the same height and label style", () => {
 });
 
 test("pane collapse buttons are plain icons without a grouped background", () => {
-  assert.match(app, /<ChevronsLeft size=\{13\} \/>/);
-  assert.match(app, /<ChevronsRight size=\{13\} \/>/);
+  assert.match(app, /filesListCollapsed \? <ArrowRight size=\{13\} \/> : <ArrowLeft size=\{13\} \/>/);
+  assert.match(app, /filesEditorCollapsed \? <ArrowLeft size=\{13\} \/> : <ArrowRight size=\{13\} \/>/);
   assert.match(css, /\.artifact-workbench-pane-toggles \{[^}]*background: transparent; border: 0;/);
   assert.match(css, /\.artifact-workbench-pane-toggles button\.active \{[^}]*background: transparent;/);
 });

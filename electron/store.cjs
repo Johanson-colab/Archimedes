@@ -3671,7 +3671,7 @@ function updateExperimentRun({
 }
 
 function bindResearchThreadHarness(id, harness) {
-  if (!["api", "codex", "claude", "opencode"].includes(harness)) throw new Error("Unknown Agent backend.");
+  if (!["api", "codex", "claude", "opencode", "antigravity"].includes(harness)) throw new Error("Unknown Agent backend.");
   const db = requireDatabase();
   const thread = getResearchThread(id);
   if (!canAccessProject(thread.project_id, "editor")) throw new Error("You do not have permission to edit this conversation.");
@@ -3698,19 +3698,43 @@ function setResearchThreadVisibility(id, visibility) {
   return { visibility: nextVisibility };
 }
 
-function createThreadSnapshot(threadId) {
+function snapshotThread(threadId) {
   const db = requireDatabase();
   const thread = db.prepare("SELECT * FROM research_threads WHERE id = ?").get(threadId);
   if (!thread) throw new Error("Research thread not found.");
   if (!canAccessProject(thread.project_id, "viewer")) throw new Error("You do not have access to this thread.");
+  if (thread.visibility === "private" && thread.owner_id !== localIdentity.userId) throw new Error("This research thread is a private draft.");
+  return thread;
+}
+
+function listThreadSnapshotTurns(threadId) {
+  snapshotThread(threadId);
+  return requireDatabase().prepare(`SELECT id, substr(user_message, 1, 180) AS user_message, created_at
+    FROM research_turns WHERE thread_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 2000`).all(threadId).reverse();
+}
+
+function createThreadSnapshot(threadId, options = {}) {
+  const db = requireDatabase();
+  const thread = snapshotThread(threadId);
+  const ids = options.turnIds;
+  if (ids !== undefined && (!Array.isArray(ids) || !ids.length || ids.length > 500 || ids.some(id => typeof id !== "string" || !id || id.length > 200) || new Set(ids).size !== ids.length)) throw new Error("Select between 1 and 500 distinct conversation turns.");
+  const selected = Array.isArray(ids);
+  const placeholders = selected ? ids.map(() => "?").join(",") : "";
+  const turnFilter = selected ? ` AND id IN (${placeholders})` : "";
+  const eventFilter = selected ? ` AND turn_id IN (${placeholders}) AND ${options.includeSources === false ? "0" : "type IN ('source_evidence', 'tool_result')"}` : "";
+  const params = selected ? [threadId, ...ids] : [threadId];
+  const stats = db.prepare(`SELECT count(*) AS count, coalesce(sum(length(user_message) + length(assistant_message)), 0) AS size FROM research_turns WHERE thread_id = ?${turnFilter}`).get(...params);
+  if (selected && stats.count !== ids.length) throw new Error("Selected conversation turns are no longer available in this session.");
+  const eventsSize = db.prepare(`SELECT coalesce(sum(length(payload_json)), 0) AS size FROM research_events WHERE thread_id = ?${eventFilter}`).get(...params).size;
+  if (stats.size + eventsSize > 4_500_000) throw new Error("SNAPSHOT_TOO_LARGE: Choose fewer turns to create a snapshot.");
   const turns = db.prepare(`
     SELECT id, mode, user_message, assistant_message, status, created_at, completed_at
-    FROM research_turns WHERE thread_id = ? ORDER BY created_at ASC, rowid ASC
-  `).all(threadId);
+    FROM research_turns WHERE thread_id = ?${turnFilter} ORDER BY created_at ASC, rowid ASC
+  `).all(...params);
   const events = db.prepare(`
     SELECT id, turn_id, sequence, type, payload_json, created_at
-    FROM research_events WHERE thread_id = ? ORDER BY created_at ASC, sequence ASC
-  `).all(threadId);
+    FROM research_events WHERE thread_id = ?${eventFilter} ORDER BY created_at ASC, sequence ASC
+  `).all(...params);
   const references = [];
   for (const event of events) {
     if (event.type !== "source_evidence" && event.type !== "tool_result") continue;
@@ -3724,6 +3748,7 @@ function createThreadSnapshot(threadId) {
   const sequence = events.reduce((max, event) => Math.max(max, Number(event.sequence) || 0), 0);
   const manifest = {
     version: 1,
+    ...(selected ? { partial: true, diagnostics_omitted: true, sources_omitted: options.includeSources === false } : {}),
     thread: {
       id: thread.id,
       project_id: thread.project_id,
@@ -3741,7 +3766,7 @@ function createThreadSnapshot(threadId) {
     artifacts: [],
   };
   const serialized = JSON.stringify(manifest);
-  if (serialized.length > 5_000_000) throw new Error("This thread is too large to snapshot; archive or split it first.");
+  if (serialized.length > 5_000_000) throw new Error("SNAPSHOT_TOO_LARGE: Choose fewer turns to create a snapshot.");
   const id = randomUUID();
   const now = timestamp();
   db.prepare(`INSERT INTO thread_snapshots (id, thread_id, project_id, owner_id, sequence, manifest_json, created_at)
@@ -4839,6 +4864,7 @@ module.exports = {
   savePaperPresentation,
   setPaperReaderFailed,
   createThreadSnapshot,
+  listThreadSnapshotTurns,
   getThreadSnapshot,
   listThreadSnapshots,
   setPaperChatThread,
