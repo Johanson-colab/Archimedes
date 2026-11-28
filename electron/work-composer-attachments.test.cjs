@@ -105,9 +105,13 @@ test("Work composer keeps attachment snapshots separate and recovers failed queu
     await settle(true);
 
     await settle(false);
-    assert.equal(field().value, "Queued with image", "a failed follow-up restores the text");
-    assert.deepEqual(images(), ["blue"], "a failed follow-up restores its own image");
-    await enter();
+    assert.equal(field().value, "", "a failed turn with followers stays queued instead of taking the editor");
+    assert.deepEqual(images(), [], "the failed turn keeps its attachments in the queue");
+    assert.equal(document.querySelectorAll(".composer-queue-item").length, 2);
+    await React.act(async () => button("Retry queued messages").click());
+    assert.deepEqual(sent.at(-1), ["Queued with image", ["blue"]]);
+    await settle(true);
+    assert.deepEqual(sent.at(-1), ["Queued without image", []]);
     await settle(true);
     assert.deepEqual(sent, [
       ["Initial", ["red"]],
@@ -117,6 +121,9 @@ test("Work composer keeps attachment snapshots separate and recovers failed queu
     ]);
 
     await paste("green");
+    await type("Draft that will fail");
+    await enter();
+    await paste("green");
     await type("New draft");
     await settle(false);
     assert.equal(field().value, "New draft");
@@ -125,7 +132,7 @@ test("Work composer keeps attachment snapshots separate and recovers failed queu
     assert.ok(retry, "a failed follow-up remains actionable beside a newer draft");
     await React.act(async () => retry.click());
     assert.equal(document.querySelector("#composer-error"), null);
-    assert.deepEqual(sent.at(-1), ["Queued without image", []]);
+    assert.deepEqual(sent.at(-1), ["Draft that will fail", ["green"]]);
     assert.deepEqual(images(), ["green"], "retrying the queued item preserves the new draft's image");
     await settle(true);
 

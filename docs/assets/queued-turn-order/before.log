@@ -1,0 +1,19 @@
+$ node --test electron/work-composer-attachments.test.cjs  (with the new ordering assertions, before the App fix)
+✖ Work composer keeps attachment snapshots separate and recovers failed queued messages (228.283459ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 838.86025
+
+✖ failing tests:
+
+test at electron/work-composer-attachments.test.cjs:7:1
+✖ Work composer keeps attachment snapshots separate and recovers failed queued messages (228.283459ms)
+  AssertionError [ERR_ASSERTION]: a failed turn with followers stays queued instead of taking the editor
+  + actual - expected
+  + 'Queued with image'
+  - ''

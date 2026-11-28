@@ -4902,7 +4902,8 @@ function ConversationView({ onOpenCreatedApps, messages, events, trajectoryEvent
     if (sent) return;
     const currentDraft = currentDraftRef.current;
     const showingOwner = Boolean(composerRef.current && currentDraft.draftKey === draftKey);
-    const restore = showingOwner && !currentDraft.prompt.trim() && !currentDraft.contextItems.length;
+    const hasFollowers = queuedPrompts.some(item => item.id !== message.id);
+    const restore = showingOwner && !hasFollowers && !currentDraft.prompt.trim() && !currentDraft.contextItems.length;
     onComposerSessionChange((session) => ({
       ...session, paused: true, queued: restore ? session.queued : [message, ...session.queued],
     }));
