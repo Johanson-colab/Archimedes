@@ -727,6 +727,26 @@ test("a root-level manuscript can create files and folders through the Writing d
   }
 });
 
+test("a deleted source can still recover the dirty draft through the conflict action", async t => {
+  let deleted = false;
+  const f = await fixture(t, { write: async (root, name) => {
+    if (deleted) return;
+    deleted = true;
+    fs.unlinkSync(path.join(root, name));
+    const error = new Error("ENOENT: no such file or directory, open 'paper/main.tex'");
+    error.code = "ENOENT";
+    throw error;
+  } });
+  await f.render(f.a, 1); await autoCompileOff();
+  const draft = source("Draft after the source was deleted");
+  await edit(draft);
+  await React.act(async () => { await new Promise(resolve => setTimeout(resolve, 820)); });
+  assert.match(document.body.textContent, /ENOENT/);
+  await click("Use the current disk contents as the save baseline, then save your draft over them.");
+  assert.equal(f.disk(f.a), draft);
+  assert.doesNotMatch(document.body.textContent, /ENOENT/);
+});
+
 test("preview addresses stay with the execution folder that produced the manuscript", () => {
   const main = fs.readFileSync(path.join(__dirname, "main.cjs"), "utf8");
   const body = main.slice(main.indexOf("function setWindowWorkspace("), main.indexOf("function workspaceStatePath("));

@@ -10,7 +10,7 @@ import { fingerprintFor } from "./proactive-engine";
 import { emitProactiveSignal } from "./proactive-signals";
 import { findSourceMatches, sourceMarksByLine, type SourceMark } from "./paper-source-search";
 import { manuscriptSourcePaths } from "./paper-writing-sources";
-import { createWritingScope, editWritingDocument, readWritingDocument, saveWritingDocument, readWritingLocation, rememberWritingLocation, type WritingScope } from "./paper-writing-state";
+import { createWritingScope, editWritingDocument, isWritingSourceConflict, readWritingDocument, saveWritingDocument, readWritingLocation, rememberWritingLocation, type WritingScope } from "./paper-writing-state";
 import "./paper-source-search.css";
 import "./paper-writing-workspace.css";
 
@@ -207,7 +207,7 @@ export default function PaperWritingView({ bridge, workspace, projectId = null, 
   const [activeProblem, setActiveProblem] = scoped("activeProblem");
   const [workspaceError, setError] = scoped("error");
   const error = workspaceError || currentDocument?.error || "";
-  const sourceConflict = Boolean(currentDocument?.error.includes("The source changed on disk"));
+  const sourceConflict = Boolean(currentDocument && isWritingSourceConflict(currentDocument.error));
   const [autoCompile, setAutoCompile] = useState(true);
   const [coedit, setCoedit] = scoped("coedit");
   const [chooserOpen, setChooserOpen] = scoped("chooserOpen");
@@ -499,9 +499,14 @@ export default function PaperWritingView({ bridge, workspace, projectId = null, 
 
   async function keepDraftAfterConflict() {
     const document = currentDocument;
-    if (!document || !document.error.includes("The source changed on disk")) return;
+    if (!document || !isWritingSourceConflict(document.error)) return;
     try {
-      const disk = await bridge.readWorkspaceFile(document.workspace, document.file.path);
+      let disk;
+      try { disk = await bridge.readWorkspaceFile(document.workspace, document.file.path); }
+      catch (cause) {
+        if (!isWritingSourceConflict(String(cause))) throw cause;
+        disk = { ...document.file, content: "", size: 0 };
+      }
       document.file = disk;
       document.savedDraft = disk.content || "";
       document.version += 1;

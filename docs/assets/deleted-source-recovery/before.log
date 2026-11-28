@@ -1,0 +1,16 @@
+$ node --test --test-name-pattern='deleted source can still recover' electron/paper-writing-workspace.test.cjs  (before the fix)
+✖ a deleted source can still recover the dirty draft through the conflict action (1008.656667ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1838.223083
+
+✖ failing tests:
+
+test at electron/paper-writing-workspace.test.cjs:730:1
+✖ a deleted source can still recover the dirty draft through the conflict action (1008.656667ms)
+  AssertionError [ERR_ASSERTION]: Keep my draft

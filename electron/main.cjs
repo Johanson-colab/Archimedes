@@ -1109,8 +1109,10 @@ app.whenReady().then(async () => {
 
   ipcMain.handle("workspace:write-file", (event, input = {}) => {
     const workspace = resolveWorkspace(input.workspace);
-    if (input.expectedContent !== undefined &&
-      workspaceFiles.readWorkspaceFile(workspace, input.path).content !== input.expectedContent) {
+    let currentContent = "";
+    try { currentContent = workspaceFiles.readWorkspaceFile(workspace, input.path).content; }
+    catch (error) { if (error.code !== "ENOENT") throw error; }
+    if (input.expectedContent !== undefined && currentContent !== input.expectedContent) {
       throw new Error("The source changed on disk. Your draft is still open.");
     }
     const file = workspaceFiles.writeWorkspaceTextFile(workspace, input.path, input.content);

@@ -9,6 +9,10 @@ export type WritingDocument = {
   saveQueue: Promise<void>;
 };
 
+export function isWritingSourceConflict(message: string) {
+  return /source changed on disk|ENOENT|no such file or directory/i.test(message);
+}
+
 export function createWritingScope(workspace: string) {
   return {
     workspace,

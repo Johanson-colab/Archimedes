@@ -1,0 +1,10 @@
+$ node --test --test-name-pattern='deleted source can still recover' electron/paper-writing-workspace.test.cjs
+✔ a deleted source can still recover the dirty draft through the conflict action (1018.874708ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1662.572542
