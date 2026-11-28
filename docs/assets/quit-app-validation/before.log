@@ -1,0 +1,96 @@
+✔ menu proposals and late reader previews preserve the accepted owner; recovery IPC needs no database (61.658292ms)
+✔ only a window that reopens a replaced database can write to the restored papers (58.199916ms)
+✔ a window that vetoes Quit keeps its detached research database open (25.809541ms)
+✔ run ownership distinguishes data directories, domains, and principals (0.639208ms)
+✔ native quit confirmation keeps work on cancel and exits once after confirmed cleanup (31.20675ms)
+✖ main quit guard localizes cancellation, restores the window and awaits App-only validation (6017.85675ms)
+✔ cancel stops a run's descendant process (290.556708ms)
+✔ cancel escalates when a descendant ignores SIGTERM and holds log pipes (2256.109125ms)
+✔ cancel kills a stubborn descendant after the shell and log pipes close (2259.742208ms)
+✔ shutdown immediately kills a stubborn descendant (276.844625ms)
+✔ shutdown flushes pending cleanup after a cancelled shell closes (317.633333ms)
+✔ generation uses the window workspace and canonical paper, then saves a renderable report (9.277083ms)
+✔ cancel is sender-scoped and failed regeneration preserves the previous report (3.270959ms)
+✔ export cancellation writes nothing; successful export contains offline HTML, both Markdown files and images (6.168333ms)
+✔ native operations require a concrete user decision and cancellation cannot approve them (3.653542ms)
+✔ scaffold refuses overwrite and path traversal; starter-only workflows cannot be delivered (8.736583ms)
+✔ installation requires current browser and HTTP evidence; source changes invalidate it (24.829958ms)
+✔ HTTP-only success and absent browser evidence can never certify an App (6.649459ms)
+✔ configuration failures stop before repair and secrets are never copied into records (6.009458ms)
+✔ failed checks feed repairs, which are bounded to two attempts; no change is not a fix (17.589708ms)
+✔ automatic repairs cannot weaken acceptance assertions or certify concurrent source changes (9.739416ms)
+✔ validation has an exclusive lock and cancellation cannot produce Ready (8.329667ms)
+✔ restore recovers broken manifests while preserving mutable data and the rejected source (16.529208ms)
+✔ snapshot tampering and linked storage never overwrite working source (12.502458ms)
+✔ an interrupted host validation is retryable after restart (5.310542ms)
+✔ host shutdown aborts verification and cleans up its managed runtimes (5.456709ms)
+✖ host shutdown waits for validation cleanup even when verification ignores cancellation (2.844042ms)
+✔ a workspace draft previews, installs, pins, reopens and stops without a native turn (54.195458ms)
+✔ static assets exclude hidden files, source outside public and path traversal (11.884625ms)
+✔ declining approval does not install or start an App (6.555333ms)
+✔ changed installed source requires new approval; workspaces keep separate installations (14.456208ms)
+✔ invalid manifests and linked source cannot escape the app directory (4.799792ms)
+✔ missing Python dependencies report a recoverable failure instead of a dead URL (1.839666ms)
+✔ stopping during approval cancels startup without creating a service (4.946ms)
+✔ source changed while approval is open is not installed (5.748959ms)
+✔ a cancelled approval cannot stop a newer runtime (9.110041ms)
+✔ Python service belongs to the host, uses assigned port/readiness identity and excludes credentials (161.922625ms)
+✖ a stopping Python App remains active until its process exits (159.499167ms)
+✔ declared keys require approval and reach only the App process; logs do not expose them (160.669917ms)
+✔ missing declared key reports its name without starting Python (3.622042ms)
+ℹ tests 40
+ℹ suites 0
+ℹ pass 37
+ℹ fail 3
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 11570.875875
+
+✖ failing tests:
+
+test at ../../../../private/var/folders/y6/7f277x5n4z14sqwsw21h8ffm0000gn/T/archimedes-owned-runs-before-Je54fU/electron/experiment-run-cancellation.test.cjs:86:1
+✖ main quit guard localizes cancellation, restores the window and awaits App-only validation (6017.85675ms)
+  AssertionError [ERR_ASSERTION]: cancelled quit did not restore a window
+      at eventually (/private/var/folders/y6/7f277x5n4z14sqwsw21h8ffm0000gn/T/archimedes-owned-runs-before-Je54fU/electron/experiment-run-cancellation.test.cjs:19:10)
+      at async TestContext.<anonymous> (/private/var/folders/y6/7f277x5n4z14sqwsw21h8ffm0000gn/T/archimedes-owned-runs-before-Je54fU/electron/experiment-run-cancellation.test.cjs:117:3)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: undefined,
+    operator: 'fail',
+    diff: 'simple'
+  }
+
+test at ../../../../private/var/folders/y6/7f277x5n4z14sqwsw21h8ffm0000gn/T/archimedes-owned-runs-before-Je54fU/electron/research-app-delivery.test.cjs:129:1
+✖ host shutdown waits for validation cleanup even when verification ignores cancellation (2.844042ms)
+  TypeError [Error]: pipeline.hasActiveValidation is not a function
+      at TestContext.<anonymous> (/private/var/folders/y6/7f277x5n4z14sqwsw21h8ffm0000gn/T/archimedes-owned-runs-before-Je54fU/electron/research-app-delivery.test.cjs:132:25)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+
+test at ../../../../private/var/folders/y6/7f277x5n4z14sqwsw21h8ffm0000gn/T/archimedes-owned-runs-before-Je54fU/electron/research-app-runtime.test.cjs:158:1
+✖ a stopping Python App remains active until its process exits (159.499167ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  false !== true
+  
+      at TestContext.<anonymous> (/private/var/folders/y6/7f277x5n4z14sqwsw21h8ffm0000gn/T/archimedes-owned-runs-before-Je54fU/electron/research-app-runtime.test.cjs:167:10)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+Expected pre-fix exit code: 1

@@ -181,6 +181,7 @@ export function UISettingsProvider({ children }: { children: React.ReactNode }) 
   useEffect(() => {
     window.localStorage.setItem(LANGUAGE_STORAGE_KEY, language);
     document.documentElement.lang = language === "zh" ? "zh-CN" : "en";
+    if (typeof window.researchDesk?.setUiLanguage === "function") window.researchDesk.setUiLanguage(language);
   }, [language]);
 
   useEffect(() => {

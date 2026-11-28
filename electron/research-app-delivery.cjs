@@ -4,13 +4,16 @@ const { verifyApp } = require('./research-app-verify.cjs');
 const store = require('./research-app-delivery-store.cjs');
 
 function createDelivery({ setup, build, approve, readSecret = () => '', browser, repair, changed = () => {}, stop = async () => {}, verify = verifyApp } = {}) {
-  const active = new Map(), runtimes = new Set();
+  const active = new Map(), runtimes = new Set(), pending = new Set();
   const key = (workspace, id) => `${require('node:fs').realpathSync(workspace)}\0${id}`;
   function cancel(workspace, id) { const controller = active.get(key(workspace, id)); controller?.abort(); return { cancelled: Boolean(controller) }; }
   async function validate(workspace, id, { repairBackend, signal } = {}) {
     const appKey = key(workspace, id);
     if (active.has(appKey)) throw new Error('App validation is already in progress.');
-    const controller = new AbortController(); active.set(appKey, controller);
+    const controller = new AbortController();
+    let complete;
+    const completion = new Promise(resolve => { complete = resolve; });
+    active.set(appKey, controller); pending.add(completion);
     const abort = () => controller.abort(); signal?.addEventListener('abort', abort, { once: true }); if (signal?.aborted) abort();
     let app, attempts = 0;
     const update = state => { const record = store.saveState(app, { ...state, attempts }); changed(workspace); return record; };
@@ -68,7 +71,10 @@ function createDelivery({ setup, build, approve, readSecret = () => '', browser,
     } catch (error) {
       if (app) { try { app = readApp(workspace, id); update({ status: 'failed', error: String(error.message).slice(0, 2000) }); } catch { /* preserve prior failure if the manifest was damaged */ } }
       throw error;
-    } finally { active.delete(appKey); signal?.removeEventListener('abort', abort); }
+    } finally {
+      active.delete(appKey); pending.delete(completion); complete();
+      signal?.removeEventListener('abort', abort);
+    }
   }
   async function restore(workspace, id) {
     if (active.has(key(workspace, id))) throw new Error('Cancel validation before restoring a version.');
@@ -79,8 +85,10 @@ function createDelivery({ setup, build, approve, readSecret = () => '', browser,
   }
   async function shutdown() {
     for (const controller of active.values()) controller.abort();
+    await Promise.allSettled([...pending]);
     await Promise.allSettled([...runtimes].map(runtime => runtime.shutdown()));
   }
-  return { validate, restore, cancel, shutdown };
+  function hasActiveValidation() { return active.size > 0 || pending.size > 0 || runtimes.size > 0; }
+  return { validate, restore, cancel, shutdown, hasActiveValidation };
 }
 module.exports = { createDelivery };

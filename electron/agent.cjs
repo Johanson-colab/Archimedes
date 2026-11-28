@@ -26,6 +26,8 @@ const { ToolRegistry } = require("./agent/tool-registry.cjs");
 const { fetchModelWithRetry } = require("./agent/model-retry.cjs");
 const { boundActiveContext } = require("./agent/active-context.cjs");
 const { discoverSkills, readSkillResource } = require("./agent/api-skills.cjs");
+const { registerActiveRun } = require("./runtime/active-runs.cjs");
+const { localIdentity } = require("./local-identity.cjs");
 const creatorCapabilities = require("./agent/creator-capabilities.cjs");
 const { prepareResearchSkill } = require("./agent/research-skills.cjs");
 const graphAutoBuild = require("./research-graph/auto-build.cjs");
@@ -40,6 +42,7 @@ const { checkoutBranchOf, listRepositoryCheckoutDirectory, readRepositoryCheckou
 const MAX_FILE_BYTES = 64_000;
 const HIDDEN_PATHS = new Set([".archimedes", [".ax", "iom"].join(""), ".git", "node_modules", "dist"]);
 const activeRuns = new Map();
+let stoppingAgentRuns = false;
 
 const tools = [
   {
@@ -1458,6 +1461,7 @@ async function translatePaperSelection({ text, targetLanguage = "Simplified Chin
 }
 
 async function runAgent(options) {
+  if (stoppingAgentRuns) throw new Error("Archimedes is quitting.");
   const captured = (options.dataStore || defaultStore).captureStore();
   try { return await captured.store.run(() => runAgentInStore({ ...options, dataStore: captured.store })); }
   finally { captured.release(); }
@@ -1489,7 +1493,9 @@ async function runAgentInStore({ prompt, workspace, threadId, projectId, workspa
   const actions = [];
   let experimentBridge = null;
   let experimentToolsUsed = false;
-  activeRuns.set(runtimeId, controller);
+  let finished;
+  const completion = new Promise(resolve => { finished = resolve; });
+  activeRuns.set(runtimeId, { controller, completion });
 
   const emitTurn = (payload) => emit({ ...payload, threadId: thread.id, turnId: turn.id });
   const recordEvent = (event) => {
@@ -1516,6 +1522,15 @@ async function runAgentInStore({ prompt, workspace, threadId, projectId, workspa
   const scheduleGraphAutoBuild = (response) => {
     if (!autoBuildGraph || transient || origin !== "research" || !["research", "experiment-setup"].includes(mode) || !thread.project_id) return;
     const graphOwner = store.captureStore();
+    const scope = {
+      workspace: graphOwner.store.workspace, store: graphOwner.store,
+      ownerId: localIdentity().userId, domain: "graph",
+      id: `auto-build:${thread.id}:${turn.id}`,
+    };
+    let releaseRun = () => {};
+    try {
+      releaseRun = registerActiveRun(scope, { kind: "graph-auto-build", threadId: thread.id, turnId: turn.id, workspace });
+    } catch (error) { console.warn("[research-graph] auto-build was already registered:", error?.message || String(error)); }
     void graphAutoBuild.maybeAutoBuild({
       projectId: thread.project_id,
       threadId: thread.id,
@@ -1532,7 +1547,7 @@ async function runAgentInStore({ prompt, workspace, threadId, projectId, workspa
       recordEvent,
       complete,
       runNative,
-    }).catch((error) => console.warn("[research-graph] auto-build failed:", error?.message || String(error))).finally(graphOwner.release);
+    }).catch((error) => console.warn("[research-graph] auto-build failed:", error?.message || String(error))).finally(() => { releaseRun(); graphOwner.release(); });
   };
 
   try {
@@ -1781,14 +1796,26 @@ async function runAgentInStore({ prompt, workspace, threadId, projectId, workspa
     controller.abort();
     experimentBridge?.close();
     activeRuns.delete(runtimeId);
+    finished();
   }
 }
 
 function interruptAgent(threadId, workspace) {
-  const controller = activeRuns.get(defaultStore.runtimeThreadId(threadId, workspace));
-  if (!controller) return false;
-  controller.abort();
+  const run = activeRuns.get(defaultStore.runtimeThreadId(threadId, workspace));
+  if (!run) return false;
+  run.controller.abort();
   return true;
+}
+
+function hasActiveAgentRuns() {
+  return activeRuns.size > 0;
+}
+
+function shutdownAgentRuns() {
+  stoppingAgentRuns = true;
+  const runs = [...activeRuns.values()];
+  for (const run of runs) run.controller.abort();
+  return Promise.allSettled(runs.map(run => run.completion));
 }
 
 function hasApprovalSurface(threadId) {
@@ -1818,4 +1845,4 @@ async function retryGraphExtraction({ threadId, turnId, dataWorkspace, backendCo
   return { ok: Boolean(result) };
 }
 
-module.exports = { complete, createToolRegistry, executeTool, hasApprovalSurface, interruptAgent, isPrivateAddress, paperPdfUrl, resolveApproval, retryGraphExtraction, runAgent, setApprovalSurface, translatePaperSelection };
+module.exports = { complete, createToolRegistry, executeTool, hasActiveAgentRuns, hasApprovalSurface, interruptAgent, isPrivateAddress, paperPdfUrl, resolveApproval, retryGraphExtraction, runAgent, setApprovalSurface, shutdownAgentRuns, translatePaperSelection };
