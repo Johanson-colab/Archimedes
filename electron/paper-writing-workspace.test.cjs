@@ -711,6 +711,19 @@ test("a delayed autosave does not start a compile after Writing is deactivated",
   assert.equal(f.compiles.length, 0);
 });
 
+test("a delayed autosave does not compile a superseded writing scope", async t => {
+  const gate = deferred();
+  const f = await fixture(t, { write: async () => { await gate.promise; } });
+  await f.render(f.a, 1);
+  await edit(source("Edited before switching to another scope"));
+  await React.act(async () => { await new Promise(resolve => setTimeout(resolve, 820)); });
+  assert.equal(f.writes.length, 1);
+  await f.render(f.b, 2);
+  gate.resolve();
+  await React.act(async () => { await new Promise(resolve => setTimeout(resolve, 20)); });
+  assert.equal(f.compiles.length, 0);
+});
+
 test("returning to Writing drops a preview whose build inputs are no longer current", { timeout: 10_000 }, async t => {
   const manifestPath = ".archimedes/latex-build/a0/build/source-snapshot.json";
   const f = await fixture(t, {

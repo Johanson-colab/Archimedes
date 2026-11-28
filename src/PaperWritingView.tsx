@@ -486,7 +486,8 @@ export default function PaperWritingView({ bridge, workspace, projectId = null, 
     const timer = window.setTimeout(async () => {
       try {
         await saveWritingDocument(currentDocument, bridge.writeWorkspaceFile, refreshScope);
-        if (autoCompile && mainPath && activeCompileContext.current.active && owner.selectedPath === currentDocument.file.path && owner.mainPath === mainPath) void compile(mainPath);
+        const context = activeCompileContext.current;
+        if (autoCompile && mainPath && context.active && context.owner === owner && context.threadId === threadId && owner.selectedPath === currentDocument.file.path && owner.mainPath === mainPath) void compile(mainPath);
       } catch { /* The owner's buffer retains its unsaved text and save error. */ }
     }, 750);
     return () => {
