@@ -1,0 +1,8 @@
+{
+  "stage": "after",
+  "draft": true,
+  "disk": true,
+  "recoveryActions": 1,
+  "overflow": false,
+  "errors": []
+}

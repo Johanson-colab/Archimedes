@@ -1,0 +1,76 @@
+✔ same-named papers keep their owner and autosave on departure without replaying an old open request (179.951458ms)
+✔ a delayed save preserves later keystrokes and drains the newest snapshot to its old root (861.831666ms)
+✔ late reads, compile progress and build results update only their owner scope (68.503833ms)
+✔ a late LaTeX failure stays in its source project instead of suggesting a fix in another project (28.807833ms)
+✔ failed departure autosaves keep the original draft and expose its save error on return (22.59325ms)
+✖ keeping a draft after an external edit rebases the save and preserves the local text (823.98625ms)
+✔ switching source files during an in-flight save retains and saves the final edit to the old file (862.146666ms)
+✔ the actual preload preserves compile ownership and rejects writing over newer source (5.922375ms)
+✔ Writing opens existing manuscripts before templates and restores the chosen document after remount (43.711375ms)
+✔ returning to Writing while the main document reopens restores the remembered source (26.822834ms)
+✔ a tree selection wins over the remembered source while the main document is reopening (25.715542ms)
+✔ returning to Writing reloads the manuscript root and expanded source directories (31.357917ms)
+✔ re-entering a scope does not replace its explicitly opening manuscript with a cached file (22.418917ms)
+✔ a main document at the execution root opens in place and a removed recent document returns to the chooser (15.772959ms)
+✔ compiling main waits for a pending save of another source file in the same manuscript (23.00025ms)
+✔ typing during the compile save barrier retains the new edit and does not compile an older source set (23.542834ms)
+✖ compiling one manuscript ignores an unsavable draft from another folder (24.801417ms)
+✔ projects sharing one execution folder restore their own manuscript selection (19.985459ms)
+✔ shared cached source keeps the latest read when the older read resolves first (39.798834ms)
+✔ shared uncached source keeps the latest read when the older read resolves first (18.664292ms)
+✔ shared cached source keeps the latest read when the newer read resolves first (37.311667ms)
+✔ shared uncached source keeps the latest read when the newer read resolves first (22.492292ms)
+✔ sharing a document keeps dirty text and retains the preview after an unchanged refresh (38.342291ms)
+✔ returning to a clean cached manuscript reloads external edits before the next save (16.772333ms)
+✔ a delayed clean tree selection commits the fresh source before allowing edits (20.706541ms)
+✔ a failed source read leaves the previous selection and a newer selection supersedes a slow read (18.095625ms)
+✔ opening supporting sources preserves or resolves the actual manuscript compile target (21.879208ms)
+✔ a root-level manuscript can create files and folders through the Writing dialog (18.591791ms)
+✔ preview addresses stay with the execution folder that produced the manuscript (1.26025ms)
+✔ paper layout falls back to defaults and stays interactive when a preference write exceeds quota (254.851917ms)
+✔ 20 continuous pane changes write each last size once using the existing keys (291.929375ms)
+ℹ tests 31
+ℹ suites 0
+ℹ pass 29
+ℹ fail 2
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 4495.355916
+
+✖ failing tests:
+
+test at electron/paper-writing-workspace.test.cjs:211:1
+✖ keeping a draft after an external edit rebases the save and preserves the local text (823.98625ms)
+  AssertionError [ERR_ASSERTION]: the conflict exposes an explicit draft-preserving recovery action
+      at TestContext.<anonymous> (/Users/fei/Desktop/Archimedes/electron/paper-writing-workspace.test.cjs:227:10)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+
+test at electron/paper-writing-workspace.test.cjs:477:1
+✖ compiling one manuscript ignores an unsavable draft from another folder (24.801417ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+  + []
+  - [
+  -   'other/main.tex'
+  - ]
+  
+      at TestContext.<anonymous> (/Users/fei/Desktop/Archimedes/electron/paper-writing-workspace.test.cjs:487:10)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: [],
+    expected: [ 'other/main.tex' ],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }

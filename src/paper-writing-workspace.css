@@ -8,3 +8,5 @@
 .app-dialog.paper-project-dialog .paper-existing-projects button small { color: var(--text-secondary); }
 .paper-existing-project-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .app-dialog.paper-project-dialog .paper-existing-project-heading > button { display: inline-flex; width: auto; min-height: 30px; align-items: center; gap: 6px; padding: 5px 9px; }
+.latex-diagnostics .latex-conflict-actions { display: flex; justify-content: flex-end; margin-top: 6px; }
+.latex-diagnostics .latex-conflict-actions button { display: inline-flex; width: auto; min-height: 24px; align-items: center; padding: 2px 8px; font-size: 9px; }

@@ -65,9 +65,9 @@ async function fixture(t, overrides = {}) {
     createLatexFile: async (root, name) => require("./latex-workspace.cjs").createLatexFile(root, name),
     createLatexDirectory: async (root, name) => require("./latex-workspace.cjs").createLatexDirectory(root, name),
     readWorkspaceFile: async (root, name) => { reads.push({ root, name }); return overrides.read ? overrides.read(root, name, preview) : preview(root, name); },
-    writeWorkspaceFile: async (root, name, content) => {
+    writeWorkspaceFile: async (root, name, content, expected) => {
       writes.push({ root, name, content });
-      if (overrides.write) await overrides.write(root, name, content);
+      if (overrides.write) await overrides.write(root, name, content, expected);
       fs.writeFileSync(path.join(root, name), content);
       return preview(root, name);
     },
@@ -206,6 +206,30 @@ test("failed departure autosaves keep the original draft and expose its save err
   assert.equal(document.querySelector('textarea').value, pending);
   assert.equal(document.querySelector('.paper-save-state').textContent, "Unsaved");
   assert.match(document.querySelector('.latex-diagnostics').textContent, /Review disk is read-only/);
+});
+
+test("keeping a draft after an external edit rebases the save and preserves the local text", async t => {
+  const f = await fixture(t, { write: async (root, name, _content, expected) => {
+    if (name === "paper/main.tex" && expected !== undefined && fs.readFileSync(path.join(root, name), "utf8") !== expected) {
+      throw new Error("The source changed on disk. Your draft is still open.");
+    }
+  } });
+  await f.render(f.a, 1); await autoCompileOff();
+  const local = source("Local draft kept after a conflict");
+  const external = source("External editor changed the source");
+  await edit(local);
+  fs.writeFileSync(path.join(f.a, "paper/main.tex"), external);
+  await React.act(async () => { await new Promise(resolve => setTimeout(resolve, 800)); });
+  assert.equal(document.querySelector('textarea').value, local);
+  assert.equal(f.disk(f.a), external);
+  assert.match(document.querySelector('.latex-diagnostics').textContent, /The source changed on disk/);
+  const keep = [...document.querySelectorAll('button')].find(button => button.textContent === "Keep my draft");
+  assert.ok(keep, "the conflict exposes an explicit draft-preserving recovery action");
+  await React.act(async () => keep.click()); await settle();
+  assert.equal(document.querySelector('textarea').value, local);
+  assert.equal(f.disk(f.a), local);
+  assert.equal(document.querySelector('.paper-save-state').textContent, "Saved");
+  assert.equal(document.querySelector('.latex-diagnostics'), null);
 });
 
 test("switching source files during an in-flight save retains and saves the final edit to the old file", async t => {
@@ -448,6 +472,20 @@ test('typing during the compile save barrier retains the new edit and does not c
   assert.equal(document.querySelector('.latex-editor-textarea').value, latestMain);
   assert.match(document.body.textContent, /sources changed while saving/);
   assert.equal(f.disk(f.a), source('Project A original'), 'the later main edit remains visibly unsaved instead of being represented as compiled');
+});
+
+test('compiling one manuscript ignores an unsavable draft from another folder', async t => {
+  const f = await fixture(t, { write: async (_root, name) => {
+    if (name === 'paper/main.tex') throw new Error('The other manuscript is locked');
+  } });
+  fs.mkdirSync(path.join(f.a, 'other'), { recursive: true });
+  fs.writeFileSync(path.join(f.a, 'other/main.tex'), source('Independent manuscript'));
+  await f.render(f.a); await autoCompileOff();
+  await edit(source('Unsavable draft in the other manuscript'));
+  await f.render(f.a, 2, 'other/main.tex'); await settle(); await autoCompileOff();
+  await click('Recompile'); await settle();
+  assert.deepEqual(f.compiles.map(call => call.name), ['other/main.tex']);
+  assert.match(document.querySelector('.latex-editor-textarea').value, /Independent manuscript/);
 });
 
 
