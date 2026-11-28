@@ -1,0 +1,7 @@
+{
+  "error": "The source changed on disk. Your draft is still open.",
+  "actions": [
+    "Overwrite external changes with my draft"
+  ],
+  "draft": "\\documentclass{article}\n\\begin{document}\nDraft kept after external edit\n\\end{document}\n"
+}
