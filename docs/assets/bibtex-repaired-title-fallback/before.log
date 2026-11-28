@@ -1,0 +1,50 @@
+$ node --test --test-name-pattern="already repaired to decoded text" electron/bibliography-interchange.test.cjs  # PR #369 head
+✖ legacy author fallback accepts a title already repaired to decoded text (82.850917ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1072.553083
+
+✖ failing tests:
+
+test at electron/bibliography-interchange.test.cjs:844:1
+✖ legacy author fallback accepts a title already repaired to decoded text (82.850917ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + undefined
+  - {
+  -   abstract: '',
+  -   arxiv_id: '',
+  -   authors: [
+  -     "Jos\\'e Garc\\'ia"
+  -   ],
+  -   citation_count: 0,
+  -   citekey: 'legacy',
+  -   doi: '',
+  -   external_id: 'bibtex:legacy',
+  -   pdf_url: '',
+  -   s2_id: '',
+  -   source: 'bibtex',
+  -   title: 'García on scaling',
+  -   url: '',
+  -   venue: '',
+  -   year: 2024
+  - }
+  
+      at TestContext.<anonymous> (/Users/fei/Desktop/Archimedes/electron/bibliography-interchange.test.cjs:848:10)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: { external_id: 'bibtex:legacy', s2_id: '', arxiv_id: '', doi: '', title: 'García on scaling', authors: [ "Jos\\'e Garc\\'ia" ], year: 2024, venue: '', abstract: '', url: '', pdf_url: '', citation_count: 0, source: 'bibtex', citekey: 'legacy' },
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

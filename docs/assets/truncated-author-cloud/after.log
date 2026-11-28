@@ -1,0 +1,20 @@
+$ node --test --test-name-pattern='truncated in the import' electron/library-sync.test.cjs
+✔ title-only sync joins a cloud record whose author list is truncated in the import (29.874625ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 138.903208
+
+$ node --test electron/library-sync.test.cjs
+ℹ tests 10
+ℹ suites 0
+ℹ pass 10
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 397.334

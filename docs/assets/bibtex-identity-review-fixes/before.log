@@ -1,0 +1,98 @@
+✔ a redundant title-only row cannot hide a later paper with a distinct DOI (29.855583ms)
+✔ the preview points to the same source locations in English and Chinese, and imports valid entries (101.026291ms)
+✔ article and proceedings previews identify fields and author groups that the actual export omits (74.087ms)
+✔ a local title-only candidate cannot override a conflict-free global strong identifier (52.276958ms)
+✔ BibTeX supports nested values, grouped authors, stable keys and explicit unsupported syntax (0.79075ms)
+✔ BibTeX decodes TeX accents and exports caret and tilde as literal characters (1.628542ms)
+✔ BibTeX export retains explicit keys and disambiguates every generated key after normalization (0.281ms)
+✔ BibTeX export uses booktitle for proceedings and round-trips TeX character escapes (0.153042ms)
+✔ BibTeX ignores commented-out entries with nested braces and tolerates whitespace after the opener (0.10725ms)
+✔ quoted parentheses in skipped directives preserve the following references (0.082083ms)
+✔ BibTeX preview rejects citation keys that collide only by case (58.36625ms)
+✔ BibTeX preserves literal braces and backslashes across its own export while retaining grouped capitalization (0.318792ms)
+✔ BibTeX only identifies arXiv eprints and normalizes the same identifiers as the actual store (53.12775ms)
+✔ citation keys are scoped to the target export, while paper identity still deduplicates across projects (69.977917ms)
+✔ a shared paper cannot take a citation key already used in another collection (48.095ms)
+✔ a conflicting replacement rolls back attaching the imported paper (61.4985ms)
+✔ real Library BibTeX preview preserves existing edits and notes; only selected metadata repair is applied (66.961541ms)
+✔ applying a BibTeX import invalidates the previous export preview (58.849542ms)
+✔ leaving a BibTeX import stops subsequent operations after an in-flight add returns (55.955917ms)
+✔ BibTeX stores the first key and explicit replacement through the desktop bridge (73.5075ms)
+✔ BibTeX stores the first key and explicit replacement through the browser bridge (22.177917ms)
+✔ browser BibTeX import leaves collection links and the old key intact on a rejected replacement (0.361125ms)
+✔ BibTeX preview and import keep distinct same-title works and match author name order (64.982625ms)
+✔ a DOI-matched row can connect a subsequent arXiv alias without hiding a conflicting DOI (0.297417ms)
+✔ BibTeX imports learned identifier conflicts into SQLite with an empty library (59.539209ms)
+✔ BibTeX imports learned identifier conflicts into SQLite with a saved representative (61.695458ms)
+✔ a title alias from a strong match deduplicates a later compatible row, while the conflicting work imports (58.727667ms)
+✔ a selected title repair preserves the paper ID resolved for a later row (62.958334ms)
+✔ two retained DOI claims resolve against the saved identity of a title-only paper (68.091875ms)
+✔ contradictory identifier claims are blocked before writing and unrelated rows can be imported (76.38425ms)
+✔ a retained bibliography key cannot be assigned to a conflicting enriched reference (70.195833ms)
+✔ a learned identifier cannot join a saved paper with a conflicting DOI (74.092208ms)
+✔ retained title keys and truncated authors agree in the preview and the saved library (72.834ms)
+✔ URL fields retain literal URI characters instead of text-mode TeX commands (0.204667ms)
+✔ a repeat import can repair exact legacy TeX spellings while guarding the author and year (247.408667ms)
+✔ a literal TeX command remains distinct from its Unicode character in both directions (0.210375ms)
+✔ DOIs with literal BibTeX delimiters keep their strong identity across export (0.167417ms)
+✔ legacy author fallback accepts a title already repaired to decoded text (0.074833ms)
+✖ title-only duplicate rows enrich the retained representative (0.594333ms)
+✔ library sync pushes local libraries and pulls shared books and paper state (33.905666ms)
+✔ a DOI or arXiv match without personal state initializes from the cloud (27.141625ms)
+✔ a new title-only reference joins its legacy cloud record without joining a different publication (28.530917ms)
+✖ title-only sync reuses a legacy cloud identity from another accessible project (27.039875ms)
+✔ syncing an older cloud duplicate twice cannot overwrite a newer note on the original cloud paper (29.791416ms)
+✔ reusing a cloud title key preserves an explicit local note for reconciliation (27.014584ms)
+✔ annotation sync reads the cloud record attached to the destination collection (29.0445ms)
+✔ cloud sync recognizes current metadata on an unchanged fingerprint from an earlier import (52.172959ms)
+✔ library sync requires a shared project (25.277625ms)
+ℹ tests 48
+ℹ suites 0
+ℹ pass 46
+ℹ fail 2
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2183.490208
+
+✖ failing tests:
+
+test at electron/bibliography-interchange.test.cjs:851:1
+✖ title-only duplicate rows enrich the retained representative (0.594333ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + ''
+  - '10.5555/shared-result'
+  
+      at TestContext.<anonymous> (/Users/fei/Desktop/Archimedes/electron/bibliography-interchange.test.cjs:859:10)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '',
+    expected: '10.5555/shared-result',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at electron/library-sync.test.cjs:173:1
+✖ title-only sync reuses a legacy cloud identity from another accessible project (27.039875ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + 'cloud-paper-2'
+  - 'cloud-paper-1'
+                 ^
+  
+      at TestContext.<anonymous> (/Users/fei/Desktop/Archimedes/electron/library-sync.test.cjs:195:12)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'cloud-paper-2',
+    expected: 'cloud-paper-1',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
