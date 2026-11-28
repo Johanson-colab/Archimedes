@@ -78,6 +78,7 @@ test('window close releases its preview tokens and accepted quit stops backgroun
     closeWindowTerminals: noop, releaseWindowApprovalClaim: noop, presence: null, windowStartupWorkspaces: new Map(),
     windowWorkspaces: new Map(), closeAllNativeClients: noop, closeAllTerminals: noop, collaborationServer: null,
     latexCompiles: new Map(), experimentRunner: { shutdownExperimentRuns: noop }, store: { closeAllWorkspaces: noop },
+    harnessSetup: { shutdown: noop }, researchAppRuntime: { shutdown: noop }, researchAppDelivery: { shutdown: noop },
   };
   new Function('scope', `with (scope) {
     ${section('function stopWorkspaceWatcher(', 'function setWindowWorkspace(')}
