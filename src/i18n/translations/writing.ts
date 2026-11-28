@@ -93,6 +93,7 @@ export const writing: Record<string, string> = {
   "Open official source": "打开官方来源",
   "Open {path}": "打开 {path}",
   "Opening source…": "正在打开源文件…",
+  "Overwrite external changes with my draft": "用我的草稿覆盖外部更改",
   "Preparing compiler": "正在准备编译引擎",
   "Preparing template…": "正在准备模板…",
   "Preprint": "预印本",

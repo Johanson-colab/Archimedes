@@ -57,7 +57,8 @@ async function fixture(t, overrides = {}) {
   let progress;
   const bridge = {
     listLatexProjects: async root => overrides.listProjects ? overrides.listProjects(root) : require("./latex-workspace.cjs").listLatexProjects(root),
-    listWorkspaceFiles: async (root, parent) => require("./workspace-files.cjs").listWorkspaceDirectory(root, parent),
+    listWorkspaceFiles: async (root, parent) => overrides.listWorkspaceFiles
+      ? overrides.listWorkspaceFiles(root, parent) : require("./workspace-files.cjs").listWorkspaceDirectory(root, parent),
     createLatexFile: async (root, name) => require("./latex-workspace.cjs").createLatexFile(root, name),
     createLatexDirectory: async (root, name) => require("./latex-workspace.cjs").createLatexDirectory(root, name),
     readWorkspaceFile: async (root, name) => { reads.push({ root, name }); return overrides.read ? overrides.read(root, name, preview) : preview(root, name); },
@@ -71,6 +72,8 @@ async function fixture(t, overrides = {}) {
       compiles.push({ root, name, requestId });
       return overrides.compile ? overrides.compile(root, name, requestId) : { ok: true, diagnostics: [], log: "fake build", duration_ms: 1 };
     },
+    readManuscriptSnapshot: async (root, manifestPath) => overrides.readManuscriptSnapshot
+      ? overrides.readManuscriptSnapshot(root, manifestPath) : { current: true },
     onLatexCompileProgress: callback => { progress = callback; return () => { progress = undefined; }; },
   };
   let reactRoot = createRoot(document.getElementById("root"));
@@ -682,4 +685,107 @@ test("preview addresses stay with the execution folder that produced the manuscr
   assert.equal(tokens.get(first), "/project-a");
   assert.equal(api.createPreviewToken(1, "/project-a"), first);
   assert.equal(tokens.get(second), "/project-b");
+});
+
+test("a rejected source conflict can be resolved without losing the local draft", { timeout: 10_000 }, async t => {
+  let conflicted = false;
+  const f = await fixture(t, {
+    write: async (_root, name) => {
+      if (!conflicted && name === "paper/main.tex") {
+        conflicted = true;
+        throw new Error("The source changed on disk. Your draft is still open.");
+      }
+    },
+  });
+  fs.writeFileSync(path.join(f.a, "paper/main.tex"), source("External editor version"));
+  await f.render(f.a); await autoCompileOff();
+  const draft = source("My draft after the external edit");
+  await edit(draft);
+  await React.act(async () => { await new Promise(resolve => setTimeout(resolve, 800)); });
+  assert.match(document.querySelector(".latex-diagnostics").textContent, /source changed on disk/);
+  const button = [...document.querySelectorAll("button")].find(node => node.textContent === "Overwrite external changes with my draft");
+  assert.ok(button, "the conflict offers an explicit resolution");
+  await React.act(async () => button.click());
+  await settle();
+  assert.equal(f.disk(f.a), draft);
+  assert.equal(document.querySelector(".latex-editor-textarea").value, draft);
+  assert.equal(document.querySelector(".paper-save-state").textContent, "Saved");
+  assert.doesNotMatch(document.body.textContent, /source changed on disk/);
+});
+
+test("cached previews are revalidated before a returning scope restores them", async t => {
+  const manifestPath = ".archimedes/latex-build/a0/build/source-snapshot.json";
+  let current = true;
+  const f = await fixture(t, {
+    compile: () => ({ ok: true, preview_url: "https://example.invalid/manuscript.pdf", source_snapshot: { manifest_path: manifestPath }, diagnostics: [], log: "", duration_ms: 1 }),
+    readManuscriptSnapshot: async (root, manifest) => {
+      assert.equal(manifest, manifestPath);
+      return { current };
+    },
+  });
+  await f.render(f.a); await autoCompileOff();
+  await click("Recompile");
+  assert.ok(document.querySelector("iframe"));
+  await f.render(f.b, null);
+  await f.render(f.a, null); await settle();
+  assert.ok(document.querySelector("iframe"), "a current snapshot keeps its saved preview");
+  current = false;
+  await f.render(f.b, null);
+  await f.render(f.a, null); await settle();
+  assert.equal(document.querySelector("iframe"), null, "a stale source or missing PDF clears the saved preview");
+  assert.doesNotMatch(document.querySelector(".paper-compile-state").textContent, /ms/);
+});
+
+test("a new manuscript activation cancels an older clean source read", async t => {
+  const held = deferred(), started = deferred();
+  let holding = false, gateActivation = false;
+  const f = await fixture(t, {
+    listWorkspaceFiles: async (root, parent) => {
+      if (gateActivation && path.basename(root) === "a" && parent === "other") {
+        held.resolve();
+        await new Promise(resolve => setImmediate(resolve));
+      }
+      return require("./workspace-files.cjs").listWorkspaceDirectory(root, parent);
+    },
+    read: async (root, name, preview) => {
+      if (holding && path.basename(root) === "a" && name === "paper/main.tex") {
+        started.resolve();
+        await held.promise;
+      }
+      return preview(root, name);
+    },
+  });
+  fs.mkdirSync(path.join(f.a, "other"));
+  fs.writeFileSync(path.join(f.a, "other/main.tex"), source("Containing other manuscript"));
+  fs.writeFileSync(path.join(f.a, "other/references.bib"), "@book{manual,title={Other bibliography}}\n");
+  await f.render(f.a); await autoCompileOff();
+  const mainReads = () => f.reads.filter(({ name }) => name === "paper/main.tex").length;
+  const before = mainReads();
+  holding = true;
+  gateActivation = true;
+  await f.render(f.b, null);
+  await f.render(f.a, null);
+  await started.promise;
+  await f.render(f.a, 2, "other/references.bib");
+  await settle();
+  assert.equal(document.querySelector(".latex-editor-textarea").value, "@book{manual,title={Other bibliography}}\n");
+  assert.equal(document.querySelector(".paper-main-document select").value, "other/main.tex");
+  assert.equal(mainReads(), before + 1, "the superseded read never replaced the activated manuscript");
+});
+
+test("a conflicted source in another manuscript does not block compiling the target", async t => {
+  const f = await fixture(t, { write: async (_root, name) => {
+    if (name === "paper/section.tex") throw new Error("Section conflict");
+  } });
+  fs.mkdirSync(path.join(f.a, "other"));
+  fs.writeFileSync(path.join(f.a, "paper/section.tex"), "Original section\n");
+  fs.writeFileSync(path.join(f.a, "other/main.tex"), source("Other manuscript"));
+  await f.render(f.a); await autoCompileOff();
+  await click("paper/section.tex");
+  await edit("Conflicted section\n", "paper/section.tex");
+  await f.render(f.a, 2, "other/main.tex"); await settle();
+  await click("Recompile"); await settle();
+  assert.equal(f.compiles.at(-1).name, "other/main.tex");
+  assert.equal(document.querySelector(".latex-editor-textarea").value, source("Other manuscript"));
+  assert.doesNotMatch(document.body.textContent, /Section conflict/);
 });

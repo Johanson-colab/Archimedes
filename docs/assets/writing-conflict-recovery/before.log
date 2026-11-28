@@ -1,0 +1,77 @@
+$ node --test --test-name-pattern="<finding>" electron/paper-writing-workspace.test.cjs  (baseline a7bdb6c)
+
+## a rejected source conflict
+✖ a rejected source conflict can be resolved without losing the local draft (950.271667ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1514.642583
+
+✖ failing tests:
+
+test at electron/paper-writing-workspace.test.cjs:690:1
+✖ a rejected source conflict can be resolved without losing the local draft (950.271667ms)
+  AssertionError [ERR_ASSERTION]: the conflict offers an explicit resolution
+      at TestContext.<anonymous> (electron/paper-writing-workspace.test.cjs:707:10)
+
+## cached previews are revalidated
+✖ electron/paper-writing-workspace.test.cjs (61425.847417ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 61430.266958
+
+✖ failing tests:
+
+test at electron/paper-writing-workspace.test.cjs:1:1
+✖ electron/paper-writing-workspace.test.cjs (61425.847417ms)
+  'test failed'
+
+## a new manuscript activation cancels
+✖ a new manuscript activation cancels an older clean source read (246.350041ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2564.673833
+
+✖ failing tests:
+
+test at electron/paper-writing-workspace.test.cjs:739:1
+✖ a new manuscript activation cancels an older clean source read (246.350041ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+
+  + 'paper/main.tex'
+  - 'other/main.tex'
+
+      at TestContext.<anonymous> (electron/paper-writing-workspace.test.cjs:772:10)
+
+## a conflicted source in another manuscript
+✖ a conflicted source in another manuscript does not block compiling the target (179.537542ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 639.549875
+
+✖ failing tests:
+
+test at electron/paper-writing-workspace.test.cjs:776:1
+✖ a conflicted source in another manuscript does not block compiling the target (179.537542ms)
+  TypeError [Error]: Cannot read properties of undefined (reading 'name')
+      at TestContext.<anonymous> (electron/paper-writing-workspace.test.cjs:788:33)

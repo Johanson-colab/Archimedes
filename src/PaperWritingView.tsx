@@ -9,7 +9,7 @@ import { Tab, Tabs } from "./Tabs";
 import { fingerprintFor } from "./proactive-engine";
 import { emitProactiveSignal } from "./proactive-signals";
 import { findSourceMatches, sourceMarksByLine, type SourceMark } from "./paper-source-search";
-import { createWritingScope, editWritingDocument, readWritingDocument, saveWritingDocument, readWritingLocation, rememberWritingLocation, type WritingScope } from "./paper-writing-state";
+import { acknowledgeWritingConflict, createWritingScope, editWritingDocument, readWritingDocument, saveWritingDocument, readWritingLocation, rememberWritingLocation, type WritingScope } from "./paper-writing-state";
 import "./paper-source-search.css";
 import "./paper-writing-workspace.css";
 
@@ -274,6 +274,9 @@ export default function PaperWritingView({ bridge, workspace, projectId = null, 
   const activateProject = useCallback(async (path: string) => {
     const request = ++owner.activationSequence;
     owner.pendingActivation = request;
+    // An earlier clean re-entry read may still own the selection; this
+    // activation supersedes it before the new manuscript is resolved.
+    if (owner.pendingOpen) ++owner.openSequence;
     const openSequence = owner.openSequence;
     const isCurrent = () => request === owner.activationSequence && owner.openSequence === openSequence;
     try {
@@ -316,7 +319,7 @@ export default function PaperWritingView({ bridge, workspace, projectId = null, 
         const saved = readWritingLocation(window.localStorage, owner.workspace, projectId);
         if (saved && found.some((item) => item.path === saved.mainPath)) {
           const activation = owner.activationSequence + 1;
-          const mainOpen = owner.openSequence + 1;
+          const mainOpen = owner.openSequence + 1 + (owner.pendingOpen ? 1 : 0);
           await activateProject(saved.mainPath);
           if (owner.activationSequence !== activation || owner.openSequence !== mainOpen
             || owner.mainPath !== saved.mainPath || owner.selectedPath !== saved.mainPath) return;
@@ -342,7 +345,19 @@ export default function PaperWritingView({ bridge, workspace, projectId = null, 
     // A fresh root listing lets the existing expanded nodes reload their children.
     if (owner.activeProject) void loadDirectory(owner.activeProject, true);
     if (owner.selectedPath && !owner.pendingActivation && !owner.pendingOpen) void openFile(owner.selectedPath, true);
-  }, [active, loadDirectory, openFile, owner, refreshProjects]);
+    const snapshot = owner.compileResult?.source_snapshot;
+    if (snapshot?.manifest_path && bridge.readManuscriptSnapshot) {
+      const invalidate = () => {
+        if (!mountedRef.current || owner.compileResult?.source_snapshot?.manifest_path !== snapshot.manifest_path) return;
+        ++owner.compileSequence; owner.compileTarget = "";
+        owner.compileResult = null; owner.compileLog = ""; owner.compileState = "idle";
+        refreshScope();
+      };
+      void bridge.readManuscriptSnapshot(owner.workspace, snapshot.manifest_path)
+        .then(verification => { if (!verification.current) invalidate(); })
+        .catch(invalidate);
+    }
+  }, [active, bridge, loadDirectory, openFile, owner, refreshProjects]);
   useEffect(() => {
     if (!activeProject || !mainPath || !file?.path) return;
     rememberWritingLocation(window.localStorage, owner.workspace, projectId, { projectPath: activeProject, mainPath, selectedPath: file.path });
@@ -357,7 +372,9 @@ export default function PaperWritingView({ bridge, workspace, projectId = null, 
     const sequence = ++owner.compileSequence;
     setCompileState("compiling"); setCompileResult(null); setError("");
     try {
-      const documents = [...owner.documents.values()];
+      const scopeRoot = owner.activeProject || target.split("/").slice(0, -1).join("/");
+      const inScope = (path: string) => !scopeRoot || scopeRoot === "." || path === scopeRoot || path.startsWith(scopeRoot + "/");
+      const documents = [...owner.documents.values()].filter((document) => inScope(document.file.path));
       await Promise.all(documents.map((document) => saveWritingDocument(document, bridge.writeWorkspaceFile, refreshScope)));
       if (sequence !== owner.compileSequence) return;
       if (documents.some((document) => document.draft !== document.savedDraft)) throw new Error(t("The sources changed while saving. Compile again to use the latest edits."));
@@ -399,6 +416,18 @@ export default function PaperWritingView({ bridge, workspace, projectId = null, 
       setError(t(message.replace(/^Error invoking remote method '[^']+':\s*(?:Error:\s*)?/, "")));
     }
   }, [bridge, compileRequestPrefix, mainPath, owner, projectId, refreshScope, t, threadId]);
+
+  const resolveConflict = useCallback(async () => {
+    if (!currentDocument) return;
+    try {
+      await acknowledgeWritingConflict(currentDocument, bridge.readWorkspaceFile, refreshScope);
+      if (currentDocument.draft !== currentDocument.savedDraft) await saveWritingDocument(currentDocument, bridge.writeWorkspaceFile, refreshScope);
+    } catch (nextError) {
+      if (!mountedRef.current) return;
+      const message = nextError instanceof Error ? nextError.message : String(nextError);
+      setError(t(message.replace(/^Error invoking remote method '[^']+':\s*(?:Error:\s*)?/, "")));
+    }
+  }, [bridge, currentDocument, refreshScope, t]);
 
   useEffect(() => bridge.onLatexCompileProgress?.((input) => {
     const target = [...scopesRef.current.values()].find(item => item.workspace === input.workspace && item.compileRequestId === input.requestId);
@@ -656,7 +685,7 @@ export default function PaperWritingView({ bridge, workspace, projectId = null, 
           <button type="button" disabled={!searchMatches.length} onClick={() => navigateSearch(1)} title={`${t("Next match")} (Enter)`} aria-label={t("Next match")}><ArrowDown size={14} /></button>
           <button type="button" onClick={closeSearch} title={`${t("Close search")} (Esc)`} aria-label={t("Close search")}><X size={14} /></button>
         </div>}
-        {file ? <>{coedit && projectId && <div className="latex-coedit-pane"><SharedNoteEditor bridge={bridge} projectId={projectId} docKey={`latex:${file.path}`} initialText={draft} title={`Co-editing ${file.name}`} onTextChange={(text) => { setDraft(text); }} /></div>}<div className={coedit ? "latex-editor-body coediting" : "latex-editor-body"}><div className="latex-line-numbers" ref={lineNumbersRef}>{lines.map((_, index) => <span key={index} className={problemLines.has(index + 1) ? "diagnostic" : ""}>{problemLines.has(index + 1) ? <AlertTriangle size={10} /> : index + 1}</span>)}</div><div className="latex-editor-layer"><pre className="latex-highlight" ref={highlightRef} aria-hidden="true">{lines.map((line, index) => <HighlightLine key={index} text={line} marks={searchMarks.get(index)} activeMatch={activeMatchIndex} problem={problemLines.has(index + 1) || activeProblem === index + 1} />)}</pre><textarea className="latex-editor-textarea" ref={editorRef} value={draft} readOnly={openingSource} onChange={(event) => { if (!owner.pendingOpen) setDraft(event.target.value); }} onKeyDown={(event) => { if (!owner.pendingOpen && event.key === "Tab") { event.preventDefault(); const target = event.currentTarget; const next = `${draft.slice(0, target.selectionStart)}  ${draft.slice(target.selectionEnd)}`; const start = target.selectionStart; setDraft(next); window.requestAnimationFrame(() => target.setSelectionRange(start + 2, start + 2)); } if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") { event.preventDefault(); if (!owner.pendingOpen) void compile(); } }} onScroll={(event) => syncScroll(event.currentTarget)} spellCheck={false} aria-label={`Edit ${file.path}`} /></div></div></> : <StateView className="paper-writing-empty" icon={<FileText size={25} />} title="No LaTeX project open" description={t("Open an existing manuscript, or create a new paper from a template.")} action={<button className="primary-button" onClick={() => { setChooserTab("existing"); setChooserOpen(true); void refreshProjects(); }}><FolderOpen size={14} />Open project</button>} />}{buildLogOpen && <section id={buildLogId} className="latex-live-log" aria-label={t("Build log")}><strong>{t("Build log")}</strong><pre tabIndex={0}>{compileState === "compiling" ? compileLog || t("Waiting for compiler output…") : compileResult?.log || compileLog || t("No build log yet.")}</pre></section>}{(error || compileResult?.diagnostics.length || (compileResult && !compileResult.ok)) && <div className="latex-diagnostics"><header><AlertTriangle size={13} /><strong>{error ? "Workspace error" : `Problems · ${compileResult?.diagnostics.length || 1}`}</strong><span>{error ? "Resolve this before compiling again." : "Select a problem to jump to the source line."}</span></header>{error && <p>{t(error)}</p>}{compileResult?.diagnostics.map((diagnostic, index) => <button key={`${diagnostic.line}-${index}`} className={diagnostic.line === activeProblem ? "active" : ""} onClick={() => jumpToProblem(diagnostic)}><b>{diagnostic.line ? `Line ${diagnostic.line}` : "LaTeX"}</b><span>{t(diagnostic.message)}{diagnostic.help && <small className="latex-diagnostic-help">{t(diagnostic.help)}</small>}</span></button>)}{compileResult && !compileResult.ok && compileResult.log && <details><summary>Show full build log</summary><pre>{compileResult.log}</pre></details>}</div>}<div className="paper-pane-resizer" role="separator" aria-orientation="vertical" aria-label="Resize PDF preview" title="Drag to resize · double-click to reset" aria-valuemin={Math.round(PREVIEW_SPLIT_MIN * 100)} aria-valuemax={Math.round(PREVIEW_SPLIT_MAX * 100)} aria-valuenow={Math.round(effectivePreviewSplit * 100)} tabIndex={0} onPointerDown={(event) => beginPaneResize("preview", event)} onPointerMove={movePaneResize} onPointerUp={endPaneResize} onPointerCancel={endPaneResize} onDoubleClick={() => setPreviewSplit(PREVIEW_SPLIT_DEFAULT)} onKeyDown={(event) => handlePaneResizeKey("preview", event)} /></section>
+        {file ? <>{coedit && projectId && <div className="latex-coedit-pane"><SharedNoteEditor bridge={bridge} projectId={projectId} docKey={`latex:${file.path}`} initialText={draft} title={`Co-editing ${file.name}`} onTextChange={(text) => { setDraft(text); }} /></div>}<div className={coedit ? "latex-editor-body coediting" : "latex-editor-body"}><div className="latex-line-numbers" ref={lineNumbersRef}>{lines.map((_, index) => <span key={index} className={problemLines.has(index + 1) ? "diagnostic" : ""}>{problemLines.has(index + 1) ? <AlertTriangle size={10} /> : index + 1}</span>)}</div><div className="latex-editor-layer"><pre className="latex-highlight" ref={highlightRef} aria-hidden="true">{lines.map((line, index) => <HighlightLine key={index} text={line} marks={searchMarks.get(index)} activeMatch={activeMatchIndex} problem={problemLines.has(index + 1) || activeProblem === index + 1} />)}</pre><textarea className="latex-editor-textarea" ref={editorRef} value={draft} readOnly={openingSource} onChange={(event) => { if (!owner.pendingOpen) setDraft(event.target.value); }} onKeyDown={(event) => { if (!owner.pendingOpen && event.key === "Tab") { event.preventDefault(); const target = event.currentTarget; const next = `${draft.slice(0, target.selectionStart)}  ${draft.slice(target.selectionEnd)}`; const start = target.selectionStart; setDraft(next); window.requestAnimationFrame(() => target.setSelectionRange(start + 2, start + 2)); } if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") { event.preventDefault(); if (!owner.pendingOpen) void compile(); } }} onScroll={(event) => syncScroll(event.currentTarget)} spellCheck={false} aria-label={`Edit ${file.path}`} /></div></div></> : <StateView className="paper-writing-empty" icon={<FileText size={25} />} title="No LaTeX project open" description={t("Open an existing manuscript, or create a new paper from a template.")} action={<button className="primary-button" onClick={() => { setChooserTab("existing"); setChooserOpen(true); void refreshProjects(); }}><FolderOpen size={14} />Open project</button>} />}{buildLogOpen && <section id={buildLogId} className="latex-live-log" aria-label={t("Build log")}><strong>{t("Build log")}</strong><pre tabIndex={0}>{compileState === "compiling" ? compileLog || t("Waiting for compiler output…") : compileResult?.log || compileLog || t("No build log yet.")}</pre></section>}{(error || compileResult?.diagnostics.length || (compileResult && !compileResult.ok)) && <div className="latex-diagnostics"><header><AlertTriangle size={13} /><strong>{error ? "Workspace error" : `Problems · ${compileResult?.diagnostics.length || 1}`}</strong><span>{error ? "Resolve this before compiling again." : "Select a problem to jump to the source line."}</span></header>{error && <p>{t(error)}</p>}{currentDocument?.conflict && <button className="primary-button conflict-action" onClick={() => void resolveConflict()}>{t("Overwrite external changes with my draft")}</button>}{compileResult?.diagnostics.map((diagnostic, index) => <button key={`${diagnostic.line}-${index}`} className={diagnostic.line === activeProblem ? "active" : ""} onClick={() => jumpToProblem(diagnostic)}><b>{diagnostic.line ? `Line ${diagnostic.line}` : "LaTeX"}</b><span>{t(diagnostic.message)}{diagnostic.help && <small className="latex-diagnostic-help">{t(diagnostic.help)}</small>}</span></button>)}{compileResult && !compileResult.ok && compileResult.log && <details><summary>Show full build log</summary><pre>{compileResult.log}</pre></details>}</div>}<div className="paper-pane-resizer" role="separator" aria-orientation="vertical" aria-label="Resize PDF preview" title="Drag to resize · double-click to reset" aria-valuemin={Math.round(PREVIEW_SPLIT_MIN * 100)} aria-valuemax={Math.round(PREVIEW_SPLIT_MAX * 100)} aria-valuenow={Math.round(effectivePreviewSplit * 100)} tabIndex={0} onPointerDown={(event) => beginPaneResize("preview", event)} onPointerMove={movePaneResize} onPointerUp={endPaneResize} onPointerCancel={endPaneResize} onDoubleClick={() => setPreviewSplit(PREVIEW_SPLIT_DEFAULT)} onKeyDown={(event) => handlePaneResizeKey("preview", event)} /></section>
       <section className="paper-pdf-pane"><div className="paper-pane-toolbar"><FileText size={14} /><strong>PDF preview</strong><label className="paper-auto-compile"><input type="checkbox" checked={autoCompile} onChange={(event) => setAutoCompile(event.target.checked)} />Auto compile</label><span className={`paper-compile-state ${compileState}`}>{compileState === "compiling" ? <LoaderCircle className="spin" size={11} /> : compileState === "success" ? <Check size={11} /> : compileState === "error" ? <AlertTriangle size={11} /> : null}{compileState === "success" ? `${compileResult?.duration_ms ?? 0} ms` : compileState === "error" ? "Build failed" : compileState === "compiling" ? `${t(compilePhase)} · ${compileElapsed}s` : "Not built"}</span><div className="paper-pane-actions"><button className={buildLogOpen ? "paper-pane-action active" : "paper-pane-action"} onClick={() => setBuildLogOpen((open) => !open)} title={t("Build log")} aria-label={t("Build log")} aria-expanded={buildLogOpen} aria-controls={buildLogId}><FileText size={13} /><span>{t("Build log")}</span></button>{file && <button className="paper-pane-action" onClick={() => void Promise.resolve(onAskAI(file.path)).catch((reason) => setError(String(reason)))} title="Ask AI about this file"><MessageCircle size={13} /><span>Ask AI</span></button>}<button className="paper-pane-action icon" onClick={() => { setChooserTab("existing"); setChooserOpen(true); void refreshProjects(); }} title="Projects" aria-label="Projects"><FolderOpen size={13} /></button>{activeProject && <><button className="paper-pane-action icon" disabled={importing} onClick={() => void importFolder()} title="Import folder" aria-label="Import folder">{importing ? <LoaderCircle className="spin" size={13} /> : <FolderUp size={13} />}</button><button className="paper-pane-action primary" disabled={!mainPath || compileState === "compiling"} onClick={() => void compile()} title="Recompile">{compileState === "compiling" ? <LoaderCircle className="spin" size={13} /> : <Play size={13} />}<span>{compileState === "compiling" ? "Compiling…" : "Recompile"}</span></button></>}</div></div>{compileResult?.ok && compileResult.preview_url ? <iframe key={compileResult.preview_url} src={compileResult.preview_url} title="Compiled paper PDF" /> : <StateView className="paper-writing-empty" icon={<FileText size={27} />} title="Compile to preview" description="The generated PDF appears here. Any build problem is listed beside the source with its line number." action={mainPath ? <button className="primary-button" disabled={compileState === "compiling"} onClick={() => void compile()}><Play size={14} />Compile paper</button> : undefined} />}</section>
     </div>
     <Dialog open={dialogOpen} onClose={() => setChooserOpen(false)} size="gallery" className="paper-project-dialog" overlayClassName="paper-create-backdrop app-dialog-overlay" ariaLabelledBy="paper-project-title">
