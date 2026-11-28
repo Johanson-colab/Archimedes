@@ -91,6 +91,7 @@ function registerThreadCommands({ ipcMain, store, agent, modelConfig, dialog, Br
       const backend = configured && harness && harness !== "api"
         ? { ...configured, ...configured.profiles?.[harness], ...(binding && binding.model !== undefined ? { model: binding.model } : {}), backend: harness }
         : null;
+      if (backend && binding && binding.model !== configured.profiles?.[harness]?.model) backend.effort = "";
       if (backend && thread.kind !== "paper") {
         const requireEditor = () => {
           if (!store.canAccessProject(thread.project_id, "editor")) throw new Error("You do not have permission to edit this conversation.");

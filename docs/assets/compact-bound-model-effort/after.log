@@ -1,0 +1,21 @@
+$ node --test electron/thread-commands.test.cjs
+✔ fork persists a separate history with remapped events, visibility and compaction boundary (69.9485ms)
+✔ undo persists the shortened thread and a private recoverable backup without touching files (45.545166ms)
+✔ manual compaction replaces only model context and includes future turns exactly once (33.833625ms)
+✔ running turns and empty history cannot be undone or compacted (29.753792ms)
+✔ compaction summarizes all chunks and preserves the previous summary (0.997375ms)
+✔ Init loads workspace instructions and rejects an AGENTS.md symlink escaping the project (30.410458ms)
+✔ Markdown export includes full messages and source URLs (0.191334ms)
+✔ main Work native compaction bypasses the API summary and preserves visible history (35.200208ms)
+✔ native compaction requires editor access before starting or persisting its result (36.746375ms)
+✔ IPC exports Markdown or JSON and canceling the dialog writes nothing (39.289584ms)
+✔ a rejected or stale model summary never replaces stored history (37.003208ms)
+✔ native compaction clears profile effort for a different bound model (36.274125ms)
+ℹ tests 12
+ℹ suites 0
+ℹ pass 12
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 510.968916
