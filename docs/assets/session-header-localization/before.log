@@ -1,0 +1,66 @@
+✔ translation shards cover every string exactly once (8.854208ms)
+✔ keys stay sorted inside each shard so concurrent additions do not collide (2.821125ms)
+✖ session-header recovery guidance is translated at every display boundary (2.203333ms)
+✔ the shell merges every shard and keeps the surfaces translated (2.034625ms)
+✔ sanitizeHeaders drops unsafe or malformed headers (0.818542ms)
+✔ sanitizeSessionHeader validates strategy and name (0.132291ms)
+✔ buildModelHeaders adds auth, custom headers, and thread session id (0.167291ms)
+✖ provider session errors get actionable messages (0.757583ms)
+✔ saved custom header values stay in the main process and can be replaced or cleared (2.531083ms)
+✔ the dedicated Go provider recognizes existing Custom connections and uses the Go catalog (2.998459ms)
+✔ catalog, connection test, chat and inherited Paper review use the configured HTTP headers (33.3885ms)
+✔ the reproduction executor includes its run ID on every model request (1.590708ms)
+ℹ tests 12
+ℹ suites 0
+ℹ pass 10
+ℹ fail 2
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 580.98325
+
+✖ failing tests:
+
+test at electron/i18n-translations.test.cjs:45:1
+✖ session-header recovery guidance is translated at every display boundary (2.203333ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /[一-鿿]/. Input:
+  
+  ''
+  
+      at TestContext.<anonymous> (/Users/fei/Desktop/Archimedes/electron/i18n-translations.test.cjs:48:10)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '',
+    expected: /[一-鿿]/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at electron/model-request-headers.test.cjs:55:1
+✖ provider session errors get actionable messages (0.757583ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + 'This provider requires a stable session header. In Settings → Models, select OpenCode Go or set Session header to x-opencode-session and Strategy to Thread.'
+  - undefined
+  
+      at TestContext.<anonymous> (/Users/fei/Desktop/Archimedes/electron/model-request-headers.test.cjs:58:10)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'This provider requires a stable session header. In Settings → Models, select OpenCode Go or set Session header to x-opencode-session and Strategy to Thread.',
+    expected: undefined,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

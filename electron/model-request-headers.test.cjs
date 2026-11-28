@@ -6,6 +6,7 @@ const path = require("node:path");
 const test = require("node:test");
 
 const {
+  MODEL_SESSION_HEADER_GUIDANCE,
   buildModelHeaders,
   formatConnectionError,
   formatModelRequestError,
@@ -54,6 +55,7 @@ test("buildModelHeaders adds auth, custom headers, and thread session id", () =>
 test("provider session errors get actionable messages", () => {
   const raw = '{"type":"error","error":{"type":"MissingSessionID","message":"Request is missing x-opencode-session"}}';
   assert.match(formatModelRequestError(400, raw), /requires a stable session header/);
+  assert.equal(modelProviderErrorDetail(raw, {}), MODEL_SESSION_HEADER_GUIDANCE);
   assert.equal(formatConnectionError(400, raw), "Connection failed (400): MissingSessionID");
   assert.equal(formatModelRequestError(500, "boom"), "Model request failed (500): boom");
   assert.match(modelProviderErrorDetail(raw, { headers: { "X-Tenant": "dummy" } }), /requires a stable session header/);

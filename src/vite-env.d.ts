@@ -2003,7 +2003,7 @@ interface AgentRunResult {
   taskId: string;
   response: string;
   status: string;
-  error?: ModelIncompleteFailure;
+  error?: ModelTurnFailure;
   actions: AgentAction[];
   thread: ResearchThreadDetail;
 }
@@ -2022,6 +2022,8 @@ interface WorkspaceSnapshotCoverage {
 }
 
 interface ModelIncompleteFailure { code: "MODEL_RESPONSE_INCOMPLETE"; reason: string; provider: string; finishReason?: string | null }
+interface ModelSessionHeaderFailure { code: "MODEL_SESSION_HEADER_REQUIRED" }
+type ModelTurnFailure = ModelIncompleteFailure | ModelSessionHeaderFailure;
 
 interface AgentEvent {
   type: "status" | "tool" | "artifact" | "approval" | "assistant_delta" | "complete" | "failed" | "incomplete" | "configuration" | "interrupted" | "workspace_change" | "native_activity" | "native_usage" | "native_plan" | "native_diff" | "native_question" | "native_question_resolved" | "native_approval_resolved" | "native_steer" | "graph_update" | "graph_update_pending" | "experiment_run";
@@ -2031,7 +2033,7 @@ interface AgentEvent {
   turnId?: string;
   delta?: string;
   clientRunId?: string;
-  error?: ModelIncompleteFailure;
+  error?: ModelTurnFailure;
   action?: AgentAction;
   changeSet?: WorkspaceChangeSet;
   snapshotCoverage?: WorkspaceSnapshotCoverage;

@@ -1,4 +1,5 @@
 const HEADER_NAME = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
+const MODEL_SESSION_HEADER_GUIDANCE = "This provider requires a stable session header. In Settings → Models, select OpenCode Go or set Session header to x-opencode-session and Strategy to Thread.";
 const INVALID_HEADER_VALUE = /[^\t\x20-\x7e\x80-\xff]/;
 const BLOCKED_HEADERS = new Set([
   "host",
@@ -85,9 +86,7 @@ function requiresSessionHeader(text) {
 
 function modelProviderErrorDetail(detail, config = {}) {
   const text = String(detail || "");
-  if (requiresSessionHeader(text.slice(0, 500))) {
-    return "This provider requires a stable session header. In Settings → Models, select OpenCode Go or set Session header to x-opencode-session and Strategy to Thread.";
-  }
+  if (requiresSessionHeader(text.slice(0, 500))) return MODEL_SESSION_HEADER_GUIDANCE;
   if (hasPrivateHeaderValues(config)) return "";
   return (config.apiKey ? text.split(config.apiKey).join("[redacted]") : text).slice(0, 500);
 }
@@ -108,6 +107,7 @@ function formatConnectionError(status, detail, config) {
 }
 
 module.exports = {
+  MODEL_SESSION_HEADER_GUIDANCE,
   buildModelHeaders,
   buildModelRequestOptions,
   formatConnectionError,
@@ -115,6 +115,7 @@ module.exports = {
   hasPrivateHeaderValues,
   modelProviderErrorDetail,
   redactModelSecrets,
+  requiresSessionHeader,
   sanitizeHeaders,
   sanitizeSessionHeader,
 };

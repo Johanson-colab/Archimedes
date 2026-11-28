@@ -2387,7 +2387,10 @@ function App() {
       }
       if (isGraphEvent && event.threadId && activeThreadIdRef.current !== event.threadId) return;
       const state = event.type === "complete" || event.type === "artifact" || event.type === "graph_update" || event.snapshotCoverage || event.toolCall?.status === "completed" ? "done" : event.type === "configuration" || event.type === "failed" || event.type === "incomplete" || event.type === "interrupted" || event.toolCall?.status === "failed" || event.toolCall?.status === "interrupted" ? "waiting" : "active";
-      setEvents((current) => [...current.filter((item) => item.title !== event.title), { title: event.title, detail: event.detail, snapshotCoverage: event.snapshotCoverage, state }]);
+      const localizableFailure = event.error?.code === "MODEL_SESSION_HEADER_REQUIRED";
+      const title = localizableFailure ? t(event.title) : event.title;
+      const detail = localizableFailure ? t(event.detail) : event.detail;
+      setEvents((current) => [...current.filter((item) => item.title !== title), { title, detail, snapshotCoverage: event.snapshotCoverage, state }]);
     });
     return unsubscribe;
   }, []);
@@ -5066,16 +5069,18 @@ function ConversationView({ onOpenCreatedApps, messages, events, trajectoryEvent
 }
 
 const ConversationMessage = memo(function ConversationMessage({ message, streaming, busyBackend }: { message: Message; streaming: boolean; busyBackend?: NativeSessionBackend }) {
+  const { t } = useUISettings();
+  const text = message.text === "This provider requires a stable session header. In Settings → Models, select OpenCode Go or set Session header to x-opencode-session and Strategy to Thread." ? t(message.text) : message.text;
   return <article className={`conversation-message ${message.role}`} data-session-message-id={message.id} data-turn-id={message.role === "user" ? message.id : undefined}>
     <div className="conversation-message-content">
     {message.role === "user" && Boolean(message.attachments?.length) && <div className="message-attachments">{message.attachments?.map((attachment) => <MessageAttachmentView key={attachment.position} attachment={attachment} turnId={message.turn_id} />)}</div>}
     <div className="conversation-message-copy">
       <div className="conversation-message-role">{message.role === "assistant" ? "Archimedes" : "You"}</div>
       {message.role === "assistant"
-        ? streaming ? <StreamingMarkdownMessage content={message.text} /> : busyBackend
+        ? streaming ? <StreamingMarkdownMessage content={text} /> : busyBackend
           ? <NativeSessionBusyNotice backend={busyBackend} />
-          : <MarkdownMessage content={message.text} />
-        : <p>{message.text}</p>}
+          : <MarkdownMessage content={text} />
+        : <p>{text}</p>}
       {Boolean(message.sources?.length) && <div className="conversation-sources" aria-label="Sources read by Archimedes">
         {message.sources?.map((source, index) => <a key={`${source.url}:${source.startPage}:${index}`} href={source.startPage ? `${source.url}#page=${source.startPage}` : source.url} target="_blank" rel="noreferrer" title={[source.title, source.url, source.query && `Query: ${source.query}`, source.excerpt, source.retrievedAt && `Read: ${source.retrievedAt}`].filter(Boolean).join("\n\n")}>
           <FileText size={12} /><span>{source.startPage ? `${new URL(source.url).hostname} · pp. ${source.startPage}${source.endPage !== source.startPage ? `-${source.endPage}` : ""}` : source.title}</span>

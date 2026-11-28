@@ -32,7 +32,7 @@ function riskTone(risk: string) {
 
 function reviewError(message: string, t: (key: string, values?: Record<string, string | number>) => string) {
   const match = String(message || "").match(/^Could not download (arXiv:\S+)\. ([\s\S]+)$/);
-  return match ? t("Could not download {identifier}. {reason}", { identifier: match[1], reason: match[2] }) : message;
+  return match ? t("Could not download {identifier}. {reason}", { identifier: match[1], reason: match[2] }) : t(message);
 }
 
 function decisionLabel(t: (key: string) => string, value: string) {

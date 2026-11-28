@@ -42,6 +42,16 @@ test("keys stay sorted inside each shard so concurrent additions do not collide"
   }
 });
 
+test("session-header recovery guidance is translated at every display boundary", () => {
+  const merged = new Map(files.flatMap(entries));
+  const key = "This provider requires a stable session header. In Settings → Models, select OpenCode Go or set Session header to x-opencode-session and Strategy to Thread.";
+  assert.match(merged.get(key) || "", /[一-鿿]/);
+  const app = fs.readFileSync(path.join(root, "src", "App.tsx"), "utf8");
+  assert.match(app, /event\.error\?\.code === "MODEL_SESSION_HEADER_REQUIRED"/);
+  assert.ok(app.includes(`message.text === "${key}"`));
+  const review = fs.readFileSync(path.join(root, "src", "PaperReviewView.tsx"), "utf8");
+  assert.match(review, /: t\(message\);/);
+});
 test("the shell merges every shard and keeps the surfaces translated", () => {
   const shell = fs.readFileSync(path.join(root, "src", "i18n.tsx"), "utf8");
   for (const file of files) {

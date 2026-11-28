@@ -24,7 +24,7 @@ const { runApprovedCommand } = require("./agent/command-runner.cjs");
 const { readLines, searchWorkspace, prepareWrite, prepareEdit, readCommandLog, visibleExisting } = require("./agent/workspace-tools.cjs");
 const { ToolRegistry } = require("./agent/tool-registry.cjs");
 const { fetchModelWithRetry } = require("./agent/model-retry.cjs");
-const { buildModelRequestOptions, formatModelRequestError, modelProviderErrorDetail } = require("./model-request-headers.cjs");
+const { MODEL_SESSION_HEADER_GUIDANCE, buildModelRequestOptions, formatModelRequestError, modelProviderErrorDetail, requiresSessionHeader } = require("./model-request-headers.cjs");
 const { readModelResponseJson } = require("./model-response-json.cjs");
 const { boundActiveContext } = require("./agent/active-context.cjs");
 const { discoverSkills, readSkillResource } = require("./agent/api-skills.cjs");
@@ -1775,6 +1775,12 @@ async function runAgentInStore({ prompt, workspace, threadId, projectId, workspa
       recordEvent({ type: "model_incomplete", payload: failure });
       emitTurn({ type: "incomplete", title: "Response incomplete", detail: "Partial text was kept. Continue in this chat to retry; no tool from the unfinished response was executed.", error: failure });
       return { ...finish(`${error.partialResponse ? `${error.partialResponse}\n\n` : ""}This model response is incomplete: ${error.message} Continue in this chat to retry.`, "incomplete"), error: failure };
+    }
+    if (requiresSessionHeader(String(error?.message || "").slice(0, 500))) {
+      const failure = { code: "MODEL_SESSION_HEADER_REQUIRED" };
+      recordEvent({ type: "model_session_header_required", payload: failure });
+      emitTurn({ type: "failed", title: "Research turn failed", detail: MODEL_SESSION_HEADER_GUIDANCE, error: failure });
+      return { ...finish(MODEL_SESSION_HEADER_GUIDANCE, "failed"), error: failure };
     }
     if (error instanceof NativeSessionBusyError) {
       recordEvent({ type: "native_session_busy", payload: { backend: error.backend } });
