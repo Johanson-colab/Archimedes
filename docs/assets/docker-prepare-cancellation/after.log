@@ -1,0 +1,13 @@
+✔ reproduction run passes its abort signal into Docker preparation (1.413333ms)
+✔ cancelling Docker preparation kills docker run and still removes a possible container (327.64475ms)
+✔ Docker structured files reject external directory/final symlinks and preserve ordinary nested edits (4.309333ms)
+✔ SSH production file scripts preserve stdin/quoting, refuse linked paths and never truncate a complete-read result silently (33.091208ms)
+✔ the real pilot never falls back to another file after a structured read-limit error (7.248333ms)
+ℹ tests 5
+ℹ suites 0
+ℹ pass 5
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 479.782084
