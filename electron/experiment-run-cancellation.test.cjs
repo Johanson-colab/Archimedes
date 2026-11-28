@@ -133,10 +133,10 @@ test("main quit guard localizes cancellation, restores the window and awaits App
     shutdown: async () => { shutdownStarted++; await new Promise(resolve => { releaseValidation = resolve; }); validation = false; },
   };
   new Function("installQuitGuard", "app", "dialog", "uiLanguage", "BrowserWindow", "createWindow", "startupWorkspace",
-    "listActiveRuns", "agent", "researchAppRuntime", "researchAppDelivery", "experimentRunner", "stoppingResearch", source.slice(start, end))(
+    "listActiveRuns", "agent", "store", "researchAppRuntime", "researchAppDelivery", "experimentRunner", "stoppingResearch", source.slice(start, end))(
     installQuitGuard, app, dialog, "zh", { getAllWindows: () => Array.from({ length: windowCount }) },
     () => { windowCount++; restored++; }, () => null, () => [],
-    { hasActiveAgentRuns: () => false, shutdownAgentRuns: async () => {} },
+    { hasActiveAgentRuns: () => false, shutdownAgentRuns: async () => {} }, { hasPendingWorkspaceMutations: () => false },
     { hasRunningApps: () => false, shutdown: async () => {} }, researchAppDelivery,
     { shutdownExperimentRuns: async () => {} }, false,
   );
