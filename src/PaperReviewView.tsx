@@ -119,10 +119,11 @@ function HistoryList({ runs, selectedId, onSelect, onDelete }: {
   </section>;
 }
 
-export default function PaperReviewView({ bridge, workspace, projectId, active, manuscript, onClearManuscript, onRevision }: {
+export default function PaperReviewView({ bridge, workspace, projectId, threadId, active, manuscript, onClearManuscript, onRevision }: {
   bridge: ResearchDeskBridge;
   workspace: string;
   projectId: string | null;
+  threadId?: string | null;
   active: boolean;
   manuscript?: ManuscriptReviewRequest | null;
   onClearManuscript?: () => void;
@@ -262,7 +263,7 @@ export default function PaperReviewView({ bridge, workspace, projectId, active, 
       // Re-resolve the destination after any in-page settings change so the
       // consent prompt and the submitted run describe the same provider.
       try {
-        handoff = await bridge.prepareManuscriptReview({ projectId: projectId ?? "", workspaceId: manuscript.origin.workspaceId, manifestPath: manuscript.origin.manifestPath }) ?? manuscript;
+        handoff = await bridge.prepareManuscriptReview({ projectId: projectId ?? "", workspaceId: manuscript.origin.workspaceId, workspace: manuscript.origin.workspace, threadId: threadId || undefined, manifestPath: manuscript.origin.manifestPath }) ?? manuscript;
       } catch (cause) {
         setError(cause instanceof Error ? cause.message : String(cause));
         return;
@@ -276,7 +277,7 @@ export default function PaperReviewView({ bridge, workspace, projectId, active, 
       confirmLabel: "Send manuscript text",
     })) return;
     const source: PaperReviewSource = handoff
-      ? { kind: "manuscript", manifestPath: handoff.origin.manifestPath, workspaceId: handoff.origin.workspaceId, buildId: handoff.origin.buildId, destination: handoff.destination }
+      ? { kind: "manuscript", manifestPath: handoff.origin.manifestPath, workspaceId: handoff.origin.workspaceId, workspace: handoff.origin.workspace, threadId: handoff.origin.threadId || undefined, buildId: handoff.origin.buildId, destination: handoff.destination }
       : sourceKind === "library"
       ? { kind: "library", paperId }
       : sourceKind === "arxiv"

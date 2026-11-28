@@ -3211,7 +3211,7 @@ function App() {
 
   async function openManuscriptReview(manifestPath: string) {
     if (!activeProjectId || !activeWorkspaceId || !desktopBridge.prepareManuscriptReview) return;
-    const request = await desktopBridge.prepareManuscriptReview({ projectId: activeProjectId, workspaceId: activeWorkspaceId, manifestPath });
+    const request = await desktopBridge.prepareManuscriptReview({ projectId: activeProjectId, workspaceId: activeWorkspaceId, workspace: executionWorkspace, threadId: activeThreadId || undefined, manifestPath });
     if (manuscriptOwnerRef.current !== manuscriptOwner) return;
     if (hiddenCoreModules.has("paper-review")) await setCoreModuleEnabled("paper-review", true);
     if (manuscriptOwnerRef.current !== manuscriptOwner) return;
@@ -3634,7 +3634,7 @@ function App() {
     daily: <LibraryView key={`${workspace}:${activeProjectId || ""}:${dailyStartMode}`} bridge={desktopBridge} mode="daily" active={mainSection === "daily"} initialDailyMode={dailyStartMode} workspace={workspace} projectId={activeProjectId} onLibraryImported={() => setLibraryRefreshVersion((version) => version + 1)} onInternalReviewThreadsDeleted={(threadIds) => setThreads((current) => current.filter((thread) => !threadIds.includes(thread.id)))} onReproduceOpened={(id) => { setReproduceId(id); setMainSection("reproduce"); }} onOpenProject={(id) => setActiveProjectId(id)} />,
     "benchmark-radar": <BenchmarkRadarView />,
     news: <NewsView bridge={desktopBridge} projectId={activeProjectId} active={mainSection === "news"} onSendToChat={sendNoteToChat} />,
-    "paper-review": <PaperReviewView key={manuscriptOwner} bridge={desktopBridge} workspace={executionWorkspace} projectId={activeProjectId} active={mainSection === "paper-review"}
+    "paper-review": <PaperReviewView key={manuscriptOwner} bridge={desktopBridge} workspace={executionWorkspace} projectId={activeProjectId} threadId={activeThreadId} active={mainSection === "paper-review"}
       manuscript={manuscriptReview && manuscriptReview.origin.workspace === executionWorkspace && manuscriptReview.origin.projectId === activeProjectId ? manuscriptReview : null}
       onClearManuscript={() => setManuscriptReview(null)} onRevision={openManuscriptRevision} />,
     extensions: <ExtensionsView bridge={desktopBridge} workspace={executionWorkspace} tab={extensionsTab} onTabChange={setExtensionsTab} attachedIds={new Set(contextItems.map((item) => item.id))} onAttach={(item) => setContextItems((current) => current.some((candidate) => candidate.id === item.id) ? current : [...current, item].slice(0, 12))} />,

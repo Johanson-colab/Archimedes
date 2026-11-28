@@ -78,6 +78,12 @@ function cachePdf(data) {
   return { sha256, path: outputPath };
 }
 
+function retainedPdfPath(sha256) {
+  if (!pdfDir || !/^[a-f0-9]{64}$/.test(String(sha256 || ""))) return "";
+  const target = path.join(pdfDir, `${sha256}.pdf`);
+  return fs.existsSync(target) ? target : "";
+}
+
 function verifyPdf(data) {
   if (!Buffer.isBuffer(data) || data.length < 5) throw new Error("The selected file is empty.");
   if (data.length > MAX_PDF_BYTES) throw new Error("The PDF is larger than the 100 MB library limit.");
@@ -523,6 +529,7 @@ module.exports = {
   deleteRun,
   exportRun,
   markdownForRun,
+  retainedPdfPath,
   parseArxivRef,
   isInitialized,
   // exposed for tests

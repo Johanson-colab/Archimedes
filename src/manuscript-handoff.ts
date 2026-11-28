@@ -2,6 +2,7 @@ export type ManuscriptReviewOrigin = {
   dataWorkspace: string;
   projectId: string;
   workspaceId: string;
+  threadId?: string;
   workspace: string;
   mainPath: string;
   manifestPath: string;

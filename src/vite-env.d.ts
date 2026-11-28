@@ -340,7 +340,7 @@ interface ResearchDeskBridge {
     listPaperReviewPapers: (input?: { workspace?: string; projectId?: string }) => Promise<PaperReviewPaperSummary[]>;
     choosePaperReviewPdf: () => Promise<string>;
     stagePaperToSlidesPdf: (workspace: string, path: string) => Promise<string>;
-    prepareManuscriptReview?: (input: { projectId: string; workspaceId: string; manifestPath: string }) => Promise<import("./manuscript-handoff").ManuscriptReviewRequest>;
+    prepareManuscriptReview?: (input: { projectId: string; workspaceId: string; manifestPath: string; workspace?: string; threadId?: string }) => Promise<import("./manuscript-handoff").ManuscriptReviewRequest>;
     createManuscriptRevision?: (input: import("./manuscript-handoff").ManuscriptReviewFinding) => Promise<{ thread: ResearchThreadDetail; draft: string }>;
     openManuscriptReviewPage?: (input: import("./manuscript-handoff").ManuscriptReviewFinding) => Promise<string>;
     createPaperReviewRun: (input: PaperReviewCreateInput) => Promise<{ runId: string; document: PaperReviewDocumentSummary | null; venue: { id: string; displayName: string; version: string }; model: string }>;
@@ -629,7 +629,7 @@ interface PaperReviewDocumentSummary {
 }
 
 type PaperReviewSource =
-  | ({ kind: "manuscript"; manifestPath: string; workspaceId: string; buildId: string } & Pick<import("./manuscript-handoff").ManuscriptReviewRequest, "destination">)
+  | ({ kind: "manuscript"; manifestPath: string; workspaceId: string; workspace?: string; threadId?: string; buildId: string } & Pick<import("./manuscript-handoff").ManuscriptReviewRequest, "destination">)
   | { kind: "library"; paperId: string }
   | { kind: "arxiv"; value: string }
   | { kind: "pdf"; filePath: string };
