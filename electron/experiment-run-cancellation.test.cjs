@@ -83,6 +83,51 @@ test("native quit confirmation keeps work on cancel and exits once after confirm
   assert.deepEqual({ dialogs, stopped, quit, work }, { dialogs: 3, stopped: 1, quit: 1, work: false });
 });
 
+test("main quit guard localizes cancellation, restores the window and awaits App-only validation", async () => {
+  const source = fs.readFileSync(path.join(__dirname, "main.cjs"), "utf8");
+  const start = source.indexOf("const QUIT_DIALOG_COPY");
+  const guard = source.indexOf("installQuitGuard({ app, dialog,", start);
+  const end = source.indexOf("\n});", guard) + 4;
+  assert.ok(start >= 0 && guard > start && end > guard, "quit guard wiring was not found");
+  const app = new EventEmitter();
+  let response = 0, validation = true, windowCount = 0, restored = 0, dialogs = 0, shutdownStarted = 0, quits = 0, releaseValidation;
+  let dialogOptions;
+  const beforeQuit = () => {
+    const event = { defaultPrevented: false, preventDefault() { this.defaultPrevented = true; } };
+    app.emit("before-quit", event);
+    if (event.defaultPrevented) return;
+    app.emit("will-quit", event);
+    if (!event.defaultPrevented) quits++;
+  };
+  app.quit = beforeQuit;
+  const dialog = { showMessageBox: async options => { dialogs++; dialogOptions = options; return { response }; } };
+  const researchAppDelivery = {
+    hasActiveValidation: () => validation,
+    shutdown: async () => { shutdownStarted++; await new Promise(resolve => { releaseValidation = resolve; }); validation = false; },
+  };
+  new Function("installQuitGuard", "app", "dialog", "uiLanguage", "BrowserWindow", "createWindow", "startupWorkspace",
+    "listActiveRuns", "agent", "researchAppRuntime", "researchAppDelivery", "experimentRunner", "stoppingResearch", source.slice(start, end))(
+    installQuitGuard, app, dialog, "zh", { getAllWindows: () => Array.from({ length: windowCount }) },
+    () => { windowCount++; restored++; }, () => null, () => [],
+    { hasActiveAgentRuns: () => false, shutdownAgentRuns: async () => {} },
+    { hasRunningApps: () => false, shutdown: async () => {} }, researchAppDelivery,
+    { shutdownExperimentRuns: async () => {} }, false,
+  );
+  beforeQuit();
+  await eventually(() => restored === 1, "cancelled quit did not restore a window");
+  assert.deepEqual({ dialogs, shutdownStarted, quits, validation }, { dialogs: 1, shutdownStarted: 0, quits: 0, validation: true });
+  assert.equal(dialogOptions.message, "研究任务仍在运行");
+  assert.equal(dialogOptions.detail, "停止正在运行的工作并退出 Archimedes？");
+  assert.deepEqual(dialogOptions.buttons, ["保持运行", "停止并退出"]);
+  response = 1;
+  beforeQuit();
+  await eventually(() => shutdownStarted === 1, "App-only validation did not start shutdown");
+  assert.equal(quits, 0, "quit completed before validation cleanup");
+  releaseValidation();
+  await eventually(() => quits === 1, "quit did not finish after validation cleanup");
+  assert.equal(validation, false);
+});
+
 for (const { name, ignoreTerm, stdio, shutdown, stopThenShutdown } of [
   { name: "cancel stops a run's descendant process", ignoreTerm: false, stdio: "inherit" },
   { name: "cancel escalates when a descendant ignores SIGTERM and holds log pipes", ignoreTerm: true, stdio: "inherit" },
