@@ -1,0 +1,16 @@
+$ node --test --test-name-pattern='explicit conference open is consumed' electron/discovery-project-state.test.cjs  (branch head 0e3ef0fe before the fix)
+✖ an explicit conference open is consumed before another project mounts discovery (55.726708ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 849.871333
+
+✖ failing tests:
+
+test at electron/discovery-project-state.test.cjs:101:1
+✖ an explicit conference open is consumed before another project mounts discovery (55.726708ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /key=\{`\$\{workspace\}:\$\{activeProjectId \|\| ""\}:\$\{dailyStartRequest\}`\}/.

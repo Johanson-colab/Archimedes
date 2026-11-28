@@ -37,6 +37,7 @@ import { buildPdfHighlightSegments, PDF_HIGHLIGHT_COLORS } from "./pdf-highlight
 import { useUISettings, type Language } from "./i18n";
 import { MenuItem, MenuSurface } from "./Menu";
 import { Tabs, Tab, FilterGroup, FilterButton } from "./Tabs";
+import { discoveryStorageKey, readDiscoveryControls, writeDiscoveryControls } from "./discovery-state";
 import { fingerprintFor } from "./proactive-engine";
 import { emitProactiveSignal } from "./proactive-signals";
 import {
@@ -197,11 +198,12 @@ export default function LibraryView(props: LibraryViewProps) {
     renderEditor={(editorProps) => <LibraryEditor {...editorProps} active={active} />}
     renderImport={(importProps) => <PaperImportModal {...importProps} bridge={bridge} workspace={workspace} />}
   />;
-  return <DailyLibraryView key={projectId || "local"} bridge={bridge} projectId={projectId} initialMode={initialDailyMode} active={active} refreshVersion={libraryRefreshVersion} onLibraryImported={onLibraryImported} />;
+  const storageKey = discoveryStorageKey(workspace, projectId);
+  return <DailyLibraryView key={storageKey} storageKey={storageKey} bridge={bridge} projectId={projectId} initialMode={initialDailyMode} active={active} refreshVersion={libraryRefreshVersion} onLibraryImported={onLibraryImported} />;
 }
 
-function DailyLibraryView({ bridge, projectId, initialMode, active = true, refreshVersion, onLibraryImported }: {
-  bridge: ResearchDeskBridge; projectId?: string | null; initialMode?: DailyDiscoveryMode | "conference"; active?: boolean; refreshVersion: number; onLibraryImported?: () => void;
+function DailyLibraryView({ storageKey, bridge, projectId, initialMode, active = true, refreshVersion, onLibraryImported }: {
+  storageKey: string; bridge: ResearchDeskBridge; projectId?: string | null; initialMode?: DailyDiscoveryMode | "conference"; active?: boolean; refreshVersion: number; onLibraryImported?: () => void;
 }) {
   const [libraries, setLibraries] = useState<ResearchLibrary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -217,7 +219,11 @@ function DailyLibraryView({ bridge, projectId, initialMode, active = true, refre
     void loadLibraries().catch(() => {});
     return () => { alive.current = false; };
   }, [loadLibraries, refreshVersion]);
-  return <DailyDiscovery initialMode={initialMode} active={active} bridge={bridge} libraries={libraries} loadingLibraries={loading} onImported={async () => { await loadLibraries(); onLibraryImported?.(); }} />;
+  return <DailyDiscovery storageKey={storageKey} initialMode={initialMode} active={active} bridge={bridge} libraries={libraries} loadingLibraries={loading} onImported={async () => {
+    if (!alive.current) return;
+    await loadLibraries();
+    if (alive.current) onLibraryImported?.();
+  }} />;
 }
 
 function PaperInspector({ paper, onUpdate, onRemove, onRead, noteDrafts }: { paper: LibraryPaper | null; onUpdate: (patch: Parameters<ResearchDeskBridge["updateLibraryPaper"]>[1]) => Promise<void>; onRemove: () => Promise<void>; onRead: () => void; noteDrafts: LibraryNoteDrafts }) {
@@ -2599,16 +2605,27 @@ function DailyThumbnail({ paper, bridge }: { paper: DailyPaper; bridge: Research
   </div>;
 }
 
-function DailyDiscovery({ initialMode = "latest", active = true, bridge, libraries, loadingLibraries, onImported }: { initialMode?: DailyDiscoveryMode | "conference"; active?: boolean; bridge: ResearchDeskBridge; libraries: ResearchLibrary[]; loadingLibraries: boolean; onImported: () => Promise<void> }) {
+function DailyDiscovery({ storageKey, initialMode = "latest", active = true, bridge, libraries, loadingLibraries, onImported }: { storageKey: string; initialMode?: DailyDiscoveryMode | "conference"; active?: boolean; bridge: ResearchDeskBridge; libraries: ResearchLibrary[]; loadingLibraries: boolean; onImported: () => Promise<void> }) {
   const { t } = useUISettings();
-  const [mode, setMode] = useState<DailyDiscoveryMode | "conference">(initialMode);
-  const [conferenceOpened, setConferenceOpened] = useState(initialMode === "conference");
+  const [saved] = useState(() => readDiscoveryControls(storageKey, {
+    mode: initialMode,
+    range: "7d" as DailyDiscoveryRange,
+    topic: "all" as DailyDiscoveryTopic,
+    query: "",
+    submittedQuery: "",
+    targetLibraryId: "",
+  }));
+  const [mode, setMode] = useState<DailyDiscoveryMode | "conference">(() => {
+    if (initialMode === "conference") return initialMode;
+    return ["latest", "trending", "conference"].includes(saved.mode) ? saved.mode : initialMode;
+  });
+  const [conferenceOpened, setConferenceOpened] = useState(mode === "conference");
   const feedCache = useRef(new Map<string, DailyDiscoveryResponse>());
-  const [range, setRange] = useState<DailyDiscoveryRange>("7d");
-  const [topic, setTopic] = useState<DailyDiscoveryTopic>("all");
-  const [query, setQuery] = useState("");
-  const [submittedQuery, setSubmittedQuery] = useState("");
-  const [targetLibraryId, setTargetLibraryId] = useState("");
+  const [range, setRange] = useState<DailyDiscoveryRange>(DAILY_RANGES.some(({ id }) => id === saved.range) ? saved.range : "7d");
+  const [topic, setTopic] = useState<DailyDiscoveryTopic>(DAILY_TOPICS.some(({ id }) => id === saved.topic) ? saved.topic : "all");
+  const [query, setQuery] = useState(saved.query);
+  const [submittedQuery, setSubmittedQuery] = useState(saved.submittedQuery);
+  const [targetLibraryId, setTargetLibraryId] = useState(saved.targetLibraryId);
   const [response, setResponse] = useState<DailyDiscoveryResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [added, setAdded] = useState<Set<string>>(new Set());
@@ -2617,8 +2634,14 @@ function DailyDiscovery({ initialMode = "latest", active = true, bridge, librari
   const [error, setError] = useState("");
   const feedRequestId = useRef(0);
   const responseRef = useRef<DailyDiscoveryResponse | null>(null);
-  useEffect(() => { if (!targetLibraryId && libraries[0]) setTargetLibraryId(libraries[0].id); }, [libraries, targetLibraryId]);
-  const targetLibrary = useMemo(() => libraries.find((library) => library.id === targetLibraryId), [libraries, targetLibraryId]);
+  const targetLibrary = libraries.find((library) => library.id === targetLibraryId) ?? libraries[0];
+  const destinationId = targetLibrary?.id ?? "";
+  useEffect(() => {
+    if (!loadingLibraries && targetLibraryId !== destinationId) setTargetLibraryId(destinationId);
+  }, [loadingLibraries, targetLibraryId, destinationId]);
+  useEffect(() => {
+    writeDiscoveryControls(storageKey, { mode, range, topic, query, submittedQuery, targetLibraryId });
+  }, [storageKey, mode, range, topic, query, submittedQuery, targetLibraryId]);
   const searchActive = Boolean(submittedQuery);
   const loadFeed = useCallback(async (forceRefresh = false) => {
     if (mode === "conference") return;
@@ -2645,7 +2668,7 @@ function DailyDiscovery({ initialMode = "latest", active = true, bridge, librari
     } catch (discoverError) {
       if (requestId !== feedRequestId.current) return;
       const message = readableError(discoverError, "The daily paper feed could not be refreshed.");
-      setError(responseRef.current ? `${message} Showing the previous results.` : message);
+      setError(responseRef.current ? `${message} ${t("Showing the previous results.")}` : message);
     } finally {
       if (requestId === feedRequestId.current) setLoading(false);
     }
@@ -2691,13 +2714,17 @@ function DailyDiscovery({ initialMode = "latest", active = true, bridge, librari
     if (!value.trim() && submittedQuery) clearSearch();
   }
 
+  function savedPaperKey(paper: AcademicSearchResult) {
+    return `${destinationId}:${paper.external_id || paper.title}`;
+  }
+
   async function add(paper: DailyPaper | AcademicSearchResult) {
-    if (!targetLibraryId) return;
-    const key = paper.external_id || paper.title;
+    if (!destinationId) return;
+    const key = savedPaperKey(paper);
     setAdding(key);
     setError("");
     try {
-      await bridge.addLibraryPaper(targetLibraryId, paper);
+      await bridge.addLibraryPaper(destinationId, paper);
       setAdded((current) => new Set(current).add(key));
       await onImported();
     } catch (addError) {
@@ -2718,10 +2745,10 @@ function DailyDiscovery({ initialMode = "latest", active = true, bridge, librari
       </div>
       <button className={mode === "conference" ? "secondary-button conference-mode-button active" : "secondary-button conference-mode-button"} aria-pressed={mode === "conference"} title="Search official conference catalogs" onClick={() => changeMode("conference")}><GraduationCap size={16} />Top conference search</button>
       {mode !== "conference" && !searchActive && <button className="secondary-button daily-refresh" disabled={loading} onClick={() => void loadFeed(true)}>{loading ? <LoaderCircle className="spin" size={14} /> : <RefreshCw size={14} />}Refresh</button>}
-      <label className="daily-save-target">Save to<select value={targetLibraryId} disabled={loadingLibraries} onChange={(event) => setTargetLibraryId(event.target.value)}>{libraries.map((library) => <option key={library.id} value={library.id}>{library.name}</option>)}</select></label>
+      <label className="daily-save-target">Save to<select value={destinationId} disabled={loadingLibraries} onChange={(event) => setTargetLibraryId(event.target.value)}>{libraries.map((library) => <option key={library.id} value={library.id}>{library.name}</option>)}</select></label>
     </div>
     <FilterGroup label="AI research topic" className="daily-topic-filter">{DAILY_TOPICS.map((item) => <FilterButton key={item.id} active={topic === item.id} title={item.description} onClick={() => { clearSearch(); setTopic(item.id); }}>{item.label}</FilterButton>)}</FilterGroup>
-    {conferenceOpened && <div hidden={mode !== "conference"}><ConferenceDiscovery bridge={bridge} active={active && mode === "conference"} targetLibraryId={targetLibraryId} topic={topic} onImported={onImported} /></div>}
+    {conferenceOpened && <div hidden={mode !== "conference"}><ConferenceDiscovery storageKey={`${storageKey}:conference`} bridge={bridge} active={active && mode === "conference"} targetLibraryId={destinationId} topic={topic} onImported={onImported} /></div>}
     <div hidden={mode === "conference"}>
     <div className="daily-search-panel">
       <div className="daily-search-input-row"><input value={query} onChange={(event) => changeQuery(event.target.value)} onKeyDown={(event) => event.key === "Enter" && void submitSearch()} placeholder={t("Search all papers by keyword, title, or author")} />
@@ -2733,8 +2760,9 @@ function DailyDiscovery({ initialMode = "latest", active = true, bridge, librari
     {response?.warning && <InlineNotice tone="warning" className="library-error">{t(response.warning)}</InlineNotice>}
     {loading && !response ? <LoadingState /> : error && !response ? <StateView tone="error" className="daily-empty daily-feed-failed" icon={<RefreshCw size={28} />} title="Could not load the live feed" description="arXiv may be responding slowly. Your library is unaffected." action={<button className="secondary-button" onClick={() => void loadFeed(true)}><RefreshCw size={14} />Retry</button>} /> : !visiblePapers.length ? <StateView className="daily-empty" icon={<Calendar size={28} />} title="No papers found" description="Try another topic, expand the date range, or use a broader keyword." /> : <div className="daily-paper-list">{visiblePapers.map((paper) => {
       const key = paper.external_id || paper.title;
-      const isAdded = added.has(key);
-      const isAdding = adding === key;
+      const destinationKey = savedPaperKey(paper);
+      const isAdded = added.has(destinationKey);
+      const isAdding = adding === destinationKey;
       return <article
         className="daily-paper-row"
         key={key}
@@ -2767,8 +2795,8 @@ function DailyDiscovery({ initialMode = "latest", active = true, bridge, librari
       paper={previewPaper}
       bridge={bridge}
       canSave={Boolean(targetLibrary)}
-      isAdded={added.has(previewPaper.external_id || previewPaper.title)}
-      isAdding={adding === (previewPaper.external_id || previewPaper.title)}
+      isAdded={added.has(savedPaperKey(previewPaper))}
+      isAdding={adding === savedPaperKey(previewPaper)}
       onAdd={() => void add(previewPaper)}
       onClose={() => setPreviewPaper(null)}
     />}

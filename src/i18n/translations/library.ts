@@ -261,6 +261,7 @@ export const library: Record<string, string> = {
   "Show library folders": "显示文献目录",
   "Show paper details": "展开论文详情",
   "Show reader controls": "显示阅读器工具栏",
+  "Showing the previous results.": "显示上一次的结果。",
   "Showing up to 32 ranked papers with observed links.": "最多显示 32 篇存在引用关系的排序结果。",
   "Sort papers": "论文排序",
   "Source failed": "数据源请求失败",
