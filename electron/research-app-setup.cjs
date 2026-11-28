@@ -16,7 +16,8 @@ function requirements(app) {
 }
 function createSetup({ approve, execute = runCommand }) {
   const active = new Set();
-  async function setup(workspace, id) {
+  async function setup(workspace, id, { signal } = {}) {
+    signal?.throwIfAborted();
     const app = readApp(workspace, id), key = `${app.workspace}\0${id}`;
     if (active.has(key)) throw new Error('Dependency setup is already in progress.');
     active.add(key);
@@ -25,14 +26,15 @@ function createSetup({ approve, execute = runCommand }) {
       const envDir = path.join(app.directory, '.venv');
       if (fs.lstatSync(envDir, { throwIfNoEntry: false })) throw new Error('The App already has a .venv. Existing environments are never replaced.');
       if (!await approve({ app, packages })) throw new Error('Dependency setup was not approved.');
+      signal?.throwIfAborted();
       if (fingerprint(readApp(workspace, id)) !== signature) throw new Error('App source changed during approval. Review it again.');
       // Exclusive mkdir ensures cleanup only removes a directory we created.
       fs.mkdirSync(envDir);
       try {
         const python = process.platform === 'win32' ? 'python' : 'python3';
-        await execute(python, ['-m', 'venv', envDir], app.directory);
+        await execute(python, ['-m', 'venv', envDir], app.directory, signal);
         const interpreter = path.join(envDir, process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python');
-        if (packages.length) await execute(interpreter, ['-m', 'pip', 'install', '--disable-pip-version-check', '--no-input', ...packages], app.directory);
+        if (packages.length) await execute(interpreter, ['-m', 'pip', 'install', '--disable-pip-version-check', '--no-input', ...packages], app.directory, signal);
         return { installed: true, packages };
       } catch (error) {
         throw new Error(`${error.message} The incomplete .venv was preserved; review and remove it before retrying.`);
@@ -41,7 +43,8 @@ function createSetup({ approve, execute = runCommand }) {
   }
   return { setup };
 }
-function runCommand(command, args, cwd) {
+function runCommand(command, args, cwd, signal) {
+  signal?.throwIfAborted();
   const env = {};
   for (const key of ['PATH', 'HOME', 'USERPROFILE', 'SystemRoot', 'WINDIR', 'PATHEXT', 'TMPDIR', 'TMP', 'TEMP', 'LANG', 'LC_ALL']) if (process.env[key]) env[key] = process.env[key];
   env.PIP_CONFIG_FILE = process.platform === 'win32' ? 'NUL' : '/dev/null';
@@ -50,8 +53,7 @@ function runCommand(command, args, cwd) {
     const child = spawn(command, args, { cwd, env, shell: false, detached: process.platform !== 'win32', windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
     let output = '', timedOut = false;
     for (const stream of [child.stdout, child.stderr]) stream.on('data', chunk => { output = (output + String(chunk)).slice(-4000); });
-    const timer = setTimeout(() => {
-      timedOut = true;
+    const terminate = () => {
       try {
         if (process.platform === 'win32') {
           const killer = spawn('taskkill.exe', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' });
@@ -59,9 +61,12 @@ function runCommand(command, args, cwd) {
         }
         else process.kill(-child.pid, 'SIGKILL');
       } catch { child.kill(); }
-    }, 10 * 60_000);
-    child.once('error', error => { clearTimeout(timer); reject(new Error(`Could not start dependency setup: ${error.message}`)); });
-    child.once('close', code => { clearTimeout(timer); if (code === 0 && !timedOut) resolve(); else reject(new Error(timedOut ? 'Dependency setup timed out.' : `Dependency setup failed (${code}): ${output}`)); });
+    };
+    const timer = setTimeout(() => { timedOut = true; terminate(); }, 10 * 60_000);
+    signal?.addEventListener('abort', terminate, { once: true });
+    if (signal?.aborted) terminate();
+    child.once('error', error => { clearTimeout(timer); signal?.removeEventListener('abort', terminate); reject(new Error(`Could not start dependency setup: ${error.message}`)); });
+    child.once('close', code => { clearTimeout(timer); signal?.removeEventListener('abort', terminate); if (code === 0 && !timedOut && !signal?.aborted) resolve(); else reject(new Error(signal?.aborted ? 'Dependency setup cancelled.' : timedOut ? 'Dependency setup timed out.' : `Dependency setup failed (${code}): ${output}`)); });
   });
 }
 module.exports = { requirements, createSetup };

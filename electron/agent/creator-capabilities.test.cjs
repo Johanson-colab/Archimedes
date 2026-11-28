@@ -156,6 +156,10 @@ test("Create instructions reach API and shared native prompts on new and resumed
         assert.match(native, /zero, one or multiple/);
         assert.match(native, /A localhost URL is not a completed sidebar Research App/);
         assert.match(api, /may be reclaimed when the turn ends/);
+        assert.match(api, /reply in Chinese to Chinese requests/);
+        assert.match(native, /must not change the conversation language/);
+        assert.match(native, /not end-to-end verification/);
+        assert.match(native, /verify '<JSON/);
         assert.doesNotMatch(native, /# Paper Lookup/);
       } else {
         assert.doesNotMatch(api, /search_research_capabilities/);
