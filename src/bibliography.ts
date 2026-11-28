@@ -26,6 +26,28 @@ const arxivUrl = (value: string) => /^https?:\/\/(?:www\.)?arxiv\.org\/(?:abs|pd
 const arxivId = (value: string) => /^(?:\d{4}\.\d{4,5}|[a-z-]+(?:\.[a-z]{2})?\/\d{7})$/.test(arxiv(value));
 const title = (value: string) => value.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 
+function authorIdentity(authors: string[] = []) {
+  return authors.map(author => title(author).split(" ").sort().join(" ")).filter(Boolean).join("\n");
+}
+
+export function bibliographyTitleKey(paper: AcademicSearchResult) {
+  if (paper.s2_id || paper.arxiv_id || paper.doi) return "";
+  const prefix = `title:${title(paper.title)}`;
+  const authors = authorIdentity(paper.authors);
+  if (!authors && !paper.year) return prefix;
+  const bytes = new TextEncoder().encode(JSON.stringify([authors, paper.year || null]));
+  return crypto.subtle.digest("SHA-256", bytes).then(hash =>
+    prefix + ":" + Array.from(new Uint8Array(hash), byte => byte.toString(16).padStart(2, "0")).join(""));
+}
+
+function compatibleTitleMetadata(first: AcademicSearchResult, second: AcademicSearchResult) {
+  if (first.year && second.year && first.year !== second.year) return false;
+  const firstAuthors = authorIdentity(first.authors), secondAuthors = authorIdentity(second.authors);
+  return !firstAuthors || !secondAuthors || firstAuthors === secondAuthors
+    || (firstAuthors.endsWith("\nothers") && secondAuthors.startsWith(firstAuthors.slice(0, -"others".length)))
+    || (secondAuthors.endsWith("\nothers") && firstAuthors.startsWith(secondAuthors.slice(0, -"others".length)));
+}
+
 function splitAuthors(value: string) {
   const authors: string[] = [];
   let depth = 0, start = 0;
@@ -152,18 +174,48 @@ export function parseBibliography(input: string): { entries: BibliographyEntry[]
   return { entries, warnings };
 }
 
-export function matchBibliographyPaper(incoming: AcademicSearchResult, papers: BibliographyPaper[], { strongOnly = false }: { strongOnly?: boolean } = {}) {
-  const fields = [
-    ['s2_id', (value: string) => value.trim().toLowerCase()], ['arxiv_id', arxiv], ['doi', doi],
-  ] as const;
-  const compatible = (paper: BibliographyPaper) => !fields.some(([field, normalize]) => incoming[field] && paper[field] && normalize(incoming[field]) !== normalize(paper[field]));
-  for (const [field, normalize] of fields) {
+const identifierFields = [
+  ['s2_id', (value: string) => value.trim().toLowerCase()], ['arxiv_id', arxiv], ['doi', doi],
+] as const;
+
+export function hasConflictingBibliographyIdentifiers(first: AcademicSearchResult, second: AcademicSearchResult) {
+  return identifierFields.some(([field, normalize]) => {
+    const a = normalize(first[field] || "");
+    const b = normalize(second[field] || "");
+    return a && b && a !== b;
+  });
+}
+
+export function hasConflictingSavedBibliographyIdentifiers(candidate: AcademicSearchResult, papers: BibliographyPaper[], existing?: BibliographyPaper) {
+  return papers.some(paper => paper.id !== existing?.id
+    && identifierFields.some(([field, normalize]) => candidate[field] && paper[field] && normalize(candidate[field]) === normalize(paper[field]))
+    && (hasConflictingBibliographyIdentifiers(candidate, paper) || existing && hasConflictingBibliographyIdentifiers(existing, paper)));
+}
+
+export function matchBibliographyPaper<T extends AcademicSearchResult>(incoming: AcademicSearchResult, papers: T[], { strongOnly = false, titleAlreadyMatched = false, originalKey = "" }: { strongOnly?: boolean; titleAlreadyMatched?: boolean; originalKey?: string } = {}) {
+  const compatible = (paper: AcademicSearchResult) => !hasConflictingBibliographyIdentifiers(incoming, paper);
+  for (const [field, normalize] of identifierFields) {
     if (!incoming[field]) continue;
     const matched = papers.find(paper => paper[field] && normalize(incoming[field]) === normalize(paper[field]) && compatible(paper));
     if (matched) return matched;
   }
   if (strongOnly) return undefined;
-  return papers.find(paper => compatible(paper) && title(incoming.title) && title(incoming.title) === title(paper.title));
+  const normalizedTitle = title(incoming.title);
+  // A metadata repair does not rewrite the stored key assigned at import.
+  const legacyKey = `title:${normalizedTitle}`;
+  const retained = originalKey && papers.find(paper => "canonical_key" in paper && compatible(paper)
+    && (paper.canonical_key === originalKey && originalKey !== legacyKey
+      || paper.canonical_key === legacyKey && compatibleTitleMetadata(incoming, paper)));
+  return retained || papers.find(paper => compatible(paper) && compatibleTitleMetadata(incoming, paper)
+    && (titleAlreadyMatched || normalizedTitle && normalizedTitle === title(paper.title)));
+}
+
+// Complete a compatible record's identity without replacing saved identifiers.
+export function paperWithLearnedIdentifiers(paper: BibliographyPaper, representative: AcademicSearchResult) {
+  const identifiers = identifierFields
+    .filter(([field]) => !paper[field] && representative[field])
+    .map(([field]) => [field, representative[field]]);
+  return identifiers.length ? { ...paper, ...Object.fromEntries(identifiers) } : paper;
 }
 
 export function metadataDifferences(entry: AcademicSearchResult, current: AcademicSearchResult): MetadataPatch {
@@ -200,4 +252,68 @@ export function exportBibliography(papers: BibliographyPaper[]) {
     const escape = (value: string) => value.replace(/[\\{}%&#_$]/g, (character) => character === "\\" ? "\\textbackslash{} " : `\\${character}`);
     return `@${paper.entry_type || "article"}{${keys[index]},\n${Object.entries(values).filter(([, value]) => value).map(([field, value]) => `  ${field} = {${field === "author" ? paper.authors.map((author) => /\s+and\s+/i.test(author) ? `{${escape(author)}}` : escape(author)).join(" and ") : escape(value)}}`).join(",\n")}\n}`;
   }).join("\n\n") + "\n";
+}
+
+// Only retained rows can represent another import. A discarded title-only
+// match has no authority to hide a later entry with a different DOI.
+export function indexBibliographyBatch(entries: BibliographyEntry[], savedPapers: AcademicSearchResult[] = []) {
+  const byIdentity = new Map<string, Set<AcademicSearchResult>>();
+  const repeatedRows = new Set<number>();
+  const representatives = new Map<number, AcademicSearchResult>();
+  const addIdentity = (key: string, representative: AcademicSearchResult) => {
+    const group = byIdentity.get(key);
+    if (group) group.add(representative);
+    else byIdentity.set(key, new Set([representative]));
+  };
+  entries.forEach(({ paper }, index) => {
+    const identities = identifierFields.flatMap(([field, normalize]) =>
+      paper[field] ? [field + ":" + normalize(paper[field])] : []);
+    const normalizedTitle = title(paper.title);
+    const titleKey = normalizedTitle ? "title:" + normalizedTitle : "";
+    let representative: AcademicSearchResult | undefined;
+    for (const identity of identities) {
+      representative = matchBibliographyPaper(paper, [...(byIdentity.get(identity) || [])], { strongOnly: true });
+      if (representative) break;
+    }
+    if (representative) {
+      repeatedRows.add(index);
+      if (titleKey) addIdentity(titleKey, { ...representative, ...paper });
+      for (const [field, normalize] of identifierFields) {
+        if (!paper[field] || representative[field]) continue;
+        representative[field] = paper[field];
+        addIdentity(field + ":" + normalize(paper[field]), representative);
+      }
+      return;
+    }
+    const titleMatch = titleKey && matchBibliographyPaper(paper, [...(byIdentity.get(titleKey) || [])], { titleAlreadyMatched: true });
+    if (titleMatch) {
+      // Check the saved identity before learning aliases from a weak title match.
+      const savedIdentity = savedPapers.length ? matchBibliographyPaper(titleMatch, savedPapers) : undefined;
+      if (!savedIdentity || !hasConflictingBibliographyIdentifiers(paper, savedIdentity)) {
+        repeatedRows.add(index);
+        for (const [field, normalize] of identifierFields) {
+          if (!paper[field] || titleMatch[field]) continue;
+          titleMatch[field] = paper[field];
+          addIdentity(field + ":" + normalize(paper[field]), titleMatch);
+        }
+        return;
+      }
+    }
+    representative = { ...paper };
+    representatives.set(index, representative);
+    for (const identity of identities) addIdentity(identity, representative);
+    if (titleKey) addIdentity(titleKey, representative);
+  });
+  // A strong alias can make two retained rows claim the same identifier.
+  // Detect contradictions after the batch has finished learning aliases.
+  const conflictingPapers = new Set<AcademicSearchResult>();
+  for (const [identity, group] of byIdentity) {
+    if (identity.startsWith("title:") || group.size < 2) continue;
+    const papers = [...group];
+    for (const paper of papers) {
+      if (papers.some(other => hasConflictingBibliographyIdentifiers(paper, other))) conflictingPapers.add(paper);
+    }
+  }
+  const conflictingRows = new Set([...representatives].filter(([, paper]) => conflictingPapers.has(paper)).map(([index]) => index));
+  return { repeatedRows, representatives, conflictingRows };
 }

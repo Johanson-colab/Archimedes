@@ -1,0 +1,41 @@
+$ node --test --test-name-pattern='incomplete metadata joins its unique legacy cloud record' electron/library-sync.test.cjs  (branch head 0ca7c583 before the fix)
+✖ a title-only reference with incomplete metadata joins its unique legacy cloud record (39.228459ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 164.240666
+
+✖ failing tests:
+
+test at electron/library-sync.test.cjs:173:1
+✖ a title-only reference with incomplete metadata joins its unique legacy cloud record (39.228459ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+
+  3 !== 2
+
+      at TestContext.<anonymous> (/Users/fei/Desktop/Archimedes/electron/library-sync.test.cjs:193:12)
+
+$ node --test --test-name-pattern='weak title match cannot learn an arXiv ID' electron/bibliography-interchange.test.cjs  (before the fix)
+✖ a weak title match cannot learn an arXiv ID that contradicts a saved paper (149.701208ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 881.290541
+
+✖ failing tests:
+
+test at electron/bibliography-interchange.test.cjs:623:1
+✖ a weak title match cannot learn an arXiv ID that contradicts a saved paper (149.701208ms)
+  AssertionError [ERR_ASSERTION]: The input was expected to not match the regular expression /Conflicting DOI or arXiv IDs/. Input:
+
+  'Conflicting DOI or arXiv IDs: edit the source before importing'
+
+      at TestContext.<anonymous> (/Users/fei/Desktop/Archimedes/electron/bibliography-interchange.test.cjs:638:12)

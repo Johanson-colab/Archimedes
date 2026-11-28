@@ -1,3 +1,16 @@
+const { canonicalTitleKey, identifier, titleIdentity, compatibleTitleMetadata } = require("./bibliography-records.cjs");
+
+function titleFingerprint(paper) {
+  if (!paper.canonical_key.startsWith("title:") || Object.entries(identifier).some(([key, normalize]) => normalize(paper[key]))) return null;
+  const fingerprint = canonicalTitleKey(paper);
+  return fingerprint === canonicalTitleKey({ title: paper.title }) ? null : fingerprint;
+}
+
+function hasInitialPaperState(paper) {
+  return paper.state_updated_at === paper.created_at && paper.reading_status === "unread"
+    && !paper.starred && !paper.notes && !paper.tags.length;
+}
+
 function createLibrarySync({ store, api } = {}) {
   if (!store || !api) throw new Error("Store and collaboration API are required.");
 
@@ -9,6 +22,38 @@ function createLibrarySync({ store, api } = {}) {
     const remoteLibraries = await api.listLibraries(project.cloud_project_id);
     const remoteById = new Map(remoteLibraries.map((library) => [library.id, library]));
     let localLibraries = store.listLibraries(projectId);
+    let visiblePapers;
+
+    async function matchingCloudTitlePaper(paper) {
+      const fingerprint = titleFingerprint(paper);
+      if (!fingerprint) return null;
+      // Read existing cloud references before uploading a title-only identity.
+      // Enrichment can leave the saved key behind the current bibliographic metadata.
+      visiblePapers ??= Promise.all(remoteLibraries.map(library => api.listPapers(library.id)))
+        .then(lists => {
+          const byKey = new Map(lists.flat().map(item => [item.canonical_key, item]));
+          const byFingerprint = new Map();
+          const byTitle = new Map();
+          for (const item of byKey.values()) {
+            const identity = titleFingerprint(item);
+            if (identity) byFingerprint.set(identity, byFingerprint.has(identity) ? null : item);
+            const normalizedTitle = titleIdentity(item.title);
+            if (normalizedTitle) byTitle.set(normalizedTitle, [...(byTitle.get(normalizedTitle) || []), item]);
+          }
+          return { byKey, byFingerprint, byTitle };
+        });
+      const { byKey, byFingerprint, byTitle } = await visiblePapers;
+      if (byKey.has(paper.canonical_key)) return null;
+      const exact = byFingerprint.get(fingerprint);
+      if (exact) return exact;
+      // A missing year or a truncated author list can make the saved key differ
+      // from the current fingerprint without describing a different work.
+      const candidates = (byTitle.get(titleIdentity(paper.title)) || []).filter(item =>
+        String(item.canonical_key || "").startsWith("title:")
+        && !Object.entries(identifier).some(([key, normalize]) => normalize(item[key]))
+        && compatibleTitleMetadata({ year: item.year, authors_json: JSON.stringify(item.authors || []) }, paper));
+      return candidates.length === 1 ? candidates[0] : null;
+    }
 
     // Local -> cloud: create missing cloud libraries and attach papers.
     for (const library of localLibraries) {
@@ -36,8 +81,9 @@ function createLibrarySync({ store, api } = {}) {
       for (const paper of store.listPapers(library.id)) {
         if (paper.cloud_paper_id) continue;
         try {
+          const match = await matchingCloudTitlePaper(paper);
           const cloudPaper = await api.addPaper(cloudLibraryId, {
-            canonical_key: paper.canonical_key,
+            canonical_key: match?.canonical_key ?? paper.canonical_key,
             title: paper.title,
             authors: paper.authors,
             year: paper.year,
@@ -54,7 +100,11 @@ function createLibrarySync({ store, api } = {}) {
             github_stars: paper.github_stars,
             conference: paper.conference,
           });
-          store.linkPaperToCloud(paper.id, cloudPaper.id);
+          const linked = store.linkPaperToCloud(paper.id, cloudPaper.id);
+          if (match?.state_updated_at && match.id === cloudPaper.id && hasInitialPaperState(linked)) {
+            // A fresh import has a timestamp even though nobody edited its defaults.
+            store.applyCloudPaperState(linked.id, match);
+          }
         } catch (error) {
           warnings.push(`${paper.title}: ${error instanceof Error ? error.message : String(error)}`);
         }
