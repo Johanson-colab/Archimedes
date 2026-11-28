@@ -19,6 +19,7 @@ export const conversation: Record<string, string> = {
   "Side conversation": "侧边对话",
   "Start a conversation before using this command.": "请先开始对话，再使用此命令。",
   "Stop the running turn before using this command.": "请先停止正在运行的任务，再使用此命令。",
+  "The app closed while this turn was running. You can continue in this chat. Check any partial changes before continuing.": "这一轮运行时应用已关闭。你可以在此对话中继续。继续前请检查是否有只完成了一部分的修改。",
   "The side conversation is already open.": "侧边对话已经打开。",
   "Wait for the current command to finish.": "请等待当前命令执行完毕。",
 };

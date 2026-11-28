@@ -155,6 +155,20 @@ test("Python service belongs to the host, uses assigned port/readiness identity 
   await assert.rejects(fetch(running.url));
 });
 
+test("a stopping Python App remains active until its process exits", { skip: python.status !== 0 || process.platform === "win32" }, async (t) => {
+  const source = `import os, signal, sys\nfrom http.server import BaseHTTPRequestHandler, HTTPServer\nsignal.signal(signal.SIGTERM, lambda *_: sys.exit(0))\nclass H(BaseHTTPRequestHandler):\n def do_GET(self):\n  self.send_response(200); self.send_header('X-Archimedes-App-Token',os.environ['ARCHIMEDES_APP_TOKEN']); self.end_headers()\n def log_message(self,*args): pass\nHTTPServer(('127.0.0.1',int(os.environ['PORT'])),H).serve_forever()\n`;
+  const f = fixture(t, { kind: "python-http", source });
+  fs.mkdirSync(path.join(f.directory, ".venv/bin"), { recursive: true });
+  fs.symlinkSync(python.stdout.trim(), path.join(f.directory, ".venv/bin/python"));
+  const running = await f.runtime.start(f.workspace, "sample-app");
+  assert.equal(running.status, "running", running.error);
+  const stopping = f.runtime.stop(f.workspace, "sample-app");
+  assert.equal(f.runtime.status(f.workspace, "sample-app").status, "stopping");
+  assert.equal(f.runtime.hasRunningApps(), true);
+  await stopping;
+  assert.equal(f.runtime.hasRunningApps(), false);
+});
+
 test("declared keys require approval and reach only the App process; logs do not expose them", { skip: python.status !== 0 || process.platform === "win32" }, async (t) => {
   const source = `import os\nfrom http.server import BaseHTTPRequestHandler, HTTPServer\nclass H(BaseHTTPRequestHandler):\n def do_GET(self):\n  self.send_response(200); self.send_header('X-Archimedes-App-Token',os.environ['ARCHIMEDES_APP_TOKEN']); self.end_headers(); self.wfile.write(str('EXAMPLE_API_KEY' in os.environ).encode())\n def log_message(self,*args): pass\nprint(os.environ['EXAMPLE_API_KEY'],flush=True)\nHTTPServer(('127.0.0.1',int(os.environ['PORT'])),H).serve_forever()\n`;
   let approvals = 0;

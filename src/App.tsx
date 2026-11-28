@@ -180,6 +180,7 @@ type Message = {
   turn_id?: string;
   role: "user" | "assistant";
   text: string;
+  recoveryNotice?: boolean;
   sources?: ResearchSource[];
   attachments?: MessageAttachment[];
   created_at?: string;
@@ -5066,13 +5067,14 @@ function ConversationView({ onOpenCreatedApps, messages, events, trajectoryEvent
 }
 
 const ConversationMessage = memo(function ConversationMessage({ message, streaming, busyBackend }: { message: Message; streaming: boolean; busyBackend?: NativeSessionBackend }) {
+  const { t } = useUISettings();
   return <article className={`conversation-message ${message.role}`} data-session-message-id={message.id} data-turn-id={message.role === "user" ? message.id : undefined}>
     <div className="conversation-message-content">
     {message.role === "user" && Boolean(message.attachments?.length) && <div className="message-attachments">{message.attachments?.map((attachment) => <MessageAttachmentView key={attachment.position} attachment={attachment} turnId={message.turn_id} />)}</div>}
     <div className="conversation-message-copy">
       <div className="conversation-message-role">{message.role === "assistant" ? "Archimedes" : "You"}</div>
       {message.role === "assistant"
-        ? streaming ? <StreamingMarkdownMessage content={message.text} /> : busyBackend
+        ? message.recoveryNotice ? <p>{t(message.text)}</p> : streaming ? <StreamingMarkdownMessage content={message.text} /> : busyBackend
           ? <NativeSessionBusyNotice backend={busyBackend} />
           : <MarkdownMessage content={message.text} />
         : <p>{message.text}</p>}

@@ -117,7 +117,7 @@ export default function ExperimentInspector({ node, runs, onReadLog, connections
                     <span>SHA-256</span><p className="experiment-run-code">{file.sha256}</p>
                   </div>)}
                 </details>)}
-                {run.error && <div className="experiment-plan-row"><span>{t("Run error")}</span><p>{run.error}</p></div>}
+                {run.error && <div className="experiment-plan-row"><span>{t("Run error")}</span><p>{t(run.error)}</p></div>}
                 <button type="button" className="experiment-run-link" onClick={() => void readLog(run.id)} disabled={readingLog === run.id}>
                   <FileText size={12} />{t("Run log")}
                 </button>

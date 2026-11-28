@@ -19,6 +19,8 @@ const GIT_STATES = new Set(["none", "empty", "ready", "nested", "suspicious"]);
 const WORKSPACE_KINDS = new Set(["shared", "worktree", "sandbox"]);
 /** Sandboxes are an isolated copy; never copy caches, VCS data, or the app DB. */
 const SANDBOX_SKIP = new Set([".git", ".archimedes", "node_modules", "dist", "build", ".next"]);
+const recoveredDatabases = new Set();
+const RECOVERED_TURN_NOTICE = "The app closed while this turn was running. You can continue in this chat. Check any partial changes before continuing.";
 // SQL functions stay shared; each bound facade selects its own state. A run
 // captures the facade/lease, so opening another window cannot redirect it.
 const workspaceContext = new AsyncLocalStorage();
@@ -1193,21 +1195,67 @@ function backfillPaperRepositories(db) {
 }
 
 /**
- * A run cannot survive the process that owned it: the container is gone, and no
- * session is left to stop. Leaving those rows as "running" makes the UI show a
- * Stop button for a job that no longer exists, so they are reconciled on open.
+ * A new process has no Reproduce session to stop. An SSH process may still be
+ * running on its host, so require the researcher to verify it before retrying.
  */
 function reconcileInterruptedReproductions(db) {
   const now = timestamp();
-  const stuck = db.prepare("SELECT id FROM reproductions WHERE status IN ('provisioning', 'running', 'diagnosing')").all();
+  const stuck = db.prepare(`SELECT reproductions.id, (
+    SELECT backend FROM reproduction_runs
+    WHERE reproduction_id = reproductions.id AND status = 'running' ORDER BY started_at DESC LIMIT 1
+  ) AS backend FROM reproductions WHERE status IN ('provisioning', 'running', 'diagnosing')`).all();
   if (!stuck.length) return 0;
-  const message = "The app stopped while this was running. Start it again.";
   for (const row of stuck) {
+    const message = /^ssh\b/i.test(row.backend || "")
+      ? "Remote process status is unconfirmed after the app closed. Check the SSH host before running again."
+      : "The app stopped while this was running. Start it again.";
     db.prepare("UPDATE reproductions SET status = 'blocked', error = ?, updated_at = ? WHERE id = ?").run(message, now, row.id);
-    db.prepare("UPDATE reproduction_runs SET status = 'interrupted', finished_at = ?, updated_at = ? WHERE reproduction_id = ? AND status = 'running'")
-      .run(now, now, row.id);
+    db.prepare("UPDATE reproduction_runs SET status = 'interrupted', error = ?, finished_at = ?, updated_at = ? WHERE reproduction_id = ? AND status = 'running'")
+      .run(message, now, now, row.id);
   }
   return stuck.length;
+}
+
+
+function reconcileInterruptedResearch(db) {
+  // A non-null local task identifies execution owned by this desktop process.
+  // Cloud-imported turns have no local task and may still be running elsewhere.
+  const turns = db.prepare(`SELECT t.id, t.thread_id, t.task_id, t.assistant_message,
+      r.status AS task_status, r.response AS task_response
+    FROM research_turns t JOIN task_runs r ON r.id = t.task_id
+    WHERE t.status = 'running'`).all();
+  const now = timestamp();
+  db.exec("BEGIN");
+  try {
+    for (const turn of turns) {
+      // finishTask may have been persisted just before an unexpected exit.
+      const status = turn.task_status === "running" ? "interrupted" : turn.task_status;
+      const savedResponse = turn.task_response || turn.assistant_message;
+      const response = savedResponse || RECOVERED_TURN_NOTICE;
+      db.prepare("UPDATE research_turns SET status = ?, assistant_message = ?, completed_at = ? WHERE id = ?").run(status, response, now, turn.id);
+      db.prepare("UPDATE task_runs SET status = ?, response = ? WHERE id = ?").run(status, response, turn.task_id);
+      const sequence = db.prepare("SELECT COALESCE(MAX(sequence), 0) + 1 AS value FROM research_events WHERE turn_id = ?").get(turn.id).value;
+      db.prepare("INSERT INTO research_events (id, thread_id, turn_id, sequence, type, payload_json, created_at) VALUES (?, ?, ?, ?, 'run_recovered', ?, ?)")
+        .run(randomUUID(), turn.thread_id, turn.id, sequence, JSON.stringify({ status, reason: "owning_process_exited", generated_notice: !savedResponse }), now);
+      if (status === "completed" && !db.prepare("SELECT 1 FROM research_events WHERE turn_id = ? AND type = 'assistant_message'").get(turn.id)) {
+        db.prepare("INSERT INTO research_events (id, thread_id, turn_id, sequence, type, payload_json, created_at) VALUES (?, ?, ?, ?, 'assistant_message', ?, ?)")
+          .run(randomUUID(), turn.thread_id, turn.id, sequence + 1, JSON.stringify({ text: response, status }), now);
+      }
+    }
+    for (const threadId of new Set(turns.map(turn => turn.thread_id))) {
+      const running = db.prepare("SELECT 1 FROM research_turns WHERE thread_id = ? AND status = 'running' LIMIT 1").get(threadId);
+      const latest = db.prepare("SELECT status FROM research_turns WHERE thread_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 1").get(threadId);
+      const status = running ? "running" : ["failed", "incomplete"].includes(latest?.status) ? "error" : "idle";
+      db.prepare("UPDATE research_threads SET status = ?, updated_at = ? WHERE id = ?").run(status, now, threadId);
+    }
+    db.prepare("UPDATE task_runs SET status = 'interrupted', response = CASE WHEN response = '' THEN ? ELSE response END WHERE status = 'running'").run(RECOVERED_TURN_NOTICE);
+    db.prepare("UPDATE agent_actions SET status = 'rejected', resolved_at = ? WHERE status = 'pending'").run(now);
+    db.prepare("UPDATE command_runs SET status = 'interrupted', completed_at = ? WHERE status = 'running'").run(now);
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
 }
 
 function canonicalizeStoredWorkspacePaths(db) {
@@ -1227,16 +1275,21 @@ function reconcileInterruptedExperimentRuns(db) {
     const now = timestamp();
     for (const row of rows) {
       let alive = false;
-      if (row.pid) {
+      const pid = Number(row.pid);
+      if (Number.isSafeInteger(pid) && pid > 0) {
         try {
-          process.kill(Number(row.pid), 0);
+          process.kill(pid, 0);
           alive = true;
         } catch (error) {
           // EPERM means the process exists but belongs to another user.
           alive = error?.code === "EPERM";
         }
       }
-      if (alive) continue;
+      if (alive) {
+        db.prepare("UPDATE experiment_runs SET error = ?, updated_at = ? WHERE id = ?")
+          .run("A process with the saved PID is still present. Verify its identity before stopping or rerunning it.", now, row.id);
+        continue;
+      }
       db.prepare("UPDATE experiment_runs SET status = 'failed', error = ?, ended_at = ?, updated_at = ? WHERE id = ?")
         .run("The run process is no longer available.", now, now, row.id);
     }
@@ -1305,9 +1358,16 @@ function initializeWorkspace(state, workspacePath) {
   schema(database);
   state.localIdentity = localIdentity;
   canonicalizeStoredWorkspacePaths(database);
-  reconcileInterruptedExperimentRuns(database);
   backfillPaperRepositories(database);
-  reconcileInterruptedReproductions(database);
+  // Reopening a file through another folder does not create a new process owner.
+  const file = fs.statSync(databasePath, { bigint: true });
+  const identity = `${file.dev}:${file.ino}:${file.birthtimeNs}`;
+  if (!recoveredDatabases.has(identity)) {
+    reconcileInterruptedExperimentRuns(database);
+    reconcileInterruptedReproductions(database);
+    reconcileInterruptedResearch(database);
+    recoveredDatabases.add(identity);
+  }
   migrateLegacyTasks(database);
   seedLibraries(database);
   ensureProjectLibraries(database);
@@ -4035,6 +4095,11 @@ function getResearchThread(id) {
     // order across the whole thread, so expose a thread-wide ordinal.
     return { id: event.id, turn_id: event.turn_id, sequence: event.sequence, ordinal: index + 1, type: event.type, payload, created_at: event.created_at };
   });
+  // Older recovery records have the reason but no generated_notice field.
+  // Match their exact fallback text below. New records also distinguish a
+  // saved model answer that happens to contain the same text.
+  const recoveryNoticeTurns = new Set(events.filter((event) => event.type === "run_recovered"
+    && event.payload?.reason === "owning_process_exited" && event.payload.generated_notice !== false).map((event) => event.turn_id));
   const changeSets = db.prepare(`
     SELECT agent_actions.id, agent_actions.task_id, agent_actions.kind, agent_actions.payload_json,
       agent_actions.status, agent_actions.created_at, agent_actions.resolved_at, research_turns.id AS turn_id
@@ -4074,7 +4139,8 @@ function getResearchThread(id) {
     messages: turns.flatMap((turn) => {
       const items = [{ id: `${turn.id}:user`, turn_id: turn.id, role: "user", text: turn.user_message, attachments: attachmentsByTurn.get(turn.id) || [], created_at: turn.created_at }];
       if (turn.assistant_message) {
-        items.push({ id: `${turn.id}:assistant`, turn_id: turn.id, role: "assistant", text: turn.assistant_message, created_at: turn.completed_at || turn.created_at, sources: sourcesByTurn.get(turn.id) || [] });
+        const recoveryNotice = recoveryNoticeTurns.has(turn.id) && turn.assistant_message === RECOVERED_TURN_NOTICE;
+        items.push({ id: `${turn.id}:assistant`, turn_id: turn.id, role: "assistant", text: turn.assistant_message, created_at: turn.completed_at || turn.created_at, sources: sourcesByTurn.get(turn.id) || [], ...(recoveryNotice ? { recoveryNotice } : {}) });
       }
       return items;
     }),

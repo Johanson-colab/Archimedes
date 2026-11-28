@@ -85,6 +85,7 @@ const RUN_LABELS: Record<ReproductionRunStatus, string> = {
   timeout: "Ran out of time",
   interrupted: "Interrupted",
 };
+const REMOTE_STOP_UNCONFIRMED = "Stop requested. Check the SSH host to confirm the remote process has exited.";
 
 function stepDuration(step: ReproductionRunStep) {
   if (!step.duration_ms) return "";
@@ -160,6 +161,7 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
   const [liveLog, setLiveLog] = useState("");
   const [running, setRunning] = useState(false);
   const [runLine, setRunLine] = useState("");
+  const remoteStopUnconfirmed = run?.status === "stopped" && run.error === REMOTE_STOP_UNCONFIRMED;
   const [question, setQuestion] = useState("");
   const [journal, setJournal] = useState<JournalEntry[]>([]);
   const [progress, setProgress] = useState<{ turn: number; maxTurns: number } | null>(null);
@@ -485,7 +487,7 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
         <FlaskConical size={26} />
         <strong>No plan yet</strong>
         <span>The planner reads the paper and its code to work out which numbers can be checked independently. It never touches a machine.</span>
-        {detail.error && <div className="reproduce-note bad">{detail.error}</div>}
+        {detail.error && <div className="reproduce-note bad">{t(detail.error)}</div>}
         <button className="primary-button" disabled={busy !== ""} onClick={() => void plan()}>
           {busy === "plan" ? <LoaderCircle className="spin" size={14} /> : <FlaskConical size={14} />}
           {busy === "plan" ? "Planning…" : "Generate plan"}
@@ -560,10 +562,10 @@ export default function ReproduceView({ bridge, selectedId, onSelect }: {
         {(run || running || runLine || journal.length > 0) && <section className="reproduce-block reproduce-run">
           <h2>Run
             {progress && <span className="reproduce-turn">Turn {progress.turn} / {progress.maxTurns}</span>}
-            {run && <span className={`reproduce-check-status ${run.status === "verified" ? "passed" : run.status === "running" ? "needs-run" : run.status === "manual" || run.status === "stopped" || run.status === "interrupted" ? "manual" : "failed"}`}>{RUN_LABELS[run.status]}</span>}
+          {run && <span className={`reproduce-check-status ${run.status === "verified" ? "passed" : run.status === "running" ? "needs-run" : run.status === "manual" || run.status === "stopped" || run.status === "interrupted" ? "manual" : "failed"}`}>{remoteStopUnconfirmed ? t("Remote stop unconfirmed") : RUN_LABELS[run.status]}</span>}
           </h2>
           {run?.backend && <p className="reproduce-hint">{run.backend}</p>}
-          {runLine && <p className="reproduce-hint">{runLine}</p>}
+          {(runLine || remoteStopUnconfirmed) && <p className="reproduce-hint">{remoteStopUnconfirmed || runLine === REMOTE_STOP_UNCONFIRMED ? t(REMOTE_STOP_UNCONFIRMED) : runLine}</p>}
           {question && <InlineNotice tone="warning" className="reproduce-question" title="Needs you">{question}</InlineNotice>}
           {journal.length > 0 && <ol className="reproduce-journal">
             {journal.map((entry, index) => <li key={index} className={`reproduce-journal-row ${entry.kind}`}>

@@ -2,6 +2,7 @@
 // Keys stay sorted so concurrent changes do not collide.
 
 export const researchGraph: Record<string, string> = {
+  "A process with the saved PID is still present. Verify its identity before stopping or rerunning it.": "保存的 PID 对应进程仍存在。停止或重新运行前请确认其身份。",
   "Activity completed": "已完成",
   "Activity failed": "失败",
   "Activity note": "记录",
@@ -104,6 +105,7 @@ export const researchGraph: Record<string, string> = {
   "tests": "验证",
   "The agent has not run this experiment yet.": "模型还没有运行这个实验。",
   "The agent will fill this plan from the conversation.": "模型会根据主对话自动补全实验计划。",
+  "The run process is no longer available.": "运行进程已不可用。",
   "Undoing…": "正在撤销……",
   "Updating research graph…": "正在更新研究图……",
   "Values are agent-reported; file references may change after registration.": "指标由 Agent 报告；引用文件在登记后可能发生变化。",

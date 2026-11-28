@@ -245,7 +245,7 @@ function PaperInspector({ paper, onUpdate, onRemove, onRead, noteDrafts }: { pap
   </article>;
 }
 
-type PaperChatMessage = { role: "assistant" | "user"; text: string };
+type PaperChatMessage = Pick<ResearchThreadMessage, "role" | "text" | "recoveryNotice">;
 type CodeChatAttachment = { path: string; startLine: number; endLine: number; snippet: string };
 type PaperVisualKind = "figure" | "table" | "equation";
 type PaperFigureCapture = { pageNumber: number; nearbyText: string; kind: PaperVisualKind; image: ContextAttachment };
@@ -348,7 +348,9 @@ const PaperChatMessageRow = memo(function PaperChatMessageRow({ message, streami
   return <article className={`conversation-message paper-ai-message ${message.role}${streaming ? " streaming" : ""}`}>
     <div className="conversation-message-copy">
       {assistant && <div className="conversation-message-role">{t("Archimedes")}</div>}
-      {assistant ? <PaperChatMarkdown text={message.text || "…"} onOpenCodePath={onOpenCodePath} /> : <p>{message.text}</p>}
+      {assistant && !message.recoveryNotice
+        ? <PaperChatMarkdown text={message.text || "…"} onOpenCodePath={onOpenCodePath} />
+        : <p>{message.recoveryNotice ? t(message.text) : message.text}</p>}
       {streaming && <i className="paper-ai-stream-cursor" aria-label={t("Generating response")} />}
     </div>
   </article>;
@@ -602,7 +604,7 @@ function PaperReadingWorkbench({ paper, library, onBack, onUpdate, bridge, works
       if (thread) {
         const messages = thread.messages
           .filter((message) => !isHiddenPaperBriefingInstruction(message))
-          .map((message) => ({ role: message.role, text: message.text }));
+          .map(({ role, text, recoveryNotice }) => ({ role, text, recoveryNotice }));
         setChatThreadId(thread.id);
         setChatMessages(messages);
         briefingStartedRef.current = messages.some((message) => message.role === "assistant");
