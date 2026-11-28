@@ -16,10 +16,11 @@ before(async () => {
   const { transformWithOxc } = await import("vite");
   const helpers = await import("../src/paper-writing-state.ts");
   const search = await import("../src/paper-source-search.ts");
+  const sources = await import("../src/paper-writing-sources.ts");
   const source = fs.readFileSync(path.join(__dirname, "../src/PaperWritingView.tsx"), "utf8");
   const icons = require("lucide-react");
   const names = source.match(/\{([^}]+)\} from "lucide-react"/)[1].split(",").map(name => name.trim());
-  const scope = { React, ...React, ...helpers, ...search,
+  const scope = { React, ...React, ...helpers, ...search, ...sources,
     ...Object.fromEntries(names.map(name => [name, icons[name]])),
     useUISettings: () => ({ t: value => value }),
     Dialog: props => props.open ? React.createElement(props.as || "div", { role: "dialog", onSubmit: props.onSubmit }, props.children) : null,
@@ -268,6 +269,9 @@ test("the actual preload preserves compile ownership and rejects writing over ne
   assert.equal(fs.readFileSync(path.join(workspace, "paper/main.tex"), "utf8"), "External editor version");
   const saved = await api.writeWorkspaceFile(workspace, "paper/main.tex", "Merged draft", "External editor version");
   assert.equal(saved.content, "Merged draft");
+  const created = await api.writeWorkspaceFile(workspace, "paper/new.bib", "@misc{new, title={New}}", "");
+  assert.equal(created.content, "@misc{new, title={New}}");
+  assert.throws(() => api.writeWorkspaceFile(workspace, "paper/new.bib", "Overwrite", ""), /The source changed on disk/);
 });
 
 test('Writing opens existing manuscripts before templates and restores the chosen document after remount', async t => {
@@ -458,6 +462,43 @@ test('compiling one manuscript ignores an unsavable draft from another folder', 
   await click('Recompile'); await settle();
   assert.deepEqual(f.compiles.map(call => call.name), ['other/main.tex']);
   assert.match(document.querySelector('.latex-editor-textarea').value, /Independent manuscript/);
+});
+
+test('compiling a root-level manuscript ignores an independent root-level draft', async t => {
+  const f = await fixture(t, { write: async (_root, name) => {
+    if (name === 'a.tex') throw new Error('The other root manuscript is locked');
+  } });
+  fs.writeFileSync(path.join(f.a, 'a.tex'), source('Root manuscript A'));
+  fs.writeFileSync(path.join(f.a, 'b.tex'), source('Root manuscript B'));
+  await f.render(f.a, 1, 'a.tex'); await autoCompileOff();
+  await edit(source('Unsavable root draft'), 'a.tex');
+  await f.render(f.a, 2, 'b.tex'); await settle(); await autoCompileOff();
+  await click('Recompile'); await settle();
+  assert.deepEqual(f.compiles.map(call => call.name), ['b.tex']);
+  assert.match(document.querySelector('.latex-editor-textarea').value, /Root manuscript B/);
+  assert.equal(fs.readFileSync(path.join(f.a, 'a.tex'), 'utf8'), source('Root manuscript A'));
+});
+
+test('a root-level compile waits for a reachable input outside the main folder', async t => {
+  const gate = deferred();
+  let diskAtCompile = '';
+  const f = await fixture(t, {
+    write: async (_root, name) => { if (name === 'shared/section.tex') await gate.promise; },
+    compile: async (root, name) => { diskAtCompile = fs.readFileSync(path.join(root, 'shared/section.tex'), 'utf8'); return { ok: true, diagnostics: [], log: 'fixture compiler read actual input', duration_ms: 1 }; },
+  });
+  fs.mkdirSync(path.join(f.a, 'shared'));
+  fs.writeFileSync(path.join(f.a, 'shared/section.tex'), 'Original external section\n');
+  fs.writeFileSync(path.join(f.a, 'main.tex'), source('Root main').replace('\\begin{document}', '\\input{shared/section}\n\\begin{document}'));
+  await f.render(f.a, 1, 'main.tex'); await autoCompileOff();
+  await f.render(f.a, 2, 'shared/section.tex'); await autoCompileOff();
+  await edit('Latest external section\n', 'shared/section.tex');
+  await click('main.tex');
+  await click('Recompile');
+  assert.equal(f.compiles.length, 0, 'compiler ran before the reachable external input was saved');
+  gate.resolve();
+  await React.act(async () => { await gate.promise; await new Promise(resolve => setImmediate(resolve)); });
+  assert.equal(f.compiles.length, 1);
+  assert.equal(diskAtCompile, 'Latest external section\n');
 });
 
 

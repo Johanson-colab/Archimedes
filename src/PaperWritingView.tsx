@@ -4,7 +4,7 @@ import { useUISettings } from "./i18n";
 import SharedNoteEditor from "./SharedNoteEditor";
 import PaperTemplateLibrary from "./PaperTemplateLibrary";
 import PaperWritingCitations from "./PaperWritingCitations";
-import { findManuscriptCitation, insertCitationAt, manuscriptBibliographyPaths } from "./paper-writing-citations";
+import { findManuscriptCitation, insertCitationAt, manuscriptBibliographyPaths, readManuscriptBibliography } from "./paper-writing-citations";
 import type { BibliographyPaper } from "./bibliography";
 import { Dialog } from "./Dialog";
 import { StateView } from "./StateView";
@@ -12,6 +12,7 @@ import { Tab, Tabs } from "./Tabs";
 import { fingerprintFor } from "./proactive-engine";
 import { emitProactiveSignal } from "./proactive-signals";
 import { findSourceMatches, sourceMarksByLine, type SourceMark } from "./paper-source-search";
+import { manuscriptSourcePaths } from "./paper-writing-sources";
 import { createWritingScope, editWritingDocument, readWritingDocument, saveWritingDocument, readWritingLocation, rememberWritingLocation, type WritingDocument, type WritingScope } from "./paper-writing-state";
 import "./paper-source-search.css";
 import "./paper-writing-workspace.css";
@@ -362,10 +363,22 @@ export default function PaperWritingView({ bridge, workspace, projectId = null, 
     const sequence = ++owner.compileSequence;
     setCompileState("compiling"); setCompileResult(null); setError("");
     try {
+      const contents = new Map<string, string>();
+      for (const [path, document] of owner.documents) {
+        contents.set(path, document.draft);
+        contents.set(document.file.path, document.draft);
+      }
+      if (!contents.has(target)) {
+        try { contents.set(target, (await bridge.readWorkspaceFile(owner.workspace, target)).content ?? ""); }
+        catch { /* The compiler will report a missing or unreadable main document. */ }
+      }
+      const sourcePaths = manuscriptSourcePaths(target, contents);
       const root = projectRoot(target);
       const documents = [...owner.documents.entries()].filter(([path, document]) => {
         const candidates = [path, document.file.path];
-        return candidates.some(candidate => candidate === target || !root || candidate.startsWith(`${root}/`));
+        // Folder builds snapshot the whole manuscript directory. Root-level
+        // builds have no folder boundary, so only reachable sources are safe.
+        return candidates.some(candidate => sourcePaths.has(candidate) || (root && candidate.startsWith(`${root}/`)));
       }).map(([, document]) => document);
       await Promise.all(documents.map((document) => saveWritingDocument(document, bridge.writeWorkspaceFile, refreshScope)));
       if (sequence !== owner.compileSequence) return;
@@ -655,7 +668,7 @@ export default function PaperWritingView({ bridge, workspace, projectId = null, 
     const { document, initialDraft, position, paths, written } = citation;
     const contents = new Map<string, string>();
     for (const path of paths) {
-      const current = await bridge.readWorkspaceFile(document.workspace, path);
+      const current = await readManuscriptBibliography(document.workspace, path, bridge.readWorkspaceFile);
       const resolvedPath = current.path || path;
       const cached = owner.documents.get(path) ?? owner.documents.get(resolvedPath);
       if (cached && cached.draft !== cached.savedDraft) throw new Error("Save the open bibliography draft before inserting a citation.");

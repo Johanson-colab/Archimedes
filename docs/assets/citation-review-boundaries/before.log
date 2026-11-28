@@ -1,0 +1,125 @@
+$ node --test --test-name-pattern="checks conflicts and matching references across every declared bibliography file" electron/paper-writing-citations.test.cjs
+✖ checks conflicts and matching references across every declared bibliography file (71.42375ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 209.825167
+
+✖ failing tests:
+
+test at electron/paper-writing-citations.test.cjs:41:1
+✖ checks conflicts and matching references across every declared bibliography file (71.42375ms)
+  AssertionError [ERR_ASSERTION]: Missing expected exception.
+      at TestContext.<anonymous> (/private/tmp/claude-501/archimedes-citation-before.zojYtZ/electron/paper-writing-citations.test.cjs:47:10)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: /different bibliography entry/,
+    operator: 'throws',
+    diff: 'simple'
+  }
+
+$ node --test --test-name-pattern="treats a missing declared bibliography as empty" electron/paper-writing-citations.test.cjs
+✖ treats a missing declared bibliography as empty but preserves other read failures (70.33525ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 206.714875
+
+✖ failing tests:
+
+test at electron/paper-writing-citations.test.cjs:54:1
+✖ treats a missing declared bibliography as empty but preserves other read failures (70.33525ms)
+  TypeError [Error]: api.readManuscriptBibliography is not a function
+      at TestContext.<anonymous> (/private/tmp/claude-501/archimedes-citation-before.zojYtZ/electron/paper-writing-citations.test.cjs:56:27)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3)
+
+$ node --test --test-name-pattern="compiling a root-level manuscript ignores an independent root-level draft" electron/paper-writing-workspace.test.cjs
+✖ compiling a root-level manuscript ignores an independent root-level draft (179.683916ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 703.041166
+
+✖ failing tests:
+
+test at electron/paper-writing-workspace.test.cjs:467:1
+✖ compiling a root-level manuscript ignores an independent root-level draft (179.683916ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+  + []
+  - [
+  -   'b.tex'
+  - ]
+  
+      at TestContext.<anonymous> (/private/tmp/claude-501/archimedes-citation-before.zojYtZ/electron/paper-writing-workspace.test.cjs:477:10)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: [],
+    expected: [ 'b.tex' ],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+$ node --test --test-name-pattern="a root-level compile waits for a reachable input outside the main folder" electron/paper-writing-workspace.test.cjs
+✔ a root-level compile waits for a reachable input outside the main folder (168.829583ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 600.479
+
+$ node --test --test-name-pattern="the actual preload preserves compile ownership" electron/paper-writing-workspace.test.cjs
+✖ the actual preload preserves compile ownership and rejects writing over newer source (82.879958ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 530.468791
+
+✖ failing tests:
+
+test at electron/paper-writing-workspace.test.cjs:228:1
+✖ the actual preload preserves compile ownership and rejects writing over newer source (82.879958ms)
+  Error: ENOENT: no such file or directory, lstat '/private/tmp/claude-501/archimedes-writing-conflict-v4Q1i9/paper/new.bib'
+      at Object.realpathSync (node:fs:3455:29)
+      at resolveWorkspaceTarget (/private/tmp/claude-501/archimedes-citation-before.zojYtZ/electron/security/path-sandbox.cjs:17:23)
+      at workspacePath (/private/tmp/claude-501/archimedes-citation-before.zojYtZ/electron/workspace-files.cjs:27:10)
+      at Object.readWorkspaceFile (/private/tmp/claude-501/archimedes-citation-before.zojYtZ/electron/workspace-files.cjs:116:18)
+      at evalmachine.<anonymous>:4:22
+      at Object.invoke (/private/tmp/claude-501/archimedes-citation-before.zojYtZ/electron/paper-writing-workspace.test.cjs:246:48)
+      at Object.writeWorkspaceFile (evalmachine.<anonymous>:77:86)
+      at TestContext.<anonymous> (/private/tmp/claude-501/archimedes-citation-before.zojYtZ/electron/paper-writing-workspace.test.cjs:272:29)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7) {
+    errno: -2,
+    code: 'ENOENT',
+    syscall: 'lstat',
+    path: '/private/tmp/claude-501/archimedes-writing-conflict-v4Q1i9/paper/new.bib'
+  }

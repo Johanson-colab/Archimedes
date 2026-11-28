@@ -17,6 +17,20 @@ function sameReference(paper: AcademicSearchResult, existing: AcademicSearchResu
   return Boolean(matchBibliographyPaper(paper, [existing]));
 }
 
+function missingFile(reason: unknown) {
+  const code = (reason as { code?: string } | null)?.code;
+  const message = reason instanceof Error ? reason.message : String(reason);
+  return code === "ENOENT" || /\bENOENT\b|no such file/i.test(message);
+}
+
+export async function readManuscriptBibliography(workspace: string, path: string, read: ResearchDeskBridge["readWorkspaceFile"]) {
+  try { return await read(workspace, path); }
+  catch (reason) {
+    if (!missingFile(reason)) throw reason;
+    return { name: path.split("/").at(-1) || path, path, kind: "text" as const, size: 0, modifiedAt: "", content: "" };
+  }
+}
+
 export function prepareManuscriptCitation(content: string, paper: BibliographyPaper) {
   const keys: string[] = [];
   const { entries } = parseBibliography(content, undefined, key => keys.push(key));
@@ -36,13 +50,14 @@ export function prepareManuscriptCitation(content: string, paper: BibliographyPa
 }
 
 export function findManuscriptCitation(contents: Map<string, string>, paper: BibliographyPaper, targetPath: string) {
-  // A conflict in any declared file invalidates the insert. A matching
-  // reference in another file lets the manuscript reuse that key without
-  // adding a duplicate entry to the selected file.
+  // Validate every declared file before reusing an early match; a later file
+  // can still own the same key for a different reference.
+  let matching: { content: string; key: string; path: string; changed: false } | undefined;
   for (const [path, content] of contents) {
     const prepared = prepareManuscriptCitation(content, paper);
-    if (prepared.content === content) return { ...prepared, path, changed: false };
+    if (prepared.content === content && !matching) matching = { ...prepared, path, changed: false };
   }
+  if (matching) return matching;
   const content = contents.get(targetPath);
   if (content === undefined) throw new Error("The selected bibliography is not declared by the manuscript.");
   const prepared = prepareManuscriptCitation(content, paper);

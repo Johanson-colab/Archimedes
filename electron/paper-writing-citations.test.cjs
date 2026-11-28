@@ -10,7 +10,7 @@ before(async () => {
   const filename = path.join(__dirname, "../src/paper-writing-citations.ts");
   const source = fs.readFileSync(filename, "utf8").replace(/^import .*;\n/, "").replace(/^export /gm, "");
   const { code } = await transformWithOxc(source, filename);
-  api = new Function(...Object.keys(bibliographic), code.replace(/^export \{\};?$/gm, "") + "\nreturn { manuscriptBibliographyPaths, prepareManuscriptCitation, findManuscriptCitation, insertCitationAt };")(...Object.values(bibliographic));
+  api = new Function(...Object.keys(bibliographic), code.replace(/^export \{\};?$/gm, "") + "\nreturn { manuscriptBibliographyPaths, prepareManuscriptCitation, findManuscriptCitation, insertCitationAt, readManuscriptBibliography: typeof readManuscriptBibliography === 'function' ? readManuscriptBibliography : undefined };")(...Object.values(bibliographic));
 });
 
 const paper = {
@@ -44,10 +44,18 @@ test("checks conflicts and matching references across every declared bibliograph
   const matching = "@article{local, title={Measured Models}, doi={10.1000/measured}}";
   assert.deepEqual(api.findManuscriptCitation(new Map([["a.bib", matching], ["b.bib", ""]]), paper, "b.bib"),
     { content: matching, key: "local", path: "a.bib", changed: false });
+  assert.throws(() => api.findManuscriptCitation(new Map([["a.bib", matching], ["b.bib", conflict]]), paper, "a.bib"), /different bibliography entry/);
   const added = api.findManuscriptCitation(new Map([["a.bib", ""], ["b.bib", ""]]), paper, "b.bib");
   assert.equal(added.path, "b.bib");
   assert.equal(added.key, "doe2025");
   assert.equal(added.changed, true);
+});
+
+test("treats a missing declared bibliography as empty but preserves other read failures", async () => {
+  const missing = Object.assign(new Error("ENOENT: no such file or directory"), { code: "ENOENT" });
+  const empty = await api.readManuscriptBibliography("/fixture", "paper/new.bib", async () => { throw missing; });
+  assert.deepEqual(empty, { name: "new.bib", path: "paper/new.bib", kind: "text", size: 0, modifiedAt: "", content: "" });
+  await assert.rejects(() => api.readManuscriptBibliography("/fixture", "paper/new.bib", async () => { throw new Error("permission denied"); }), /permission denied/);
 });
 
 test("suggests only bibliography paths declared inside the manuscript folder", () => {

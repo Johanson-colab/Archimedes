@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Dialog } from "./Dialog";
 import { useUISettings } from "./i18n";
 import type { BibliographyPaper } from "./bibliography";
+import { readManuscriptBibliography } from "./paper-writing-citations";
 
 export default function PaperWritingCitations({ bridge, projectId, paths, workspace, onClose, onInsert }: {
   bridge: ResearchDeskBridge;
@@ -32,7 +33,7 @@ export default function PaperWritingCitations({ bridge, projectId, paths, worksp
 
   useEffect(() => {
     let current = true;
-    void bridge.readWorkspaceFile(workspace, target).then(file => {
+    void readManuscriptBibliography(workspace, target, bridge.readWorkspaceFile).then(file => {
       if (current) { setBibliography(file); setLoadedTarget(target); }
     }).catch(reason => { if (current) setError(String(reason)); });
     return () => { current = false; };
