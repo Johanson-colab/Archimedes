@@ -1,0 +1,81 @@
+✔ one repository and branch maps to one directory on the server (1.423375ms)
+✔ a trailing slash or .git in the URL does not change the directory (0.08325ms)
+✔ a non-GitHub URL still produces a usable directory (0.072667ms)
+✔ commands survive quoting, including single quotes in a path (0.108709ms)
+✔ the probe output is parsed into facts (0.222667ms)
+✔ a machine without docker or a GPU says so instead of guessing (0.475208ms)
+✔ the probe command asks only for things it can report (0.090292ms)
+✔ a remote path lets the server expand the home directory (0.074625ms)
+✔ commands run through a login shell so the profile's proxy applies (0.073084ms)
+✔ the backend implements everything the runner calls (1.72925ms)
+✖ reproduction run passes its abort signal into SSH probe and preparation (1.209292ms)
+✖ SSH probe aborts its command and releases the abort listener (8002.107417ms)
+✖ SSH preparation aborts a slow provisioning command and releases its listeners (8002.639667ms)
+ℹ tests 13
+ℹ suites 0
+ℹ pass 10
+ℹ fail 1
+ℹ cancelled 2
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 16118.867625
+
+✖ failing tests:
+
+test at electron/reproduction-remote.test.cjs:118:1
+✖ reproduction run passes its abort signal into SSH probe and preparation (1.209292ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /backend\.probe\(\{\s*signal: controller\.signal\s*\}\)/. Input:
+  
+  'const backend = createSshBackend({ server, repoUrl, branch, copyFrom, emit: session.send, secrets });\n' +
+    '          session.backend = backend;\n' +
+    '          store.updateReproductionRun(run.id, { backend: backend.describe(), image: "" });\n' +
+    '          session.send({ type: "preparing", detail: `Checking ${server.host}…` });\n' +
+    '          const probe = await backend.probe();\n' +
+    '          ensureActive();\n' +
+    '          session.send({\n' +
+    '            type: "preparing",\n' +
+    '            detail: [probe.os || server.host, `${probe.diskFreeGb} GB free`, probe.docker ? "docker" : "", probe.gpu].filter(Boolean).join(" · "),\n' +
+    '          });\n' +
+    '          if (probe.diskFreeGb > 0 && probe.diskFreeGb < 5) {\n' +
+    '            throw new Error(`${server.host} has only ${probe.diskFreeGb} GB free. Free some space before running.`);\n' +
+    '          }\n' +
+    '          await backend.prepare();\n' +
+    '          ensureActive();\n' +
+    '          store.updateReproduction(record.id, { status: "running" });\n' +
+    '          await executeRun(session);\n' +
+    '          return;\n' +
+    '        }\n' +
+    '\n' +
+    '        session.send({ type: "preparing", detail: "Getting the repository checkout…" });\n' +
+    '        const checkoutOptions = { branch };\n' +
+    '        const existing = await getRepositoryCheckout(dataWorkspace, repoUrl, checkoutOptions).catch(() => null);\n' +
+    '        ensureActive();\n' +
+    '        if (!existing) {\n' +
+    '          session.send({ type: "preparing", detail: branch ? `Cloning ${branch}…` : "Cloning the repository…" });\n' +
+    '          await cloneRepositoryCheckout(dataWorkspace, repoUrl, checkoutOptions);\n' +
+    '          ensureActive();\n' +
+    '        }\n' +
+    '        const { root } = await resolveAuditPath(dataWorkspace, repoUrl, "", branch'
+  
+      at TestContext.<anonymous> (/Users/fei/Desktop/Archimedes/electron/reproduction-remote.test.cjs:123:10)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'const backend = createSshBackend({ server, repoUrl, branch, copyFrom, emit: session.send, secrets });\n          session.backend = backend;\n          store.updateReproductionRun(run.id, { backend: backend.describe(), image: "" });\n          session.send({ type: "preparing", detail: `Checking ${server.host}…` });\n          const probe = await backend.probe();\n          ensureActive();\n          session.send({\n            type: "preparing",\n            detail: [probe.os || server.host, `${probe.diskFreeGb} GB free`, probe.docker ? "docker" : "", probe.gpu].filter(Boolean).join(" · "),\n          });\n          if (probe.diskFreeGb > 0 && probe.diskFreeGb < 5) {\n            throw new Error(`${server.host} has only ${probe.diskFreeGb} GB free. Free some space before running.`);\n          }\n          await backend.prepare();\n          ensureActive();\n          store.updateReproduction(record.id, { status: "running" });\n          await executeRun(session);\n          return;\n        }\n\n        session.send({ type: "preparing", detail: "Getting the repository checkout…" });\n        const checkoutOptions = { branch };\n        const existing = await getRepositoryCheckout(dataWorkspace, repoUrl, checkoutOptions).catch(() => null);\n        ensureActive();\n        if (!existing) {\n          session.send({ type: "preparing", detail: branch ? `Cloning ${branch}…` : "Cloning the repository…" });\n          await cloneRepositoryCheckout(dataWorkspace, repoUrl, checkoutOptions);\n          ensureActive();\n        }\n        const { root } = await resolveAuditPath(dataWorkspace, repoUrl, "", branch',
+    expected: /backend\.probe\(\{\s*signal: controller\.signal\s*\}\)/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at electron/reproduction-remote.test.cjs:127:1
+✖ SSH probe aborts its command and releases the abort listener (8002.107417ms)
+  'test timed out after 8000ms'
+
+test at electron/reproduction-remote.test.cjs:142:1
+✖ SSH preparation aborts a slow provisioning command and releases its listeners (8002.639667ms)
+  'test timed out after 8000ms'

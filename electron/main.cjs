@@ -1755,7 +1755,7 @@ app.whenReady().then(async () => {
           session.backend = backend;
           store.updateReproductionRun(run.id, { backend: backend.describe(), image: "" });
           session.send({ type: "preparing", detail: `Checking ${server.host}…` });
-          const probe = await backend.probe();
+          const probe = await backend.probe({ signal: controller.signal });
           ensureActive();
           session.send({
             type: "preparing",
@@ -1764,7 +1764,7 @@ app.whenReady().then(async () => {
           if (probe.diskFreeGb > 0 && probe.diskFreeGb < 5) {
             throw new Error(`${server.host} has only ${probe.diskFreeGb} GB free. Free some space before running.`);
           }
-          await backend.prepare();
+          await backend.prepare({ signal: controller.signal });
           ensureActive();
           store.updateReproduction(record.id, { status: "running" });
           await executeRun(session);
