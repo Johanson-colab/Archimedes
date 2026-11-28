@@ -211,6 +211,17 @@ function stopWorkspaceWatcher(senderId) {
 
 function setWindowWorkspace(senderId, workspace) {
   if (windowWorkspaces.get(senderId) !== workspace) releaseWindowApprovalClaim(senderId);
+  else {
+    const claim = windowApprovalClaims.get(senderId);
+    if (claim) {
+      const scope = agent.approvalScopeForWorkspace(workspace);
+      if (claim.scope.store !== scope.store || claim.scope.ownerId !== scope.ownerId) {
+        releaseWindowApprovalClaim(senderId);
+        windowApprovalClaims.set(senderId, { scope, threadId: claim.threadId });
+        agent.setApprovalSurface(claim.threadId, true, scope);
+      }
+    }
+  }
   windowWorkspaces.set(senderId, workspace);
   return createPreviewToken(senderId, workspace);
 }

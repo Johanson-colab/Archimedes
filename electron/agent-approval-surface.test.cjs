@@ -1,4 +1,6 @@
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
 const test = require("node:test");
 const { hasApprovalSurface, hasPendingApproval, resolveApproval, setApprovalSurface, waitForApproval } = require("./agent/approval-manager.cjs");
 
@@ -32,6 +34,31 @@ test("interrupting a run rejects a pending approval", async () => {
   setApprovalSurface(scope, "thread-abort", false);
 });
 
+
+test("accepting a replacement store reissues the visible thread approval claim", () => {
+  const source = fs.readFileSync(path.join(__dirname, "main.cjs"), "utf8");
+  const start = source.indexOf("function setWindowWorkspace(");
+  const end = source.indexOf("function createPreviewToken(", start);
+  assert.ok(start >= 0 && end > start, "window workspace binding was not found");
+  const oldScope = { store: {}, ownerId: "researcher" }, nextScope = { store: {}, ownerId: "researcher" };
+  setApprovalSurface(oldScope, "thread-visible", true);
+  const windowWorkspaces = new Map([[1, "/workspace"]]);
+  const windowApprovalClaims = new Map([[1, { scope: oldScope, threadId: "thread-visible" }]]);
+  const calls = [];
+  const agent = {
+    approvalScopeForWorkspace: () => nextScope,
+    setApprovalSurface: (threadId, active, scope) => { calls.push([threadId, active, scope]); return setApprovalSurface(scope, threadId, active); },
+  };
+  const setWindowWorkspace = new Function("windowWorkspaces", "windowApprovalClaims", "agent", "createPreviewToken", `${source.slice(start, end)}\nreturn setWindowWorkspace;`)(
+    windowWorkspaces, windowApprovalClaims, agent, () => "preview-token",
+  );
+  setWindowWorkspace(1, "/workspace");
+  assert.equal(hasApprovalSurface(oldScope, "thread-visible"), false);
+  assert.equal(hasApprovalSurface(nextScope, "thread-visible"), true);
+  assert.deepEqual(windowApprovalClaims.get(1), { scope: nextScope, threadId: "thread-visible" });
+  assert.deepEqual(calls, [["thread-visible", false, oldScope], ["thread-visible", true, nextScope]]);
+  setApprovalSurface(nextScope, "thread-visible", false);
+});
 
 test("claims and decisions stay with their data store generation and owner", async () => {
   const a = { store: {}, ownerId: "original" };
