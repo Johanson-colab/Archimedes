@@ -6,7 +6,7 @@ const desktop = new Set(["electron/chat-layout-width.test.cjs", "electron/pdf-ro
 const root = path.join(__dirname, "..");
 
 function testFiles(mode = "all") {
-  const all = [...fs.globSync(["electron/*.test.cjs", "electron/figure-forge-upstream-*.mjs", "electron/agent/*.test.cjs", "server/*.test.cjs"], { cwd: root })].map(file => file.replaceAll("\\", "/")).sort();
+  const all = [...fs.globSync(["electron/*.test.cjs", "electron/figure-forge-upstream-*.mjs", "electron/agent/*.test.cjs", "electron/runtime/*.test.cjs", "server/*.test.cjs"], { cwd: root })].map(file => file.replaceAll("\\", "/")).sort();
   return all.filter(file => mode === "all" || (mode === "desktop" ? desktop.has(file) : !desktop.has(file)));
 }
 

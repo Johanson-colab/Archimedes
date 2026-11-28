@@ -125,3 +125,19 @@ test('host shutdown aborts verification and cleans up its managed runtimes', asy
   const pending = pipeline.validate(f.workspace, 'sample'); await new Promise(setImmediate);
   await pipeline.shutdown(); await assert.rejects(pending, /cancelled/); assert.equal(stopped, 1);
 });
+
+test("host shutdown waits for validation cleanup even when verification ignores cancellation", async t => {
+  const f = fixture(t); let release, finished = false;
+  const pipeline = delivery({ verify: () => new Promise(resolve => { release = () => { finished = true; resolve({ passed: false }); }; }) });
+  assert.equal(pipeline.hasActiveValidation(), false);
+  const pending = pipeline.validate(f.workspace, 'sample'); await new Promise(setImmediate);
+  assert.equal(pipeline.hasActiveValidation(), true);
+  let shutdownSettled = false;
+  const shutdown = pipeline.shutdown().then(() => { shutdownSettled = true; });
+  await new Promise(setImmediate);
+  assert.equal(shutdownSettled, false);
+  release();
+  await assert.rejects(pending, /cancelled/); await shutdown;
+  assert.equal(finished, true);
+  assert.equal(pipeline.hasActiveValidation(), false);
+});

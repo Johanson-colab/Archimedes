@@ -88,6 +88,7 @@ interface ResearchDeskBridge {
     updateLocalIdentity: (patch: { displayName: string }) => Promise<LocalIdentity>;
     setTitleBarTheme?: (theme: "charcoal" | "paper") => Promise<void>;
     setUiZoom?: (factor: number) => Promise<number>;
+    setUiLanguage?: (language: "en" | "zh") => void;
     chooseWorkspace: () => Promise<string | null>;
     watchWorkspace: (workspace: string) => Promise<string>;
     revealWorkspace: (workspace: string) => Promise<{ opened: boolean }>;

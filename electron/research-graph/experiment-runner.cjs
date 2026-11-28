@@ -1,32 +1,28 @@
 const { getSharedEnvironment } = require("../environment-vault.cjs");
-const { spawn, execFileSync } = require("node:child_process");
+const { spawn } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
 const { randomUUID } = require("node:crypto");
 const store = require("../store.cjs");
-const { inspectCodeState, createCodeSnapshot } = require("./code-snapshot.cjs");
+const { localIdentity } = require("../local-identity.cjs");
+const { findActiveRun, listActiveRuns, registerActiveRun } = require("../runtime/active-runs.cjs");
+const { gitOutput } = require("../git-state.cjs");
+const { createCodeSnapshot } = require("./code-snapshot.cjs");
 
-const activeRuns = new Map();
+const preparingRuns = new WeakMap();
 const pendingCleanup = new Set();
 const TERMINAL = new Set(["succeeded", "failed", "cancelled"]);
+
+function runScope(id) {
+  const dataStore = store.currentStore();
+  return { workspace: dataStore.workspace, store: dataStore, ownerId: localIdentity().userId, domain: "graph", id };
+}
 
 function shellFor(command) {
   if (process.platform === "win32") {
     return { shell: "cmd.exe", args: ["/d", "/s", "/c", command] };
   }
   return { shell: process.env.SHELL || (process.platform === "darwin" ? "/bin/zsh" : "/bin/sh"), args: ["-lc", command] };
-}
-
-function readCommit(cwd) {
-  try {
-    const value = execFileSync("git", ["-C", cwd, "rev-parse", "HEAD"], {
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"],
-    }).trim();
-    return value || null;
-  } catch {
-    return null;
-  }
 }
 
 function runDirectory(workspace, runId) {
@@ -41,18 +37,30 @@ function runDirectory(workspace, runId) {
  * failed-only experiment stays provisional and may be repaired with a new
  * command.
  */
-function startExperimentRun(options) {
+async function startExperimentRun(options = {}) {
   const owner = store.captureStore();
+  let preparing = preparingRuns.get(owner.store);
+  if (!preparing) {
+    preparing = new Set();
+    preparingRuns.set(owner.store, preparing);
+  }
+  if (preparing.has(options.nodeId)) {
+    owner.release();
+    throw new Error("This experiment already has a run in progress.");
+  }
+  preparing.add(options.nodeId);
   try {
-    const started = owner.store.run(() => startInWorkspace(options));
+    const started = await owner.store.run(() => startInWorkspace(options));
     return { ...started, completion: started.completion.finally(owner.release) };
   } catch (error) {
     owner.release();
     throw error;
+  } finally {
+    preparing.delete(options.nodeId);
   }
 }
 
-function startInWorkspace({
+async function startInWorkspace({
   projectId,
   threadId,
   nodeId,
@@ -60,6 +68,7 @@ function startInWorkspace({
   cwd,
   workspace,
   experimentWorkspaceId = null,
+  verifyStart,
   onUpdate = () => {},
 } = {}) {
   const text = String(command || "").trim();
@@ -82,6 +91,9 @@ function startInWorkspace({
     throw new Error("The experiment does not belong to this session.");
   }
   if (node.archived || node.status === "retracted") throw new Error("Restore the experiment before starting a run.");
+  // Snapshot preparation awaits Git. Pin the plan revision so an edit made
+  // while the snapshot is being written cannot silently become the run's plan.
+  const expectedRevisionId = node.current_revision_id;
 
   const existing = store.listExperimentRuns({ nodeId });
   if (existing.some((run) => !TERMINAL.has(run.status))) {
@@ -92,8 +104,6 @@ function startInWorkspace({
     throw new Error("The run command is fixed after a successful run. Create a next round to change it.");
   }
 
-  if (experimentWorkspaceId) inspectCodeState(runWorkspace);
-
   const runId = randomUUID();
   const directory = runDirectory(runWorkspace, runId);
   fs.mkdirSync(directory, { recursive: true });
@@ -102,8 +112,9 @@ function startInWorkspace({
 
   let run;
   try {
-    const codeSnapshot = experimentWorkspaceId ? createCodeSnapshot(runWorkspace, directory) : null;
-    run = store.createExperimentRun({
+    const codeSnapshot = experimentWorkspaceId ? await createCodeSnapshot(runWorkspace, directory) : null;
+    const commitSha = codeSnapshot?.commit || await gitOutput(runCwd, ["rev-parse", "HEAD"]);
+    run = await store.createExperimentRun({
       id: runId,
       projectId,
       threadId,
@@ -112,10 +123,12 @@ function startInWorkspace({
       backend: "local",
       command: text,
       cwd: runCwd,
-      commitSha: codeSnapshot?.commit || readCommit(runCwd),
+      commitSha: commitSha || null,
       experimentWorkspaceId,
       codeSnapshot,
       logPath,
+      verifyStart,
+      expectedRevisionId,
     });
   } catch (error) {
     fs.rmSync(directory, { recursive: true, force: true });
@@ -126,6 +139,7 @@ function startInWorkspace({
   const stream = fs.createWriteStream(logPath, { flags: "a" });
   let settled = false;
   let cancelled = false;
+  let releaseRun;
   let finish;
   const completion = new Promise((resolve) => { finish = resolve; });
 
@@ -144,7 +158,7 @@ function startInWorkspace({
       } catch (cause) {
         console.warn("[experiment-run] could not record final status:", cause?.message || String(cause));
       }
-      activeRuns.delete(runId);
+      releaseRun?.();
       onUpdate(final);
       finish(final);
     });
@@ -178,16 +192,8 @@ function startInWorkspace({
     else complete(code === 0 ? "succeeded" : "failed", code);
   });
 
-  try {
-    run = store.updateExperimentRun({ runId, status: "running", pid: child.pid ?? null });
-    onUpdate(run);
-  } catch (error) {
-    complete("failed", null, error.message);
-    return { run, completion };
-  }
-
-  activeRuns.set(runId, {
-    child,
+  const active = {
+    completion,
     cancel: (force = false) => {
       if ((cancelled || settled) && !force) return;
       cancelled = true;
@@ -220,24 +226,29 @@ function startInWorkspace({
         timer.unref();
       }
     },
-  });
+  };
+  releaseRun = registerActiveRun(runScope(runId), active);
+  try {
+    run = store.updateExperimentRun({ runId, status: "running", pid: child.pid ?? null });
+    onUpdate(run);
+  } catch (error) {
+    active.cancel(true);
+    complete("failed", null, error.message);
+  }
   return { run, completion };
 }
 
 function cancelExperimentRun(runId) {
   if (!runId) throw new Error("An experiment run id is required.");
-  const active = activeRuns.get(runId);
-  if (active) {
-    active.cancel();
-    return store.getExperimentRun(runId);
-  }
   const run = store.getExperimentRun(runId);
   if (!run) throw new Error("Experiment run not found.");
+  if (store.canAccessProject(run.project_id, "editor")) findActiveRun(runScope(runId))?.cancel();
   return run;
 }
 
 function shutdownExperimentRuns() {
-  for (const active of activeRuns.values()) {
+  const activeRuns = listActiveRuns("graph");
+  for (const active of activeRuns) {
     try {
       // The app may exit immediately; a delayed escalation would never fire.
       active.cancel(true);
@@ -245,9 +256,9 @@ function shutdownExperimentRuns() {
       // The process may already be gone during app shutdown.
     }
   }
-  activeRuns.clear();
   // A cancelled shell may already have closed while a worker awaits escalation.
   for (const cleanup of pendingCleanup) cleanup();
+  return Promise.allSettled(activeRuns.map(run => run.completion));
 }
 
 module.exports = {

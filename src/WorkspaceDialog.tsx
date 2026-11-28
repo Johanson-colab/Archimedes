@@ -85,7 +85,7 @@ export default function WorkspaceDialog({
         />
         {mode === "rename" && projectName && <small>{t("Project: {name}", { name: projectName })}</small>}
       </label>
-      {error && <p className="project-rename-error" role="alert">{error}</p>}
+      {error && <p className="project-rename-error" role="alert">{t(error)}</p>}
     </div>
     <footer className="dialog-ref-footer">
       <button type="button" className="secondary-button" onClick={onClose} disabled={busy}>{t("Cancel")}</button>

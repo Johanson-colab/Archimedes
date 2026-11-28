@@ -19,7 +19,7 @@ test("menu proposals and late reader previews preserve the accepted owner; recov
   fs.writeFileSync(path.join(a, "paper.pdf"), "fixture");
   t.after(() => { store.closeAllWorkspaces(); fs.rmSync(root, { recursive: true, force: true }); });
   const handlers = new Map(), windowWorkspaces = new Map(), windowPreviewTokens = new Map(), previewTokenWorkspaces = new Map(), windowApprovalClaims = new Map();
-  const event = { sender: { id: 1 } }, proposals = [];
+  const event = { sender: { id: 1, isDestroyed: () => false } }, proposals = [];
   const browserWindow = { webContents: { id: 1, send: (...args) => proposals.push(args) }, isDestroyed: () => false };
   const helpers = new Function("scope", `with(scope) { ${["setWindowWorkspace", "releaseWindowApprovalClaim", "createPreviewToken", "openFolderFromMenu", "readerStateForWindow"].map(extract).join("\n")}; return {setWindowWorkspace,releaseWindowApprovalClaim,createPreviewToken,openFolderFromMenu,readerStateForWindow}; }`)({
     windowWorkspaces, windowApprovalClaims, windowPreviewTokens, previewTokenWorkspaces, randomUUID, fs, agent,
@@ -28,10 +28,16 @@ test("menu proposals and late reader previews preserve the accepted owner; recov
     workspaceFiles: require("./workspace-files.cjs"),
   });
   helpers.setWindowWorkspace(1, a);
+  let releasePreviousOpen;
+  const waitForPreviousOpen = new Promise(resolve => { releasePreviousOpen = resolve; });
   const bindingStart = source.indexOf("  const ipcMain = createWorkspaceIpc(");
   const bindingEnd = source.indexOf("\n  });", bindingStart) + 6;
   const ipc = new Function("scope", `with(scope) { ${source.slice(bindingStart,bindingEnd)}; return ipcMain; }`)({
-    createWorkspaceIpc, isWorkspaceDataChannel, store, windowWorkspaces, resolveWorkspace: path.resolve,
+    createWorkspaceIpc, isWorkspaceDataChannel, windowWorkspaces, resolveWorkspace: path.resolve,
+    store: { ...store, refreshWorkspaceGitStates: async () => {
+      if (store.currentStore().workspace === a) await waitForPreviousOpen;
+      await store.refreshWorkspaceGitStates();
+    } },
     electronIpcMain: { handle: (name, callback) => handlers.set(name, callback) },
   });
   ipc.handle("library:owner", () => store.currentStore().workspace);
@@ -97,7 +103,12 @@ test("menu proposals and late reader previews preserve the accepted owner; recov
   const alias = path.join(root, "selected-folder");
   const linkType = process.platform === "win32" ? "junction" : "dir";
   fs.symlinkSync(b, alias, linkType);
-  assert.equal(handlers.get("workspace:open")(event, alias).workspace, b);
+  const open = handlers.get("workspace:open");
+  const older = assert.rejects(open(event, a), /no longer current/);
+  assert.equal((await open(event, alias)).workspace, b);
+  releasePreviousOpen();
+  await older;
+  assert.equal(handlers.get("library:owner")(event), b);
   const updateStart = source.indexOf('  ipcMain.handle("library:update-paper",');
   const updateEnd = source.indexOf('  ipcMain.handle("library:remove-paper",', updateStart);
   new Function("ipcMain", "store", source.slice(updateStart, updateEnd))(ipc, store);
@@ -174,8 +185,9 @@ test("a window that vetoes Quit keeps its detached research database open", t =>
   t.after(() => { store.closeAllWorkspaces(); fs.rmSync(root, { recursive: true, force: true }); });
   const app = new (require("node:events").EventEmitter)();
   const registration = source.slice(source.lastIndexOf('app.on(', source.indexOf('  closeAllNativeClients();')));
-  new Function("app", "store", "experimentRunner", "closeAllNativeClients", "closeAllTerminals", "collaborationServer", "presence", "harnessSetup", registration)(
-    app, store, { shutdownExperimentRuns() {} }, () => {}, () => {}, null, null, { shutdown() {} },
+  new Function("app", "store", "experimentRunner", "closeAllNativeClients", "closeAllTerminals", "collaborationServer", "presence",
+    "harnessSetup", "researchAppRuntime", "researchAppDelivery", registration)(
+    app, store, { shutdownExperimentRuns() {} }, () => {}, () => {}, null, null, { shutdown() {} }, { shutdown() {} }, { shutdown() {} },
   );
   app.emit("before-quit");
   owner.updatePaper("seed-react", { notes: "finished after the canceled quit" });
