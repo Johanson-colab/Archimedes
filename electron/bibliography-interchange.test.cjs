@@ -820,6 +820,42 @@ test("a repeat import can repair exact legacy TeX spellings while guarding the a
   }
 });
 
+test("a title-only repair of a legacy record keeps the next identical import on the same paper", async () => {
+  const legacyAuthor = String.raw`Jos\'e Garc\'ia`;
+  const source = String.raw`@article{legacy,title={Garc{\'i}a~on scaling},author={Jos{\'e} Garc{\'i}a},year=2024}`;
+  const data = database("Partial legacy repair");
+  let unmount;
+  try {
+    const library = data.db.listLibraries(data.project.id)[0];
+    const [entry] = scope.parseBibliography(source).entries;
+    const oldTitle = String.raw`Garc\'ia~on scaling`;
+    const legacyKey = oldTitle.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+    const old = data.db.addPaper(library.id, { ...entry.paper, title: oldTitle, authors: [legacyAuthor], canonical_key: `title:${legacyKey}` });
+    data.db.setPaperBibliography(old.id, { citekey: "legacy", entryType: "article" });
+    data.db.updatePaper(old.id, { notes: "Keep the research note" });
+    data.db.repairLibraryPaperMetadata(old.id, { title: entry.paper.title });
+
+    const next = scope.parseBibliography(source).entries[0].paper;
+    assert.equal(scope.matchBibliographyPaper(next, data.db.listPapers(library.id))?.id, old.id);
+
+    unmount = await mount(scope.BibliographyDialog, { bridge: data.bridge, library, onClose() {}, onChanged: async () => {} });
+    await input(document.querySelector('[aria-label="BibTeX source"]'), source);
+    const row = document.querySelector("article.external-paper");
+    assert.match(row.querySelector("small").textContent, /Existing paper with metadata differences/);
+    assert.doesNotMatch(row.querySelector("small").textContent, /Citation key conflict/);
+    await click("Import selected references");
+    data.db.closeAllWorkspaces();
+    data.db.openWorkspace(data.root);
+    const saved = data.db.listPapers(library.id);
+    assert.equal(saved.length, 1);
+    assert.deepEqual([saved[0].id, saved[0].title, saved[0].authors, saved[0].citekey, saved[0].notes],
+      [old.id, entry.paper.title, [legacyAuthor], "legacy", "Keep the research note"]);
+  } finally {
+    if (unmount) await unmount();
+    data.close();
+  }
+});
+
 test("a literal TeX command remains distinct from its Unicode character in both directions", () => {
   const [literal, unicode] = scope.parseBibliography(String.raw`@article{code,title={Result \textbackslash{}AA}}
 @article{ring,title={Result Å}}`).entries.map(({ paper }) => paper);

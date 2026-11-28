@@ -1,0 +1,25 @@
+$ node --test --test-name-pattern='title-only repair of a legacy record' electron/bibliography-interchange.test.cjs  (branch head c16bc302 before the fix)
+✖ a title-only repair of a legacy record keeps the next identical import on the same paper (134.463959ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 845.384125
+
+✖ failing tests:
+
+test at electron/bibliography-interchange.test.cjs:823:1
+✖ a title-only repair of a legacy record keeps the next identical import on the same paper (134.463959ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+
+  + undefined
+  - '41b98bd1-0e0b-468a-9fa5-9ea52c7b8c1f'
+
+      at TestContext.<anonymous> (/Users/fei/Desktop/Archimedes/electron/bibliography-interchange.test.cjs:839:12)
+      at Test.runInAsyncScope (node:async_hooks:226:13)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {

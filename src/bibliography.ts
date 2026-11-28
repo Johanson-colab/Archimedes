@@ -290,10 +290,10 @@ export function matchBibliographyPaper<T extends AcademicSearchResult>(incoming:
   const matched = retained || papers.find(paper => compatible(paper) && compatibleTitleMetadata(incoming, paper)
     && (titleAlreadyMatched || normalizedTitle && normalizedTitle === title(paper.title)));
   if (matched) return matched;
-  // Recover the exact spelling saved by the old parser for this citation.
+  // The old parser's title or authors may survive a partial metadata repair.
   const legacy = legacySpellings.get(incoming);
   return legacy && papers.find(paper => "citekey" in paper && paper.citekey === legacy.citekey
-    && paper.title === legacy.title && compatible(paper) && (
+    && (paper.title === legacy.title || paper.title === incoming.title) && compatible(paper) && (
       compatibleTitleMetadata(incoming, paper) || compatibleTitleMetadata({ ...incoming, authors: legacy.authors }, paper)
     ));
 }
