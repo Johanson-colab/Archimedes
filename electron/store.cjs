@@ -1,6 +1,7 @@
 const { createHash, randomUUID } = require("node:crypto");
 const { findRepositoryUrl } = require("./paper-repository.cjs");
 const { detectGitState, gitBranch, gitOutput, runGit } = require("./git-state.cjs");
+const { inspectCodeState } = require("./research-graph/code-snapshot.cjs");
 const { normalizeWorkspaceName, suggestWorkspaceName, suggestRandomWorkspaceName, workspaceNameAvailable } = require("./workspace-names.cjs");
 const fs = require("node:fs");
 const path = require("node:path");
@@ -3559,6 +3560,12 @@ async function createExperimentRun({
     workspaceProvenance = { id: linked.id, root: linked.root, branchName: linked.branch_name, baseCommit: linked.base_commit, parentRunId: linked.parent_run_id };
   }
   verifyStart?.();
+  if (codeSnapshot && workspaceProvenance) {
+    const currentCode = await inspectCodeState(workspaceProvenance.root);
+    if (currentCode.commit !== codeSnapshot.commit) {
+      throw new Error("The experiment commit changed while saving its code snapshot. Try again.");
+    }
+  }
   const node = getResearchNode(nodeId);
   if (!node) throw new Error("Research node not found.");
   if (node.kind !== "experiment") throw new Error("Only an experiment node can start a run.");
