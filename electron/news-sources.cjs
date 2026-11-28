@@ -111,6 +111,12 @@ function normalizeMedia(media) {
   return output;
 }
 
+function normalizePublishedAt(value) {
+  if (value == null || value === "") return "";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "" : date.toISOString();
+}
+
 function makeItem(source, fields) {
   const url = canonicalUrl(fields.url);
   return {
@@ -120,7 +126,7 @@ function makeItem(source, fields) {
     title: String(fields.title || "").trim(),
     url,
     author: String(fields.author || "").trim(),
-    publishedAt: fields.publishedAt ? new Date(fields.publishedAt).toISOString() : "",
+    publishedAt: normalizePublishedAt(fields.publishedAt),
     score: Number(fields.score) || 0,
     comments: Number(fields.comments) || 0,
     summary: truncate(stripHtml(fields.summary || ""), 460),
@@ -138,7 +144,7 @@ function parseHackerNews(json) {
       title: hit.title,
       url: hit.url || `https://news.ycombinator.com/item?id=${hit.objectID}`,
       author: hit.author || "",
-      publishedAt: hit.created_at || hit.created_at_i ? hit.created_at || new Date(hit.created_at_i * 1000).toISOString() : "",
+      publishedAt: hit.created_at || (hit.created_at_i != null ? hit.created_at_i * 1000 : ""),
       score: hit.points,
       comments: hit.num_comments,
       summary: hit.story_text || "",
@@ -184,6 +190,21 @@ function parseGitHub(json) {
 function firstMatch(block, pattern) {
   const match = block.match(pattern);
   return match ? match[1] : "";
+}
+
+function attribute(tag, name) {
+  const match = tag.match(new RegExp(`(?:^|\\s)${name}\\s*=\\s*(["'])([\\s\\S]*?)\\1`, "i"));
+  return match ? match[2] : "";
+}
+
+function atomEntryLink(block) {
+  for (const tag of block.match(/<link\b[^>]*>/gi) || []) {
+    const rel = attribute(tag, "rel").trim().toLowerCase();
+    if (rel && !rel.split(/\s+/).includes("alternate")) continue;
+    const href = attribute(tag, "href");
+    if (href) return href;
+  }
+  return firstMatch(block, /<link[^>]*>([^<]+)<\/link>/i);
 }
 
 function parseArxiv(xml) {
@@ -239,7 +260,7 @@ function parseRssFeed(xml, { feedLabel = "" } = {}) {
     .map((block) => {
       const title = stripHtml(firstMatch(block, /<title[^>]*>([\s\S]*?)<\/title>/i));
       const link = isAtom
-        ? firstMatch(block, /<link[^>]*\bhref="([^"]+)"[^>]*\/?>/i) || firstMatch(block, /<link[^>]*>([^<]+)<\/link>/i)
+        ? atomEntryLink(block)
         : firstMatch(block, /<link>\s*([^<]+?)\s*<\/link>/i);
       if (!title || !link) return null;
       const rawDescription = firstMatch(block, /<content:encoded[^>]*>([\s\S]*?)<\/content:encoded>/i) || firstMatch(block, /<description[^>]*>([\s\S]*?)<\/description>/i) || firstMatch(block, /<summary[^>]*>([\s\S]*?)<\/summary>/i);
@@ -260,7 +281,7 @@ function parseRssFeed(xml, { feedLabel = "" } = {}) {
         title,
         url: decodeEntities(link),
         author: stripHtml(author),
-        publishedAt: published ? new Date(published).toISOString() : "",
+        publishedAt: published,
         summary: rawDescription,
         tags: feedLabel ? [feedLabel] : [],
         media,
@@ -288,7 +309,7 @@ function parseReddit(json) {
       title: post.title,
       url: post.permalink ? `https://www.reddit.com${post.permalink}` : post.url,
       author: post.author || "",
-      publishedAt: post.created_utc ? new Date(post.created_utc * 1000).toISOString() : "",
+      publishedAt: post.created_utc != null ? post.created_utc * 1000 : "",
       score: post.score,
       comments: post.num_comments,
       summary: post.selftext || "",
