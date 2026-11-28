@@ -261,7 +261,12 @@ export default function PaperReviewView({ bridge, workspace, projectId, active, 
     if (manuscript && bridge.prepareManuscriptReview) {
       // Re-resolve the destination after any in-page settings change so the
       // consent prompt and the submitted run describe the same provider.
-      handoff = await bridge.prepareManuscriptReview({ projectId: projectId ?? "", workspaceId: manuscript.origin.workspaceId, manifestPath: manuscript.origin.manifestPath }) ?? manuscript;
+      try {
+        handoff = await bridge.prepareManuscriptReview({ projectId: projectId ?? "", workspaceId: manuscript.origin.workspaceId, manifestPath: manuscript.origin.manifestPath }) ?? manuscript;
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : String(cause));
+        return;
+      }
     }
     if (handoff && !await confirm({
       title: "Send manuscript text for simulated review?",
