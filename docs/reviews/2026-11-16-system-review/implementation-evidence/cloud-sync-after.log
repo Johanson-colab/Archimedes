@@ -1,0 +1,41 @@
+(node:58830) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ same-ID running turns deliver completed/failed/incomplete to another SQLite client, survive retries and old snapshots (235.702041ms)
+✔ library and membership tombstones survive reconnect/old pull while explicit re-add and other references remain valid (135.9315ms)
+✔ real main sync IPC captures A dataRoot through delayed pull, B open and A close (63.409666ms)
+✔ turn revisions reject terminal regression and cross-thread identity mixing (0.223333ms)
+✔ a first upload removed before its ACK remains deleted, including delayed library creation (67.587542ms)
+✔ viewer sync can import and observe deletion without exposing local editor operations or pushing libraries (72.497083ms)
+✔ deletion journal survives reopening and a delayed deletion ACK cannot swallow an explicit re-add (74.842709ms)
+✔ old servers retain pending deletes with an upgrade warning; unknown pre-migration library IDs are never recreated (62.454667ms)
+✔ collaboration API sends the user token and maps project/member routes (1.314667ms)
+✔ collaboration API maps library and paper routes (0.396709ms)
+✔ collaboration API maps highlights, reviews, and presentations (0.311458ms)
+✔ collaboration API maps thread, turn, event, and comment routes (0.407209ms)
+✔ collaboration API creates, redeems, and revokes guest share links (0.250625ms)
+✔ collaboration API exports a project and reads admin audit events (0.155083ms)
+✔ collaboration API maps CRDT shared document reads and updates (0.125583ms)
+✔ collaboration API maps shared agent-run controls (0.262167ms)
+✔ collaboration API requires sign-in and surfaces API errors (0.419834ms)
+✔ local libraries and papers link to cloud ids and import shared libraries (34.588625ms)
+✔ cloud paper import keeps canonical identity and applies remote user state (26.523333ms)
+✔ paper sync requires editor access to the library project (26.426041ms)
+✔ library sync pushes local libraries and pulls shared books and paper state (42.703791ms)
+✔ library sync requires a shared project (24.535459ms)
+✔ OpenAI stream accepts a finished text and fully assembled tool arguments, including a final unterminated SSE line (3.887083ms)
+✔ OpenAI missing finish, length, broken final frame and partial tool arguments retain text without a second request (1.115625ms)
+✔ Anthropic requires message_stop, a valid stop reason and closed blocks before returning tools (1.540167ms)
+✔ a transport error after text retains that text and does not retry the model stream (0.682167ms)
+✔ real agent persists incomplete text and executes none of a mixed complete/partial tool batch; a later valid turn can continue (63.377542ms)
+✔ JSON review/planner refuses truncated but parseable output before its single JSON repair pass (0.722792ms)
+✔ session sync pushes position anchors, pulls peer anchors, and updates resolution (1.106208ms)
+✔ thread sync pushes local threads, turns, events, comments and pulls shared ones (38.144666ms)
+✔ thread sync requires a shared project (23.268667ms)
+ℹ tests 31
+ℹ suites 0
+ℹ pass 31
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1104.975084

@@ -1,0 +1,36 @@
+{
+  "branch": "codex/research-workflow-integrity",
+  "base": "1f4b37581c446770d576440f9ebb9bca5c55bfb7",
+  "scope": "uncommitted focused checkpoint, not final full gate",
+  "node": "v26.13.0",
+  "platform": "darwin",
+  "arch": "arm64",
+  "tests": {
+    "total": 59,
+    "pass": 59,
+    "fail": 0,
+    "skip": 0
+  },
+  "sourceHashes": {
+    "electron/project-transfer.cjs": "2957c2ecfa6cacff9543ce20bfe501300a2928ddd94b859004655b1963095a72",
+    "electron/project-transfer-commands.cjs": "86b3052ea33e139375c724a86e586f9a518f1b14e29675ab46f27bb43090b93f",
+    "electron/decimal-comparison.cjs": "0f2eda81a91189dfa83f1cbab995b3c0e7d78a1f75273cb0ea1924c8fd3a64d8",
+    "electron/metric-comparison.cjs": "8b2fb7225663b1ff17cc56d63ef308b40f028a6da22be57270dc6096dc2d38ec",
+    "electron/metric-comparison-commands.cjs": "db0a4a0a41856f74f602216a36a842449089bb8e3634d6781db0eb4903b2a35a",
+    "src/ProjectTransferDialog.tsx": "898b8d2b9fcdebf107b055b66d9ea030d049ed19b3af309a08f2838c80d98628",
+    "src/MetricComparisonPanel.tsx": "0febbca42eff3c5d84fabe9a27efc13fcb21ca75cf4bdb85875cecb9769ed4dc",
+    "src/project-transfer.ts": "22cf6144e9e375a2d22ec15444591ea4ed5f7b059dab41fe0c0567b5e8b4343a",
+    "src/metric-comparison.ts": "1da19e7c4cae0c26e2c0958a59b766a8bb0941fe792096a97c43b2451c003c9c",
+    "shared/delimited.mjs": "0710eb89f1cfbdcbf8ecfa6e2b90ad0f2e91bdcf1f2194cdec97c84e79fc7a72",
+    "shared/delimited.d.mts": "033de707755af31f835b75dc2cc843c667086ce326c26e397642457f6da7128e",
+    "scripts/run-semantic-worker-audit.cjs": "da56e888e3a4511530977ab195038f1a832a29526d69399a5411db92fcdc91c3",
+    "electron/library-records.cjs": "ec747439aad51da87ded7a6d65f7b12191ccda53c3092d4b18d51281c559a65f",
+    "src/bibliography.ts": "12db76359733765271878f4d1def21b0fb70d89ab9f63ff0ca7c7c65833d1b09",
+    "src/BibliographyDialog.tsx": "015b8f9ce0928b9c902b8af77e8cf4ed555f11fe1e33fe63433572ebea15905d"
+  },
+  "nativeDesktop": "not run by this agent in X01/V02 batch; frontend owner acceptance pending",
+  "fullSuiteBuildPackage": "pending frozen submitted-tree gate",
+  "publicTestsDependOnLocalReviewDirectory": false,
+  "finalLog": "x01-v02-i01-final-focused.log",
+  "productSourceFrozen": true
+}

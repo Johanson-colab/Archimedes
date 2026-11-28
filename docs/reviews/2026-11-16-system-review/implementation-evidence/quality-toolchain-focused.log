@@ -1,0 +1,32 @@
+✔ About logo preserves the seven Paper blocks without an opaque background (3.8455ms)
+✔ About logo is decorative next to the existing accessible product name (0.69625ms)
+✔ About logo uses the active theme foreground rather than an opaque themed tile (7.787791ms)
+✔ Windows EXE, installer, uninstaller and wizard all reference the approved multi-size ICO (2.289208ms)
+✔ macOS bundle and DMG both reference the ICNS and keep native dependency rebuilds enabled (0.130833ms)
+✔ macOS Info.plist declares microphone access for the opt-in voice input (0.124916ms)
+✔ packaged Dock and window icons resolve outside ASAR, with development fallbacks (4.639833ms)
+✔ packaging includes server/shared runtime code, excludes env files and uses file-safe renderer URLs (5.227833ms)
+✔ development windows override the Electron taskbar group icon with complete relaunch metadata (0.527834ms)
+✔ packaged relaunch metadata uses only the app executable, while non-Windows windows are untouched (0.245083ms)
+✔ window icon properties are assigned before the Windows window first becomes visible (2.852209ms)
+✔ build identity captures commit, dirty source and actual feature policy without inventing a release (281.543958ms)
+✔ actual preload and main handler expose packaged identity and runtime target (4.425417ms)
+✔ translation shards cover every string exactly once (21.923375ms)
+✔ keys stay sorted inside each shard so concurrent additions do not collide (11.456125ms)
+✔ the shell merges every shard and keeps the surfaces translated (5.796166ms)
+✔ declared toolchains accept compatible LTS and reject runtimes missing required TypeScript support (2.023417ms)
+✔ missing desktop runtime fails immediately without evaluating Electron's download entry (10.121542ms)
+✔ explicit preparation times out a stalled installer instead of hanging the test runner (158.861459ms)
+✔ full test inventory retains both real desktop regressions and every core file (15.034875ms)
+✔ settings chrome drops the decorative marks (1.322958ms)
+✔ proactive, web, and terminal use the shared settings page language (0.192167ms)
+✔ shared settings action row is styled once (0.641041ms)
+✔ text size defaults to 100 percent with 10 percent steps (0.096917ms)
+ℹ tests 24
+ℹ suites 0
+ℹ pass 24
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 543.590417

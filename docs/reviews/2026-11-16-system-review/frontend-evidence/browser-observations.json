@@ -1,0 +1,33 @@
+{
+  "date": "2026-11-16",
+  "sourceCommit": "1f4b37581c446770d576440f9ebb9bca5c55bfb7",
+  "environment": "Built renderer served at http://127.0.0.1:4273; Chrome; previewBridge; CUA UI actions and accessibility observations",
+  "limitations": "These observations verify renderer behavior. They do not verify Electron IPC, filesystem writes, model calls, or cloud behavior.",
+  "observations": [
+    {
+      "id": "welcome-hidden-destinations",
+      "steps": [
+        "Open a fresh preview session with the default Research Apps configuration.",
+        "Observe Choose your path and the four workflow cards.",
+        "Click Reproduce a paper.",
+        "Read the resulting accessibility tree.",
+        "Click Generate figures and read the resulting accessibility tree."
+      ],
+      "observed": "The page returns to Choose your path after Reproduce a paper. Generate figures leaves the same accessibility tree. No destination or explanation appears.",
+      "screenshot": "welcome-dead-entry-preview.jpg"
+    },
+    {
+      "id": "analysis-overwrites-unsent-draft",
+      "steps": [
+        "Set the chat textbox to UNSENT_RESEARCH_PLAN_A — keep this question while exploring data.",
+        "Read the accessibility tree and confirm that exact value is present.",
+        "Open Data analysis and use its built-in Palmer Penguins dataset.",
+        "Enter ANALYSIS_HANDOFF_B — explain body mass differences by species. in Continue in research chat.",
+        "Click Continue in chat and inspect the resulting chat textbox."
+      ],
+      "observed": "The textbox contains ANALYSIS_HANDOFF_B plus the dataset summary and sample rows. UNSENT_RESEARCH_PLAN_A is absent. No confirmation dialog appears. Nothing was submitted to an agent.",
+      "screenshot": "analysis-handoff-preview.jpg"
+    }
+  ],
+  "cleanup": "Used New research to return the preview chat to an empty draft after recording the overwrite scenario. No account sign-in or model request was performed."
+}

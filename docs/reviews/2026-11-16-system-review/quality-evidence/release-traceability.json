@@ -1,0 +1,77 @@
+{
+  "checkedDate": "2026-11-16",
+  "repository": "Johanson-colab/Archimedes",
+  "localBaseline": "1f4b37581c446770d576440f9ebb9bca5c55bfb7",
+  "remoteMain": "1f4b37581c446770d576440f9ebb9bca5c55bfb7",
+  "versionTag": {
+    "ref": "refs/tags/v0.1.0",
+    "tagObject": "a4b82b30b2edcb1dada0fe30f5877d50d638b542",
+    "commit": "af3e8b4c201b25bb8c4415b23f14f0c752120c0a"
+  },
+  "compare": {
+    "status": "diverged",
+    "aheadBy": 6,
+    "behindBy": 4,
+    "mergeBase": "f80175d4014be28e4f88c8206a75d964dd58e6b8",
+    "mainCommits": [
+      {
+        "sha": "ea32b0422f8a67167b10523144bb21065ca454b4",
+        "message": "revert: keep cloud features enabled on the development trunk\n\nThe account/team entry points were hidden for the v0.1.0 release, not for\nongoing development. The hiding now lives on release/0.1.0, cut from\nf80175d, so main can continue with the full feature set.\n\nThis reverts the merges of #330 and #329. The tree matches 81db95a exactly."
+      },
+      {
+        "sha": "e8fa4fd548646e4b4a8810422982b05dd21940f6",
+        "message": "Merge pull request #331 from Johanson-colab/revert/cloud-hidden-on-main\n\nrevert: keep cloud features enabled on the development trunk"
+      },
+      {
+        "sha": "067aa1beccf3a8f4dd44effaa4e343d6d99b4bf3",
+        "message": "fix(welcome): resolve images relative to packaged renderer"
+      },
+      {
+        "sha": "9047c259ca0107183defb67759886c33b70798ee",
+        "message": "fix(pdf): keep font measurement canvases out of root layout"
+      },
+      {
+        "sha": "a5a57ba23a68102366ce0aec46bc658fd982b452",
+        "message": "docs: add website link and bilingual README"
+      },
+      {
+        "sha": "1f4b37581c446770d576440f9ebb9bca5c55bfb7",
+        "message": "Merge pull request #335 from Johanson-colab/docs/readme-website-bilingual\n\ndocs: add website link and bilingual README"
+      }
+    ]
+  },
+  "release": [
+    {
+      "tag": "v0.1.0",
+      "publishedAt": "2026-11-15T09:29:15Z",
+      "url": "https://github.com/Johanson-colab/Archimedes/releases/tag/v0.1.0",
+      "assets": [
+        {
+          "name": "Archimedes-0.1.0-mac-arm64.dmg",
+          "size": 318654530,
+          "digest": "sha256:2b369a2c2c101898e66cfe2077e2c3855dc97c3a42ab3afe0ce57c3f2213c395"
+        },
+        {
+          "name": "Archimedes-0.1.0-mac-x64.dmg",
+          "size": 320656289,
+          "digest": "sha256:a257102612d38835918cdcce4d8a0759b4971e7c4ec9e6b9db17c65a4b085b53"
+        },
+        {
+          "name": "Archimedes-0.1.0-win-x64.exe",
+          "size": 166945700,
+          "digest": "sha256:993f00e6c12ca16a9987432e15364df5c90728bc2cce5e4edaf9ea638d4d8467"
+        }
+      ],
+      "body": "# Changelog\r\n\r\n## 0.1.0 — 2026-11-15\r\n\r\nFirst public build. Local-first research workspace for Windows and macOS.\r\n\r\n### Included\r\n\r\n- **Research chat and agents** — OpenAI-compatible model backends plus native Codex, Claude Code, and OpenCode harnesses. Tool calls, file writes and shell commands pause for approval.\r\n- **Library and PDF reading** — project libraries, PDF reader with search, highlights, notes, translation, figure capture, and source-grounded paper chat.\r\n- **Daily papers** — recent papers from arXiv and Hugging Face, with conference discovery.\r\n- **Paper writing** — LaTeX project tree, templates, multi-file editing, managed Tectonic compilation, diagnostics, and source search.\r\n- **Data analysis** — local CSV/TSV profiling, statistics, charts, and SVG export. Session-only by design.\r\n- **Workbench** — trajectory, files, changes, notes, terminal, and artifacts.\r\n- **Canvas** — paper figure and quote boards saved per workspace.\r\n- **Session tools** — comments and snapshot export (Markdown, JSON, PNG).\r\n\r\n### Beta, off by default\r\n\r\nThese can be enabled in **Settings → Research Apps**:\r\n\r\n- Image creation (FigureForge) — reference gallery and CLIP weights load from an external host.\r\n- Data charts — a browsable gallery of published figures, not local analysis.\r\n- Paper to Slides — requires a MinerU API token and uploads the PDF for parsing.\r\n- Reproduce — runbooks and evidence collection; numeric comparison is not implemented yet.\r\n\r\n### Not included in 0.1.0\r\n\r\nAccounts, cloud sync, guest links, and team collaboration are not available. Their entry points are hidden in this build.\r\n\r\n### Platforms\r\n\r\n- Windows 10/11 x64 (NSIS installer).\r\n- macOS Apple Silicon and Intel (DMG, one per architecture).\r\n\r\nBuilds are unsigned. Windows shows a SmartScreen warning; macOS requires right-click → Open on first launch.\r\n\r\n### Known limitations\r\n\r\n- The first LaTeX compile downloads TeX packages and needs network access.\r\n- There is no auto-update channel; new versions must be downloaded manually.\r\n- Presentation preview requires LibreOffice on the machine.\r\n- Data analysis keeps files only for the current session.\r\n- Figure galleries and the FigureForge reference index depend on external hosts.\r\n\n### Checksums (SHA-256)\n\n```text\n993F00E6C12CA16A9987432E15364DF5C90728BC2CCE5E4EDAF9EA638D4D8467  Archimedes-0.1.0-win-x64.exe\n2B369A2C2C101898E66CFE2077E2C3855DC97C3A42AB3AFE0CE57C3F2213C395  Archimedes-0.1.0-mac-arm64.dmg\nA257102612D38835918CDCCE4D8A0759B4971E7C4EC9E6B9DB17C65A4B085B53  Archimedes-0.1.0-mac-x64.dmg\n```\n"
+    }
+  ],
+  "commitVisibleStatuses": {
+    "statuses": []
+  },
+  "repoContainsGithubDirectory": false,
+  "limits": [
+    "No release binary downloaded or run in this quality review.",
+    "No assertion that external CI does not exist; no repository workflow or commit status was observed.",
+    "Release tag and main intentionally have different cloud entry-point gates."
+  ]
+}

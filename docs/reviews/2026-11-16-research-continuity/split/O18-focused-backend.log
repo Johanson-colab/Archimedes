@@ -1,0 +1,12 @@
+✔ review retains the real build with its generated run ID and keeps its data-store lease through background ingestion (550.232708ms)
+✔ failed run creation rolls back only its pin, and stale or mismatched inputs cannot create a new review (46.357208ms)
+✔ the global review database filters same-project-ID histories by data root without fabricating provenance for legacy rows (37.728417ms)
+✔ actual review view prioritizes the manuscript request over old history and sends selected versioned feedback back to its owner (129.712542ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 909.986084

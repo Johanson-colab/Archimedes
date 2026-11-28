@@ -1,0 +1,61 @@
+✔ translation shards cover every string exactly once (9.28275ms)
+✖ keys stay sorted inside each shard so concurrent additions do not collide (4.874208ms)
+✔ the shell merges every shard and keeps the surfaces translated (3.976625ms)
+✔ imports a local PDF into a library and indexes it without duplicating identical files (268.693ms)
+✔ opening a project hydrates only the first folder; project-wide browsing deduplicates shared papers (138.066917ms)
+✔ document switching mounts one reader and protects a running paper conversation (39.241125ms)
+✔ more than eight papers remain open and keep their reading positions (63.037ms)
+✔ removing a paper removes only that folder membership; sync still includes annotations (24.302291ms)
+✔ a late folder refresh cannot overwrite a completed paper-state update (19.199708ms)
+✔ notes survive unmounting and failed saves; editing during save keeps the newer draft (7.7635ms)
+✔ metadata queue bounds concurrency, continues after errors and cancels queued work (2.733625ms)
+✔ search keeps a pasted title together, includes tags, and sorting leaves cache order intact (0.225ms)
+✔ proactive is opt-in and starts off (1.241792ms)
+✔ the floating layer drags, resizes, clamps, and persists (0.197375ms)
+✔ research path keeps the thread state and drops the old chrome (0.093875ms)
+✔ the research path state is lifted to the thread owner (0.441917ms)
+✔ proactive output always carries evidence, why-now, and one primary action (0.194542ms)
+✔ the engine dedupes, expires, budgets, and learns from dismissal (0.144167ms)
+✔ the hook gates on composer focus and uses the dock as the shown boundary (0.103708ms)
+✔ L0 signals are emitted by the surfaces that own the evidence (0.125458ms)
+✔ toolbar opens the floating panels without stealing focus (0.883ms)
+✔ proactive settings expose mode, budget, quiet hours, and L0 sources (0.159625ms)
+✔ the proactive header is output-first and uses an amber status mark (1.026292ms)
+✔ panels float over the workspace and share one surface (2.835125ms)
+✔ proactive shows the latest output only and hides the composer until asked (0.08475ms)
+✔ proactive suggestions are read-only and replies use the Proactive model (2.908708ms)
+✔ proactive action labels follow the interface language (0.0745ms)
+✔ live observation follows the local activity pulse (0.099541ms)
+✔ L2 captures the Archimedes window only, never the desktop (0.296458ms)
+✔ Proactive model lives inside the Proactive agent page (0.067792ms)
+✔ the research path is thread-scoped and can be pinned globally (0.179875ms)
+✔ configured model starts auto from the dock and random mode opens on signals (0.257625ms)
+✔ research path checkpoints offer only actions that change state (0.983375ms)
+ℹ tests 33
+ℹ suites 0
+ℹ pass 32
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1045.682125
+
+✖ failing tests:
+
+test at electron/i18n-translations.test.cjs:36:1
+✖ keys stay sorted inside each shard so concurrent additions do not collide (4.874208ms)
+  AssertionError [ERR_ASSERTION]: library.ts is out of order at "back to reading"
+      at TestContext.<anonymous> (/Users/fei/Desktop/Archimedes-pr-splits/product-baseline/electron/i18n-translations.test.cjs:40:14)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }

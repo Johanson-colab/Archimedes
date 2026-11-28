@@ -1,0 +1,12 @@
+Base: 1f4b375
+Host: macOS arm64, Node 26.13.0
+Command: node --test electron/terminal-shell.test.cjs
+Observed output excerpt (timings/stack paths omitted):
+
+✖ Windows prefers PowerShell 7 when it is installed
+✖ Windows falls back to Windows PowerShell before cmd
+✖ explicit shell profiles do not fall through to a different shell
+ℹ tests 7
+ℹ pass 4
+ℹ fail 3
+Observed assertions: actual cmd.exe; expected Windows PowerShell paths.

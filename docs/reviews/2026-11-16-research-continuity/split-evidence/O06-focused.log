@@ -1,0 +1,29 @@
+✔ large tool-free reconstruction requests reject truncated model output (1.089875ms)
+✔ retries OpenAI-compatible models with max_completion_tokens when requested (0.238042ms)
+✔ retries a nonstandard empty stream as a non-streaming completion (1.554292ms)
+✔ completes without a text callback, as the proactive agent does (0.183833ms)
+✔ model requests retry rate limits without rerunning any tool (2.268667ms)
+✔ large reconstruction output is opt-in and rejects Anthropic truncation (1.094584ms)
+✔ translates tool calls and results into Anthropic message blocks (0.583ms)
+✔ streams Anthropic text and tool input as normalized agent calls (3.382792ms)
+✔ OpenAI stream accepts a finished text and fully assembled tool arguments, including a final unterminated SSE line (3.74475ms)
+✔ OpenAI missing finish, length, broken final frame and partial tool arguments retain text without a second request (1.014917ms)
+✔ Anthropic requires message_stop, a valid stop reason and closed blocks before returning tools (1.101958ms)
+✔ a transport error after text retains that text and does not retry the model stream (0.56525ms)
+✔ real agent persists incomplete text and executes none of a mixed complete/partial tool batch; a later valid turn can continue (58.447333ms)
+✔ JSON review/planner refuses truncated but parseable output before its single JSON repair pass (0.503875ms)
+✔ extractJsonObject handles plain, fenced and chatty responses (1.638375ms)
+✔ OpenAI-compatible requests carry the model, messages and usage (0.929917ms)
+✔ Anthropic requests use messages and the system field (0.191292ms)
+✔ malformed JSON gets one schema-preserving repair pass (0.165708ms)
+✔ reasoning endpoints that reject temperature are retried without it (0.174709ms)
+✔ custom provider resolution validates required fields (0.098208ms)
+✔ agent mode inherits the main agent provider and model (0.966584ms)
+ℹ tests 21
+ℹ suites 0
+ℹ pass 21
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 467.377041

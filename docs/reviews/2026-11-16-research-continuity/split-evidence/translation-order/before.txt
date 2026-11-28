@@ -1,0 +1,12 @@
+Base: 1f4b375
+Host: macOS arm64, Node 26.13.0
+Command: node --test electron/i18n-translations.test.cjs
+Observed output excerpt (timings/stack paths omitted):
+
+✔ translation shards cover every string exactly once
+✖ keys stay sorted inside each shard so concurrent additions do not collide
+✔ the shell merges every shard and keeps the surfaces translated
+ℹ tests 3
+ℹ pass 2
+ℹ fail 1
+Observed assertion: library.ts is out of order at "back to reading".

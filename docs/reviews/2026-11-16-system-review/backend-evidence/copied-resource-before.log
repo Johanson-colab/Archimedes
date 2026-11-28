@@ -1,0 +1,32 @@
+✖ a directly copied database cannot reclaim an original data workspace's still-active run resources (58.549375ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 202.607291
+
+✖ failing tests:
+
+test at electron/reproduction-lifecycle.test.cjs:122:1
+✖ a directly copied database cannot reclaim an original data workspace's still-active run resources (58.549375ms)
+  AssertionError [ERR_ASSERTION]: a cloned owner UUID/run ID cannot authorize cleanup from a different canonical data root
+  + actual - expected
+  
+  + [
+  +   'still-live-A'
+  + ]
+  - []
+  
+      at TestContext.<anonymous> (/Users/fei/Desktop/Archimedes/electron/reproduction-lifecycle.test.cjs:138:12)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: [ 'still-live-A' ],
+    expected: [],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }

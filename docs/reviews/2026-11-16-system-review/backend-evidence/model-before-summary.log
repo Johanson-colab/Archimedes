@@ -1,0 +1,15 @@
+✔ OpenAI stream accepts a finished text and fully assembled tool arguments, including a final unterminated SSE line (4.316042ms)
+✖ OpenAI missing finish, length, broken final frame and partial tool arguments retain text without a second request (0.696ms)
+✖ Anthropic requires message_stop, a valid stop reason and closed blocks before returning tools (0.723041ms)
+✖ a transport error after text retains that text and does not retry the model stream (0.556875ms)
+✖ real agent persists incomplete text and executes none of a mixed complete/partial tool batch; a later valid turn can continue (48.882834ms)
+✖ JSON review/planner refuses truncated but parseable output before its single JSON repair pass (1.142541ms)
+ℹ tests 6
+ℹ suites 0
+ℹ pass 1
+ℹ fail 5
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 706.387417
+

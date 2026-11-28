@@ -1,0 +1,1 @@
+{"service":"docker","status":"passed","configuredImage":"python:3.11-slim","smokeImage":"python:3.11-slim","launchOverride":false,"container":"archimedes-repro-e0dd7705-1d7d-4ac6-8400-c9e8eb7b7894","outputBytes":1048588,"boundedCapture":64000,"removedOwnedContainer":true}

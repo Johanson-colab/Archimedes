@@ -1,0 +1,1 @@
+{"originalNewRunInput":"previous contract with passed verdict","before":"verified","currentNewRunInput":"freshContract used by production run-manager","after":"manual","executedCommands":0,"scope":"Intact original pilot; original main passed the saved steps. Actual current manager/store ownership and history are additionally tested in electron/reproduction-snapshot.test.cjs."}

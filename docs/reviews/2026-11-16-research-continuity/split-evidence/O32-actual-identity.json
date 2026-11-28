@@ -1,0 +1,27 @@
+{
+  "version": "0.1.0",
+  "commit": "1f4b37581c446770d576440f9ebb9bca5c55bfb7",
+  "channel": "development",
+  "branch": "codex/build-diagnostics",
+  "sourceDirty": true,
+  "sourceFingerprint": "f8611cc0cb362cb0b69c6cb8e38a1909536aa0d6128cb754efb1fc2daea5aaac",
+  "capabilities": {
+    "cloudEntryPoints": true,
+    "defaultResearchApps": [
+      "library",
+      "daily",
+      "writing",
+      "data-analysis"
+    ],
+    "betaResearchApps": [
+      "reproduce",
+      "image-creation",
+      "data-charts",
+      "paper-to-slides"
+    ]
+  },
+  "platform": "darwin",
+  "arch": "arm64",
+  "packaged": false,
+  "electron": null
+}

@@ -1,0 +1,20 @@
+$ node --test --test-name-pattern='superseded writing scope' electron/paper-writing-workspace.test.cjs  (branch head 3c899173 before the fix)
+✖ a delayed autosave does not compile a superseded writing scope (1042.353541ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1636.096125
+
+✖ failing tests:
+
+test at electron/paper-writing-workspace.test.cjs:714:1
+✖ a delayed autosave does not compile a superseded writing scope (1042.353541ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+
+  1 !== 0
+
+      at TestContext.<anonymous> (/Users/fei/Desktop/Archimedes/electron/paper-writing-workspace.test.cjs:724:10)

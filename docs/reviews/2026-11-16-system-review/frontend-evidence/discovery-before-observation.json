@@ -1,0 +1,20 @@
+{
+  "renderer": "Read-only snapshot of prior dist, SHA256 recorded in before-manifest.json",
+  "fixture": "Only library:discover-daily is replaced by discovery-fixture.cjs feed; no model/search network call",
+  "project": "Discovery Review",
+  "defaultLibrary": "Project library is created by the original backend; removing its last library is rejected",
+  "steps": [
+    "Create project through real UI",
+    "Open Daily and enter handoff evidence",
+    "Search returns visible fixed candidate",
+    "Open Library and original Import paper dialog",
+    "Return to Daily"
+  ],
+  "observed": {
+    "submittedQueryWasVisible": true,
+    "queryAfterReturn": "",
+    "searchModeAfterReturn": "initial daily feed",
+    "sameFixtureCandidateStillVisible": true
+  },
+  "scope": "Proves loss of query and search state across navigation; the fixture always returns the same paper, so candidate-content loss is not inferred"
+}

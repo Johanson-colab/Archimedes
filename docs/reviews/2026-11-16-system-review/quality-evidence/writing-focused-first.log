@@ -1,0 +1,43 @@
+✔ normalizes only workspace-relative TeX compile targets (0.786625ms)
+✔ creates a collision-safe paper template and discovers main documents (25.427083ms)
+✔ creates LaTeX files and folders without overwriting workspace entries (1.956334ms)
+✔ creates projects from built-in templates with a bibliography (7.516625ms)
+✔ falls back to tectonic and passes its CLI arguments (8.044917ms)
+✔ classifies known LaTeX compilers (0.43275ms)
+✔ imports a complete LaTeX folder and selects its main document (8.301917ms)
+✔ finds the imported main document even when the workspace discovery cap is exhausted (1241.830875ms)
+✔ extracts line-oriented LaTeX diagnostics (0.75275ms)
+﹣ built-in templates compile before and after adding a citation (0.1875ms) # latexmk is not installed
+✔ a missing TeX font reports an installation fix instead of a source line (0.115417ms)
+✔ a failed recompile does not expose the PDF left by a previous successful build (4.904208ms)
+✔ a stalled compiler returns its partial log and a dependency timeout diagnostic (3.553875ms)
+✔ an active first build keeps its longer budget but still reaches the total deadline (0.308125ms)
+✔ compiler logs preserve UTF-8 symbols split across stdout and stderr chunks (0.601292ms)
+✔ missing-glyph diagnostics recover the symbol from XeTeX's code point and deduplicate damaged text (0.675041ms)
+✔ extracts executable bytes from tar.gz and deflated Windows ZIP without writing archive paths (3.44825ms)
+✔ concurrent first use downloads once; verified warm cache works offline and corrupt cache is replaced (44.675291ms)
+✔ checksum and download failures leave no executable, and retry can recover (7.627959ms)
+✔ packaged archive is verified and unpacked without network access; invalid archive never downloads a replacement (7.678208ms)
+✔ unsupported platforms and oversized downloads fail explicitly (1.346875ms)
+✔ native compiler inherits Electron HTTP proxy and preserves explicit proxy environment (1.892333ms)
+✔ compiler log stages distinguish downloading, initialization and typesetting (0.224167ms)
+(node:16202) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ search treats LaTeX commands and regex punctuation literally (1.6815ms)
+✔ search ignores case and keeps original Unicode textarea offsets (0.221291ms)
+✔ highlights keep line-relative offsets and one identity across lines (0.180041ms)
+✔ newlines and trailing empty lines never add highlight text (0.116833ms)
+✔ same-named papers keep their owner and autosave on departure without replaying an old open request (323.518875ms)
+✔ a delayed save preserves later keystrokes and drains the newest snapshot to its old root (852.319375ms)
+✔ late reads, compile progress and build results update only their owner scope (64.793375ms)
+✔ failed departure autosaves keep the original draft and expose its save error on return (27.8335ms)
+✔ switching source files during an in-flight save retains and saves the final edit to the old file (844.178083ms)
+✔ the actual preload and compile handler preserve owner ids and legacy two-argument calls (2.585ms)
+ℹ tests 33
+ℹ suites 0
+ℹ pass 32
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 1
+ℹ todo 0
+ℹ duration_ms 3009.268042

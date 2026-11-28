@@ -1,0 +1,109 @@
+### Page
+- Page URL: http://127.0.0.1:5260/
+- Page Title: Archimedes
+### Snapshot
+```yaml
+- main [ref=f4e3]:
+  - complementary "Archimedes navigation":
+    - generic:
+      - img "Archimedes"
+      - button "Search or run a command"
+      - button "Hide sidebar"
+    - button "New research"
+    - navigation "Primary":
+      - generic:
+        - generic: Research Apps
+        - button "Manage Research Apps"
+      - generic:
+        - button "Library"
+        - button "Daily papers"
+        - button "Data analysis"
+        - button "Paper writing"
+        - button "News"
+    - generic:
+      - generic:
+        - generic: Projects
+        - generic:
+          - button "New project"
+      - generic:
+        - generic:
+          - generic:
+            - button "General 1" [expanded]:
+              - generic: General
+              - generic: "1"
+          - generic:
+            - generic:
+              - button "Hegel House"
+    - generic:
+      - generic:
+        - button "Sign in":
+          - generic:
+            - strong: Sign in
+      - generic "Application version 0.1.0": v0.1.0
+      - button "Settings"
+    - separator "Resize sidebar"
+  - generic [ref=f4e90]:
+    - generic [ref=f4e91]:
+      - button "Show sidebar" [pressed] [ref=f4e318] [cursor=pointer]
+      - generic [ref=f4e92]:
+        - generic "Project and workspace" [ref=f4e93]:
+          - generic "General" [ref=f4e94]
+          - generic [aria-hidden] [ref=f4e95]: /
+          - button "Hegel House" [ref=f4e96] [cursor=pointer]
+        - button "New session" [ref=f4e100] [cursor=pointer]
+      - generic [ref=f4e105]:
+        - button "Show Research path" [ref=f4e106] [cursor=pointer]
+        - button "Show Proactive agent" [ref=f4e111] [cursor=pointer]
+        - button "Hide workbench" [pressed] [ref=f4e250] [cursor=pointer]
+    - generic [ref=f4e117]:
+      - generic [ref=f4e206]:
+        - generic [ref=f4e207]:
+          - tablist "News view" [ref=f4e208]:
+            - tab "Feed" [selected] [ref=f4e209] [cursor=pointer]
+            - tab "Board" [ref=f4e211] [cursor=pointer]
+          - generic [ref=f4e213]: Not synced yet
+          - button "Refresh" [ref=f4e214] [cursor=pointer]
+          - button "News settings" [ref=f4e220] [cursor=pointer]
+        - generic [ref=f4e224]:
+          - textbox "Search news" [ref=f4e229]
+          - generic [ref=f4e230]:
+            - button "Hot" [ref=f4e231] [cursor=pointer]
+            - button "Newest" [ref=f4e232] [cursor=pointer]
+          - combobox "Time range" [ref=f4e233]:
+            - option "Past 24 hours" [selected]
+            - option "Past 3 days"
+            - option "Past 7 days"
+        - generic [ref=f4e234]:
+          - button "All sources 0" [pressed] [ref=f4e235] [cursor=pointer]:
+            - text: All sources
+            - generic [ref=f4e236]: "0"
+          - button "Saved" [ref=f4e237] [cursor=pointer]
+        - generic [ref=f4e240]: bridge.listNews is not a function
+        - generic [ref=f4e241]:
+          - strong [ref=f4e246]: No news yet
+          - generic [ref=f4e247]: Enable sources or add a feed to start collecting stories.
+          - button "Refresh now" [ref=f4e249] [cursor=pointer]
+      - generic "Floating agent panels"
+    - complementary "Workbench" [ref=f4e251]:
+      - separator "Resize workbench" [ref=f4e252]
+      - region "Workbench pane" [ref=f4e254]:
+        - generic [ref=f4e255]:
+          - tablist "Workbench panels" [ref=f4e256]:
+            - tab "Trajectory · Drag to reorder" [ref=f4e257] [cursor=pointer]
+            - tab "Files · Drag to reorder" [ref=f4e262] [cursor=pointer]
+            - tab "Changes · Drag to reorder" [ref=f4e268] [cursor=pointer]
+            - tab "Notes · Drag to reorder" [selected] [ref=f4e277] [cursor=pointer]
+            - tab "Terminal · Drag to reorder" [ref=f4e282] [cursor=pointer]
+          - button "More tabs" [ref=f4e287] [cursor=pointer]
+        - tabpanel "Notes" [ref=f4e294]:
+          - region "Notes" [ref=f4e295]:
+            - generic [ref=f4e296]:
+              - generic [ref=f4e297]: New conversation notes
+              - generic [ref=f4e302]: Saved
+            - textbox "Notes editor" [ref=f4e303]:
+              - /placeholder: Jot down an idea, a quote, or draft your next prompt…
+              - text: Check whether the evaluation split contains repeated participants.
+            - generic [ref=f4e305]:
+              - button "Add to chat" [ref=f4e306] [cursor=pointer]
+              - button "Use as prompt" [ref=f4e309] [cursor=pointer]
+```

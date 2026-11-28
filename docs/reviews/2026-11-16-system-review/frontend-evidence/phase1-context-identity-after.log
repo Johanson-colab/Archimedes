@@ -1,0 +1,15 @@
+[
+  {
+    "scenario": "same cloud thread id across two data roots",
+    "sameKey": false,
+    "leakedAttachment": false,
+    "keyA": "thread:[\"/private/var/folders/y6/7f277x5n4z14sqwsw21h8ffm0000gn/T/archimedes-independent-context-LTcJw7/data-a\",\"same-cloud-thread-id\"]",
+    "keyB": "thread:[\"/private/var/folders/y6/7f277x5n4z14sqwsw21h8ffm0000gn/T/archimedes-independent-context-LTcJw7/data-b\",\"same-cloud-thread-id\"]"
+  },
+  {
+    "scenario": "fresh cloud import into project whose folder differs from data root",
+    "frontendExecutionRoot": "/private/var/folders/y6/7f277x5n4z14sqwsw21h8ffm0000gn/T/archimedes-independent-context-LTcJw7/project",
+    "expectedExecutionRoot": "/private/var/folders/y6/7f277x5n4z14sqwsw21h8ffm0000gn/T/archimedes-independent-context-LTcJw7/project",
+    "rejection": ""
+  }
+]

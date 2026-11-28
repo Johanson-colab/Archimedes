@@ -1,0 +1,38 @@
+{
+  "root": "/private/var/folders/y6/7f277x5n4z14sqwsw21h8ffm0000gn/T/archimedes-o17-real-tex-WjduJP",
+  "engine": "tectonic",
+  "usedRetainedRuntimeCache": "/Users/fei/Library/Application Support/Archimedes/latex-runtime",
+  "before": {
+    "sourceVersion": "1c63f947315019aad6b5c4de83e5a12b997951dd7b160fc71568459c798e2883",
+    "pdf": {
+      "path": ".archimedes/latex-build/defc3a7a99c3/62d5a110-feec-4b8d-a12c-c6d5e86ab032/main.pdf",
+      "bytes": 7457,
+      "sha256": "cb9496814cd87942149dc99f493b323c1e6e1f1df68da18f739fd42a21750ad5"
+    },
+    "log": {
+      "path": ".archimedes/latex-build/defc3a7a99c3/62d5a110-feec-4b8d-a12c-c6d5e86ab032/build-output.log",
+      "bytes": 2400,
+      "sha256": "a7723487089950105c63d865bf79875e42791ebcc8f5ba148682f6c823beeb85",
+      "retention": "bounded compiler output"
+    },
+    "durationMs": 316
+  },
+  "after": {
+    "sourceVersion": "64575e47fa210f3f970a193cd25ba35ee7312a3de657ca0e8a212b5ec9bbd7af",
+    "pdf": {
+      "path": ".archimedes/latex-build/defc3a7a99c3/5d53cafc-031c-4226-8b53-73cfe7a0f500/main.pdf",
+      "bytes": 7525,
+      "sha256": "bfb2895e9f44c08a3c26b628bbc893274502a0946259fcf988524d8779def365"
+    },
+    "log": {
+      "path": ".archimedes/latex-build/defc3a7a99c3/5d53cafc-031c-4226-8b53-73cfe7a0f500/build-output.log",
+      "bytes": 2400,
+      "sha256": "b5cedf97df72d040f6826bc9e5f1bc5cc8b4b51b5646416bc2dd0af093730edb",
+      "retention": "bounded compiler output"
+    },
+    "durationMs": 281
+  },
+  "retainedOldPdfUnchanged": true,
+  "oldBuildCurrent": false,
+  "newBuildCurrent": true
+}

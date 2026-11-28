@@ -1,0 +1,31 @@
+✔ a local title-only candidate cannot override a conflict-free global strong identifier (99.777333ms)
+✔ BibTeX supports nested values, grouped authors, stable keys and explicit unsupported syntax (1.707458ms)
+✔ BibTeX preserves literal braces and backslashes across its own export while retaining grouped capitalization (0.276292ms)
+✔ BibTeX only identifies arXiv eprints and normalizes the same identifiers as the actual store (55.417541ms)
+✔ citation keys are scoped to the target export, while paper identity still deduplicates across projects (105.305375ms)
+✔ real Library BibTeX preview preserves existing edits and notes; only selected metadata repair is applied (76.423958ms)
+✔ leaving a BibTeX import stops subsequent operations after an in-flight add returns (61.322167ms)
+✔ explicit metadata repair and bibliography survive identifier-changing imports without discarding PDF pages or notes (91.42975ms)
+✔ bibliography keys and explicit repairs persist through the actual preload and main handlers (95.531125ms)
+✔ library metadata updates preserve a manuscript key, manual fields, other entries and directives (194.785416ms)
+✔ new references avoid collisions and keep their key when metadata changes (0.932916ms)
+✔ same-named papers keep their owner and autosave on departure without replaying an old open request (212.212666ms)
+✔ a delayed save preserves later keystrokes and drains the newest snapshot to its old root (842.437417ms)
+✔ late reads, compile progress and build results update only their owner scope (69.196916ms)
+✔ failed departure autosaves keep the original draft and expose its save error on return (34.553625ms)
+✔ switching source files during an in-flight save retains and saves the final edit to the old file (838.712292ms)
+✔ the actual preload and compile handler preserve owner ids and legacy two-argument calls (2.499584ms)
+✔ Writing opens existing manuscripts before templates and restores the chosen document after remount (28.905209ms)
+✔ a main document at the execution root opens in place and a removed recent document returns to the chooser (21.101709ms)
+✔ compiling main waits for a pending save of another source file in the same manuscript (29.914042ms)
+✔ typing during the compile save barrier retains the new edit and does not compile an older source set (29.588458ms)
+✔ projects sharing one execution folder restore their own manuscript selection (29.691958ms)
+✔ Writing inserts a project-library citation and explicitly refreshes its bibliography without replacing manual content (88.914083ms)
+ℹ tests 23
+ℹ suites 0
+ℹ pass 23
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2868.98025

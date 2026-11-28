@@ -1,0 +1,27 @@
+{
+  "removed": [
+    {
+      "path": "/tmp/archimedes-final-resource-audit",
+      "removed": true
+    },
+    {
+      "path": "/tmp/archimedes-final-package-smoke",
+      "removed": true
+    },
+    {
+      "path": "/private/var/folders/y6/7f277x5n4z14sqwsw21h8ffm0000gn/T/archimedes-final-journeys-mi137r7a",
+      "removed": true
+    },
+    {
+      "path": "/private/var/folders/y6/7f277x5n4z14sqwsw21h8ffm0000gn/T/archimedes-v03-resources-6KgBeb",
+      "removed": true
+    }
+  ],
+  "retained": [
+    "release/mac-arm64/Archimedes.app",
+    "docs/reviews/2026-11-16-system-review",
+    ".archimedes/latex-package/mac-arm64/engine.tar.gz"
+  ],
+  "processes": "All task Electron/audit/provider processes exited; final actual packaged executable exited0 and its localhost server closed.",
+  "docker": "Daemon socket absent and no Docker Desktop/backend process at final observation; task containers were removed by their original service probes. Docker is stopped as before this task. No unrelated image/volume was deleted."
+}

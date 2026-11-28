@@ -1,0 +1,26 @@
+✔ actual FigureForge preserves owner drafts and reopens saved source, references, models and output without re-uploading (507.249417ms)
+✔ actual App slides callback creates its target before copying the old-root build, preserving the original draft (252.901333ms)
+✔ late App slides staging stays with its original owner and stores a recoverable draft rather than sending in the newly selected task (39.527292ms)
+✔ actual App manuscript discussion/revision uses an empty based-on historical-root session and reuses it without replacing drafts (48.191542ms)
+✔ a reopened unlinked analysis creates its session at its registered old root after the project default moves (110.5575ms)
+✔ same-named papers keep their owner and autosave on departure without replaying an old open request (232.344ms)
+✔ a delayed save preserves later keystrokes and drains the newest snapshot to its old root (848.071208ms)
+✔ late reads, compile progress and build results update only their owner scope (66.066167ms)
+✔ failed departure autosaves keep the original draft and expose its save error on return (31.834459ms)
+✔ switching source files during an in-flight save retains and saves the final edit to the old file (841.531333ms)
+✔ the actual preload and compile handler preserve owner ids and legacy two-argument calls (3.879834ms)
+✔ Writing opens existing manuscripts before templates and restores the chosen document after remount (37.1565ms)
+✔ a main document at the execution root opens in place and a removed recent document returns to the chooser (25.876583ms)
+✔ compiling main waits for a pending save of another source file in the same manuscript (28.758584ms)
+✔ typing during the compile save barrier retains the new edit and does not compile an older source set (30.796375ms)
+✔ Writing hands off only a fresh whole-manuscript snapshot and keeps source/PDF identity for returning (38.254792ms)
+✔ a late snapshot check cannot hand off a newer unsaved editing version as its old PDF (24.464209ms)
+✔ a registered figure is copied by the real IPC handler and inserted without losing later manuscript typing (67.03825ms)
+ℹ tests 18
+ℹ suites 0
+ℹ pass 18
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 3179.336834

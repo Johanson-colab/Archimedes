@@ -1,0 +1,7 @@
+- Branch/worktree: `codex/discovery-project-state` / `/Users/fei/Desktop/Archimedes-pr-splits/discovery-project-state`.
+- Commit: `8d4dea2`; base `1f4b375`; no dependencies. Prior unpublished feature commits 39b7ca7/777843b were amended to include the target-save fix and screenshots.
+- Scope: Daily/conference local search snapshots, target-library restore/current membership, inline library creation and related four strings/CSS. No B1 context, project-selection reasons or BibTeX feature included.
+- Focused 11/11, lint/build/theme pass. Standard 1,273: 1,259 pass, identical 7 base failures, 7 skips. Original base full log is `../product-base-npm-test.log`.
+- Coordinator's delayed A-save/B-selection case reproduced before correction; `pending-target-before.log` retains the failed behavior. Fixed state updates retain the original actual DB write and affect current display only when its target is still active.
+- Actual base/head renderer pair committed under `docs/assets/discovery-state/`, 1440×1000 charcoal English. Same input/action journey, different returned state is the intended change.
+- Published after coordinator review: https://github.com/Johanson-colab/Archimedes/pull/342 (normal main-base PR). Both exact-head raw image URLs returned HTTP 200; remote files checked as this feature only. Final body in `PR_BODY.md`.

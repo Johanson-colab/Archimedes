@@ -1,0 +1,82 @@
+{
+  "executable": "/opt/homebrew/bin/tectonic",
+  "engine": "Tectonic 0.17.0",
+  "bundle": "https://relay.fullyjustified.net/default_bundle_v33.tar",
+  "fixture": "real Tectonic, article + section + bibliography",
+  "cold": {
+    "ok": false,
+    "timed_out": true,
+    "duration_ms": 360023,
+    "diagnostics": [
+      {
+        "line": null,
+        "message": "LaTeX compilation timed out.",
+        "help": "The first build exceeded its preparation time limit. Downloaded dependencies are retained. Retry to continue using the cache; see the build log below."
+      }
+    ],
+    "log": "note: generating format \"latex\"\n(texputnote: downloading tectonic-format-latex.tex\n (tectonic-format-latex.texnote: downloading xelatex.ini\n (xelatex.ininote: downloading latex.ltx\n (latex.ltxnote: downloading texsys.cfg\n (texsys.cfg)\n./texsys.aux found\n\n\n\\@currdir set to: ./.\n\n\nAssuming \\openin and \\input \nhave the same search path.\n\n\nDefining UNIX/DOS style filename parser.\n\ncatcodes, registers, parameters,\nLaTeX2e <2021-11-15> patch level 1\nnote: downloading expl3.ltx\n(expl3.ltxnote: downloading expl3-code.tex\n (expl3-code.texnote: downloading cmr10.tfm\nnote: downloading UnicodeData.txt\nnote: downloading CaseFolding.txt\nnote: downloading SpecialCasing.txt\n)) hacks, document commands, control, par, spacing,\nfiles, font encodings, lengths,note: downloading fonttext.cfg\n\n====================================\n\nLocal config file fonttext.cfg used\n\n====================================\n(fonttext.cfgnote: downloading fonttext.ltx\n (fonttext.ltx\n=== Don't modify this file, use a .cfg file instead ===\n\nnote: downloading omlenc.def\n(omlenc.def)note: downloading omsenc.def\n (omsenc.def)note: downloading ot1enc.def\n (ot1enc.def)note: downloading t1enc.def\n (t1enc.def)note: downloading ts1enc.def\n (ts1enc.def)note: downloading tuenc.def\n (tuenc.def)note: downloading tulmr.fd\n\n(tulmr.fd)note: downloading tulmss.fd\n (tulmss.fd)note: downloading tulmtt.fd\n (tulmtt.fd)note: downloading ts1lmr.fd\n (ts1lmr.fd)note: downloading t1cmr.fd\n (t1cmr.fd)note: downloading ot1cmr.fd\n (ot1cmr.fd)note: downloading ot1cmss.fd\n\n(ot1cmss.fd)note: downloading ot1cmtt.fd\n (ot1cmtt.fd)))note: downloading fontmath.cfg\n\n====================================\n\nLocal config file fontmath.cfg used\n\n====================================\n(fontmath.cfgnote: downloading fontmath.ltx\n (fontmath.ltx\n=== Don't modify this file, use a .cfg file instead ===\n\nnote: downloading omlcmm.fd\n(omlcmm.fd)note: downloading omscmsy.fd\n (omscmsy.fd)note: downloading omxcmex.fd\n (omxcmex.fd)note: downloading ucmr.fd\n (ucmr.fd)))note: downloading preload.cfg\n\n====================================\n\nLocal config file preload.cfg used\n\n=====================================\n(preload.cfgnote: downloading preload.ltx\n (preload.ltxnote: downloading cmex10.tfm\nnote: downloading line10.tfm\nnote: downloading linew10.tfm\nnote: downloading lcircle10.tfm\nnote: downloading lcirclew10.tfm\nnote: downloading cmr5.tfm\nnote: downloading cmr7.tfm\nnote: downloading cmmi5.tfm\nnote: downloading cmmi7.tfm\nnote: downloading cmmi10.tfm\nnote: downloading cmsy5.tfm\nnote: downloading cmsy7.tfm\nnote: downloading cmsy10.tfm\n)) page nos., x-ref, environments, center, verbatim,\nmath definitions, boxes, title, sectioning, contents, floats, footnotes,\nindex, bibliography,note: downloading atveryend.sty\nnote: downloading atveryend-ltx.sty\nnote: downloading atbegshi.sty\nnote: downloading atbegshi-ltx.sty\n output,  Unicode character data,note: downloading load-unicode-data.tex\n (load-unicode-data \nload-unicode-data.tex v1.15 (2021-09-15)\nReading Unicode data\n# UnicodeData-14.0.0.txt\n# Modified 2021-09-15 11:00:00 GMT [JAW]\n)note: downloading hyphen.cfg\n\n===========================================\nLocal configuration file hyphen.cfg used\n===========================================\n(hyphen.cfgnote: downloading xebabel.def\n (xebabel.def)note: downloading language.dat\nnote: downloading hyphen.tex\n (hyphen.tex)note: downloading dumyhyph.tex\n (dumyhyph.tex)note: downloading zerohyph.tex\n (zerohyph.tex)note: downloading dehypht-x-2022-03-16.tex\n\n(dehypht-x-2022-03-16.tex\ndehyph-exptl: using a TeX engine with native UTF-8 support.note: downloading dehypht-x-2022-03-16.pat\n\n(dehypht-x-2022-03-16.pat\nGerman Hyphenation Patterns (Traditional Orthography) `dehypht-x' 2022-03-16 (W\nL)))note: downloading dehyphn-x-2022-03-16.tex\n (dehyphn-x-2022-03-16.tex\ndehyph-exptl: using a TeX engine with native UTF-8 support.note: downloading dehyphn-x-2022-03-16.pat\n\n(dehyphn-x-2022-03-16.pat\nGerman Hyphenation Patterns (Reformed Orthography, 2006) `dehyphn-x' 2022-03-16\n (WL)))note: downloading loadhyph-af.tex\n (loadhyph-af.tex UTF-8 Afrikaans hyphenation patternsnote: downloading hyph-af.tex\n (hyph-af.tex)note: downloading hyph-quote-af.tex\n\n(hyph-quote-af.tex))note: downloading loadhyph-grc.tex\n (loadhyph-grc.tex\nUTF-8 Hyphenation patterns for Ancient Greeknote: downloading hyph-grc.tex\n (hyph-grc.tex))note: downloading ibyhyph.tex\n (ibyhyph.tex\nGreek hyphenation patterns for Ibycus encoding, v3.0) (zerohyph.tex)note: downloading loadhyph-hy.tex\n\n(loadhyph-hy.tex UTF-8 Armenian hyphenation patternsnote: downloading hyph-hy.tex\n (hyph-hy.tex))note: downloading loadhyph-eu.tex\n\n(loadhyph-eu.tex UTF-8 Basque hyphenation patternsnote: downloading hyph-eu.tex\n (hyph-eu.tex))note: downloading loadhyph-be.tex\n\n(loadhyph-be.tex UTF-8 Belarusian hyphenation patternsnote: downloading hyph-be.tex\n (hyph-be.tex)note: downloading hyph-quote-be.tex\n\n(hyph-quote-be.tex))note: downloading loadhyph-bg.tex\n (loadhyph-bg.tex UTF-8 Bulgarian hyphenation patternsnote: downloading hyph-bg.tex\n\n(hyph-bg.tex\nBulgarian hyphenation patterns (options: --safe-morphology --standalone-tex, ve\nrsion 21 October 2017)))note: downloading loadhyph-ca.tex\n (loadhyph-ca.tex UTF-8 Catalan hyphenation patternsnote: downloading hyph-ca.tex\n\n(hyph-ca.tex))note: downloading loadhyph-zh-latn-pinyin.tex\n (loadhyph-zh-latn-pinyin.tex\nUTF-8 Pinyin Hyphenation Patterns (with tone markers) 2018-11-25 (WL)note: downloading hyph-zh-latn-pinyin.tex\n\n(hyph-zh-latn-pinyin.tex))note: downloading loadhyph-cu.tex\n (loadhyph-cu.tex\nUTF-8 Church Slavonic hyphenation patternsnote: downloading hyph-cu.tex\n (hyph-cu.tex))note: downloading loadhyph-cop.tex\n (loadhyph-cop.tex\nUTF-8 Coptic hyphenation patternsnote: downloading hyph-cop.tex\n (hyph-cop.tex))note: downloading loadhyph-hr.tex\n (loadhyph-hr.tex\nUTF-8 Croatian hyphenation patternsnote: downloading hyph-hr.tex\n (hyph-hr.tex))note: downloading loadhyph-cs.tex\n (loadhyph-cs.tex\nUTF-8 Czech hyphenation patternsnote: downloading hyph-cs.tex\n (hyph-cs.tex))note: downloading loadhyph-da.tex\n (loadhyph-da.tex\nUTF-8 Danish hyphenation patternsnote: downloading hyph-da.tex\n (hyph-da.tex))note: downloading loadhyph-nl.tex\n (loadhyph-nl.tex\nUTF-8 Dutch hyphenation patternsnote: downloading hyph-nl.tex\n (hyph-nl.tex))note: downloading loadhyph-en-gb.tex\n (loadhyph-en-gb.tex\nASCII Hyphenation patterns for British Englishnote: downloading hyph-en-gb.tex\n (hyph-en-gb.tex))note: downloading loadhyph-en-us.tex\n\n(loadhyph-en-us.tex ASCII Hyphenation patterns for American Englishnote: downloading hyph-en-us.tex\n\n(hyph-en-us.tex))note: downloading loadhyph-eo.tex\n (loadhyph-eo.tex UTF-8 Esperanto hyphenation patternsnote: downloading hyph-eo.tex\n\n(hyph-eo.tex))note: downloading loadhyph-et.tex\n (loadhyph-et.tex UTF-8 Estonian hyphenation patternsnote: downloading hyph-et.tex\n\n(hyph-et.tex))note: downloading loadhyph-mul-ethi.tex\n (loadhyph-mul-ethi.tex UTF-8 Pan-Ethiopic hyphenation patternsnote: downloading hyph-mul-ethi.tex\n\n(hyph-mul-ethi.tex)) (zerohyph.tex)note: downloading loadhyph-fi.tex\n (loadhyph-fi.tex\nUTF-8 Finnish hyphenation patternsnote: downloading hyph-fi.tex\n (hyph-fi.tex))note: downloading loadhyph-fi-x-school.tex\n (loadhyph-fi-x-school.tex\nUTF-8 Finnish hyphenation patterns for schoolnote: downloading hyph-fi-x-school.tex\n (hyph-fi-x-school.tex))note: downloading loadhyph-fr.tex\n\n(loadhyph-fr.tex UTF-8 French hyphenation patternsnote: downloading hyph-fr.tex\n (hyph-fr.tex)note: downloading hyph-quote-fr.tex\n\n(hyph-quote-fr.tex))note: downloading loadhyph-fur.tex\n (loadhyph-fur.tex UTF-8 Friulan hyphenation patternsnote: downloading hyph-fur.tex\n\n(hyph-fur.tex)note: downloading hyph-quote-fur.tex\n (hyph-quote-fur.tex))note: downloading loadhyph-gl.tex\n (loadhyph-gl.tex\nUTF-8 Galician hyphenation patternsnote: downloading hyph-gl.tex\n (hyph-gl.tex))note: downloading loadhyph-ka.tex\n (loadhyph-ka.tex\nUTF-8 Georgian hyphenation patternsnote: downloading hyph-ka.tex\n (hyph-ka.tex))note: downloading loadhyph-de-1901.tex\n (loadhyph-de-1901.tex\nUTF-8 German hyphenation patterns (traditional orthography)note: downloading hyph-de-1901.tex\n (hyph-de-1901.tex\nGerman Hyphenation Patterns (Traditional Orthography) `dehypht-x' 2021-02-26 (W\nL)))note: downloading loadhyph-de-1996.tex\n (loadhyph-de-1996.tex\nUTF-8 German hyphenation patterns (reformed orthography)note: downloading hyph-de-1996.tex\n\nLaTeX compilation timed out (total time limit).",
+    "snapshot": {
+      "version": 1,
+      "build_id": "a81af171-1058-4f6f-be06-9abb4f5f7f55",
+      "workspace": "/private/var/folders/y6/7f277x5n4z14sqwsw21h8ffm0000gn/T/archimedes-v03-real-nffwut",
+      "source_path": "paper/main.tex",
+      "project_path": "paper",
+      "created_at": "2026-11-16T05:18:23.096Z",
+      "engine": "tectonic",
+      "requested_source": {
+        "workspace": "/private/var/folders/y6/7f277x5n4z14sqwsw21h8ffm0000gn/T/archimedes-v03-real-nffwut",
+        "source_path": "paper/main.tex",
+        "project_path": "paper",
+        "coverage": "manuscript-directory",
+        "source_version": "98f5fc31164bc34e4477d1fb7888403f097f1bae4548645c9f207af9cbb8bda2",
+        "observation_version": "d8387a81c7b5e0cc462a343f4e4c0446398ef9cf1d80a62114f4b35aab13ceb3",
+        "files": [
+          {
+            "path": "paper/main.tex",
+            "bytes": 117,
+            "sha256": "fd940da1bb496de8c438d255fc3f3285ea61b3f9417f7a1d8862af003e2322fd"
+          },
+          {
+            "path": "paper/refs.bib",
+            "bytes": 93,
+            "sha256": "91b663ef45e8217adcb23b8c0ccec648728a1f8d248122ed28fdb50d1c9747b6"
+          },
+          {
+            "path": "paper/section.tex",
+            "bytes": 39,
+            "sha256": "aed784263443535ebc0a37fd1fe3288d443301a0377bf36530711f6187381a49"
+          }
+        ],
+        "total_bytes": 249,
+        "untracked_inputs": [],
+        "excluded_directories": [
+          ".archimedes",
+          ".git",
+          "node_modules",
+          "dist",
+          "build",
+          ".next",
+          ".venv",
+          "venv",
+          "__pycache__",
+          ".cache"
+        ]
+      },
+      "started_source_version": "98f5fc31164bc34e4477d1fb7888403f097f1bae4548645c9f207af9cbb8bda2",
+      "finished_source_version": "98f5fc31164bc34e4477d1fb7888403f097f1bae4548645c9f207af9cbb8bda2",
+      "source_changed": false,
+      "status": "failed",
+      "pdf": null,
+      "log": {
+        "path": ".archimedes/latex-build/defc3a7a99c3/a81af171-1058-4f6f-be06-9abb4f5f7f55/build-output.log",
+        "bytes": 8461,
+        "sha256": "94394c73484901742d157f719b28c4b4b63257d4c3b18991c79ad45b44934c51",
+        "retention": "bounded compiler output"
+      },
+      "manifest_path": ".archimedes/latex-build/defc3a7a99c3/a81af171-1058-4f6f-be06-9abb4f5f7f55/source-snapshot.json"
+    }
+  },
+  "warm_offline": null,
+  "cleanup": true,
+  "duration_ms": 360082
+}

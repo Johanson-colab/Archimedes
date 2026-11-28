@@ -1,0 +1,307 @@
+{
+  "base": "f6b5ee37721d9e908c401f9acc8a5765654c490f",
+  "branch": "codex/research-continuity",
+  "verification": "Pre-split-refinement checkpoint: suite 1466=1460 passed/0 failed/6 conditional skips; package exited 0; native checkpoint journey passed. Later O11/O04 fixes require actual final-branch integration and verification.",
+  "files": [
+    {
+      "path": "docs/assets/research-continuity/citations-after.png",
+      "bytes": 688591,
+      "sha256": "0474ff03736a24e031ec0932f7f79d5ff7a43f8f44e2d541f55e636e07263aeb"
+    },
+    {
+      "path": "docs/assets/research-continuity/citations-updated-after.png",
+      "bytes": 673166,
+      "sha256": "d6abc196e50e1314892f727228deea9401a12a79acbf6cd71ead3673ff7a6e14"
+    },
+    {
+      "path": "docs/assets/research-continuity/index-analysis-after.png",
+      "bytes": 762069,
+      "sha256": "699d7d7baa92326f778c0f3daff22dde91ec544f62cf3886aff11ec3980636a3"
+    },
+    {
+      "path": "docs/assets/research-continuity/index-paper-after.png",
+      "bytes": 458067,
+      "sha256": "f1f2a56de49870ddfad23e6524cbb02106051e93adc0b609245b35da417b5893"
+    },
+    {
+      "path": "docs/assets/research-continuity/index-run-after.png",
+      "bytes": 538740,
+      "sha256": "8fbf4f5c2083ed3becc9bc310487f5aa057e79b6411272c63533937bd2d77c72"
+    },
+    {
+      "path": "docs/assets/research-continuity/index-version-after.png",
+      "bytes": 649513,
+      "sha256": "88de4fb4470a060f2115d6cc9ea01f4c93b1caac17e39df12c7c29b77aafee6b"
+    },
+    {
+      "path": "docs/assets/research-continuity/project-after.png",
+      "bytes": 737848,
+      "sha256": "853a5c6dd536e3ab349c8ff6294bbfcf6470acdff354f95ca33d3f3379c7fc65"
+    },
+    {
+      "path": "docs/assets/research-continuity/project-before.png",
+      "bytes": 407446,
+      "sha256": "cff05da4ff84155aedf094f4695abaecc1c681b419fad5b8c298b62a502359f0"
+    },
+    {
+      "path": "docs/assets/research-continuity/restored-compiled-after.png",
+      "bytes": 560118,
+      "sha256": "b1599213dc87cd076d81b248088ee2c2d0b01e20db7da72e22e941c337e8ac7b"
+    },
+    {
+      "path": "docs/assets/research-continuity/versions-after.png",
+      "bytes": 772900,
+      "sha256": "e8602b5563381ea6fcc7c9011f37867f2b61299c96419a3f452eefd11c4125e8"
+    },
+    {
+      "path": "docs/assets/research-continuity/writing-after.png",
+      "bytes": 584864,
+      "sha256": "8a403ef6b31f381aba2c85a3099eb2d6e42268d49dfed40f0f0332c6f3a63a26"
+    },
+    {
+      "path": "docs/assets/research-continuity/writing-before.png",
+      "bytes": 551224,
+      "sha256": "097c6eccdb9b596fa563bc5804f2cf9381fe8ec205c0f3d6d96c8fc086102d78"
+    },
+    {
+      "path": "docs/paper-writing-citations.md",
+      "bytes": 1628,
+      "sha256": "5d1daf3e74070b81402ead69ffcc38934739a487e5b2ecae487af5f8d07b39c8"
+    },
+    {
+      "path": "docs/paper-writing-key-versions.md",
+      "bytes": 2149,
+      "sha256": "76c52440104d2b1b9fb666853cd15752c9f24f68f289d6c1e3b134afd08527bf"
+    },
+    {
+      "path": "docs/project-research.md",
+      "bytes": 1910,
+      "sha256": "a6ad3b8a983e2088bd84110eedf187f1368f72b87d78cd5e112bbababd697725"
+    },
+    {
+      "path": "electron/composer-session.test.cjs",
+      "bytes": 18644,
+      "sha256": "2bc6415f4c8e27e3df84e9f0f95619d8d1ec1ff6cc3af2cb3bb394ecec78f9e7"
+    },
+    {
+      "path": "electron/library-workspace.test.cjs",
+      "bytes": 14376,
+      "sha256": "eef340cfb9a05bc2e9a5ed8adb42e7edfd244c6c328cf5e2d1076286c2b2af5e"
+    },
+    {
+      "path": "electron/main.cjs",
+      "bytes": 135696,
+      "sha256": "f7dcd210bd6e4a5d69c618fd2c2b866e245e690accdd6fd95f38b52ad95c19fc"
+    },
+    {
+      "path": "electron/manuscript-snapshot.cjs",
+      "bytes": 9840,
+      "sha256": "e9eb02bdd8da55184459f43015b9d2d61a03eb068616ca5769907bf291018688"
+    },
+    {
+      "path": "electron/manuscript-workflow-ui.test.cjs",
+      "bytes": 12261,
+      "sha256": "bff3f56aa8a5bf3b9d1c7f622d10a85e21cb6768ba1ca7306551735efc56a5c8"
+    },
+    {
+      "path": "electron/paper-writing-citations.test.cjs",
+      "bytes": 4116,
+      "sha256": "74397f70fc45b18d0bd25b8a11836c1b075dd78bda71a6e43229ab9f05c1d49f"
+    },
+    {
+      "path": "electron/paper-writing-commands.cjs",
+      "bytes": 2727,
+      "sha256": "475cb47ca7b46587af2a974b8e8524a9769322087aca91acc9cd1bec16db6315"
+    },
+    {
+      "path": "electron/paper-writing-history.cjs",
+      "bytes": 13375,
+      "sha256": "c3ba7f33f2b2bea831e278327b095bdef944db53e17326ddee8e3141c7e7552f"
+    },
+    {
+      "path": "electron/paper-writing-history.test.cjs",
+      "bytes": 7397,
+      "sha256": "b05d67ffd2ce96a2d094cb5258e54445c1f8600c9e033989708611fe626956b2"
+    },
+    {
+      "path": "electron/paper-writing-workspace.test.cjs",
+      "bytes": 34317,
+      "sha256": "e9c7ea165fe0864af128df9935be3d6d9f7e93ece43a35fd385b4dc1f9610892"
+    },
+    {
+      "path": "electron/preload.cjs",
+      "bytes": 31705,
+      "sha256": "002882be538013fa37b8a051902e8989739f823101bd221be6a93b8d9a5bdfd6"
+    },
+    {
+      "path": "electron/project-research-commands.cjs",
+      "bytes": 624,
+      "sha256": "406e5f8fc5b79eef0da6dfa99bca90ab6fb6313ad9dce7ca7d3d811b69675198"
+    },
+    {
+      "path": "electron/project-research-navigation.test.cjs",
+      "bytes": 5615,
+      "sha256": "6097f4e2fe4c8261d2b7a457261f0177f091ff972ff41f06e58b43d6a7c19a74"
+    },
+    {
+      "path": "electron/project-research-ui.test.cjs",
+      "bytes": 5909,
+      "sha256": "6135e3dbc38d5e2375ef6fcde176119139c90d2bae7063494c549ecdc6a44336"
+    },
+    {
+      "path": "electron/project-research.cjs",
+      "bytes": 11751,
+      "sha256": "79d3c64fd9cdb981600bb89733754ac7d25c5c333612b55da15dccdf091993df"
+    },
+    {
+      "path": "electron/project-research.test.cjs",
+      "bytes": 12085,
+      "sha256": "ed819c258540ad4590bdf4d711e6a3dccf63e875acfc267828acc56bbdc40ec0"
+    },
+    {
+      "path": "electron/project-transfer.cjs",
+      "bytes": 49146,
+      "sha256": "cc61db3e8b098e42189e780e9e5ef81c407a4d9b9e4f91d179942ab30e60c783"
+    },
+    {
+      "path": "electron/reproduction-owner-view.test.cjs",
+      "bytes": 8057,
+      "sha256": "92f6c78d453c69424774f3d402072a7cc3123e13459bb911eb9efe23db6ad2ac"
+    },
+    {
+      "path": "electron/research-handoffs.test.cjs",
+      "bytes": 2804,
+      "sha256": "8d4110623326c89a7578162ae8527a15428068e925454d9b43303007d9473940"
+    },
+    {
+      "path": "electron/store.cjs",
+      "bytes": 206602,
+      "sha256": "8ac22dd8e80d99b0038ab6a2be861030a6aa941b5b65e2831a6fa7c9737bcbcc"
+    },
+    {
+      "path": "src/App.tsx",
+      "bytes": 352772,
+      "sha256": "c81641483aea2d11ec3922f3b403277c47225967cd69e03e1a6bb82920804287"
+    },
+    {
+      "path": "src/LibraryView.tsx",
+      "bytes": 192309,
+      "sha256": "378c8a098368b46a40b6ff4a6111753f4aca2401a3eff1fcfddd1548de5f527f"
+    },
+    {
+      "path": "src/LibraryWorkspace.tsx",
+      "bytes": 32809,
+      "sha256": "a2b77e8720ff75be3174db544465e7b36ac11b721811a790a905587496ab8172"
+    },
+    {
+      "path": "src/PaperReviewView.tsx",
+      "bytes": 37709,
+      "sha256": "bddcb1a926774a7fc96f7a35805eb4e27b5974d1eea88cb5a3f7779abd83a30d"
+    },
+    {
+      "path": "src/PaperWritingCitations.tsx",
+      "bytes": 5328,
+      "sha256": "4bdec36cd13de32d3c218403e4d19d36a6df3025a48653d610f18a64a0111eaf"
+    },
+    {
+      "path": "src/PaperWritingVersions.tsx",
+      "bytes": 5322,
+      "sha256": "51290f7910ad5d2da491e6582bc3da0f4a9934ec671311194874011cb1ce1a16"
+    },
+    {
+      "path": "src/PaperWritingView.tsx",
+      "bytes": 67840,
+      "sha256": "03e11e8d208a1e89a648dd9f5aeddbb8a96bbf6998b55cb489359e3d8a1e98c6"
+    },
+    {
+      "path": "src/ProjectResearchView.tsx",
+      "bytes": 12646,
+      "sha256": "50be5c565909b4e9a75222f21d9c3dd4d5a1c5c5c42fe9bb4fcd66f2113480ec"
+    },
+    {
+      "path": "src/ProjectSidebar.tsx",
+      "bytes": 21126,
+      "sha256": "4d0aaad4431634194a225a12eff530d5b571003c96f038962a6aad5a3a2828a2"
+    },
+    {
+      "path": "src/ProjectTransferDialog.tsx",
+      "bytes": 9347,
+      "sha256": "c1443fc448eac5fade23f061995a645d1bb33ebb6cb3c0f0ce60faae250c8753"
+    },
+    {
+      "path": "src/ReproduceView.tsx",
+      "bytes": 43912,
+      "sha256": "1406f81d2b878d6ee2844e525b641590463af45bc913bd478faa4bad16f7b940"
+    },
+    {
+      "path": "src/i18n.tsx",
+      "bytes": 12438,
+      "sha256": "dd69c832bf4454ed8e3ef79ad4c5bb12efb4f2f910addc4717c57d0424ff3e38"
+    },
+    {
+      "path": "src/i18n/translations/projectResearch.ts",
+      "bytes": 3112,
+      "sha256": "6a49bc50e7e60998ec272e830491cdb4d5df3a57d70ec38d8e9c8613fce2e56f"
+    },
+    {
+      "path": "src/i18n/translations/writingCitations.ts",
+      "bytes": 2009,
+      "sha256": "ef6c3c659639225f82fc94ce9c86f67ed473435f322c111f18f4870f9e8c2350"
+    },
+    {
+      "path": "src/i18n/translations/writingVersions.ts",
+      "bytes": 2154,
+      "sha256": "43d3f17d94ca3fede796405f25d95710f43a9e11e92507ccdee1138763b73530"
+    },
+    {
+      "path": "src/paper-writing-citations.ts",
+      "bytes": 6146,
+      "sha256": "8ce34feaaac6a0db50dd969bc620e41adb906cb75d24a33edbfbf22e424dffad"
+    },
+    {
+      "path": "src/paper-writing-continuity.css",
+      "bytes": 2498,
+      "sha256": "5689f1b75aa2664ca3f404707354a1cf4587c756670451bd4b1fd4a667587109"
+    },
+    {
+      "path": "src/paper-writing-history.ts",
+      "bytes": 1206,
+      "sha256": "b3c12702ec424b6f6a6adc0f78ec67030655e872a54d726e2d195d84e5cb71ba"
+    },
+    {
+      "path": "src/paper-writing-state.ts",
+      "bytes": 4329,
+      "sha256": "0f7f25846c11cff503e750cafb078a52a55351fd0c39d88bbf84fc508b6a1de1"
+    },
+    {
+      "path": "src/project-research.css",
+      "bytes": 7244,
+      "sha256": "1d450bf44134c997a1169ffff262fbc4b370185ae81142d622f019ac3c7c8b47"
+    },
+    {
+      "path": "src/project-research.ts",
+      "bytes": 3400,
+      "sha256": "c7b5ef6374a1038259cd8841c33955799960223fbc04d99ed080cd69f7d32ad9"
+    },
+    {
+      "path": "src/project-transfer.ts",
+      "bytes": 1806,
+      "sha256": "a29e8f96d0b8459986a85d48db4a97a715e16b81398feb28ed7a467738fdadea"
+    },
+    {
+      "path": "src/research-handoffs.ts",
+      "bytes": 9140,
+      "sha256": "d705feaae3868d004fd4f5089de38baa8404d543fdfd6c736e4135d40de05e47"
+    },
+    {
+      "path": "src/sidebar-registry.tsx",
+      "bytes": 6657,
+      "sha256": "637085fe60bf3276275934ab17b62abf7ede541df827d4542853d0d161fc9680"
+    },
+    {
+      "path": "src/vite-env.d.ts",
+      "bytes": 77749,
+      "sha256": "8bb80050d7bbbdac886fa579ca01fc2cd769902e54fec5c3866b19bff79b7014"
+    }
+  ]
+}

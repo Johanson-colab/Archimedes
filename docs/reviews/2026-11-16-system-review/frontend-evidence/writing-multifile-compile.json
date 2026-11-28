@@ -1,0 +1,18 @@
+{
+  "scenario": "Edit section.tex, switch to main.tex, immediately compile while section save is delayed",
+  "before": {
+    "compilerCallsBeforeRelease": 1,
+    "sectionReadByCompiler": "Original section"
+  },
+  "after": {
+    "compilerCallsBeforeRelease": 0,
+    "compilerReceivesLatestSection": true
+  },
+  "typingDuringBarrier": "Latest edit remains in its original owner and unsaved; compile is not started until the user saves/requests the latest version again",
+  "validation": "Real React component and real temporary filesystem writes; compiler is an observation fixture, not an installed TeX engine",
+  "tests": {
+    "file": "electron/paper-writing-workspace.test.cjs",
+    "count": 10,
+    "pass": 10
+  }
+}

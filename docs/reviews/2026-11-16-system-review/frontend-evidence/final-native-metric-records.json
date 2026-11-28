@@ -1,0 +1,68 @@
+[
+  {
+    "path": "/private/var/folders/y6/7f277x5n4z14sqwsw21h8ffm0000gn/T/archimedes-final-journeys-mi137r7a/data-b/.archimedes/metric-comparisons/ac39c747-7226-47c2-8e69-52f741d2bd33/332e5b0e-7281-4b7e-bdfb-725495a079d0/comparison.json",
+    "data": {
+      "version": 1,
+      "arithmetic": "exact-decimal",
+      "id": "332e5b0e-7281-4b7e-bdfb-725495a079d0",
+      "title": "Local recorded experiment",
+      "owner": {
+        "dataRoot": "/private/var/folders/y6/7f277x5n4z14sqwsw21h8ffm0000gn/T/archimedes-final-journeys-mi137r7a/data-b",
+        "projectId": "31c44da2-14da-4035-acad-b71c59512cc7",
+        "workspaceId": "2191f122-e30d-40a6-8656-c70676fd2476",
+        "executionRoot": "/private/var/folders/y6/7f277x5n4z14sqwsw21h8ffm0000gn/T/archimedes-final-journeys-mi137r7a/restored/Restored Workflow-31c44da2/history/root-1",
+        "reproductionId": "7be47681-7287-4dc2-a10a-fa31fe09d4a7",
+        "runId": "ac39c747-7226-47c2-8e69-52f741d2bd33"
+      },
+      "createdAt": "2026-11-16T08:31:01.965Z",
+      "runSnapshotSha256": null,
+      "source": {
+        "name": "metrics.csv",
+        "path": ".archimedes/metric-comparisons/ac39c747-7226-47c2-8e69-52f741d2bd33/332e5b0e-7281-4b7e-bdfb-725495a079d0/source.csv",
+        "sha256": "e0964a4ada3751e684ddcfea3f1c3ea9b53b1cd25d0faf9fbe5dd42726271a95",
+        "bytes": 70,
+        "originalPath": "/private/var/folders/y6/7f277x5n4z14sqwsw21h8ffm0000gn/T/archimedes-final-journeys-mi137r7a/metrics.csv",
+        "origin": "user-selected-file"
+      },
+      "mapping": {
+        "metricColumn": "metric",
+        "expectedColumn": "expected",
+        "actualColumn": "actual",
+        "unitColumn": "unit",
+        "actualUnitColumn": "",
+        "datasetColumn": "dataset",
+        "actualDatasetColumn": "",
+        "toleranceColumn": "",
+        "unitValue": "",
+        "datasetValue": "",
+        "absoluteTolerance": "0"
+      },
+      "rows": [
+        {
+          "row": 1,
+          "metric": "accuracy",
+          "expectedRaw": "0.9",
+          "actualRaw": "0.9",
+          "expected": "0.9",
+          "actual": "0.9",
+          "expectedUnit": "fraction",
+          "actualUnit": "fraction",
+          "expectedDataset": "fixture",
+          "actualDataset": "fixture",
+          "tolerance": "0",
+          "difference": "0",
+          "status": "within",
+          "reason": "The absolute difference is within the confirmed tolerance."
+        }
+      ],
+      "counts": {
+        "missing": 0,
+        "incomparable": 0,
+        "within": 1,
+        "outside": 0
+      },
+      "computationSha256": "4236b1e88e9460a98797fe1d2b5952d938b7ec8a8d3c9d791f40023364be62d8",
+      "coverage": "User-confirmed column/value comparison only; attachment to a run does not establish that the run produced this file or scientifically reproduced the paper."
+    }
+  }
+]

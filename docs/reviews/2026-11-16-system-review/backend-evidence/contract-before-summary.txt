@@ -1,0 +1,6 @@
+Original source 1f4b37581c446770d576440f9ebb9bca5c55bfb7; candidate round-trip test with module paths redirected.
+not ok 1 - serialized runbooks preserve quoted whitespace and multiline shell commands when read back
+# tests 1
+# pass 0
+# fail 1
+# skipped 0

@@ -1,0 +1,25 @@
+✔ review retains the real build with its generated run ID and keeps its data-store lease through background ingestion (800.489542ms)
+✔ failed run creation rolls back only its pin, and stale or mismatched inputs cannot create a new review (60.273583ms)
+✔ the global review database filters same-project-ID histories by data root without fabricating provenance for legacy rows (66.693125ms)
+✔ actual review view prioritizes the manuscript request over old history and sends selected versioned feedback back to its owner (146.831458ms)
+✔ same-named papers keep their owner and autosave on departure without replaying an old open request (257.758875ms)
+✔ a delayed save preserves later keystrokes and drains the newest snapshot to its old root (849.144667ms)
+✔ late reads, compile progress and build results update only their owner scope (74.44275ms)
+✔ failed departure autosaves keep the original draft and expose its save error on return (47.737208ms)
+✔ switching source files during an in-flight save retains and saves the final edit to the old file (845.660792ms)
+✔ the actual preload and compile handler preserve owner ids and legacy two-argument calls (3.805334ms)
+✔ Writing opens existing manuscripts before templates and restores the chosen document after remount (36.885375ms)
+✔ a main document at the execution root opens in place and a removed recent document returns to the chooser (24.677542ms)
+✔ compiling main waits for a pending save of another source file in the same manuscript (45.38025ms)
+✔ typing during the compile save barrier retains the new edit and does not compile an older source set (35.834917ms)
+✔ projects sharing one execution folder restore their own manuscript selection (31.418709ms)
+✔ Writing hands off only a fresh whole-manuscript snapshot and keeps source/PDF identity for returning (53.348125ms)
+✔ a late snapshot check cannot hand off a newer unsaved editing version as its old PDF (22.980583ms)
+ℹ tests 17
+ℹ suites 0
+ℹ pass 17
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 3394.853209

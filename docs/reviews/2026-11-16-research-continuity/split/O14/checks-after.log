@@ -1,0 +1,46 @@
+✔ analysis creation preserves the originating draft and reuses only its owner plus input identity (234.367833ms)
+✔ analysis creation failure keeps its source intact and a late success cannot hijack newer input (1.277916ms)
+✔ attachment and pending request updates are isolated by session, including delayed adds (54.500833ms)
+✔ a failed run after switching sessions reports only to the original composer (168.216583ms)
+✔ a delayed successful run clears only submitted attachment objects in its owner (0.831125ms)
+✔ a newly created session receives later text, attachments and queued follow-ups from its original draft only (1.513375ms)
+✔ the same imported cloud thread in different data folders cannot share text, attachments or pending handoffs (0.751666ms)
+✔ failed send restoration keeps the failed prompt and later typing in the original stored scope (0.518708ms)
+✔ CSV quoting, BOM, CRLF, multiline cells and TSV retain original values (50.064042ms)
+✔ missing tokens are excluded from numeric statistics without rewriting source data (0.324459ms)
+✔ real bundled examples retain documented shape, missingness, group sizes and full-data calculations (3.201125ms)
+✔ time-series dates are real dates, sorted and not truncated to the first 100 rows (8.741959ms)
+✔ display sampling retains endpoints and unsupported numeric fields return an empty plot (7.255583ms)
+✔ field inspection does not empty a valid plot; examples, pagination and bounded chat draft work (617.864334ms)
+✔ analysis owner changes retain each dataset and question, and delayed handoffs identify stale input (437.277292ms)
+✔ the actual analysis component saves full CSV plus SVG, reopens its configuration, and links an explicit source handoff (954.116792ms)
+✔ real bridge saves to the canonical project root, registers only actual sessions, and cannot cross data stores (120.882583ms)
+✔ updates retain historical roots, validate session ownership before writes, and survive session deletion/reopen (101.888ms)
+✔ viewers can reopen result files and see changed hashes but cannot save or inject credentials (56.181083ms)
+✔ an analysis result creates a persisted discussion in its original registered folder (68.667375ms)
+✔ complete accepted CSV sources above the old read cap remain available to workspace tools (102.6865ms)
+✔ a delayed summary discussion links its original result after the window changes data stores (167.244542ms)
+✔ saved analysis has real complete source/output files and metadata-only reopen with controlled per-file reads (22.434666ms)
+✔ figure binary references reopen byte-for-byte without a fabricated session or model credentials (6.521ms)
+✔ the registered owner and fixed manifest path cannot be transplanted to another project or result (3.605667ms)
+✔ result writes and reads reject symbolic-link parents and leaves rather than touching external files (5.855875ms)
+✔ all package input is checked before writes and updating retains its owner and creation time (33.196167ms)
+✔ all twelve built-ins appear once in the five issue categories with four enabled (140.7135ms)
+✔ failed core visibility saves keep the switch unchanged and report an error (24.507167ms)
+✔ legacy and categorized plugins share the catalog without duplicate install rows (42.496ms)
+✔ sidebar order is independent of category; explicit plugin metadata overrides legacy sections (0.310959ms)
+✔ context rejects thread/project/workspace/root mixing before any new turn and preserves historical execution (45.372667ms)
+✔ opening a freshly imported conversation binds the same local context used by run and remains readable to viewers (34.810792ms)
+✔ new selections use only the chosen project workspace and session roots retain historical ownership (45.2355ms)
+✔ Library project selection commits the returned complete task only after loading succeeds (144.953166ms)
+✔ failed opening keeps the old coherent task and transcript available (1.694333ms)
+✔ a slower open cannot take over the task chosen by a newer request (0.670083ms)
+✔ an imported thread without local workspace fields resolves its own project default, never the data folder (0.126625ms)
+ℹ tests 38
+ℹ suites 0
+ℹ pass 38
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 3219.359291

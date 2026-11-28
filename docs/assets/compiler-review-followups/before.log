@@ -1,0 +1,33 @@
+$ node --test --test-name-pattern="cancelling a build releases a pending system proxy lookup" electron/managed-latex-engine.test.cjs
+✖ cancelling a build releases a pending system proxy lookup (5003.202125ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 0
+ℹ cancelled 1
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 30121.59325
+
+✖ failing tests:
+
+test at electron/managed-latex-engine.test.cjs:75:1
+✖ cancelling a build releases a pending system proxy lookup (5003.202125ms)
+  'test timed out after 5000ms'
+
+$ node --test --test-name-pattern="returning to Writing drops a preview whose build inputs are no longer current" electron/paper-writing-workspace.test.cjs
+✖ electron/paper-writing-workspace.test.cjs (64534.039958ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 64685.072541
+
+✖ failing tests:
+
+test at electron/paper-writing-workspace.test.cjs:1:1
+✖ electron/paper-writing-workspace.test.cjs (64534.039958ms)
+  'test failed'

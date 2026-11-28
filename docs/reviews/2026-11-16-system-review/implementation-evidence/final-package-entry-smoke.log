@@ -1,0 +1,6 @@
+Debugger listening on ws://127.0.0.1:19443/b9953205-55a6-40c0-a50e-96f748be7eac
+For help, see: https://nodejs.org/learn/getting-started/debugging
+Debugger attached.
+Debugger ending on ws://127.0.0.1:19443/b9953205-55a6-40c0-a50e-96f748be7eac
+For help, see: https://nodejs.org/learn/getting-started/debugging
+{"ok":true,"nativePty":{"exitCode":0,"text":"packaged-pty-ready"},"keywordFallback":{"status":"Semantic search unavailable; showing keyword results. Figure index image_emb.bin: HTTP 503","results":["Transformer architecture pipeline\nICLR · 2025 · 51.8\npipeline · transformer\nSelect reference"]},"metricStyles":{"buttonClass":"secondary-button","buttonFont":"12px","buttonBackground":"rgb(38, 38, 38)","titleFont":"13px","panelText":"Numerical comparisons\n\nChoose a CSV or JSON file, map its columns, and save a numerical comparison.\n\nChoose CSV or JSON data\nRefresh comparison history\nSAVED COMPARISONS\nLocal recorded experiment · Recorded comparison\nLocal recorded experiment\nMissing value\n0\nIncomparable\n0\nWithin tolerance\n1\nOutside tolerance\n0\nMetric\tExpected\tActual\tUnit\tDataset\tAbsolute tolerance\tResult\naccuracy\t0.9\t0.9\tfraction\tfixture\t0\tWithin tolerance\nThe absolute difference is within the confirmed tolerance.\nComparison evidence\nExport comparison JSON"}}

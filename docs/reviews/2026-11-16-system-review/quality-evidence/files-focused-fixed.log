@@ -1,0 +1,44 @@
+✔ same relative paths keep independent drafts and feedback in each execution root (31.070917ms)
+✔ a delayed A save completion leaves the active B draft and its feedback untouched (0.686875ms)
+✔ save completion preserves edits made after submission and does not reopen closed drafts (0.270708ms)
+✔ closing the app detects dirty drafts outside the currently viewed root (0.19825ms)
+✔ accepts editable text and rejects binary or oversized files (33.370583ms)
+✔ normalizes CRLF while editing and restores it when saving (0.326167ms)
+✔ keeps dirty buffers and reports external conflicts (1.049584ms)
+✔ formats a line comment as a readable chat request (0.253583ms)
+✔ tracks a successful save without dropping later keystrokes (0.15725ms)
+✔ workbench and full editor share the tabbed file shell (3.209583ms)
+✔ file tabs are larger and view actions are plain text (2.69225ms)
+✔ comment composer shares the chat surface language (1.20525ms)
+✔ file icons default to the real OpenCode sprite and switch across styles (5.067167ms)
+✔ the full Files view keeps the conversation title and a compact tab-strip return action (1.753209ms)
+✔ full Files floats view actions over the file and animates between modes (1.592666ms)
+✔ file tabs use a floating scrollbar and map wheel to horizontal scroll (1.216042ms)
+✔ file and terminal tab rows share the same height and label style (0.941875ms)
+✔ pane collapse buttons are plain icons without a grouped background (0.480167ms)
+✔ Files preview surfaces and the terminal viewport share the conversation canvas (1.78125ms)
+✔ terminal lives in the right workbench instead of the bottom panel (1.231792ms)
+✔ workbench shares the sidebar top edge and overlays only on narrow screens (0.923458ms)
+✔ terminal sessions stay mounted when the workbench is hidden (0.10275ms)
+✔ workbench supports keyboard toggle and resizing (0.164208ms)
+✔ files use a compact workbench pane with drill-down and split modes (1.585708ms)
+✔ files use a tab-first header without a path strip (0.8435ms)
+✔ the full editor shares the workbench shell and hides duplicate titles (0.6225ms)
+✔ terminal is a workbench tab with no dock or duplicate close controls (0.7395ms)
+✔ paper workbench toggle uses a warm active tone instead of green (0.294125ms)
+✔ files and trajectory share one row token system (1.1755ms)
+✔ terminal settings sit in the terminal tab row with a distinct icon (0.33775ms)
+✔ dirty file changes are protected when the workbench closes (0.199625ms)
+✔ agent trajectory mirrors the OpenCode context structure (0.421167ms)
+✔ raw trajectory json is highlighted without changing copied json (0.233791ms)
+✔ terminal settings expose platform shell, font and external terminal controls (0.365791ms)
+✔ paper chat code paths jump to the exact codebase lines (0.754417ms)
+✔ agent journey is derived from raw trajectory events (1.00025ms)
+ℹ tests 36
+ℹ suites 0
+ℹ pass 36
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 159.33025

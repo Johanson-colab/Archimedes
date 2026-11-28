@@ -1,0 +1,18 @@
+{
+  "fixture": "local synthetic 16 MiB / 66 files; warm filesystem; not an application performance benchmark",
+  "node": "v26.13.0",
+  "platform": "darwin",
+  "arch": "arm64",
+  "files": 66,
+  "bytes": 16777262,
+  "capture_ms": [
+    23.218,
+    11.548,
+    15.509,
+    12.883,
+    11.593
+  ],
+  "source_manifest_bytes": 9012,
+  "source_copies_in_build": 0,
+  "file_hash_buffer_bytes": 65536
+}

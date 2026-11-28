@@ -1,0 +1,37 @@
+✔ the agent runs a command and finishes when the evidence is real (3.9115ms)
+✔ a verdict with an invented quote is refused and the step stays open (0.432625ms)
+✔ a failing command cannot prove that a step passed (1.030875ms)
+✔ rewording a runbook step preserves its verdict when its execution and checks are unchanged (0.408708ms)
+✔ a person is asked rather than guessed at (0.099041ms)
+✔ a changed command cannot inherit a verdict or reuse output from before its revision (0.273166ms)
+✔ changed acceptance criteria need a new verdict but can re-evaluate the same execution output (0.205459ms)
+✔ reordering and changing only titles or source labels retains unchanged receipts (0.22025ms)
+✔ changing one step's execution does not clear an unrelated step's result (0.223375ms)
+✔ an explicit replacement command must have produced the cited output (0.3515ms)
+✔ historical errors can explain a manual handoff but cannot fail changed execution conditions (0.266833ms)
+✔ command receipts preserve meaningful quoted whitespace when matching or revising execution (0.249375ms)
+✔ destructive commands never reach the machine (0.14825ms)
+✔ a destructive command is refused and the run continues (0.110917ms)
+✔ the agent is stopped when it keeps running commands without moving the runbook (0.330875ms)
+✔ the prompt carries what earlier runs learned and the last output (0.130625ms)
+✔ done is refused while a runbook step has no verdict (0.074959ms)
+✔ a reopened run keeps the verdicts the last one earned (0.1085ms)
+✔ an error-driven fix is written back to the runbook (0.15575ms)
+✔ a long output is kept on the machine and its path is offered (0.880583ms)
+✔ a short output is not copied anywhere (0.136417ms)
+✔ a finding counts as progress, so diagnosis does not look like a stall (0.428833ms)
+✔ the stall message says which command it gave up on (0.312292ms)
+✔ the agent sees which keys are set, never their values (0.084791ms)
+✔ each turn announces itself so the run panel can show progress (0.083542ms)
+✔ read_paper puts the requested slice in front of the model, not the whole paper (0.149125ms)
+✔ read_file returns numbered lines and a paging hint (0.288958ms)
+✔ write_file writes inside the checkout and announces it (0.127042ms)
+✔ edit_file refuses ambiguous text and records a unique replacement (0.146ms)
+ℹ tests 29
+ℹ suites 0
+ℹ pass 29
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 122.307875
