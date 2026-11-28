@@ -88,3 +88,16 @@ test("Paper review strings are translated", () => {
   assert.match(i18n, /"Score-conditioned reviewers": "分数条件审稿人"/);
   assert.match(i18n, /"Evaluate": "评估"/);
 });
+
+test("a manuscript handoff refresh failure is shown before review consent", () => {
+  const start = view.indexOf("  async function startReview()");
+  const end = view.indexOf("  async function cancelReview()", start);
+  const body = view.slice(start, end);
+  const refresh = body.indexOf("handoff = await bridge.prepareManuscriptReview");
+  assert.ok(start >= 0 && refresh >= 0, "the manuscript handoff refresh should remain in startReview");
+  const beforeRefresh = body.slice(0, refresh);
+  const throughConsent = body.slice(refresh, body.indexOf("if (handoff && !await confirm"));
+  assert.match(beforeRefresh, /try\s*\{/);
+  assert.match(throughConsent, /catch\s*\(cause\)\s*\{[\s\S]*setError\(cause instanceof Error \? cause\.message : String\(cause\)\)/);
+  assert.match(throughConsent, /return;/);
+});
