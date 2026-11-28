@@ -134,6 +134,49 @@ test("parseRssFeed handles Atom entries", () => {
   assert.equal(items[0].native.feedLabel, "Example feed");
 });
 
+test("parseRssFeed chooses Atom alternate links instead of self or enclosure links", () => {
+  const xml = `<feed xmlns="http://www.w3.org/2005/Atom">
+    <title>Example feed</title>
+    <entry>
+      <title>First story</title>
+      <link rel="self" href="https://example.com/feed/atom" />
+      <link rel="enclosure" href="https://example.com/audio/first.mp3" type="audio/mpeg" />
+      <link rel="alternate" href="https://example.com/stories/first" />
+      <published>2026-11-04T08:00:00Z</published>
+    </entry>
+    <entry>
+      <title>Second story</title>
+      <link href='https://example.com/stories/second' />
+      <published>2026-11-04T09:00:00Z</published>
+    </entry>
+  </feed>`;
+  const items = parseRssFeed(xml);
+  assert.deepEqual(items.map(item => item.url), [
+    "https://example.com/stories/first",
+    "https://example.com/stories/second",
+  ]);
+  assert.equal(new Set(items.map(item => item.id)).size, 2);
+});
+
+test("parseRssFeed retains valid entries when another publication date is invalid", () => {
+  const xml = `<rss version="2.0"><channel><title>Example feed</title>
+    <item>
+      <title>Bad date</title>
+      <link>https://example.com/bad-date</link>
+      <pubDate>not a date</pubDate>
+    </item>
+    <item>
+      <title>Good date</title>
+      <link>https://example.com/good-date</link>
+      <pubDate>Tue, 04 Nov 2026 10:00:00 GMT</pubDate>
+    </item>
+  </channel></rss>`;
+  const items = parseRssFeed(xml);
+  assert.deepEqual(items.map(item => item.title), ["Bad date", "Good date"]);
+  assert.equal(items[0].publishedAt, "");
+  assert.equal(items[1].publishedAt, "2026-11-04T10:00:00.000Z");
+});
+
 test("parseReddit keeps subreddit, flair, score and preview image", () => {
   const items = parseReddit({
     data: {

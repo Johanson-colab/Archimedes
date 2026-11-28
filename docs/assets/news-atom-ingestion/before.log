@@ -1,0 +1,63 @@
+✔ canonicalUrl strips tracking params and trailing slashes (0.95375ms)
+✔ item ids are stable across tracking parameters (2.573375ms)
+✔ parseHackerNews keeps points, comments, domain and discussion link (1.990292ms)
+✔ parseGitHub exposes repo metadata and trending rank (0.170792ms)
+✔ parseArxiv reads Atom entries, authors and categories (0.512709ms)
+✔ parseLobsters keeps score, comments and tags (0.705209ms)
+✔ parseRssFeed handles RSS items, images and entity decoding (0.91ms)
+✔ parseRssFeed handles Atom entries (0.510125ms)
+✖ parseRssFeed chooses Atom alternate links instead of self or enclosure links (1.076958ms)
+✖ parseRssFeed retains valid entries when another publication date is invalid (0.341458ms)
+✔ parseReddit keeps subreddit, flair, score and preview image (0.258625ms)
+✔ parseX resolves author and media from includes (0.229125ms)
+✔ parsers tolerate empty and malformed payloads (0.067667ms)
+ℹ tests 13
+ℹ suites 0
+ℹ pass 11
+ℹ fail 2
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 116.433916
+
+✖ failing tests:
+
+test at electron/news-sources.test.cjs:137:1
+✖ parseRssFeed chooses Atom alternate links instead of self or enclosure links (1.076958ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+
+    [
+  +   'https://example.com/feed/atom'
+  -   'https://example.com/stories/first',
+  -   'https://example.com/stories/second'
+    ]
+
+      at TestContext.<anonymous> (/Users/fei/Desktop/Archimedes/electron/news-sources.test.cjs:154:10)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: [ 'https://example.com/feed/atom' ],
+    expected: [ 'https://example.com/stories/first', 'https://example.com/stories/second' ],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at electron/news-sources.test.cjs:161:1
+✖ parseRssFeed retains valid entries when another publication date is invalid (0.341458ms)
+  RangeError [Error]: Invalid time value
+      at Date.toISOString (<anonymous>)
+      at /Users/fei/Desktop/Archimedes/electron/news-sources.cjs:263:54
+      at Array.map (<anonymous>)
+      at parseRssFeed (/Users/fei/Desktop/Archimedes/electron/news-sources.cjs:239:6)
+      at TestContext.<anonymous> (/Users/fei/Desktop/Archimedes/electron/news-sources.test.cjs:174:17)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)

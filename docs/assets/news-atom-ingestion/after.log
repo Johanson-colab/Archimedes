@@ -1,0 +1,21 @@
+✔ canonicalUrl strips tracking params and trailing slashes (0.591583ms)
+✔ item ids are stable across tracking parameters (1.053166ms)
+✔ parseHackerNews keeps points, comments, domain and discussion link (2.198709ms)
+✔ parseGitHub exposes repo metadata and trending rank (0.272292ms)
+✔ parseArxiv reads Atom entries, authors and categories (1.079083ms)
+✔ parseLobsters keeps score, comments and tags (0.161333ms)
+✔ parseRssFeed handles RSS items, images and entity decoding (0.909208ms)
+✔ parseRssFeed handles Atom entries (0.657208ms)
+✔ parseRssFeed chooses Atom alternate links instead of self or enclosure links (0.299833ms)
+✔ parseRssFeed retains valid entries when another publication date is invalid (0.326458ms)
+✔ parseReddit keeps subreddit, flair, score and preview image (0.26925ms)
+✔ parseX resolves author and media from includes (0.194709ms)
+✔ parsers tolerate empty and malformed payloads (0.052166ms)
+ℹ tests 13
+ℹ suites 0
+ℹ pass 13
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 121.187083
