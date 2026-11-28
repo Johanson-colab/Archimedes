@@ -1,0 +1,31 @@
+✔ stdio protocol correlates replies and refuses unknown requests without shell (2.039042ms)
+✔ explicit app-server arguments are placed before the app-server subcommand (0.400625ms)
+✔ RPC timeouts do not replay and process exit rejects pending requests (21.558333ms)
+✔ Codex terminates its POSIX process group even after the leader exits (21.239667ms)
+✔ Codex falls back to the owned child when the POSIX group is unavailable (21.04075ms)
+✔ Codex terminates the owned Windows process tree and contains taskkill failures (0.284083ms)
+✔ Codex does not repeat Windows termination after taskkill succeeds (0.127125ms)
+✔ Codex contains a hung Windows taskkill helper (21.298334ms)
+✔ invalid and oversized protocol input fails closed (2.416584ms)
+✔ inbound limits apply to each UTF-8 frame, not a batch of valid messages (13.297583ms)
+✔ only identical successful local history can resume; forks, undo and dirty delivery cannot (0.290375ms)
+✔ streaming uses restricted policy, rejects foreign events and persists only completed continuity (3.698959ms)
+✔ Codex Create receives the capability CLI in its actual native turn (3.008ms)
+✔ native approval is returned once and denied unless explicitly approved (1.282ms)
+✔ unsupported server requests are denied; failed/uncertain turns preserve partial text without continuity (0.724833ms)
+✔ abort stops the native turn and closes the child (0.497166ms)
+✔ configuration never stores arbitrary secrets and account checks always close (2.580875ms)
+✔ native client negotiates experimental questions while suppressing private reasoning deltas (0.562375ms)
+✔ outbound native protocol rejects oversized UTF-8 and escaped payloads before serialization or writes (15.594875ms)
+✔ unsupported initialize capabilities fail explicitly without fallback and close the child (0.510875ms)
+✔ outbound JSON preflight rejects serialization hooks without invoking them (0.173875ms)
+✔ outbound JSON byte counts match actual escaping, surrogate and nested representations (0.190959ms)
+✔ Codex exposes live experiment tools and dispatches requests during the turn (10.687584ms)
+ℹ tests 23
+ℹ suites 0
+ℹ pass 23
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 249.169958

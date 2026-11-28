@@ -18,17 +18,22 @@ function executableCandidates(binary = "codex") {
 }
 
 class CodexClient extends EventEmitter {
-  constructor({ binary = "codex", spawnImpl = spawn, requestTimeout = 20_000, env = {}, appServerArgs = [] } = {}) {
+  constructor({ binary = "codex", spawnImpl = spawn, requestTimeout = 20_000, env = {}, appServerArgs = [], platform = process.platform, treeKillImpl = spawn, terminationTimeout = 2_000 } = {}) {
     super();
     if (!Array.isArray(appServerArgs) || appServerArgs.some((arg) => typeof arg !== "string")) throw new Error("Invalid Codex app-server arguments.");
+    if (!Number.isFinite(terminationTimeout) || terminationTimeout < 0) throw new Error("Invalid Codex termination timeout.");
     this.binary = binary;
     this.env = env;
     this.spawnImpl = spawnImpl;
     this.requestTimeout = requestTimeout;
     this.appServerArgs = appServerArgs;
+    this.platform = platform;
+    this.treeKillImpl = treeKillImpl;
+    this.terminationTimeout = terminationTimeout;
     this.pending = new Map();
     this.nextId = 0;
     this.closed = false;
+    this.terminated = false;
     this.buffer = "";
     this.bufferBytes = 0;
   }
@@ -37,10 +42,10 @@ class CodexClient extends EventEmitter {
     const binary = this.spawnImpl === spawn ? executableCandidates(this.binary)[0] : this.binary;
     if (!binary) throw new Error("Codex CLI was not found. Install Codex and run codex login, or set its absolute executable path.");
     // Never use a shell or expose an app-server network listener.
-    if (process.platform === "win32" && binary.endsWith(".cmd")) throw new Error("Select the native codex.exe executable; Windows .cmd launchers are not supported yet.");
+    if (this.platform === "win32" && binary.endsWith(".cmd")) throw new Error("Select the native codex.exe executable; Windows .cmd launchers are not supported yet.");
     const env = { ...process.env, ...this.env };
     delete env.CODEX_THREAD_ID;
-    this.child = this.spawnImpl(binary, [...this.appServerArgs, "app-server", "--listen", "stdio://"], { stdio: ["pipe", "pipe", "pipe"], env, windowsHide: true, detached: process.platform !== "win32" });
+    this.child = this.spawnImpl(binary, [...this.appServerArgs, "app-server", "--listen", "stdio://"], { stdio: ["pipe", "pipe", "pipe"], env, windowsHide: true, detached: this.platform !== "win32" });
     clients.add(this);
     this.child.stdout.setEncoding("utf8");
     this.child.stdout.on("data", (chunk) => this.read(chunk));
@@ -131,17 +136,42 @@ class CodexClient extends EventEmitter {
   }
 
   terminate() {
-    if (!this.child || this.child.exitCode !== null) return;
-    try {
-      if (process.platform !== "win32" && this.child.pid) process.kill(-this.child.pid, "SIGTERM");
-      else this.child.kill();
-    } catch { this.child.kill(); }
     const child = this.child;
-    const timer = setTimeout(() => {
-      if (child.exitCode !== null) return;
-      try { if (process.platform !== "win32" && child.pid) process.kill(-child.pid, "SIGKILL"); else child.kill("SIGKILL"); } catch { /* already exited */ }
-    }, 2_000);
+    if (!child || this.terminated) return;
+    this.terminated = true;
+    if (this.platform === "win32") return this.terminateWindowsTree(child);
+    const kill = (signal) => {
+      if (Number.isSafeInteger(child.pid) && child.pid > 0) {
+        try { process.kill(-child.pid, signal); return; } catch { /* group already gone */ }
+      }
+      try { child.kill(signal); } catch { /* already exited */ }
+    };
+    kill("SIGTERM");
+    const timer = setTimeout(() => kill("SIGKILL"), this.terminationTimeout);
     timer.unref();
+  }
+
+  terminateWindowsTree(child) {
+    let fallbackUsed = false;
+    const fallback = () => {
+      if (fallbackUsed) return;
+      fallbackUsed = true;
+      try { child.kill("SIGKILL"); } catch { /* already exited */ }
+    };
+    const pid = child.pid;
+    if (!Number.isSafeInteger(pid) || pid <= 0 || pid > 2147483647) return fallback();
+    let helper;
+    try {
+      helper = this.treeKillImpl("taskkill.exe", ["/PID", String(pid), "/T", "/F"], { shell: false, windowsHide: true, stdio: "ignore" });
+    } catch { return fallback(); }
+    const timeout = Math.min(2_000, Math.max(1, this.terminationTimeout));
+    const timer = setTimeout(() => {
+      try { helper.kill("SIGKILL"); } catch { /* helper already exited */ }
+      fallback();
+    }, timeout);
+    timer.unref();
+    helper.once("error", () => { clearTimeout(timer); fallback(); });
+    helper.once("close", code => { clearTimeout(timer); if (code !== 0) fallback(); });
   }
 
   close() { this.fail(new Error("Codex connection closed.")); }

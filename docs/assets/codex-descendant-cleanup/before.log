@@ -1,0 +1,79 @@
+✔ stdio protocol correlates replies and refuses unknown requests without shell (2.558125ms)
+✔ explicit app-server arguments are placed before the app-server subcommand (0.540167ms)
+✔ RPC timeouts do not replay and process exit rejects pending requests (21.55325ms)
+✖ Codex terminates its POSIX process group even after the leader exits (1.13725ms)
+✖ Codex terminates the owned Windows process tree and contains taskkill failures (0.22025ms)
+✔ invalid and oversized protocol input fails closed (1.87175ms)
+✔ inbound limits apply to each UTF-8 frame, not a batch of valid messages (10.498916ms)
+✔ only identical successful local history can resume; forks, undo and dirty delivery cannot (0.195417ms)
+✔ streaming uses restricted policy, rejects foreign events and persists only completed continuity (6.1655ms)
+✔ Codex Create receives the capability CLI in its actual native turn (3.858666ms)
+✔ native approval is returned once and denied unless explicitly approved (1.497583ms)
+✔ unsupported server requests are denied; failed/uncertain turns preserve partial text without continuity (1.069541ms)
+✔ abort stops the native turn and closes the child (0.468416ms)
+✔ configuration never stores arbitrary secrets and account checks always close (3.107459ms)
+✔ native client negotiates experimental questions while suppressing private reasoning deltas (0.626625ms)
+✔ outbound native protocol rejects oversized UTF-8 and escaped payloads before serialization or writes (19.554542ms)
+✔ unsupported initialize capabilities fail explicitly without fallback and close the child (0.59ms)
+✔ outbound JSON preflight rejects serialization hooks without invoking them (0.167209ms)
+✔ outbound JSON byte counts match actual escaping, surrogate and nested representations (0.18325ms)
+✔ Codex exposes live experiment tools and dispatches requests during the turn (18.579459ms)
+ℹ tests 20
+ℹ suites 0
+ℹ pass 18
+ℹ fail 2
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 217.151875
+
+✖ failing tests:
+
+test at electron/agent/codex-backend.test.cjs:64:1
+✖ Codex terminates its POSIX process group even after the leader exits (1.13725ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+
+  + []
+  - [
+  -   [
+  -     -43210,
+  -     'SIGTERM'
+  -   ]
+  - ]
+
+      at TestContext.<anonymous> (/Users/fei/Desktop/Archimedes/electron/agent/codex-backend.test.cjs:71:10)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: [],
+    expected: [ [ -43210, 'SIGTERM' ] ],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at electron/agent/codex-backend.test.cjs:77:1
+✖ Codex terminates the owned Windows process tree and contains taskkill failures (0.22025ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+
+  0 !== 1
+
+      at TestContext.<anonymous> (/Users/fei/Desktop/Archimedes/electron/agent/codex-backend.test.cjs:94:10)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 0,
+    expected: 1,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
