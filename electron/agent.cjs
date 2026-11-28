@@ -26,6 +26,7 @@ const { ToolRegistry } = require("./agent/tool-registry.cjs");
 const { fetchModelWithRetry } = require("./agent/model-retry.cjs");
 const { boundActiveContext } = require("./agent/active-context.cjs");
 const { discoverSkills, readSkillResource } = require("./agent/api-skills.cjs");
+const creatorCapabilities = require("./agent/creator-capabilities.cjs");
 const { prepareResearchSkill } = require("./agent/research-skills.cjs");
 const graphAutoBuild = require("./research-graph/auto-build.cjs");
 const researchGraph = require("./research-graph/service.cjs");
@@ -517,7 +518,7 @@ tools.push(
 
 function createToolRegistry() {
   const registry = new ToolRegistry();
-  for (const definition of tools) registry.register({ definition, source: "builtin", execute: (context, args) => executeBuiltInTool(context, args) });
+  for (const definition of [...tools, ...creatorCapabilities.toolDefinitions]) registry.register({ definition, source: "builtin", execute: (context, args) => executeBuiltInTool(context, args) });
   return registry;
 }
 const defaultToolRegistry = createToolRegistry();
@@ -775,9 +776,11 @@ async function waitForExperimentRun(runId, timeoutSeconds = 20) {
   return { ...run, log_tail: log.text };
 }
 
-async function executeBuiltInTool({ root, taskId, threadId, turnId, call, emit, contextItems, foundPapers, pdfCache, signal, capabilities = DEFAULT_CAPABILITIES, browser, config, recordEvent = () => {}, registry = defaultToolRegistry, researchRun, reasoningEffort, isRequestActive = () => true, dataStore = defaultStore.currentStore() }, args) {
+async function executeBuiltInTool({ root, taskId, threadId, turnId, call, emit, contextItems, foundPapers, pdfCache, signal, capabilities = DEFAULT_CAPABILITIES, browser, config, recordEvent = () => {}, registry = defaultToolRegistry, researchRun, reasoningEffort, mode = "standard", isRequestActive = () => true, dataStore = defaultStore.currentStore() }, args) {
   const store = dataStore;
   const name = call.function.name;
+
+  if (creatorCapabilities.TOOL_NAMES.has(name)) return { content: JSON.stringify(creatorCapabilities.invokeCreatorTool(name, args, mode)) };
 
   if (name === "list_skills") return { content: JSON.stringify({ skills: discoverSkills(root) }) };
   if (name === "read_skill_resource") return { content: JSON.stringify(readSkillResource(root, args.skill_id, args.path)) };
@@ -1356,6 +1359,9 @@ async function complete(config, messages, { signal, onTextDelta = () => {}, allo
     response = await requestCompletion(request);
     if (response.ok) break;
     detail = (await response.text()).slice(0, 500);
+    const rejectsStreaming = /\b(?:streaming|stream(?:["']?\s*[:=]\s*true)?(?:\s+parameter)?)["']?\s+(?:is\s+)?(?:not supported|unsupported|disabled)\b/i.test(detail) ||
+      /\b(?:does not support|doesn't support|unsupported\s+(?:parameter|value)\s*:?)\s*["']?(?:streaming|stream)\b/i.test(detail);
+    if ([400, 422].includes(response.status) && rejectsStreaming) return completeWithoutStream();
     const canUseCompletionTokens = tokenLimit && Object.hasOwn(request, "max_tokens") &&
       /(?:unsupported parameter|not supported)[^\n]{0,180}max_tokens|max_tokens[^\n]{0,180}(?:unsupported|not supported)/i.test(detail) &&
       /max_completion_tokens/i.test(detail);
@@ -1381,7 +1387,7 @@ async function complete(config, messages, { signal, onTextDelta = () => {}, allo
   }
 
   const contentType = response.headers.get("content-type") || "";
-  if (!contentType.includes("text/event-stream") || !response.body) {
+  if (!contentType.includes("text/event-stream")) {
     const body = await response.json();
     const message = body?.choices?.[0]?.message;
     if (!message) throw new Error("The model response did not contain a message.");
@@ -1391,6 +1397,7 @@ async function complete(config, messages, { signal, onTextDelta = () => {}, allo
     return normalized;
   }
 
+  if (!response.body) throw new ModelIncompleteError({ provider: "openai", reason: "missing_terminal" });
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   const message = { content: "", tool_calls: [] };
@@ -1423,12 +1430,9 @@ async function complete(config, messages, { signal, onTextDelta = () => {}, allo
     if (error.code === "MODEL_RESPONSE_INCOMPLETE") { error.partialResponse = partialResponse; throw error; }
     throw new ModelIncompleteError({ provider: "openai", reason: "stream_error", partialResponse, detail: error.message });
   } finally { reader.releaseLock(); }
-  if (!message.content && !message.tool_calls.length) {
-    if (finishReason) assertModelCompletion({ provider: "openai", finishReason, partialResponse: "" });
-    return completeWithoutStream();
-  }
   const normalized = normalizeAssistantMessage(message);
   assertModelCompletion({ provider: "openai", finishReason, terminalSeen: Boolean(finishReason), partialResponse: normalized.content, toolCalls: normalized.tool_calls });
+  if (!message.content && !message.tool_calls.length) throw new ModelIncompleteError({ provider: "openai", reason: "empty_stream", finishReason });
   contentGuard.finish(normalized);
   return normalized;
 }
@@ -1691,6 +1695,7 @@ async function runAgentInStore({ prompt, workspace, threadId, projectId, workspa
         emitTurn({ type: "status", title: "Context adjusted", detail: "Older tool output was removed from the active model context; saved events remain available." });
       }
       const availableTools = toolRegistry.definitions().filter((tool) =>
+        (!creatorCapabilities.TOOL_NAMES.has(tool.function.name) || mode === "create") &&
         !(tool.function.name === "search_academic_papers" && academicSearches >= policy.maxAcademicSearches) &&
         !(tool.function.name === "web_search" && webSearches >= policy.maxWebSearches) &&
         (["research", "experiment-setup"].includes(mode) || !["create_experiment", "prepare_experiment_workspace", "run_experiment"].includes(tool.function.name)));
@@ -1712,7 +1717,7 @@ async function runAgentInStore({ prompt, workspace, threadId, projectId, workspa
 
       for (const call of message.tool_calls) {
         try {
-          const result = await executeTool({ root: workspace, taskId: task.id, threadId: thread.id, turnId: turn.id, call, emit: emitTurn, contextItems, foundPapers, pdfCache, signal: controller.signal, capabilities: turnCapabilities, browser, config, recordEvent, registry: toolRegistry, researchRun, dataStore, reasoningEffort: resolvedReasoningEffort, preflight: (name, args) => {
+          const result = await executeTool({ root: workspace, taskId: task.id, threadId: thread.id, turnId: turn.id, call, emit: emitTurn, contextItems, foundPapers, pdfCache, signal: controller.signal, capabilities: turnCapabilities, browser, config, recordEvent, registry: toolRegistry, researchRun, dataStore, mode, reasoningEffort: resolvedReasoningEffort, preflight: (name, args) => {
             if (name === "search_academic_papers") {
               if (academicSearches >= policy.maxAcademicSearches) throw new Error("The academic search budget is exhausted. Synthesize the findings already collected.");
               academicSearches += 1;

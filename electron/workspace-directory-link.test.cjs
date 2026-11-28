@@ -46,7 +46,7 @@ test('a clicked directory link expands nested Files entries and can still open a
   const { code } = await transformWithOxc(extracts.join('\n'), 'files-view.tsx', { jsx: { runtime: 'classic' } });
   const icon = () => null;
   const FilePreview = ({ file, error }) => React.createElement('div', { 'data-testid': 'file-preview' }, error || file?.content || 'no file');
-  const names = ['React','useState','useEffect','useRef','useCallback','useUISettings','WorkspaceFileGlyph','workspaceFileTone','FilePreview','FolderOpen','RefreshCw','Plus','ChevronDown','ChevronRight','ChevronLeft','ChevronsLeft','ChevronsRight','Maximize2','Minimize2','X','MenuSurface','MenuItem','MenuDivider'];
+  const names = ['React','useState','useEffect','useRef','useCallback','useUISettings','WorkspaceFileGlyph','workspaceFileTone','FilePreview','FolderOpen','RefreshCw','Plus','ChevronDown','ChevronRight','ChevronLeft','Maximize2','Minimize2','X','MenuSurface','MenuItem','MenuDivider'];
   const values = [React,React.useState,React.useEffect,React.useRef,React.useCallback,() => ({ t: value => value }),icon,() => 'file',FilePreview,...Array(names.length - 9).fill(icon)];
   const { FilesView, setDirectoryChildren, ensureDirectoryPath } = new Function(...names, 'workspacePathName', 'displayPreferenceStorage', `${code}\nreturn { FilesView, setDirectoryChildren, ensureDirectoryPath };`)(...values, workspacePathName, dom.window.localStorage);
   const openerSource = section(app, '  function isCurrentFileWorkspace(', '\n  function updateFileScope(') + section(app, '  async function openChangedFile(', '\n  function askAIAboutPaper(');

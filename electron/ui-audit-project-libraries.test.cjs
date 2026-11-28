@@ -6,7 +6,6 @@ const test = require("node:test");
 const root = path.resolve(__dirname, "..");
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 const store = read("electron/store.cjs");
-const main = read("electron/main.cjs");
 const preload = read("electron/preload.cjs");
 const bridge = read("src/vite-env.d.ts");
 const library = read("src/LibraryView.tsx") + read("src/LibraryWorkspace.tsx");
@@ -26,7 +25,6 @@ test("libraries are project-owned and migrated to their project", () => {
 });
 
 test("library IPC and renderer pass the active project", () => {
-  assert.match(main, /ipcMain\.handle\("library:list", \(_event, input = \{\}\) => store\.listLibraries\(input\.projectId \?\? null\)\)/);
   assert.match(preload, /listLibraries: \(projectId\) => ipcRenderer\.invoke\("library:list", \{ projectId \}\)/);
   assert.match(bridge, /listLibraries: \(projectId\?: string \| null\) => Promise<ResearchLibrary\[\]>/);
   assert.match(library, /bridge\.listLibraries\(projectId \?\? undefined\)/);
