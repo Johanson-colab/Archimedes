@@ -63,3 +63,39 @@ test('native operations require a concrete user decision and cancellation cannot
   assert.equal(await approve({ command: 'cat paper.pdf', cwd: f.root, signal: controller.signal }), false);
   assert.equal(f.approvalDialogs.length, 2);
 });
+
+test('window close releases its preview tokens and accepted quit stops background resources', (t) => {
+  const source = fs.readFileSync(path.join(__dirname, 'main.cjs'), 'utf8');
+  const section = (start, end) => source.slice(source.indexOf(start), end ? source.indexOf(end, source.indexOf(start)) : undefined);
+  const browserWindow = new EventEmitter(), app = new EventEmitter();
+  const windowPreviewTokens = new Map([[1, new Map([['a', 'a-token']])], [2, new Map([['b', 'b-token']])]]);
+  const previewTokenWorkspaces = new Map([['a-token', 'a'], ['b-token', 'b']]);
+  const reading = new AbortController(), literature = new AbortController(), close = t.mock.fn();
+  const workspaceWatchers = new Map([[2, { watcher: { close } }]]);
+  const noop = () => {};
+  const scope = { browserWindow, app, senderId: 1, windowPreviewTokens, previewTokenWorkspaces, workspaceWatchers,
+    deepReadingRuns: new Map([['reading', { controller: reading }]]), activeLiteratureSearches: new Map([['search', literature]]),
+    closeWindowTerminals: noop, releaseWindowApprovalClaim: noop, presence: null, windowStartupWorkspaces: new Map(),
+    windowWorkspaces: new Map(), closeAllNativeClients: noop, closeAllTerminals: noop, collaborationServer: null,
+    latexCompiles: new Map(), experimentRunner: { shutdownExperimentRuns: noop }, store: { closeAllWorkspaces: noop },
+    harnessSetup: { shutdown: noop }, researchAppRuntime: { shutdown: noop }, researchAppDelivery: { shutdown: noop },
+  };
+  new Function('scope', `with (scope) {
+    ${section('function stopWorkspaceWatcher(', 'function setWindowWorkspace(')}
+    ${section('function releaseWindowPreviewTokens(', 'function workspaceStatePath(')}
+    ${section('  browserWindow.on("closed"', '  return browserWindow;')}
+    ${section('app.on("will-quit"')}
+  }`)(scope);
+  browserWindow.emit('closed');
+  assert.deepEqual([...windowPreviewTokens.keys()], [2]);
+  assert.deepEqual([...previewTokenWorkspaces.keys()], ['b-token']);
+  app.emit('will-quit', { defaultPrevented: true });
+  assert.equal(reading.signal.aborted, false);
+  assert.equal(literature.signal.aborted, false);
+  assert.equal(close.mock.callCount(), 0);
+  app.emit('will-quit', { defaultPrevented: false });
+  assert.equal(reading.signal.aborted, true);
+  assert.equal(literature.signal.aborted, true);
+  assert.equal(close.mock.callCount(), 1);
+  assert.equal(workspaceWatchers.size + windowPreviewTokens.size + previewTokenWorkspaces.size, 0);
+});

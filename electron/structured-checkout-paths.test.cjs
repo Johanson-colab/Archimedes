@@ -15,6 +15,76 @@ function fixture(t) {
   return { root, checkout, outside };
 }
 
+async function waitFor(check, message, timeoutMs = 6_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (check()) return;
+    await new Promise(resolve => setTimeout(resolve, 25));
+  }
+  throw new Error(message);
+}
+
+test("reproduction run passes its abort signal into Docker preparation", () => {
+  const source = fs.readFileSync(path.join(__dirname, "main.cjs"), "utf8");
+  const start = source.indexOf("const backend = createDockerBackend(");
+  assert.ok(start >= 0, "Docker reproduction wiring was not found");
+  assert.match(source.slice(start, start + 1_200), /await backend\.prepare\(\{\s*signal: controller\.signal\s*\}\)/);
+});
+
+test("cancelling Docker preparation kills docker run and still removes a possible container", { skip: process.platform === "win32" ? "POSIX fake docker fixture" : false, timeout: 15_000 }, async t => {
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "archimedes-docker-cancel-")));
+  const checkout = path.join(root, "checkout"), bin = path.join(root, "bin");
+  const trace = path.join(root, "trace.log"), ready = path.join(root, "ready");
+  fs.mkdirSync(checkout); fs.mkdirSync(bin);
+  fs.writeFileSync(path.join(bin, "docker"), [
+    "#!/bin/sh",
+    'case "$1" in',
+    '  info) echo 24.0 ;;',
+    '  run) echo run >> "$ARCHIMEDES_DOCKER_TRACE"; : > "$ARCHIMEDES_DOCKER_READY"; exec sleep 8 ;;',
+    '  rm) echo "rm $2 $3" >> "$ARCHIMEDES_DOCKER_TRACE" ;;',
+    "esac",
+    "exit 0",
+  ].join("\n"), { mode: 0o755 });
+
+  const originalPath = process.env.PATH;
+  const originalTrace = process.env.ARCHIMEDES_DOCKER_TRACE;
+  const originalReady = process.env.ARCHIMEDES_DOCKER_READY;
+  process.env.PATH = `${bin}${path.delimiter}${originalPath || ""}`;
+  process.env.ARCHIMEDES_DOCKER_TRACE = trace;
+  process.env.ARCHIMEDES_DOCKER_READY = ready;
+
+  const controller = new AbortController();
+  let preparing;
+  t.after(async () => {
+    controller.abort();
+    if (preparing) await preparing.catch(() => {});
+    process.env.PATH = originalPath;
+    if (originalTrace === undefined) delete process.env.ARCHIMEDES_DOCKER_TRACE;
+    else process.env.ARCHIMEDES_DOCKER_TRACE = originalTrace;
+    if (originalReady === undefined) delete process.env.ARCHIMEDES_DOCKER_READY;
+    else process.env.ARCHIMEDES_DOCKER_READY = originalReady;
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+
+  const backend = createDockerBackend({ checkoutDir: checkout, name: "fixture-container" });
+  let added = 0, removed = 0;
+  const add = controller.signal.addEventListener.bind(controller.signal);
+  const remove = controller.signal.removeEventListener.bind(controller.signal);
+  controller.signal.addEventListener = (...args) => { added++; return add(...args); };
+  controller.signal.removeEventListener = (...args) => { removed++; return remove(...args); };
+
+  preparing = backend.prepare({ signal: controller.signal });
+  await waitFor(() => fs.existsSync(ready), "docker run never started");
+  const start = Date.now();
+  controller.abort();
+  await assert.rejects(preparing);
+  const elapsed = Date.now() - start;
+  assert.ok(elapsed < 3_000, `cancelled preparation took ${elapsed}ms`);
+  assert.equal(added, removed, "an abort listener was retained");
+  await backend.dispose();
+  assert.equal(fs.readFileSync(trace, "utf8").trim(), "run\nrm -f fixture-container");
+});
+
 test("Docker structured files reject external directory/final symlinks and preserve ordinary nested edits", async t => {
   const f = fixture(t), external = path.join(f.outside, "input.txt");
   fs.writeFileSync(external, "Shared dataset must remain intact");
