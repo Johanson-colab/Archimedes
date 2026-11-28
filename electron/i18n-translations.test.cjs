@@ -33,6 +33,12 @@ test("translation shards cover every string exactly once", () => {
   assert.ok(total > 1000, `expected the full locale, found ${total} keys`);
 });
 
+test("the experiment worktree race has a translated recovery message", () => {
+  const message = "The experiment worktree base changed. Try again.";
+  assert.ok(entries("session.ts").some(([key, value]) => key === message && value && !/^[\x00-\x7F]+$/.test(value)));
+  assert.match(fs.readFileSync(path.join(root, "electron", "store.cjs"), "utf8"), new RegExp(`throw new Error\\("${message.replace(/\./g, "\\.")}"\\)`));
+});
+
 test("keys stay sorted inside each shard so concurrent additions do not collide", () => {
   for (const file of files) {
     const keys = entries(file).map(([key]) => key.toLowerCase());

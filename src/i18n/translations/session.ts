@@ -55,6 +55,7 @@ export const session = {
   "Shared": "共享",
   "Switch session": "切换会话",
   "The experiment changed while its run was being prepared. Start the run again.": "实验在运行准备期间发生了变化。请重新开始运行。",
+  "The experiment worktree base changed. Try again.": "实验工作树基线已变更。请重试。",
   "The project folder changed. Try again.": "项目文件夹已变更。请重试。",
   "The project workspace cannot be deleted.": "项目的默认工作区不可删除。",
   "Unpin session": "取消固定",

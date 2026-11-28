@@ -1,0 +1,18 @@
+$ node --test --test-name-pattern='experiment worktree race has a translated' electron/i18n-translations.test.cjs  (before the translation)
+✖ the experiment worktree race has a translated recovery message (5.457541ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 109.700167
+
+✖ failing tests:
+
+test at electron/i18n-translations.test.cjs:36:1
+✖ the experiment worktree race has a translated recovery message (5.457541ms)
+  AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:
+
+    assert.ok(entries("session.ts").some(([key, value]) => key === message && value && !/^[\x00-\x7F]+$/.test(value)))
