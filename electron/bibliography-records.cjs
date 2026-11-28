@@ -141,4 +141,4 @@ function repairMetadata(db, paperId, patch, canAccessProject) {
   if (assignments.length) db.prepare(`UPDATE papers SET ${assignments.join(", ")}, updated_at = ? WHERE id = ?`).run(...values, new Date().toISOString(), paperId);
 }
 
-module.exports = { identifier, titleIdentity, canonicalTitleKey, findImportMatch, assertPaperAccess, bibliography, assertCitationKeyAvailable, setBibliography, repairMetadata };
+module.exports = { identifier, titleIdentity, canonicalTitleKey, compatibleTitleMetadata, findImportMatch, assertPaperAccess, bibliography, assertCitationKeyAvailable, setBibliography, repairMetadata };

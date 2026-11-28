@@ -620,6 +620,37 @@ test("a retained bibliography key cannot be assigned to a conflicting enriched r
   } finally { if (unmount) await unmount(); data.close(); }
 });
 
+test("a weak title match cannot learn an arXiv ID that contradicts a saved paper", async () => {
+  const data = database("BibTeX title alias against a saved identity"); let unmount;
+  try {
+    const destination = data.db.listLibraries(data.project.id)[0];
+    const other = data.db.createLibrary({ projectId: data.project.id, name: "Other references" });
+    const saved = data.db.addPaper(other.id, { ...fixture.paper, title: "Shared title", doi: "10.5555/saved", arxiv_id: "2401.01234" });
+    data.db.updatePaper(saved.id, { notes: "Saved elsewhere" });
+    unmount = await mount(scope.BibliographyDialog, { bridge: data.bridge, library: destination, onClose() {}, onChanged: async () => {} });
+    const field = document.querySelector('[aria-label="BibTeX source"]');
+    const source = [
+      '@article{saved,title={Shared title},doi={10.5555/saved}}',
+      '@article{distinct,title={Shared title},eprint={2401.05678}}',
+    ].join("\n");
+    await input(field, source);
+    const rows = [...document.querySelectorAll("article.external-paper small")];
+    assert.doesNotMatch(rows[0].textContent, /Conflicting DOI or arXiv IDs/);
+    assert.match(rows[0].textContent, /Existing paper/);
+    assert.doesNotMatch(rows[1].textContent, /Duplicate/);
+
+    await click("Import selected references");
+    data.db.closeAllWorkspaces();
+    data.db.openWorkspace(data.root);
+    assert.equal(data.db.getPaper(saved.id).arxiv_id, "2401.01234");
+    assert.equal(data.db.getPaper(saved.id).notes, "Saved elsewhere");
+    const papers = data.db.listPapers(destination.id);
+    assert.equal(papers.length, 2);
+    assert.ok(papers.some(paper => paper.id === saved.id));
+    assert.equal(papers.find(paper => paper.id !== saved.id).arxiv_id, "2401.05678");
+  } finally { if (unmount) await unmount(); data.close(); }
+});
+
 test("a learned identifier cannot join a saved paper with a conflicting DOI", async () => {
   const data = database("BibTeX alias claimed by a saved paper"); let unmount;
   try {

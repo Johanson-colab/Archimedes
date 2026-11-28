@@ -256,7 +256,7 @@ export function exportBibliography(papers: BibliographyPaper[]) {
 
 // Only retained rows can represent another import. A discarded title-only
 // match has no authority to hide a later entry with a different DOI.
-export function indexBibliographyBatch(entries: BibliographyEntry[]) {
+export function indexBibliographyBatch(entries: BibliographyEntry[], savedPapers: AcademicSearchResult[] = []) {
   const byIdentity = new Map<string, Set<AcademicSearchResult>>();
   const repeatedRows = new Set<number>();
   const representatives = new Map<number, AcademicSearchResult>();
@@ -287,13 +287,17 @@ export function indexBibliographyBatch(entries: BibliographyEntry[]) {
     }
     const titleMatch = titleKey && matchBibliographyPaper(paper, [...(byIdentity.get(titleKey) || [])], { titleAlreadyMatched: true });
     if (titleMatch) {
-      repeatedRows.add(index);
-      for (const [field, normalize] of identifierFields) {
-        if (!paper[field] || titleMatch[field]) continue;
-        titleMatch[field] = paper[field];
-        addIdentity(field + ":" + normalize(paper[field]), titleMatch);
+      // Check the saved identity before learning aliases from a weak title match.
+      const savedIdentity = savedPapers.length ? matchBibliographyPaper(titleMatch, savedPapers) : undefined;
+      if (!savedIdentity || !hasConflictingBibliographyIdentifiers(paper, savedIdentity)) {
+        repeatedRows.add(index);
+        for (const [field, normalize] of identifierFields) {
+          if (!paper[field] || titleMatch[field]) continue;
+          titleMatch[field] = paper[field];
+          addIdentity(field + ":" + normalize(paper[field]), titleMatch);
+        }
+        return;
       }
-      return;
     }
     representative = { ...paper };
     representatives.set(index, representative);

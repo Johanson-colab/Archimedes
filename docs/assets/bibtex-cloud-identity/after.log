@@ -1,0 +1,33 @@
+$ node --test --test-name-pattern='incomplete metadata joins its unique legacy cloud record' electron/library-sync.test.cjs
+✔ a title-only reference with incomplete metadata joins its unique legacy cloud record (32.323334ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 148.308958
+
+$ node --test --test-name-pattern='weak title match cannot learn an arXiv ID' electron/bibliography-interchange.test.cjs
+✔ a weak title match cannot learn an arXiv ID that contradicts a saved paper (131.356333ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 605.48925
+
+$ node --test electron/library-sync.test.cjs
+ℹ tests 9
+ℹ pass 9
+ℹ fail 0
+ℹ skipped 0
+
+$ node --test electron/bibliography-interchange.test.cjs
+ℹ tests 32
+ℹ pass 32
+ℹ fail 0
+ℹ skipped 0

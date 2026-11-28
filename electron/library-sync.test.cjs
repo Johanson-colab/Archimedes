@@ -170,6 +170,37 @@ test("a new title-only reference joins its legacy cloud record without joining a
   }
 });
 
+test("a title-only reference with incomplete metadata joins its unique legacy cloud record", async () => {
+  const root = workspace();
+  try {
+    const project = store.createResearchProject({ name: "Incomplete metadata" });
+    store.linkResearchProjectToCloud(project.id, "cloud-project");
+    const library = store.listLibraries(project.id)[0];
+    const api = fakeApi();
+    const remote = api.seedRemoteLibrary(library.name, {
+      canonical_key: "title:editorial", title: "Editorial", authors: ["Alex Morgan"], year: 2019,
+      notes: "Existing cloud note", reading_status: "read", starred: true,
+      tags: ["checked"], state_updated_at: "2025-01-01T00:00:00.000Z",
+    });
+    store.linkLibraryToCloud(library.id, remote.id);
+    const [legacy] = await api.listPapers(remote.id);
+    const matching = store.addPaper(library.id, { title: "Editorial", authors: ["Alex Morgan"] });
+    const distinct = store.addPaper(library.id, { title: "Editorial", authors: ["Jamie Lee"], year: 2023 });
+    assert.notEqual(matching.canonical_key, legacy.canonical_key);
+
+    assert.deepEqual((await createLibrarySync({ store, api }).syncProjectLibraries(project.id)).warnings, []);
+    const cloud = await api.listPapers(remote.id);
+    assert.equal(cloud.length, 2);
+    assert.equal(store.getPaper(matching.id).cloud_paper_id, legacy.id);
+    assert.equal(store.getPaper(matching.id).canonical_key, matching.canonical_key);
+    assert.equal(store.getPaper(matching.id).notes, legacy.notes);
+    assert.equal(store.getPaper(matching.id).reading_status, "read");
+    assert.equal(cloud.find(item => item.id === store.getPaper(distinct.id).cloud_paper_id).canonical_key, distinct.canonical_key);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("syncing an older cloud duplicate twice cannot overwrite a newer note on the original cloud paper", async () => {
   const root = workspace();
   try {

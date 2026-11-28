@@ -23,7 +23,7 @@ export default function BibliographyDialog({ bridge, library, onClose, onChanged
   const [identity, setIdentity] = useState<{ source: string; keys: string[] }>({ source: "", keys: [] });
   const latestSource = useRef("");
   const parsed = useMemo(() => parseBibliography(input), [input]);
-  const batch = useMemo(() => indexBibliographyBatch(parsed.entries), [parsed.entries]);
+  const batch = useMemo(() => indexBibliographyBatch(parsed.entries, known), [parsed.entries, known]);
   const preview = useMemo(() => {
     const pendingKeys = new Map<string, string | number>();
     // Earlier selected rows can give a title-only paper its first strong ID.
