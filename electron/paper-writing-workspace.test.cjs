@@ -683,3 +683,46 @@ test("preview addresses stay with the execution folder that produced the manuscr
   assert.equal(api.createPreviewToken(1, "/project-a"), first);
   assert.equal(tokens.get(second), "/project-b");
 });
+
+test("a rejected source conflict can be resolved without losing the local draft", { timeout: 10_000 }, async t => {
+  let conflicted = false;
+  const f = await fixture(t, {
+    write: async (_root, name) => {
+      if (!conflicted && name === "paper/main.tex") {
+        conflicted = true;
+        throw new Error("The source changed on disk. Your draft is still open.");
+      }
+    },
+  });
+  fs.writeFileSync(path.join(f.a, "paper/main.tex"), source("External editor version"));
+  await f.render(f.a); await autoCompileOff();
+  const draft = source("My draft after the external edit");
+  await edit(draft);
+  await React.act(async () => { await new Promise(resolve => setTimeout(resolve, 800)); });
+  assert.match(document.querySelector(".latex-diagnostics").textContent, /source changed on disk/);
+  const button = [...document.querySelectorAll("button")].find(node => node.textContent === "Overwrite external changes with my draft");
+  assert.ok(button, "the conflict offers an explicit resolution");
+  await React.act(async () => button.click());
+  await settle();
+  assert.equal(f.disk(f.a), draft);
+  assert.equal(document.querySelector(".latex-editor-textarea").value, draft);
+  assert.equal(document.querySelector(".paper-save-state").textContent, "Saved");
+  assert.doesNotMatch(document.body.textContent, /source changed on disk/);
+});
+
+test("a conflicted source in another manuscript does not block compiling the target", async t => {
+  const f = await fixture(t, { write: async (_root, name) => {
+    if (name === "paper/section.tex") throw new Error("Section conflict");
+  } });
+  fs.mkdirSync(path.join(f.a, "other"));
+  fs.writeFileSync(path.join(f.a, "paper/section.tex"), "Original section\n");
+  fs.writeFileSync(path.join(f.a, "other/main.tex"), source("Other manuscript"));
+  await f.render(f.a); await autoCompileOff();
+  await click("paper/section.tex");
+  await edit("Conflicted section\n", "paper/section.tex");
+  await f.render(f.a, 2, "other/main.tex"); await settle();
+  await click("Recompile"); await settle();
+  assert.equal(f.compiles.at(-1).name, "other/main.tex");
+  assert.equal(document.querySelector(".latex-editor-textarea").value, source("Other manuscript"));
+  assert.doesNotMatch(document.body.textContent, /Section conflict/);
+});

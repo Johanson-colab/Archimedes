@@ -72,7 +72,11 @@ test("reopen linked manuscript values, flag changed or missing evidence, and enf
   assert.match(reopened.log, /seed 3/);
   assert.equal(reopened.manuscript.buildId, buildId);
   assert.equal(reopened.analysis.id, saved.id);
+  assert.match(reopened.manuscript.manifestPath, /^\.archimedes\/manuscript-evidence\/[a-f0-9]+\/builds\/[a-f0-9-]+\/source-snapshot\.json$/);
   assert.match(reopened.result.inputSha256, /^[a-f0-9]{64}$/);
+
+  fs.rmSync(buildDirectory, { recursive: true, force: true });
+  assert.equal(getEvidence(store, access).status.build, "ready", "linked evidence keeps its own build receipt after preview cleanup");
 
   assert.deepEqual(listEvidence(store, { ...scope, projectId: other.id, workspace: otherRoot }), []);
   assert.throws(() => getEvidence(store, { ...access, projectId: other.id, workspace: otherRoot }), /does not exist in this project/);

@@ -194,7 +194,7 @@ function writeManuscriptSnapshot({ root, buildDirectory, buildId, requested, sta
 /** Read the saved build and compare live input/PDF bytes before a review handoff. */
 function readManuscriptSnapshot(root, manifestPath) {
   const workspace = workspacePath(root);
-  if (!/^\.archimedes\/latex-build\/[a-f0-9]+\/[a-f0-9-]+\/source-snapshot\.json$/.test(manifestPath)) throw new Error("Choose a saved manuscript build snapshot.");
+  if (!/^\.archimedes\/(?:latex-build\/[a-f0-9]+\/[a-f0-9-]+|manuscript-evidence\/[a-f0-9]+\/builds\/[a-f0-9-]+)\/source-snapshot\.json$/.test(manifestPath)) throw new Error("Choose a saved manuscript build snapshot.");
   const snapshot = JSON.parse(fs.readFileSync(workspacePath(workspace, manifestPath), "utf8"));
   if (snapshot.version !== 1 || snapshot.workspace !== workspace || snapshot.manifest_path !== manifestPath) throw new Error("This build snapshot does not belong to the selected workspace.");
   let current, verificationError = "";

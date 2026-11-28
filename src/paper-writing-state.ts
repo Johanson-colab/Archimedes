@@ -5,6 +5,7 @@ export type WritingDocument = {
   savedDraft: string;
   saveState: "saved" | "saving" | "unsaved";
   error: string;
+  conflict: boolean;
   version: number;
   saveQueue: Promise<void>;
 };
@@ -58,7 +59,7 @@ export type WritingScope = ReturnType<typeof createWritingScope>;
 
 export function createWritingDocument(workspace: string, file: WorkspaceFilePreview): WritingDocument {
   const content = file.content || "";
-  return { workspace, file, draft: content, savedDraft: content, saveState: "saved", error: "", version: 0, saveQueue: Promise.resolve() };
+  return { workspace, file, draft: content, savedDraft: content, saveState: "saved", error: "", conflict: false, version: 0, saveQueue: Promise.resolve() };
 }
 
 /** One read per root/path owns the cached bytes, even across project selections. */
@@ -116,10 +117,12 @@ export function saveWritingDocument(
       document.version += 1;
       document.saveState = document.draft === content ? "saved" : "unsaved";
       document.error = "";
+      document.conflict = false;
     } catch (error) {
       document.saveState = "unsaved";
       const message = error instanceof Error ? error.message : String(error);
       document.error = message.replace(/^Error invoking remote method '[^']+':\s*(?:Error:\s*)?/, "");
+      document.conflict = /source changed on disk/i.test(document.error);
       throw error;
     } finally {
       changed();
@@ -130,6 +133,23 @@ export function saveWritingDocument(
   return operation;
 }
 
+/** Adopt the current disk bytes as the save baseline without losing the local draft. */
+export async function acknowledgeWritingConflict(
+  document: WritingDocument,
+  read: ResearchDeskBridge["readWorkspaceFile"],
+  changed: () => void,
+) {
+  await document.saveQueue;
+  const file = await read(document.workspace, document.file.path);
+  document.file = file;
+  document.savedDraft = file.content || "";
+  document.conflict = false;
+  document.error = "";
+  document.saveState = document.draft === document.savedDraft ? "saved" : "unsaved";
+  document.version += 1;
+  changed();
+  return document;
+}
 
 export type WritingLocation = { projectPath: string; mainPath: string; selectedPath: string };
 export function writingLocationKey(workspace: string, projectId?: string | null) {

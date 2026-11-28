@@ -1,0 +1,21 @@
+$ node --test electron/manuscript-evidence.test.cjs
+✔ reopen linked manuscript values, flag changed or missing evidence, and enforce project ownership (70.074125ms)
+ℹ tests 1
+ℹ pass 1
+ℹ fail 0
+ℹ duration_ms 207.825792
+
+$ node --test electron/ui-audit-manuscript-evidence.test.cjs
+✔ evidence selections follow the textarea's LF offsets and keep tiny values (0.453792ms)
+ℹ tests 1
+ℹ pass 1
+ℹ fail 0
+ℹ duration_ms 113.375125
+
+$ node --test --test-name-pattern='a rejected source conflict|a conflicted source in another manuscript' electron/paper-writing-workspace.test.cjs
+✔ a rejected source conflict can be resolved without losing the local draft (1001.2125ms)
+✔ a conflicted source in another manuscript does not block compiling the target (39.709083ms)
+ℹ tests 2
+ℹ pass 2
+ℹ fail 0
+ℹ duration_ms 1761.443083
