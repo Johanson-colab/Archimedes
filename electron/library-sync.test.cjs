@@ -5,6 +5,7 @@ const path = require("node:path");
 const test = require("node:test");
 
 const store = require("./store.cjs");
+const { canonicalTitleKey } = require("./bibliography-records.cjs");
 const { createLibrarySync } = require("./library-sync.cjs");
 const { createAnnotationSync } = require("./annotation-sync.cjs");
 
@@ -165,6 +166,31 @@ test("a new title-only reference joins its legacy cloud record without joining a
     const second = store.getPaper(distinct.id);
     assert.notEqual(second.cloud_paper_id, legacy.id);
     assert.equal(cloud.find(item => item.id === second.cloud_paper_id).canonical_key, distinct.canonical_key);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("title-only sync joins a cloud record whose author list is truncated in the import", async () => {
+  const root = workspace();
+  try {
+    const project = store.createResearchProject({ name: "Truncated author alias" });
+    store.linkResearchProjectToCloud(project.id, "cloud-project");
+    const library = store.listLibraries(project.id)[0];
+    const api = fakeApi();
+    const remotePaper = { title: "Shared work", authors: ["Alice Smith", "Bob Jones"], year: 2024, notes: "Existing cloud note", reading_status: "read", starred: true, tags: ["reviewed"], state_updated_at: "2025-01-01T00:00:00.000Z" };
+    const remote = api.seedRemoteLibrary(library.name, { ...remotePaper, canonical_key: canonicalTitleKey(remotePaper) });
+    store.linkLibraryToCloud(library.id, remote.id);
+    const [cloudPaper] = await api.listPapers(remote.id);
+    const matching = store.addPaper(library.id, { title: "Shared work", authors: ["Alice Smith", "others"], year: 2024 });
+    assert.notEqual(matching.canonical_key, cloudPaper.canonical_key);
+
+    assert.deepEqual((await createLibrarySync({ store, api }).syncProjectLibraries(project.id)).warnings, []);
+    const cloud = await api.listPapers(remote.id);
+    assert.equal(cloud.length, 1);
+    assert.equal(store.getPaper(matching.id).cloud_paper_id, cloudPaper.id);
+    assert.equal(store.getPaper(matching.id).canonical_key, matching.canonical_key);
+    assert.equal(store.getPaper(matching.id).notes, cloudPaper.notes);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

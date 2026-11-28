@@ -1,4 +1,4 @@
-const { canonicalTitleKey, identifier } = require("./bibliography-records.cjs");
+const { canonicalTitleKey, identifier, titleIdentity, compatibleTitleMetadata } = require("./bibliography-records.cjs");
 
 function titleFingerprint(paper) {
   if (!paper.canonical_key.startsWith("title:") || Object.entries(identifier).some(([key, normalize]) => normalize(paper[key]))) return null;
@@ -39,14 +39,25 @@ function createLibrarySync({ store, api } = {}) {
         const lists = await Promise.all(libraries.map(library => api.listPapers(library.id)));
         const byKey = new Map(lists.flat().map(item => [item.canonical_key, item]));
         const byFingerprint = new Map();
+        const byTitle = new Map();
         for (const item of byKey.values()) {
           const identity = titleFingerprint(item);
           if (identity) byFingerprint.set(identity, byFingerprint.has(identity) ? null : item);
+          const normalizedTitle = titleIdentity(item.title);
+          if (normalizedTitle) byTitle.set(normalizedTitle, [...(byTitle.get(normalizedTitle) || []), item]);
         }
-        return { byKey, byFingerprint };
+        return { byKey, byFingerprint, byTitle };
       })();
-      const { byKey, byFingerprint } = await visiblePapers;
-      return byKey.has(paper.canonical_key) ? null : byFingerprint.get(fingerprint) ?? null;
+      const { byKey, byFingerprint, byTitle } = await visiblePapers;
+      if (byKey.has(paper.canonical_key)) return null;
+      const exact = byFingerprint.get(fingerprint);
+      if (exact) return exact;
+      // A truncated author list can change the hash without changing the work.
+      const candidates = (byTitle.get(titleIdentity(paper.title)) || []).filter(item =>
+        String(item.canonical_key || "").startsWith("title:")
+        && !Object.entries(identifier).some(([key, normalize]) => normalize(item[key]))
+        && compatibleTitleMetadata({ year: item.year, authors_json: JSON.stringify(item.authors || []) }, paper));
+      return candidates.length === 1 ? candidates[0] : null;
     }
 
     // Local -> cloud: create missing cloud libraries and attach papers.
